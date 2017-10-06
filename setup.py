@@ -3,17 +3,17 @@ setup(
   name = 'cmfrec',
   packages = ['cmfrec'],
   install_requires=[
-   'pandas>=0.18.0',
+   'pandas',
    'numpy',
    'scipy',
-   'casadi==3.1.1'
+   'casadi'
 ],
-  version = '0.1',
-  description = 'Collaborartive filtering with item side information based on double matrix factorization',
+  version = '0.2',
+  description = 'Collaborartive filtering with item side information based on collective matrix factorization',
   author = 'David Cortes',
   author_email = 'david.cortes.rivera@gmail.com',
   url = 'https://github.com/david-cortes/cmfrec',
-  download_url = 'https://github.com/david-cortes/cmfrec/archive/0.1.tar.gz',
-  keywords = ['collaborative filtering', 'collective matrix factorization'],
+  download_url = 'https://github.com/david-cortes/cmfrec/archive/0.2.tar.gz',
+  keywords = ['collaborative filtering', 'collective matrix factorization', 'relational learning'],
   classifiers = [],
 )

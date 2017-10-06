@@ -4,7 +4,7 @@ from scipy.sparse import coo_matrix
 pd.options.mode.chained_assignment = None
 
 class CMF:
-    def __init__(self,k=50,alpha=.5,reg_param=(.1,.1,.1),reweight=True):
+    def __init__(self,k=50,k_main=0,k_sec=0,w1=1.0,w2=1.0,reg_param=(.1,.1,.1),reweight=True):
         """
         Collective matrix factorization model (for recommenders systems with explicit data)
         
@@ -23,16 +23,21 @@ class CMF:
         Parameters
         ----------
         k : int
-            Number of latent factors to use.
-        alpha : float between 0 and 1
+            Number of common (shared) latent factors to use.
+        k_main : int
+            Number of additional latent factors to use for the ratings factorization.
+        k_sec : int
+            Number of additional latent factors to use for the item attributes factorization.
+        w1 : float
             Weight to assign to the root squared error in factorization of the ratings matrix.
-            The factorization of the item attributes  gets weight 1-alhpa
+        w2: float
+             Weight to assign to the root squared error in factorization of the item attributes matrix.
         reg_param : tuple of floats
             Regularization parameter for each matrix, in this order:
             1) User-Factor, 2) Item-Factor, 3) Attribute-Factor.
         reweight : bool
             Whether to automatically reweight the errors of factorizing each matrix so that both get similar influence,
-            accoutning for the number of elements in each and the magnitudes of entries.
+            accounting for the number of elements in each and the magnitudes of entries.
             This is done by calculating the initial root squared errors with randomly initialized factor matrices,
             but it's not guaranteed to be a good criterion.
             
@@ -40,16 +45,16 @@ class CMF:
             (e.g. if the ratings are in [1,5], the attributes should ideally be in the same range and not [-10^3,10^3]).
         """
         self.k=k
-        if alpha>0 and alpha<1:
-            self.alpha=alpha
-        else:
-            raise ValueError('Alpha must be between zero and one')
+        self.k1=k_main
+        self.k2=k_sec
+        self.w1=w1
+        self.w1=w2
         self.reg1=reg_param[0]
         self.reg2=reg_param[1]
         self.reg3=reg_param[2]
         self.reweight=reweight
         
-    def fit(self,ratings,item_info,random_seed=None,print_time=False,ipopt_options={'tol':10,'max_iter':200,
+    def fit(self,ratings,item_info,random_seed=None,print_time=False,ipopt_options={'tol':1e2,'max_iter':200,
          'hessian_approximation':'limited-memory','linear_scaling_on_demand':'no',"print_level":0}):
         """
         Fit the model to ratings data and item side info, using BFGS
@@ -91,35 +96,42 @@ class CMF:
         
         if random_seed is not None:
             np.random.seed(random_seed)
-        m1,m2,m3,k=self._m1,self._m2,self._m3,self.k
-        x0=np.random.normal(size=(m1+m2+m3,k))
+        m1,m2,m3,k,k1,k2=self._m1,self._m2,self._m3,self.k,self.k1,self.k2
+        
+        x0=np.random.normal(size=m1*(k1+k)+m2*(k1+k+k2)+m3*(k+k2))
         if self.reweight:
-            err1=np.sum((self._X-self._W.multiply(x0[:m1,:].reshape(m1,k).dot(x0[m1:m1+m2,:].reshape(k,m2)))).power(2))
-            err2=np.linalg.norm(x0[m1:m1+m2,:].reshape(m2,k).dot(x0[m1+m2:,:].reshape(k,m3))-self._prod_arr)
+            err1=np.sum((self._X-self._W.multiply(x0[:m1*(k1+k)].reshape(m1,k1+k).dot(x0[m1*(k1+k):m1*(k1+k)+m2*(k1+k)].reshape(k1+k,m2)))).power(2))
+            err2=np.linalg.norm(x0[m1*(k1+k)+m2*k1:m1*(k1+k)+m2*(k1+k+k2)].reshape(m2,k+k2).dot(x0[m1*(k1+k)+m2*(k1+k+k2):].reshape(k+k2,m3))-self._prod_arr)
             w1=err2/(err1+err2)
             w2=err1/(err1+err2)
         else:
-            w1=1
-            w2=1
-            
-        Y=MX.sym('Y',m1+m2+m3,k)
-        U=Y[:m1,:]
-        V=Y[m1:m1+m2,:]
-        Z=Y[m1+m2:,:]
-        pred=mtimes(U,V.T)
-        pred2=mtimes(V,Z.T)
-        err=-pred*self._W+self._X
-        err2=self._prod_arr-pred2
+            w1=self.w1
+            w2=self.w2
         
+        Vars=MX.sym('Y',m1*(k1+k)+m2*(k1+k+k2)+m3*(k+k2))
+        U=Vars[:m1*(k1+k)].reshape((m1,k1+k))
+        Vu=Vars[m1*(k1+k):m1*(k1+k)+m2*(k1+k)].reshape((m2,k1+k))
+        Vz=Vars[m1*(k1+k)+m2*k1:m1*(k1+k)+m2*(k1+k+k2)].reshape((m2,k+k2))
+        V=Vars[m1*(k1+k):m1*(k1+k)+m2*(k1+k+k2)]
+        Z=Vars[m1*(k1+k)+m2*(k1+k+k2):].reshape((k+k2,m3))
+        pred=mtimes(U,Vu.T)
+        pred2=mtimes(Vz,Z)
+        err_main=-pred*self._W+self._X
+        err_sec=self._prod_arr-pred2
 
-        loss=w1*self.alpha*dot(err,err)+w2*(1-self.alpha)*dot(err2,err2)+self.reg1*dot(U,U)+self.reg2*dot(V,V)+self.reg3*dot(Z,Z)
-        solver = nlpsol("solver", "ipopt", {'x':Y,'f':loss},{'print_time':print_time,'ipopt':ipopt_options})
+        reg=1
+        loss=w1*dot(err_main,err_main)+w2*dot(err_sec,err_sec)+self.reg1*dot(U,U)+self.reg2*dot(V,V)+self.reg3*dot(Z,Z)
+        solver = nlpsol("solver", "ipopt", {'x':Vars,'f':loss},{'print_time':print_time,'ipopt':ipopt_options})
         res=solver(x0=x0)
         
         
-        self.U=np.array(res['x'][:m1,:])
-        self.V=np.array(res['x'][m1:m1+m2,:])
-        self.Z=np.array(res['x'][m1+m2:,:])
+        self.U=np.array(res['x'][:m1*(k1+k)].reshape((m1,k1+k)))
+        self.V=np.array(res['x'][m1*(k1+k):m1*(k1+k)+m2*(k1+k+k2)].reshape((m2,k1+k+k2)))
+        self.Z=np.array(res['x'][m1*(k1+k)+m2*(k1+k+k2):].reshape((m3,k+k2)))
+        
+        del self._X
+        del self._W
+        del self._prod_arr
     
     def _process_data(self,ratings,item_info):
         self._user_orig_to_int=dict()
@@ -189,7 +201,7 @@ class CMF:
         except:
             raise ValueError('Invalid item')
             
-        return self.U[user,:].dot(self.V[item,:].T)
+        return self.U[user,:].dot(self.V[item,:self.k1+self.k].T)
     
     def top_n(self,UserId,n,scores=False):
         """
@@ -215,7 +227,7 @@ class CMF:
         except:
             raise ValueError('Invalid user')
             
-        preds=self.U[user,:].dot(self.V.T)
+        preds=self.U[user,:].dot(self.V[:,:self.k1+self.k].T)
         best=np.argsort(-preds)
         if not scores:
             return [self._item_int_to_orig[i] for i in best[:n]]
