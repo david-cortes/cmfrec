@@ -9,7 +9,9 @@ The extended version of the paper (Relational learning via Collective Matrix Fac
 The model consist in predicting the rating that a user would give to an item by a low-rank matrix factorization `X~=UV'`, trying to add side information about the items (such as movie tags) by also factorizing the item-attribute matrix, sharing the same item-factor matrix for both factorizations (or only sharing some of the latent factors), i.e. trying to minimize a weighted sum of errors from both low-rank factorizations.
 
 By default, the function to minimize is as follows:
+
 ```L = w_main*norm(X-UV') + w_item*norm(I-VZ') + w_user*norm(Q-UP') + reg_param*(norm(U)+norm(V)+norm(Z)+norm(P))```
+
 Where:
 * X is the ratings matrix (considering only non-missing entries)
 * I is the item-attribute matrix (only supports dense, i.e. all non-missing entries)
