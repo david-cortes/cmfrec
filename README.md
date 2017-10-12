@@ -10,7 +10,7 @@ The model consist in predicting the rating that a user would give to an item by 
 
 By default, the function to minimize is as follows:
 
-```L = w_main*norm(X-UV') + w_item*norm(I-VZ') + w_user*norm(Q-UP') + reg_param*(norm(U)+norm(V)+norm(Z)+norm(P))```
+```L = w_main*norm(X-UV')^2 + w_item*norm(I-VZ')^2 + w_user*norm(Q-UP')^2 + reg_param*(norm(U)^2+norm(V)^2+norm(Z)^2+norm(P)^2)```
 
 Where:
 * X is the ratings matrix (considering only non-missing entries)

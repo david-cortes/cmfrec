@@ -254,14 +254,16 @@ class CMF:
                     raise ValueError('item_info must be a pandas data frame with a column named ItemId')
                 if 'ItemId' not in item_info.columns.values:
                     raise ValueError('item_info must be a pandas data frame with a column named ItemId')
-                ratings_df=ratings_df.loc[ratings_df.ItemId.map(lambda x: x in set(list(item_info.ItemId)))]
+                itemset=set(list(item_info.ItemId))
+                ratings_df=ratings_df.loc[ratings_df.ItemId.map(lambda x: x in itemset)]
 
             if user_info is not None:
                 if type(user_info)!=pd.core.frame.DataFrame:
                     raise ValueError('user_info must be a pandas data frame with a column named UserId')
                 if 'UserId' not in user_info.columns.values:
                     raise ValueError('item_info must be a pandas data frame with a column named UserId')
-                ratings_df=ratings_df.loc[ratings_df.UserId.map(lambda x: x in set(list(user_info.UserId)))]
+                userset=set(list(user_info.UserId))
+                ratings_df=ratings_df.loc[ratings_df.UserId.map(lambda x: x in userset)]
 
             if ratings_df.shape[0]==0:
                 raise ValueError('There are no ratings for the users and items with side info')
@@ -283,7 +285,8 @@ class CMF:
                     cnt_items+=1
 
             if item_info is not None:
-                self._prod_arr=item_info.loc[item_info.ItemId.map(lambda x: x in set(list(ratings_df.ItemId)))]
+                itemset=set(list(ratings_df.ItemId))
+                self._prod_arr=item_info.loc[item_info.ItemId.map(lambda x: x in itemset)]
                 self._prod_arr['ItemId']=self._prod_arr.ItemId.map(lambda x: self.item_orig_to_int[x])
                 self._prod_arr=self._prod_arr.sort_values('ItemId').set_index('ItemId').as_matrix()
                 self._m3=self._prod_arr.shape[1]
@@ -294,7 +297,8 @@ class CMF:
                 self._prod_arr=None
 
             if user_info is not None:
-                self._user_arr=user_info.loc[user_info.UserId.map(lambda x: x in set(list(ratings_df.UserId)))]
+                userset=set(list(ratings_df.UserId))
+                self._user_arr=user_info.loc[user_info.UserId.map(lambda x: x in userset)]
                 self._user_arr['UserId']=self._user_arr.UserId.map(lambda x: self.user_orig_to_int[x])
                 self._user_arr=self._user_arr.sort_values('UserId').set_index('UserId').as_matrix()
                 self._m4=self._user_arr.shape[1]
