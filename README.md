@@ -10,14 +10,16 @@ The model consist in predicting the rating that a user would give to an item by 
 
 By default, the function to minimize is as follows:
 
-```L = w_main*norm(X-UV')^2 + w_item*norm(I-VZ')^2 + w_user*norm(Q-UP')^2 + reg_param*(norm(U)^2+norm(V)^2+norm(Z)^2+norm(P)^2)```
+```L = w_main*norm(X-AB')^2 + w_item*norm(I-BC)^2 + w_user*norm(U-AD)^2 + reg_param*(norm(A)^2+norm(B)^2+norm(C)^2+norm(D)^2)```
 
 Where:
 * X is the ratings matrix (considering only non-missing entries)
 * I is the item-attribute matrix (only supports dense, i.e. all non-missing entries)
-* Q is the user-attribute matrix (only supports dense, i.e. all non-missing entries)
-* U, V, Z, P are lower-dimensional matrices (the model parameters)
-The matrix-products might not use all the rows/columns of these matrices at each factorization (this is controlled with `k_main`, `k_item` and `k_user` in the initialization). Although the package API has arguments for both user and item side information, you can fit the model with only one or none of them.
+* U is the user-attribute matrix (only supports dense, i.e. all non-missing entries)
+* A, B, C, D are lower-dimensional matrices (the model parameters)
+The matrix-products might not use all the rows/columns of these shared matrices at each factorization (this is controlled with `k_main`, `k_item` and `k_user` in the initialization). Although the package API has arguments for both user and item side information, you can fit the model with only one or none of them.
+
+Note that, in the simplest case with all factors shared and all matrices weighted the same, the model simplifies to factorizing an extended block matrix `X_ext = [[X, U], [I’, 0]]`, which can be done using any other matrix factorization library (e.g. pyspark’s ALS module).
 
 ## Instalation
 Package is available on PyPI, can be installed with

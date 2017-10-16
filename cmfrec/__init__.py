@@ -14,12 +14,12 @@ class CMF:
         by factorizing all matrices with common (shared) item-factors, e.g.:
         X~=UV' and M~=VZ'
         By default, the function to minimize is as follows:
-        L = w_main*norm(X-UV') + w_item*norm(I-VZ') + w_user*norm(Q-UP') + reg_param*(norm(U)+norm(V)+norm(Z)+norm(P))
+        L = w_main*norm(X-AB')^2 + w_item*norm(I-BC')^2 + w_user*norm(U-AD')^2 + reg_param*(norm(A)^2+norm(B)^2+norm(C)^2+norm(D)^2)
         Where:
             X is the ratings matrix (considering only non-missing entries)
             I is the item-attribute matrix (only supports dense, i.e. all non-missing entries)
-            Q is the user-attribute matrix (only supports dense, i.e. all non-missing entries)
-            U, V, Z, P are lower-dimensional matrices (the model parameters)
+            U is the user-attribute matrix (only supports dense, i.e. all non-missing entries)
+            A, B, C, D are lower-dimensional matrices (the model parameters)
             The matrix products might not use all the rows/columns of these matrices at each factorization
             (this is controlled with k_main, k_item and k_user)
         
@@ -148,10 +148,10 @@ class CMF:
             
         Attributes
         ----------
-        U : numpy.ndarray (nitems, k_main + k + k_user)
+        A : numpy.ndarray (nitems, k_main + k + k_user)
             Matrix with the user-factor attributes, containing columns from both factorizations.
             If you wish to extract only the factors used for predictons, slice it like this: U[:,:k_main+k]
-        V : numpy.ndarray (nusers, k_main + k + k_item)
+        B : numpy.ndarray (nusers, k_main + k + k_item)
             Matrix with the item-factor attributes, containing columns from both factorizations.
             If you wish to extract only the factors used for predictons, slice it like this: V[:,:k_main+k]
         user_orig_to_int : dict
@@ -169,35 +169,35 @@ class CMF:
         w1,w2,w3=self.w1,self.w2,self.w3
         
         Vars=MX.sym('B',m1*(ux+k+qx)+m2*(ux+k+zx)+m3*(k+zx)+m4*(k+qx))
-        U=Vars[:m1*(ux+k+qx)]
-        Uv=Vars[:m1*(ux+k)].reshape((m1,ux+k))
-        Up=Vars[m1*ux:m1*(ux+k+qx)].reshape((m1,k+qx))
-        V=Vars[m1*(ux+k+qx):m1*(ux+k+qx)+m2*(ux+k+zx)]
-        Vu=Vars[m1*(ux+k+qx):m1*(ux+k+qx)+m2*(ux+k)].reshape((m2,ux+k))
-        Vz=Vars[m1*(ux+k+qx)+m2*ux:m1*(ux+k+qx)+m2*(ux+k+zx)].reshape((m2,k+zx))
-        Z=Vars[m1*(ux+k+qx)+m2*(ux+k+zx):m1*(ux+k+qx)+m2*(ux+k+zx)+m3*(k+zx)].reshape((k+zx,m3))
-        P=Vars[m1*(ux+k+qx)+m2*(ux+k+zx)+m3*(k+zx):].reshape((k+qx,m4))
+        A=Vars[:m1*(ux+k+qx)]
+        Ab=Vars[:m1*(ux+k)].reshape((m1,ux+k))
+        Ad=Vars[m1*ux:m1*(ux+k+qx)].reshape((m1,k+qx))
+        B=Vars[m1*(ux+k+qx):m1*(ux+k+qx)+m2*(ux+k+zx)]
+        Ba=Vars[m1*(ux+k+qx):m1*(ux+k+qx)+m2*(ux+k)].reshape((m2,ux+k))
+        Bc=Vars[m1*(ux+k+qx)+m2*ux:m1*(ux+k+qx)+m2*(ux+k+zx)].reshape((m2,k+zx))
+        C=Vars[m1*(ux+k+qx)+m2*(ux+k+zx):m1*(ux+k+qx)+m2*(ux+k+zx)+m3*(k+zx)].reshape((k+zx,m3))
+        D=Vars[m1*(ux+k+qx)+m2*(ux+k+zx)+m3*(k+zx):].reshape((k+qx,m4))
         
-        pred_main=mtimes(Uv,Vu.T)
+        pred_main=mtimes(Ab,Ba.T)
         err_main=-pred_main*self._W+self._X
-        loss=w1*dot(err_main,err_main)+self.reg_param[0]*dot(U,U)+self.reg_param[1]*dot(V,V)+\
-        self.reg_param[2]*dot(Z,Z)+self.reg_param[3]*dot(P,P)
+        loss=w1*dot(err_main,err_main)+self.reg_param[0]*dot(A,A)+self.reg_param[1]*dot(B,B)+\
+        self.reg_param[2]*dot(C,C)+self.reg_param[3]*dot(D,D)
         
         if self._prod_arr is not None:
-            pred_item=mtimes(Vz,Z)
+            pred_item=mtimes(Bc,C)
             err_item=self._prod_arr-pred_item
             loss+=w2*dot(err_item,err_item)
             
         if self._user_arr is not None:
-            pred_user=mtimes(Up,P)
+            pred_user=mtimes(Ad,D)
             err_user=self._user_arr-pred_user
             loss+=w3*dot(err_user,err_user)
         
         solver = nlpsol("solver", "ipopt", {'x':Vars,'f':loss},{'print_time':print_time,'ipopt':ipopt_options})
         res=solver(x0=x0)
         
-        self.U=np.array(res['x'][:m1*(ux+k+qx)].reshape((m1,ux+k+qx)))
-        self.V=np.array(res['x'][m1*(ux+k+qx):m1*(ux+k+qx)+m2*(ux+k+zx)].reshape((m2,ux+k+zx)))
+        self.A=np.array(res['x'][:m1*(ux+k+qx)].reshape((m1,ux+k+qx)))
+        self.B=np.array(res['x'][m1*(ux+k+qx):m1*(ux+k+qx)+m2*(ux+k+zx)].reshape((m2,ux+k+zx)))
         
         del self._X
         del self._W
@@ -392,7 +392,7 @@ class CMF:
         except:
             raise ValueError('Invalid item')
             
-        return self.U[user,:self.k_main+self.k].dot(self.V[item,:self.k_main+self.k].T)
+        return self.A[user,:self.k_main+self.k].dot(self.B[item,:self.k_main+self.k].T)
     
     def top_n(self, UserId, n=10, scores=False, filter_rated=True):
         """
@@ -421,7 +421,7 @@ class CMF:
         except:
             raise ValueError('Invalid user')
             
-        preds=-self.U[user,:self.k_main+self.k].dot(self.V[:,:self.k_main+self.k].T)
+        preds=-self.A[user,:self.k_main+self.k].dot(self.B[:,:self.k_main+self.k].T)
         best=np.argsort(preds)
         if self.save_entries and filter_rated:
             out=list()
@@ -444,13 +444,13 @@ class CMF:
     def get_user_factor_vector(self, UserId):
         """Get the User-LatentFactor vector for a given user"""
         try:
-            return self.U[self.user_orig_to_int[UserId],:]
+            return self.A[self.user_orig_to_int[UserId],:]
         except:
             raise ValueError('Invalid user')
             
     def get_item_factor_vector(self, ItemId):
         """Get the Item-LatentFactor vector for a given item"""
         try:
-            return self.V[self.item_orig_to_int[ItemId],:]
+            return self.B[self.item_orig_to_int[ItemId],:]
         except:
             raise ValueError('Invalid user')
