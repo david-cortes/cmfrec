@@ -52,7 +52,7 @@ For a more detailed example using the MovieLens data with user demographic info 
 The code is documented internally through docstrings (e.g. you can try `help(CMF)`)
 
 ## Implementation Notes
-The implementation here is not entirely true to the paper, as the model is fit with full L-BFGS updates rather than stochastic Newton, thus not recommended for web-scale datasets. Most of the calculations are done in Tensorflow, interfacing an external L-BFGS solver, thus speed should be quite fast. As a reference point, 1,000 iterations (usually enough to fit a model with high regularization) over the movielens-1M and 1128 movie tags per movie + user demographics takes around 15 hour in a regular desktop computer and uses around ~1.5GB RAM.
+The implementation here is not entirely true to the paper, as the model is fit with full L-BFGS updates rather than stochastic Newton, thus not recommended for web-scale datasets. Most of the calculations are done in Tensorflow, interfacing an external L-BFGS solver, thus speed should be quite fast. As a reference point, 1,000 iterations (usually enough to fit a model with high regularization) over the movielens-1M and 1128 movie tags per movie + user demographics takes around 15 minutes in a regular desktop computer and uses around ~2GB RAM.
 
 If you want to try different hyperparameters on the same data, it also contains a faster `._fit` method that can be used after `.fit` has been called at least once, as it will save the data but reindexed internally. Also, if your data doesn’t need reindexing, you can pass `reindex=False` to `.fit` to speed up the process.
 
