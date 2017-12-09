@@ -1,32 +1,31 @@
-import pandas as pd, numpy as np
-from casadi import MX, nlpsol, dot, mtimes, sqrt
-from scipy.sparse import coo_matrix
+import pandas as pd, numpy as np, tensorflow as tf
 pd.options.mode.chained_assignment = None
 
 class CMF:
     def __init__(self, k=50, k_main=0, k_item=0, k_user=0, w_main=1.0, w_item=1.0, w_user=1.0,
-                 reg_param=1.0, standardize=False, reweight=False):
+                 reg_param=1e-4, standardize=True, reweight=False):
         """
         Collective matrix factorization model for recommenders systems with explicit data and side info.
         
         
         Fits a collective matrix factorization model to ratings data along with item and/or user side information,
         by factorizing all matrices with common (shared) item-factors, e.g.:
-        X~=UV' and M~=VZ'
+        X~=AB' and I~=BC'
         By default, the function to minimize is as follows:
-        L = w_main*norm(X-AB')^2 + w_item*norm(I-BC')^2 + w_user*norm(U-AD')^2 + reg_param*(norm(A)^2+norm(B)^2+norm(C)^2+norm(D)^2)
+        L = w_main*norm(X-AB')^2/nX + w_item*norm(I-BC')^2/nI + w_user*norm(U-AD')^2/nU + reg_param*(norm(A)^2+norm(B)^2+norm(C)^2+norm(D)^2)
         Where:
             X is the ratings matrix (considering only non-missing entries)
             I is the item-attribute matrix (only supports dense, i.e. all non-missing entries)
             U is the user-attribute matrix (only supports dense, i.e. all non-missing entries)
             A, B, C, D are lower-dimensional matrices (the model parameters)
+            nX, nI, nU are the number of entries in each matrix
             The matrix products might not use all the rows/columns of these matrices at each factorization
             (this is controlled with k_main, k_item and k_user)
         
         More details can be found on the paper
         'Relational learning via collective matrix factorization (2008) from Singh, A. P., & Gordon, G. J.'
         
-        The model is fit using BFGS with IPOPT as the workhorse, interfaced through CasADi
+        The model is fit using L-BFGS, interfaced through Tensorflow
         
         Note
         ----
@@ -60,9 +59,12 @@ class CMF:
             Ignored when passing 'reweight=True'.
         reweight : bool
             Whether to automatically reweight the errors of each matrix factorization so that they get similar influence,
-            accounting for the number of elements in each and the magnitudes of the entries.
+            accounting for the number of elements in each and the magnitudes of the entries
+            (appplies in addition to weights passes as w_main, w_item and w_user).
             This is done by calculating the initial sum of squared errors with randomly initialized factor matrices,
             but it's not guaranteed to be a good criterion.
+            Note that when using this, the weights of the factorizations are shrunk, so the regularization
+            parameter should also be changed.
             
             It might be better to scale the entries of either the ratings or the attributes matrix so that they are in a similar scale
             (e.g. if the ratings are in [1,5], the attributes should ideally be in the same range and not [-10^3,10^3]).
@@ -86,19 +88,16 @@ class CMF:
         self.reweight=reweight
         
     def fit(self, ratings, item_info=None, user_info=None, reindex=True, save_entries=True,
-            random_seed=None, print_time=False, ipopt_options={'tol':1e2,'max_iter':200,
-         'hessian_approximation':'limited-memory','linear_scaling_on_demand':'no',"print_level":0}):
+            random_seed=None, maxiter=1000, save_dataset=False):
         """
-        Fit the model to ratings data and item/user side info, using BFGS
+        Fit the model to ratings data and item/user side info, using L-BFGS
         
         
         Note
         ----
-        Never recommended to change the hessian approximation to exact hessian.
-        The model is fit with full BFGS updates (not stochastic gradient descent or stochastic Newton),
+        The model is fit with full L-BFGS updates (not stochastic gradient descent or stochastic Newton),
         i.e. it calculates errors for the whole data and updates all model parameters at once during each iteration.
-        By default, the number of iterations is set at 200, but this doesn't get anywhere close to convergence.
-        Nevertheless, running it for more iterations  doesn't seem to improve cross-validated recommendations.
+        By default, the number of iterations is set at 2000, but for smaller datasets, this might not reach convergence.
         
         Ratings are not centered when fitting the model. If you require it, you'll have to center them beforehand
         (e.g. subtracting global/user/item bias from each rating).
@@ -112,12 +111,10 @@ class CMF:
         
         Parameters
         ----------
-        ratings : list of tuples, pandas data frame or csc sparse matrix
+        ratings : list of tuples or pandas data frame
             Ratings data to which to fit the model.
             If a pandas data frame, must contain the columns 'UserId','ItemId' and 'Rating'.
             If a list of tuples, must be in the format (UserId,ItemId,Rating) (will be coerced to data frame)
-            If called with 'reindex=False', must be a csc_sparse matrix,
-            with rows corresponding to user ID numbers and columns to item ID numbers.
         item_info : pandas data frame or numpy array
             Side information about the items (i.e. their attributes, as a table).
             Must contain a column named ItemId.
@@ -133,18 +130,19 @@ class CMF:
             If your data is already properly enumerated, i.e. all item and user IDs are consecutive integers starting at zero,
             each row/column of the ratings matrix corresponds to the user and item with that number,
             and same for the item and/or user attribute matrix, this option will be faster.
-            If this is set to 'True', you will need to pass in data as matrices rather than data frames.
+            If this is set to 'True', you will need to pass in ratings data as a data frame and side info as numpy arrays.
         save_entries : bool
             Whether to save the information about which users rated which items.
             This can later be used to filter out already rated items when getting Top-N recommendations for a user.
-            Set to False when passing reindex=False.
+            Forced to False when passing reindex=False.
         random_seed: int
             Random seed to be used to get a starting point.
-        print_time : bool
-            Whether to print the time spent at different parts of the optimization routine.
-        ipopt_options : dict
-            Additional options to be passed to IPOPT - you can find the details here:
-            https://www.coin-or.org/Ipopt/documentation/node40.html
+        maxiter : int
+            Maximum number of iterations.
+        save_dataset : bool
+            Whether to save the raw data that passed (after processing) in the model itself. This is helpful if you want to try
+            different hypterparameters later using the '_fit' method, as it won't have to reindex the data again.
+            The reindex data is stored internally in attributes '_X', '_lst_slices', '_prod_arr', and '_user_arr'.
             
         Attributes
         ----------
@@ -159,79 +157,97 @@ class CMF:
         item_orig_to_int : dict
             Mapping of item IDs as they appear in the rating and item_info data to the rows of V.
         """
+        
+        # readjusting parameters in case they are redundant
+        if item_info is None:
+            self.k_user=0
+        if user_info is None:
+            self.k_item=0
+        
         self.save_entries=save_entries
         self._process_data(ratings,item_info,user_info,reindex)
-        m1,m2,m3,m4,k,ux,zx,qx=self._m1,self._m2,self._m3,self._m4,self.k,self.k_main,self.k_item,self.k_user
+        self._set_weights(random_seed)
+        
+        self._fit(self.w1,self.w2,self.w3,self.reg_param,
+                  self.k,self.k_main,self.k_item,self.k_user,
+                  random_seed,maxiter)
+        
+        if not save_dataset:
+            del self._X
+            del self._lst_slices
+            del self._prod_arr
+            del self._user_arr
+        
+        return self
+    
+    def _fit(self, w1=1.0, w2=1.0, w3=1.0, reg_param=[1e-3]*4,
+             k=50, k_main=0, k_item=0, k_user=0,
+             random_seed=None,maxiter=1000):
+        # faster method, can be reused with the same data
+        
         if random_seed is not None:
-            np.random.seed(random_seed)
-        x0=np.random.normal(size=m1*(ux+k+qx)+m2*(ux+k+zx)+m3*(k+zx)+m4*(k+qx))
-        self._set_weights(x0)
-        w1,w2,w3=self.w1,self.w2,self.w3
+            tf.set_random_seed(random_seed)
         
-        Vars=MX.sym('B',m1*(ux+k+qx)+m2*(ux+k+zx)+m3*(k+zx)+m4*(k+qx))
-        A=Vars[:m1*(ux+k+qx)]
-        Ab=Vars[:m1*(ux+k)].reshape((m1,ux+k))
-        Ad=Vars[m1*ux:m1*(ux+k+qx)].reshape((m1,k+qx))
-        B=Vars[m1*(ux+k+qx):m1*(ux+k+qx)+m2*(ux+k+zx)]
-        Ba=Vars[m1*(ux+k+qx):m1*(ux+k+qx)+m2*(ux+k)].reshape((m2,ux+k))
-        Bc=Vars[m1*(ux+k+qx)+m2*ux:m1*(ux+k+qx)+m2*(ux+k+zx)].reshape((m2,k+zx))
-        C=Vars[m1*(ux+k+qx)+m2*(ux+k+zx):m1*(ux+k+qx)+m2*(ux+k+zx)+m3*(k+zx)].reshape((k+zx,m3))
-        D=Vars[m1*(ux+k+qx)+m2*(ux+k+zx)+m3*(k+zx):].reshape((k+qx,m4))
+        A=tf.Variable(tf.random_normal([self._m1,k_main+k+k_user]))
+        B=tf.Variable(tf.random_normal([self._m2,k_main+k+k_item]))
+        C=tf.Variable(tf.random_normal([k+k_item,self._m3]))
+        D=tf.Variable(tf.random_normal([k+k_user,self._m4]))
         
-        pred_main=mtimes(Ab,Ba.T)
-        err_main=-pred_main*self._W+self._X
-        loss=w1*dot(err_main,err_main)+self.reg_param[0]*dot(A,A)+self.reg_param[1]*dot(B,B)+\
-        self.reg_param[2]*dot(C,C)+self.reg_param[3]*dot(D,D)
+        R=tf.placeholder(tf.float32, shape=(None,))
+        U=tf.placeholder(tf.float32)
+        I=tf.placeholder(tf.float32)
+
+        Ab=A[:,:k_main+k]
+        Ad=A[:,k_main:]
+        Ba=B[:,:k_main+k]
+        Bc=B[:,k_main:]
+
+        pred_ratings=tf.gather_nd(tf.matmul(Ab,tf.transpose(Ba)), self._lst_slices)
+        err_ratings=tf.losses.mean_squared_error(pred_ratings,R)
+        loss=w1*tf.losses.mean_squared_error(pred_ratings,R) + reg_param[0]*tf.nn.l2_loss(A) + reg_param[1]*tf.nn.l2_loss(B)
         
         if self._prod_arr is not None:
-            pred_item=mtimes(Bc,C)
-            err_item=self._prod_arr-pred_item
-            loss+=w2*dot(err_item,err_item)
+            pred_item=tf.matmul(Bc,C)
+            loss+=w2*tf.losses.mean_squared_error(pred_item,I) + reg_param[2]*tf.nn.l2_loss(C)
             
         if self._user_arr is not None:
-            pred_user=mtimes(Ad,D)
-            err_user=self._user_arr-pred_user
-            loss+=w3*dot(err_user,err_user)
-        
-        solver = nlpsol("solver", "ipopt", {'x':Vars,'f':loss},{'print_time':print_time,'ipopt':ipopt_options})
-        res=solver(x0=x0)
-        
-        self.A=np.array(res['x'][:m1*(ux+k+qx)].reshape((m1,ux+k+qx)))
-        self.B=np.array(res['x'][m1*(ux+k+qx):m1*(ux+k+qx)+m2*(ux+k+zx)].reshape((m2,ux+k+zx)))
-        
-        del self._X
-        del self._W
-        del self._prod_arr
-        del self._user_arr
+            pred_user=tf.matmul(Ad,D)
+            loss+=w3*tf.losses.mean_squared_error(pred_user,U) + reg_param[3]*tf.nn.l2_loss(D)
+
+        optimizer = tf.contrib.opt.ScipyOptimizerInterface(loss, method='L-BFGS-B', options={'maxiter':maxiter})
+        model = tf.global_variables_initializer()
+        sess=tf.Session()
+        sess.run(model)
+        with sess:
+            sess.run(model)
+            optimizer.minimize(sess, feed_dict={R:self._X, U:self._user_arr, I:self._prod_arr})
+            self.A=A.eval(session=sess)
+            self.B=B.eval(session=sess)
     
     def _process_data(self,ratings,item_info,user_info,reindex):
+        # pasing an already properly index DF will speed up the process
         if not reindex:
-            if type(ratings)!=scipy.sparse.csc.csc_matrix:
-                raise ValueError('ratings must be a sparse csc matrix')
+            if type(ratings)!=pd.core.frame.DataFrame:
+                raise ValueError('ratings must be a pandas data frame')
             if (item_info is not None) and (type(item_info)!=numpy.ndarray):
                 raise ValueError('item_info must be a numpy array')
             if (user_info is not None) and (type(user_info)!=numpy.ndarray):
                 raise ValueError('user_info must be a numpy array')
-            
-            if item_info is not None:
-                assert ratings.shape[1]==item_info.shape[0]
-            if user_info is not None:
-                assert ratings.shape[0]==user_info.shape[0]
                 
-            self._X=ratings
-            self._W=1*(self._X>0)
+            self._X=ratings.Rating
+            self._lst_slices=[list(i) for i in zip(ratings_df.UserId,ratings_df.ItemId)]
             self.user_orig_to_int={i:i for i in range(ratings.shape[0])}
             self.item_orig_to_int={i:i for i in range(ratings.shape[1])}
             self._user_int_to_orig=self.user_orig_to_int
             self._user_int_to_orig=self.item_orig_to_int
-            self._m1=ratings.shape[0]
-            self._m2=ratings.shape[1]
+            self._m1=ratings.UserId.max()
+            self._m2=ratings.ItemId.max()
             if item_info is not None:
                 self._m3=item_info.shape[1]
                 self._prod_arr=item_info
             else:
                 self._m3=0
-                self._prod_arr=none
+                self._prod_arr=None
             if user_info is not None:
                 self._m4=user_info.shape[1]
                 self._user_arr=user_info
@@ -239,7 +255,10 @@ class CMF:
                 self._m4=0
                 self._user_arr=None
             self.save_entries=False
+            
+        # reindexing all entries
         else:
+            # getting ratings as a DF
             if type(ratings)==list:
                 ratings_df=pd.DataFrame(ratings,columns=['UserId','ItemId','Rating'])
             elif type(ratings)==pd.core.frame.DataFrame:
@@ -249,21 +268,23 @@ class CMF:
             else:
                 raise ValueError("Ratings must be a list of tuples or pandas data frame")
 
+            # getting item side info
             if item_info is not None:
                 if type(item_info)!=pd.core.frame.DataFrame:
                     raise ValueError('item_info must be a pandas data frame with a column named ItemId')
                 if 'ItemId' not in item_info.columns.values:
                     raise ValueError('item_info must be a pandas data frame with a column named ItemId')
                 itemset=set(list(item_info.ItemId))
-                ratings_df=ratings_df.loc[ratings_df.ItemId.map(lambda x: x in itemset)]
+                ratings_df=ratings_df.loc[ratings_df.ItemId.isin(itemset)]
 
+            # getting user side info
             if user_info is not None:
                 if type(user_info)!=pd.core.frame.DataFrame:
                     raise ValueError('user_info must be a pandas data frame with a column named UserId')
                 if 'UserId' not in user_info.columns.values:
                     raise ValueError('item_info must be a pandas data frame with a column named UserId')
                 userset=set(list(user_info.UserId))
-                ratings_df=ratings_df.loc[ratings_df.UserId.map(lambda x: x in userset)]
+                ratings_df=ratings_df.loc[ratings_df.UserId.isin(userset)]
 
             if ratings_df.shape[0]==0:
                 raise ValueError('There are no ratings for the users and items with side info')
@@ -286,7 +307,7 @@ class CMF:
 
             if item_info is not None:
                 itemset=set(list(ratings_df.ItemId))
-                self._prod_arr=item_info.loc[item_info.ItemId.map(lambda x: x in itemset)]
+                self._prod_arr=item_info.loc[item_info.ItemId.isin(itemset)]
                 self._prod_arr['ItemId']=self._prod_arr.ItemId.map(lambda x: self.item_orig_to_int[x])
                 self._prod_arr=self._prod_arr.sort_values('ItemId').set_index('ItemId').as_matrix()
                 self._m3=self._prod_arr.shape[1]
@@ -298,7 +319,7 @@ class CMF:
 
             if user_info is not None:
                 userset=set(list(ratings_df.UserId))
-                self._user_arr=user_info.loc[user_info.UserId.map(lambda x: x in userset)]
+                self._user_arr=user_info.loc[user_info.UserId.isin(userset)]
                 self._user_arr['UserId']=self._user_arr.UserId.map(lambda x: self.user_orig_to_int[x])
                 self._user_arr=self._user_arr.sort_values('UserId').set_index('UserId').as_matrix()
                 self._m4=self._user_arr.shape[1]
@@ -312,71 +333,77 @@ class CMF:
             ratings_df['ItemId']=ratings_df.ItemId.map(lambda x: self.item_orig_to_int[x])
             self._m1=cnt_users
             self._m2=cnt_items
-
-            self._X=coo_matrix((ratings_df.Rating,(ratings_df.UserId,ratings_df.ItemId))).tocsc()
-            self._W=1*self._X>0
+            
+            self._X=ratings_df.Rating
+            self._lst_slices=[list(i) for i in zip(ratings_df.UserId,ratings_df.ItemId)]
 
             if self.save_entries:
                 self._items_rated_per_user=ratings_df.groupby('UserId')['ItemId'].agg(lambda x: set(x))
             
-    def _set_weights(self,x0):
+    def _set_weights(self, random_seed):
         m1,m2,m3,m4,k,ux,zx,qx=self._m1,self._m2,self._m3,self._m4,self.k,self.k_main,self.k_item,self.k_user
         
-        if self.standardize:
-            self._nmain=np.sum(self._W)
-            if self._prod_arr is not None:
-                self._nitem=self._prod_arr.shape[0]*self._prod_arr.shape[1]
-            else:
-                self._nitem=1
-            if self._user_arr is not None:
-                self._nuser=self._user_arr.shape[0]*self._user_arr.shape[1]
-            else:
-                self._nuser=1
-        else:
-            self._nmain=1
-            self._nitem=1
-            self._nuser=1
-            
         if self.reweight:
-            mat1=x0[:m1*(ux+k)].reshape(m1,ux+k)
-            mat2=x0[m1*(ux+k+qx):m1*(ux+k+qx)+m2*(ux+k)].reshape(ux+k,m2)
-            pred=mat1.dot(mat2)
-            err=self._X-self._W.multiply(pred)
-            err_main=1/np.sum(err.power(2))
+            # this initializes all parameters at random, calculates the error, and scales weights by them
+            if random_seed is not None:
+                np.random.seed(random_seed)
+            
+            mat1=np.random.normal(size=(m1,ux+k))
+            mat2=np.random.normal(size=(ux+k,m2))
+            ind1=tuple([i[0] for i in self._lst_slices])
+            ind2=tuple([i[1] for i in self._lst_slices])
+            pred=np.dot(mat1,mat2)[ind1,ind2]
+            err=pred-self._X
+            err_main=1/np.mean(err**2)
             err_tot=err_main
             
             if self._prod_arr is not None:
-                mat1=x0[m1*(ux+k+qx)+m2*ux:m1*(ux+k+qx)+m2*(ux+k+zx)].reshape(m2,k+zx)
-                mat2=x0[m1*(ux+k+qx)+m2*(ux+k+zx):m1*(ux+k+qx)+m2*(ux+k+zx)+m3*(k+zx)].reshape(k+zx,m3)
+                mat1=np.random.normal(size=(m2,k+zx))
+                mat2=np.random.normal(size=(k+zx,m3))
                 pred=mat1.dot(mat2)
                 err=self._prod_arr-pred
-                err_item=1/np.sum(err**2)
+                err_item=1/np.mean(err**2)
                 err_tot+=err_item
                 
             if self._user_arr is not None:
-                mat1=x0[m1*ux:m1*(ux+k+qx)].reshape(m1,k+qx)
-                mat2=x0[m1*(ux+k+qx)+m2*(ux+k+zx)+m3*(k+zx):].reshape(k+qx,m4)
+                mat1=np.random.normal(size=(m1,k+qx))
+                mat2=np.random.normal(size=(k+qx,m4))
                 pred=mat1.dot(mat2)
                 err=self._user_arr-pred
-                err_user=1/np.sum(err**2)
+                err_user=1/np.mean(err**2)
                 err_tot+=err_user
+                
+            del mat1
+            del mat2
                 
             self.w1=self.w_main*err_main/err_tot
             if self._prod_arr is not None:
                 self.w2=self.w_item*err_item/err_tot
+            else:
+                self.w2=0.0
             if self._user_arr is not None:
                 self.w3=self.w_user*err_user/err_tot
+            else:
+                self.w3=0.0
                 
-        elif self.standardize:
-            self._nmain=np.sum(self._W)
-            self.w1=self.w_main/nitem
+        elif not self.standardize:
+            # this multiplies the loss (MSE) from each matrix by its number of entries 
+            nmain=self._X.shape[0]
+            self.w1=self.w_main*nmain
+            
             if self._prod_arr is not None:
                 nitem=self._prod_arr.shape[0]*self._prod_arr.shape[1]
-                self.w2=self.w_item/nitem
+                self.w2=self.w_item*nitem
+            else:
+                self.w2=0.0
+                
             if self._user_arr is not None:
                 nuser=self._user_arr.shape[0]*self._user_arr.shape[1]
-                self.w3=self.w_user/nuser
+                self.w3=self.w_user*nuser
+            else:
+                self.w3=0.0
         else:
+            # if no option is passed, weights are taken at face value
             self.w1=self.w_main
             self.w2=self.w_item
             self.w3=self.w_user
@@ -427,10 +454,10 @@ class CMF:
             out=list()
             for i in range(self._m2):
                 if best[i] not in self._items_rated_per_user[user]:
-                    if scores:
-                        out.append(best[i])
+                    if not scores:
+                        out.append(self._item_int_to_orig[best[i]])
                     else:
-                        out.append((best[i],-preds[best[i]]))
+                        out.append((self._item_int_to_orig[best[i]],-preds[best[i]]))
                     if len(out)==n:
                         break
             return out
