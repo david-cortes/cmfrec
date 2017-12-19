@@ -87,8 +87,8 @@ class CMF:
         self.standardize=standardize
         self.reweight=reweight
         
-    def fit(self, ratings, item_info=None, user_info=None, reindex=True, save_entries=True,
-            random_seed=None, maxiter=1000, save_dataset=False):
+    def fit(self, ratings, item_info=None, user_info=None, reindex=True, use_dense=True,
+            save_entries=True, random_seed=None, maxiter=1000, save_dataset=False):
         """
         Fit the model to ratings data and item/user side info, using L-BFGS
         
@@ -131,6 +131,10 @@ class CMF:
             each row/column of the ratings matrix corresponds to the user and item with that number,
             and same for the item and/or user attribute matrix, this option will be faster.
             If this is set to 'True', you will need to pass in ratings data as a data frame and side info as numpy arrays.
+        use_dense : bool
+            Whether to create a dense matrix of predictions. This will allocate a full matrix of dimensions n_users*n_items
+            in RAM memory, so if the dataset is large, it will probably be too large to calculate, but for smaller datasets,
+            it will speed up slicing.
         save_entries : bool
             Whether to save the information about which users rated which items.
             This can later be used to filter out already rated items when getting Top-N recommendations for a user.
@@ -170,7 +174,7 @@ class CMF:
         
         self._fit(self.w1,self.w2,self.w3,self.reg_param,
                   self.k,self.k_main,self.k_item,self.k_user,
-                  random_seed,maxiter)
+                  use_dense,random_seed,maxiter)
         
         if not save_dataset:
             del self._X
@@ -182,7 +186,7 @@ class CMF:
     
     def _fit(self, w1=1.0, w2=1.0, w3=1.0, reg_param=[1e-3]*4,
              k=50, k_main=0, k_item=0, k_user=0,
-             random_seed=None,maxiter=1000):
+             use_dense=False,random_seed=None,maxiter=1000):
         # faster method, can be reused with the same data
         
         if random_seed is not None:
@@ -202,7 +206,12 @@ class CMF:
         Ba=B[:,:k_main+k]
         Bc=B[:,k_main:]
 
-        pred_ratings=tf.gather_nd(tf.matmul(Ab,tf.transpose(Ba)), self._lst_slices)
+        if use_dense:
+            pred_ratings=tf.gather_nd(tf.matmul(Ab,Ba, transpose_b=True), self._lst_slices)
+        else:
+            pred_ratings=tf.reduce_sum(tf.multiply(
+                tf.gather(Ab, self._lst_slices[:,0], axis=0), tf.gather(Ba, self._lst_slices[:,1], axis=0))
+                                       , axis=1)
         err_ratings=tf.losses.mean_squared_error(pred_ratings,R)
         loss=w1*tf.losses.mean_squared_error(pred_ratings,R) + reg_param[0]*tf.nn.l2_loss(A) + reg_param[1]*tf.nn.l2_loss(B)
         
@@ -235,7 +244,7 @@ class CMF:
                 raise ValueError('user_info must be a numpy array')
                 
             self._X=ratings.Rating
-            self._lst_slices=[list(i) for i in zip(ratings_df.UserId,ratings_df.ItemId)]
+            self._lst_slices=np.array([list(i) for i in zip(ratings_df.UserId,ratings_df.ItemId)])
             self.user_orig_to_int={i:i for i in range(ratings.shape[0])}
             self.item_orig_to_int={i:i for i in range(ratings.shape[1])}
             self._user_int_to_orig=self.user_orig_to_int
@@ -335,7 +344,7 @@ class CMF:
             self._m2=cnt_items
             
             self._X=ratings_df.Rating
-            self._lst_slices=[list(i) for i in zip(ratings_df.UserId,ratings_df.ItemId)]
+            self._lst_slices=np.array([list(i) for i in zip(ratings_df.UserId,ratings_df.ItemId)])
 
             if self.save_entries:
                 self._items_rated_per_user=ratings_df.groupby('UserId')['ItemId'].agg(lambda x: set(x))
