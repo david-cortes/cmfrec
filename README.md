@@ -1,12 +1,12 @@
 # cmfrec
 
-Python implementation of the collaborative filtering algorithm for explicit feedback data with item and/or user side information described in Singh, A. P., & Gordon, G. J. (2008, August). Relational learning via collective matrix factorization. In Proceedings of the 14th ACM SIGKDD international conference on Knowledge discovery and data mining (pp. 650-658). ACM.
+Python implementation of the collaborative filtering algorithm for explicit feedback data with item and/or user side information described in _Singh, A. P., & Gordon, G. J. (2008, August). Relational learning via collective matrix factorization. In Proceedings of the 14th ACM SIGKDD international conference on Knowledge discovery and data mining (pp. 650-658). ACM._
 
 The extended version of the paper (Relational learning via Collective Matrix Factorization) can be downloaded here:
 [http://ra.adm.cs.cmu.edu/anon/usr/ftp/ml2008/CMU-ML-08-109.pdf](http://ra.adm.cs.cmu.edu/anon/usr/ftp/ml2008/CMU-ML-08-109.pdf)
 
 ## Basic model
-The model consist in predicting the rating that a user would give to an item by a low-rank matrix factorization `X~=UV'`, trying to add side information about the items (such as movie tags) by also factorizing the item-attribute matrix, sharing the same item-factor matrix for both factorizations (or only sharing some of the latent factors), i.e. trying to minimize a weighted sum of errors from both low-rank factorizations.
+The model consist in predicting the rating that a user would give to an item by a low-rank matrix factorization of explicit ratings `X~=UV'`, trying to add side information about the items (such as movie tags) and/or users (such as their demographic info) by also factorizing the item side info matrix and/or the user side info matrix (e.g. a matrix with columns corresponding to the available attributes and rows corresponding to users/items), sharing the same item/user-factor matrix used to factorize the ratings (or sharing only some of the latent factors), i.e. trying to minimize a weighted sum of errors from more than one low-rank factorization.
 
 By default, the function to minimize is as follows:
 
@@ -19,9 +19,9 @@ Where:
 * A, B, C, D are lower-dimensional matrices (the model parameters)
 * nX, nI, nU are the number of entries in each matrix
 
-The matrix-products might not use all the rows/columns of these shared matrices at each factorization (this is controlled with `k_main`, `k_item` and `k_user` in the initialization). Although the package API has arguments for both user and item side information, you can fit the model with only one or none of them.
+The matrix-products might not use all the rows/columns of these shared latent factor matrices at each factorization (this is controlled with `k_main`, `k_item` and `k_user` in the initialization). Although the package API has arguments for both user and item side information, you can fit the model with only one or none of them.
 
-Note that, in the simplest case with all factors shared and all matrices weighted the same, the model simplifies to factorizing an extended block matrix `X_ext = [[X, U], [I’, .]]`, which can be done using any other matrix factorization library (e.g. pyspark’s ALS module).
+Note that, in the simplest case with all factors shared and all matrices weighted the same, the model simplifies to factorizing an extended block matrix `X_ext = [[X, U], [I', .]]`, which can be done using any other matrix factorization library (e.g. pyspark’s ALS module).
 
 ## Instalation
 Package is available on PyPI, can be installed with
@@ -29,7 +29,7 @@ Package is available on PyPI, can be installed with
 ```pip install cmfrec```
 
 ## Usage
-```
+```python
 import pandas as pd, numpy as np
 from cmfrec import CMF
 
@@ -41,8 +41,8 @@ prod_attributes=pd.DataFrame(np.random.normal(size=(40,60)))
 prod_attributes['ItemId']=[i for i in range(prod_attributes.shape[0])]
 
 # fitting a model and making some recommendations
-recc=CMF(k=20,k_main=3,k_item=5,reg_param=1e-4)
-recc.fit(ratings,prod_attributes)
+recc=CMF(k=20, k_main=3, k_item=5, reg_param=1e-4)
+recc.fit(ratings, prod_attributes)
 recc.top_n(UserId=4, n=10)
 recc.predict(UserId=0, ItemId=0)
 ```
