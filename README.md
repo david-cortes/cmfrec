@@ -1,4 +1,4 @@
-# cmfrec
+# Collective Matrix Factorization
 
 Python implementation of the collaborative filtering algorithm for explicit feedback data with item and/or user side information described in _Singh, A. P., & Gordon, G. J. (2008, August). Relational learning via collective matrix factorization. In Proceedings of the 14th ACM SIGKDD international conference on Knowledge discovery and data mining (pp. 650-658). ACM._
 
