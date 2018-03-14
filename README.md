@@ -6,11 +6,11 @@ The extended version of the paper (Relational learning via Collective Matrix Fac
 [http://ra.adm.cs.cmu.edu/anon/usr/ftp/ml2008/CMU-ML-08-109.pdf](http://ra.adm.cs.cmu.edu/anon/usr/ftp/ml2008/CMU-ML-08-109.pdf)
 
 ## Basic model
-The model consist in predicting the rating that a user would give to an item by a low-rank matrix factorization of explicit ratings `X~=UV'`, trying to add side information about the items (such as movie tags) and/or users (such as their demographic info) by also factorizing the item side info matrix and/or the user side info matrix (e.g. a matrix with columns corresponding to the available attributes and rows corresponding to users/items), sharing the same item/user-factor matrix used to factorize the ratings (or sharing only some of the latent factors), i.e. trying to minimize a weighted sum of errors from more than one low-rank factorization.
+The model consist in predicting the rating that a user would give to an item by performing a low-rank matrix factorization of explicit ratings `X~=AB'`, using side information about the items (such as movie tags) and/or users (such as their demographic info) by also factorizing the item side info matrix and/or the user side info matrix `X~=AB', U~=AC', I~=BD'`, sharing the same item/user-factor matrix used to factorize the ratings, or sharing only some of the latent factors.
 
 By default, the function to minimize is as follows:
 
-```L = w_main*norm(X-AB')^2/nX + w_item*norm(I-BC')^2/nI + w_user*norm(U-AD')^2/nU + reg_param*(norm(A)^2+norm(B)^2+norm(C)^2+norm(D)^2)```
+```L(A,B,C,D) = w_main*norm(X-AB')^2/nX + w_item*norm(I-BC')^2/nI + w_user*norm(U-AD')^2/nU + reg*(norm(A)^2+norm(B)^2+norm(C)^2+norm(D)^2)```
 
 Where:
 * X is the ratings matrix (considering only non-missing entries)
@@ -18,10 +18,15 @@ Where:
 * U is the user-attribute matrix (only supports dense, i.e. all non-missing entries)
 * A, B, C, D are lower-dimensional matrices (the model parameters)
 * nX, nI, nU are the number of entries in each matrix
+* w_main, w_item, and w_user are the weights assigned to each matrix
+* reg is a regularization parameter
 
 The matrix-products might not use all the rows/columns of these shared latent factor matrices at each factorization (this is controlled with `k_main`, `k_item` and `k_user` in the initialization). Although the package API has arguments for both user and item side information, you can fit the model with only one or none of them.
 
 Note that, in the simplest case with all factors shared and all matrices weighted the same, the model simplifies to factorizing an extended block matrix `X_ext = [[X, U], [I', .]]`, which can be done using any other matrix factorization library (e.g. pyspark’s ALS module).
+
+For a web-scale implementation of the algorithm see the implementation in Vowpal Wabbit:
+[https://github.com/JohnLangford/vowpal_wabbit/wiki/Matrix-factorization-example](https://github.com/JohnLangford/vowpal_wabbit/wiki/Matrix-factorization-example)
 
 ## Instalation
 Package is available on PyPI, can be installed with
