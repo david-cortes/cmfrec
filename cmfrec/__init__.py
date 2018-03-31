@@ -181,6 +181,8 @@ class CMF:
             del self._lst_slices
             del self._prod_arr
             del self._user_arr
+            del self._prod_arr_notmissing
+            del self._user_arr_notmissing
         
         return self
     
@@ -200,6 +202,9 @@ class CMF:
         R=tf.placeholder(tf.float32, shape=(None,))
         U=tf.placeholder(tf.float32)
         I=tf.placeholder(tf.float32)
+        
+        I_nonmissing=tf.placeholder(tf.float32)
+        U_nonmissing=tf.placeholder(tf.float32)
 
         Ab=A[:,:k_main+k]
         Ad=A[:,k_main:]
@@ -217,11 +222,16 @@ class CMF:
         
         if self._prod_arr is not None:
             pred_item=tf.matmul(Bc,C)
+            loss+=reg_param[2]*tf.nn.l2_loss(C)
+            if self._prod_arr_notmissing is not None:
+                pred_item*=I_nonmissing
             loss+=w2*tf.losses.mean_squared_error(pred_item,I) + reg_param[2]*tf.nn.l2_loss(C)
             
         if self._user_arr is not None:
             pred_user=tf.matmul(Ad,D)
-            loss+=w3*tf.losses.mean_squared_error(pred_user,U) + reg_param[3]*tf.nn.l2_loss(D)
+            if self._user_arr_notmissing is not None:
+                pred_user*=U_nonmissing
+            loss+=w2*tf.losses.mean_squared_error(pred_user,U) + reg_param[2]*tf.nn.l2_loss(C)
 
         optimizer = tf.contrib.opt.ScipyOptimizerInterface(loss, method='L-BFGS-B', options={'maxiter':maxiter})
         model = tf.global_variables_initializer()
@@ -229,7 +239,8 @@ class CMF:
         sess.run(model)
         with sess:
             sess.run(model)
-            optimizer.minimize(sess, feed_dict={R:self._X, U:self._user_arr, I:self._prod_arr})
+            optimizer.minimize(sess, feed_dict={R:self._X, U:self._user_arr, I:self._prod_arr,
+                                I_nonmissing:self._prod_arr_notmissing, U_nonmissing:self._user_arr_notmissing})
             self.A=A.eval(session=sess)
             self.B=B.eval(session=sess)
     
@@ -322,9 +333,17 @@ class CMF:
                 self._m3=self._prod_arr.shape[1]
                 if self._m3==0:
                     raise ValueError("item_info doesn't contain items in common with ratings data")
+                prod_arr_missing=np.isnan(self._prod_arr)
+                if np.sum(prod_arr_missing)==0:
+                    self._prod_arr_notmissing=None
+                else:
+                    self._prod_arr[prod_arr_missing]=0
+                    self._prod_arr_notmissing=(~prod_arr_missing).astype('uint8')
+                    del prod_arr_missing
             else:
                 self._m3=0
                 self._prod_arr=None
+                self._prod_arr_notmissing=None
 
             if user_info is not None:
                 userset=set(list(ratings_df.UserId))
@@ -334,9 +353,18 @@ class CMF:
                 self._m4=self._user_arr.shape[1]
                 if self._m4==0:
                     raise ValueError("user_info doesn't contain items in common with ratings data")
+                user_arr_missing=np.isnan(self._user_arr)
+                if np.sum(user_arr_missing)==0:
+                    self._user_arr_notmissing=None
+                else:
+                    self._user_arr[user_arr_missing]=0
+                    self._user_arr_notmissing=(~user_arr_missing).astype('uint8')
+                    del user_arr_missing
+                    
             else:
                 self._m4=0
                 self._user_arr=None
+                self._user_arr_notmissing=None
 
             ratings_df['UserId']=ratings_df.UserId.map(lambda x: self.user_orig_to_int[x])
             ratings_df['ItemId']=ratings_df.ItemId.map(lambda x: self.item_orig_to_int[x])
