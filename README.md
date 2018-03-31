@@ -8,26 +8,6 @@ The extended version of the paper (Relational learning via Collective Matrix Fac
 ## Basic model
 The model consist in predicting the rating that a user would give to an item by performing a low-rank matrix factorization of explicit ratings `X~=AB'`, using side information about the items (such as movie tags) and/or users (such as their demographic info) by also factorizing the item side info matrix and/or the user side info matrix `X~=AB', U~=AC', I~=BD'`, sharing the same item/user-factor matrix used to factorize the ratings, or sharing only some of the latent factors.
 
-By default, the function to minimize is as follows:
-
-```L(A,B,C,D) = w_main*norm(X-AB')^2/nX + w_item*norm(I-BC')^2/nI + w_user*norm(U-AD')^2/nU + reg*(norm(A)^2+norm(B)^2+norm(C)^2+norm(D)^2)```
-
-Where:
-* X is the ratings matrix (considering only non-missing entries)
-* I is the item-attribute matrix (only supports dense, i.e. all non-missing entries)
-* U is the user-attribute matrix (only supports dense, i.e. all non-missing entries)
-* A, B, C, D are lower-dimensional matrices (the model parameters)
-* nX, nI, nU are the number of entries in each matrix
-* w_main, w_item, and w_user are the weights assigned to each matrix
-* reg is a regularization parameter
-
-The matrix-products might not use all the rows/columns of these shared latent factor matrices at each factorization (this is controlled with `k_main`, `k_item` and `k_user` in the initialization). Although the package API has arguments for both user and item side information, you can fit the model with only one or none of them.
-
-Note that, in the simplest case with all factors shared and all matrices weighted the same, the model simplifies to factorizing an extended block matrix `X_ext = [[X, U], [I', .]]`, which can be done using any other matrix factorization library (e.g. pyspark’s ALS module).
-
-For a web-scale implementation of the algorithm see the implementation in Vowpal Wabbit:
-[https://github.com/JohnLangford/vowpal_wabbit/wiki/Matrix-factorization-example](https://github.com/JohnLangford/vowpal_wabbit/wiki/Matrix-factorization-example)
-
 ## Instalation
 Package is available on PyPI, can be installed with
 
@@ -52,9 +32,34 @@ recc.top_n(UserId=4, n=10)
 recc.predict(UserId=0, ItemId=0)
 ```
 
-For a more detailed example using the MovieLens data with user demographic info and movie genres see [this IPython notebook](http://nbviewer.jupyter.org/github/david-cortes/cmfrec/blob/master/example/cmfrec_movielens_sideinfo.ipynb).
 
-The code is documented internally through docstrings (e.g. you can try `help(CMF)`)
+## Documentation
+
+The code is documented internally through docstrings (e.g. you can try `help(CMF)`).
+
+For a detailed example using the MovieLens data with user demographic info and movie genres see [this IPython notebook](http://nbviewer.jupyter.org/github/david-cortes/cmfrec/blob/master/example/cmfrec_movielens_sideinfo.ipynb).
+
+## Model details
+
+By default, the function to minimize is as follows:
+
+```L(A,B,C,D) = w_main*norm(X-AB')^2/nX + w_item*norm(I-BC')^2/nI + w_user*norm(U-AD')^2/nU + reg*(norm(A)^2+norm(B)^2+norm(C)^2+norm(D)^2)```
+
+Where:
+* X is the ratings matrix (considering only non-missing entries)
+* I is the item-attribute matrix (only supports dense, i.e. all non-missing entries)
+* U is the user-attribute matrix (only supports dense, i.e. all non-missing entries)
+* A, B, C, D are lower-dimensional matrices (the model parameters)
+* nX, nI, nU are the number of entries in each matrix
+* w_main, w_item, and w_user are the weights assigned to each matrix
+* reg is a regularization parameter
+
+The matrix-products might not use all the rows/columns of these shared latent factor matrices at each factorization (this is controlled with `k_main`, `k_item` and `k_user` in the initialization). Although the package API has arguments for both user and item side information, you can fit the model with only one or none of them.
+
+Note that, in the simplest case with all factors shared and all matrices weighted the same, the model simplifies to factorizing an extended block matrix `X_ext = [[X, U], [I', .]]`, which can be done using any other matrix factorization library (e.g. pyspark’s ALS module).
+
+For a web-scale implementation of the algorithm see the implementation in Vowpal Wabbit:
+[https://github.com/JohnLangford/vowpal_wabbit/wiki/Matrix-factorization-example](https://github.com/JohnLangford/vowpal_wabbit/wiki/Matrix-factorization-example)
 
 ## Implementation Notes
 The implementation here is not entirely true to the paper, as the model is fit with full L-BFGS updates rather than stochastic Newton, thus not recommended for web-scale datasets. Most of the calculations are done in Tensorflow, interfacing an external L-BFGS solver, thus speed should be quite fast. As a reference point, 1,000 iterations (usually enough to fit a model with high regularization) over the movielens-1M and 1128 movie tags per movie + user demographics takes around 15 minutes in a regular desktop computer and uses around ~2GB RAM.
