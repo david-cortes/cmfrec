@@ -444,11 +444,11 @@ class CMF:
         if self.add_item_bias:
             del self.init_i_bias
         if self._user_arr is not None:
-            if (self.cols_user_bin is not None) and (not self.offsets_model):
+            if (self.cols_bin_user is not None) and (not self.offsets_model):
                 del self._user_arr_bin
                 del self._user_arr_notmissing_bin
         if self._item_arr is not None:
-            if (self.cols_item_bin is not None) and (not self.offsets_model):
+            if (self.cols_bin_item is not None) and (not self.offsets_model):
                 del self._item_arr_bin
                 del self._item_arr_notmissing_bin
 
@@ -911,6 +911,7 @@ class CMF:
                         self._item_cols_orig = np.setdiff1d(item_info.columns.values, np.array(['ItemId']))
                         item_info = item_info[np.r_[self._cols_nonbin_item, np.array(['ItemId'])]]
                 else:
+
                     self.cols_bin_item = None
                     self._item_arr_bin = None
 
@@ -1003,10 +1004,16 @@ class CMF:
             self._ratings['Rating'] -= self.global_mean
 
         if self.add_user_bias:
-            self.init_u_bias = self._ratings.groupby('UserId', sort=True)['Rating'].mean().values.astype('float32')
+            self.init_u_bias = np.zeros(self.nusers, dtype='float32')
+            user_avg = self._ratings.groupby('UserId', sort=True)['Rating'].mean()
+            self.init_u_bias[user_avg.index] = user_avg.values
+            del user_avg
 
         if self.add_item_bias:
-            self.init_i_bias = self._ratings.groupby('ItemId', sort=True)['Rating'].mean().values.astype('float32')
+            self.init_i_bias = np.zeros(self.nitems, dtype='float32')
+            item_avg = self._ratings.groupby('ItemId', sort=True)['Rating'].mean()
+            self.init_i_bias[item_avg.index] = item_avg.values
+            del item_avg
 
         self._ix_u = self._ratings.UserId.values
         self._ix_i = self._ratings.ItemId.values
