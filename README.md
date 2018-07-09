@@ -11,6 +11,8 @@ The model consist in predicting the rating that a user would give to an item by 
 
 This also has the side effect of allowing to recommend for users and items for which there is side information but no ratings, although these predictions might not be as high quality.
 
+For more details on the formulas, see the IPython notebook example.
+
 ## Instalation
 
 Package is available on PyPI, can be installed with:
@@ -81,7 +83,7 @@ Documentation is available at readthedocs: [http://cmfrec.readthedocs.io/en/late
 
 It is also internally documented through docstrings (e.g. you can try `help(cmfrec.CMF))`, `help(cmfrec.CMF.fit)`, etc.
 
-For a detailed example using the MovieLens data with user demographic info and movie genres see the IPython notebook [Recommending Movies with Collective Matrix Factorization](http://nbviewer.jupyter.org/github/david-cortes/cmfrec/blob/master/example/cmfrec_movielens_sideinfo.ipynb).
+For a detailed example using the MovieLens data with user demographic info and movie genres see the IPython notebook [Collaborative filtering with side information](http://nbviewer.jupyter.org/github/david-cortes/cmfrec/blob/master/example/cmfrec_movielens_sideinfo.ipynb).
 
 ## Model details
 
