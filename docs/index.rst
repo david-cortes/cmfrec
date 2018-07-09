@@ -6,7 +6,7 @@
 Collective Matrix Factorization
 ===============================
 
-This is the documentation page for the python package *hpfrec*. For 
+This is the documentation page for the python package *cmfrec*. For 
 more details, see the project's GitHub page:
 
 `<https://www.github.com/david-cortes/cmfrec/>`_
