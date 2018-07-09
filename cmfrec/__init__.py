@@ -362,23 +362,15 @@ class CMF:
         Note
         ----
         **Be aware that the data passed to '.fit' will be modified inplace (e.g. reindexed). Make a copy of your data beforehand if
-        you require it.**
-        
-        Note
-        ----
-        The model will only be fit with users and items that are present in both the ratings and the side info data.
-        If after filtering there are no matching entries, it will throw an error.
-        Although the API can accommodate both item and user side information,
-        you can still fit the model without them.
-        
+        you require it (e.g. using the "deepcopy" function from the "copy" module).**
         
         Parameters
         ----------
         ratings : pandas data frame or array (nobs, 3)
             Ratings data to which to fit the model.
-            If a pandas data frame, must contain the columns 'UserId','ItemId' and 'Rating'.
-            If a numpy array, will take the first 3 columns in that order
-            If a list of tuples, must be in the format (UserId,ItemId,Rating) (will be coerced to data frame)
+            If a pandas data frame, must contain the columns 'UserId','ItemId' and 'Rating'. Optionally, it might also contain a column 'Weight'.
+            If a numpy array, will take the first 4 columns in that order
+            If a list of tuples, must be in the format (UserId,ItemId,Rating,[Weight]) (will be coerced to data frame)
         user_info : pandas data frame or numpy array (nusers, nfeatures_user)
             Side information about the users (i.e. their attributes, as a table).
             Must contain a column called 'UserId'.
@@ -433,6 +425,7 @@ class CMF:
         del self._ix_i
         del self._item_arr_notmissing
         del self._user_arr_notmissing
+        del self._weights
         if self._item_arr_mismatch:
             del self._slc_item
         del self._item_arr_mismatch
@@ -478,6 +471,7 @@ class CMF:
         I = tf.placeholder(tf.float32)
         U_bin = tf.placeholder(tf.float32)
         I_bin = tf.placeholder(tf.float32)
+        W = tf.placeholder(tf.float32)
         
         I_nonmissing = tf.placeholder(tf.float32)
         U_nonmissing = tf.placeholder(tf.float32)
@@ -516,9 +510,15 @@ class CMF:
                 pred_ratings += tf.gather(item_bias, self._ix_i)
 
             if self.reweight or (not self.standardize_err):
-                loss = w1 * tf.nn.l2_loss(pred_ratings, R)
+                if self._weights is None:
+                    loss = w1 * tf.nn.l2_loss(pred_ratings - R)
+                else:
+                    loss = w1 * tf.nn.l2_loss( (pred_ratings - R) * W)
             else:
-                loss = w1 * tf.losses.mean_squared_error(pred_ratings, R)
+                if self._weights is None:
+                    loss = w1 * tf.losses.mean_squared_error(pred_ratings, R)
+                else:
+                    loss = w1 * tf.losses.mean_squared_error(pred_ratings, R, weights=W)
             loss += reg_param[0] * tf.nn.l2_loss(A) + reg_param[1] * tf.nn.l2_loss(B)
 
             if self.add_user_bias:
@@ -536,7 +536,7 @@ class CMF:
                     pred_user *= U_nonmissing
 
                 if self.reweight or (not self.standardize_err):
-                    loss += w2 * tf.nn.l2_loss(pred_user, U)
+                    loss += w2 * tf.nn.l2_loss(pred_user - U)
                 else:
                     loss += w2 * tf.losses.mean_squared_error(pred_user, U)
                 
@@ -552,7 +552,7 @@ class CMF:
                     if self.standardize_err:
                         loss += w2 * tf.losses.mean_squared_error(pred_user_bin, U_bin)
                     else:
-                        loss += w2 * tf.nn.l2_loss(pred_user_bin, U_bin)
+                        loss += w2 * tf.nn.l2_loss(pred_user_bin - U_bin)
                 loss += reg_param[4] * tf.nn.l2_loss(C)
 
             if self._item_arr is not None:
@@ -564,7 +564,7 @@ class CMF:
                     pred_item *= I_nonmissing
 
                 if self.reweight or (not self.standardize_err):
-                    loss += w3 * tf.nn.l2_loss(pred_item, I)
+                    loss += w3 * tf.nn.l2_loss(pred_item - I)
                 else:
                     loss += w3 * tf.losses.mean_squared_error(pred_item, I)
                 
@@ -580,7 +580,7 @@ class CMF:
                     if self.standardize_err:
                         loss += w3 * tf.losses.mean_squared_error(pred_item_bin, I_bin)
                     else:
-                        loss += w3 * tf.nn.l2_loss(pred_item_bin, I_bin)
+                        loss += w3 * tf.nn.l2_loss(pred_item_bin - I_bin)
                 loss += reg_param[5] * tf.nn.l2_loss(D)
 
         ### model with offsets instead
@@ -593,6 +593,7 @@ class CMF:
                 C = tf.Variable(tf.random_normal([self.user_dim, k]))
                 if self._user_arr_mismatch:
                     ## if tensorflow bug gets fixed, enable this
+                    ## https://github.com/tensorflow/tensorflow/issues/19717
                     ## currently will fill all user_arr and item_arr with rows of NAs
                     Acomp = tf.scatter_add(A, self._slc_user, tf.matmul(U, C))
                 else:
@@ -612,8 +613,8 @@ class CMF:
                 Bcomp = B
 
             pred_ratings = tf.reduce_sum( tf.multiply(
-                tf.gather(Acomp, self._ix_u, axis=0),
-                tf.gather(Bcomp, self._ix_i, axis=0))
+                    tf.gather(Acomp, self._ix_u, axis=0),
+                    tf.gather(Bcomp, self._ix_i, axis=0))
                                            , axis=1)
 
             if self.add_user_bias:
@@ -623,9 +624,15 @@ class CMF:
 
             
             if self.standardize_err:
-                loss = tf.losses.mean_squared_error(pred_ratings, R)
+                if self._weights is None:
+                    loss = tf.losses.mean_squared_error(pred_ratings, R)
+                else:
+                    loss = tf.losses.mean_squared_error(pred_ratings, R, weights=W)
             else:
-                loss = tf.nn.l2_loss(pred_ratings, R)
+                if self._weights is None:
+                    loss = tf.nn.l2_loss(pred_ratings - R)
+                else:
+                    loss = tf.nn.l2_loss( (pred_ratings - R) * W)
             loss += reg_param[0] * tf.nn.l2_loss(A) + reg_param[1] * tf.nn.l2_loss(B)
 
             if self.add_user_bias:
@@ -666,7 +673,7 @@ class CMF:
                 tf.logging.set_verbosity(tf.logging.INFO)
             else:
                 tf.logging.set_verbosity(tf.logging.WARN)
-            optimizer.minimize(sess, feed_dict={R:self._ratings, U:self._user_arr, I:self._item_arr,
+            optimizer.minimize(sess, feed_dict={R:self._ratings, U:self._user_arr, I:self._item_arr, W:self._weights,
                                 U_bin:self._user_arr_bin, I_bin:self._item_arr_bin,
                                 I_nonmissing:self._item_arr_notmissing, U_nonmissing:self._user_arr_notmissing,
                                 I_nonmissing_bin:self._item_arr_notmissing_bin,
@@ -754,18 +761,26 @@ class CMF:
         if isinstance(ratings, np.ndarray):
             assert len(ratings.shape) > 1
             assert ratings.shape[1] >= 3
-            ratings = ratings.values[:,:3]
-            ratings.columns = ['UserId', 'ItemId', "Rating"]
+            ratings = ratings.values[:,:4]
+            ratings.columns = ['UserId', 'ItemId', "Rating", "Weight"][:ratings.shape[1]]
 
         if type(ratings) == list:
-            ratings = pd.DataFrame(ratings, columns=['UserId','ItemId','Rating'])
+            if len(ratings[0]) == 3:
+                ratings = pd.DataFrame(ratings, columns=['UserId','ItemId','Rating'])
+            elif len(ratings[0]) > 3:
+                ratings = pd.DataFrame(ratings, columns=['UserId','ItemId','Rating','Weight'])
+            else:
+                raise ValueError("If passing a list to 'ratings', it must contain tuples with (UserId, ItemId, Weight).")
             
         if ratings.__class__.__name__ == 'DataFrame':
             assert ratings.shape[0] > 0
             assert 'UserId' in ratings.columns.values
             assert 'ItemId' in ratings.columns.values
             assert 'Rating' in ratings.columns.values
-            self._ratings = ratings[['UserId', 'ItemId', 'Rating']]
+            cols_take = ['UserId', 'ItemId', 'Rating']
+            if 'Weight' in ratings.columns.values:
+                cols_take += ['Weight']
+            self._ratings = ratings[cols_take]
         else:
             raise ValueError("'ratings' must be a pandas data frame or a numpy array")
 
@@ -847,6 +862,8 @@ class CMF:
             self.nitems = self.item_mapping_.shape[0]
             self._ratings['UserId'] =  self._ratings.UserId.values.astype('int32')
             self._ratings['ItemId'] =  self._ratings.ItemId.values.astype('int32')
+            if 'Weight' in self._ratings.columns.values:
+                self._ratings['Weight'] = self._ratings.Weight.astype('float32')
 
             if item_info is not None:
 
@@ -1017,6 +1034,10 @@ class CMF:
 
         self._ix_u = self._ratings.UserId.values
         self._ix_i = self._ratings.ItemId.values
+        if 'Weight' in self._ratings.columns.values:
+            self._weights = self._ratings.Weight.values
+        else:
+            self._weights = None
         if self.keep_data:
             self._store_metadata()
         self._ratings = self._ratings.Rating.values
@@ -1349,11 +1370,17 @@ class CMF:
         if items_pool is None:
             allpreds = - (self._Ab[user].dot(self._Ba.T))
             if self.add_item_bias:
-                allpreds += self.item_bias
+                allpreds -= self.item_bias
             if exclude_seen:
-                n_ext = np.min([n + self._n_seen_by_user[user], self._Ba.shape[0]])
+                if user < self._n_seen_by_user.shape[0]:
+                    n_seen_by_user = self._n_seen_by_user[user]
+                    st_ix_user = self._st_ix_user[user]
+                else:
+                    n_seen_by_user = 0
+                    st_ix_user = 0
+                n_ext = np.min([n + n_seen_by_user, self._Ba.shape[0]])
                 rec = np.argpartition(allpreds, n_ext-1)[:n_ext]
-                seen = self.seen[self._st_ix_user[user] : self._st_ix_user[user] + self._n_seen_by_user[user]]
+                seen = self.seen[st_ix_user : st_ix_user + n_seen_by_user]
                 rec = np.setdiff1d(rec, seen)
                 rec = rec[np.argsort(allpreds[rec])[:n]]
                 if self.reindex:
@@ -1399,27 +1426,33 @@ class CMF:
             if self.reindex:
                 allpreds = - self._Ab[user].dot(self._Ba[items_pool_reind].T)
                 if self.add_item_bias:
-                    allpreds += self.item_bias[items_pool_reind]
+                    allpreds -= self.item_bias[items_pool_reind]
             else:
                 allpreds = - self._Ab[user].dot(self._Ba[items_pool].T)
                 if self.add_item_bias:
-                    allpreds += self.item_bias[items_pool]
+                    allpreds -= self.item_bias[items_pool]
             n = np.min([n, items_pool.shape[0]])
             if exclude_seen:
-                n_ext = np.min([n + self._n_seen_by_user[user], items_pool.shape[0]])
+                if user < self._n_seen_by_user.shape[0]:
+                    n_seen_by_user = self._n_seen_by_user[user]
+                    st_ix_user = self._st_ix_user[user]
+                else:
+                    n_seen_by_user = 0
+                    st_ix_user = 0
+                n_ext = np.min([n + n_seen_by_user, items_pool.shape[0]])
                 rec = np.argpartition(allpreds, n_ext-1)[:n_ext]
-                seen = self.seen[self._st_ix_user[user] : self._st_ix_user[user] + self._n_seen_by_user[user]]
+                seen = self.seen[st_ix_user : st_ix_user + n_seen_by_user]
                 if self.reindex:
                     rec = np.setdiff1d(items_pool_reind[rec], seen)
                     allpreds = - self._Ab[user].dot(self._Ba[rec].T)
                     if self.add_item_bias:
-                        allpreds += self.item_bias[rec]
+                        allpreds -= self.item_bias[rec]
                     return self.item_mapping_[rec[np.argsort(allpreds)[:n]]]
                 else:
                     rec = np.setdiff1d(items_pool[rec], seen)
                     allpreds = - self._Ab[user].dot(self._Ba[rec].T)
                     if self.add_item_bias:
-                        allpreds += self.item_bias[rec]
+                        allpreds -= self.item_bias[rec]
                     return rec[np.argsort(allpreds)[:n]]
             else:
                 rec = np.argpartition(allpreds, n-1)[:n]
@@ -1471,6 +1504,13 @@ class CMF:
         assert self.is_fitted
         if self.C is None:
             raise ValueError("Can only add users if model was fit to user side information.")
+        if self.produce_dicts:
+            if new_id in self.user_dict_:
+                raise ValueError("User ID is already in the model.")
+        else:
+            if new_id in self.user_mapping_:
+                raise ValueError("User ID is already in the model.")
+
         if attributes.__class__.__name__ == 'DataFrame':
             attributes = attributes[self._user_cols_orig]
             attributes = attributes.values
@@ -1552,9 +1592,9 @@ class CMF:
             if self.produce_dicts:
                 self.user_dict_[new_id] = self.user_mapping_.shape[0] - 1
 
-        if self.keep_data:
-            self._st_ix_user = np.r_[self._st_ix_user, -1]
-            self._n_seen_by_user = np.r_[self._n_seen_by_user, 0]
+        # if self.keep_data:
+        #     self._st_ix_user = np.r_[self._st_ix_user, -1]
+        #     self._n_seen_by_user = np.r_[self._n_seen_by_user, 0]
 
         if self.add_user_bias:
             self.user_bias = np.r_[self.user_bias, np.zeros(1, dtype=self.user_bias.dtype)]
@@ -1607,6 +1647,13 @@ class CMF:
         assert self.is_fitted
         if self.D is None:
             raise ValueError("Can only add items if model was fit to item side information.")
+        if self.produce_dicts:
+            if new_id in self.item_dict_:
+                raise ValueError("Item ID is already in the model.")
+        else:
+            if new_id in self.item_mapping_:
+                raise ValueError("Item ID is already in the model.")
+
         if attributes.__class__.__name__ == 'DataFrame':
             attributes = attributes.values
         if attributes.__class__.__name__ == 'Series':
@@ -1801,7 +1848,7 @@ class CMF:
         if items_pool is None:
             allpreds = user_vec.dot(self._Ba.T)
             if self.add_item_bias:
-                allpreds += self.item_bias
+                allpreds -= self.item_bias
             n = np.min([n, self._Ba.shape[0]])
             rec = np.argpartition(allpreds, n-1)[:n]
             rec = rec[np.argsort(allpreds[rec])]
@@ -1839,11 +1886,11 @@ class CMF:
             if self.reindex:
                 allpreds = user_vec.dot(self._Ba[items_pool_reind].T)
                 if self.add_item_bias:
-                    allpreds += self.item_bias[items_pool_reind]
+                    allpreds -= self.item_bias[items_pool_reind]
             else:
                 allpreds = user_vec.dot(self._Ba[items_pool].T)
                 if self.add_item_bias:
-                    allpreds += self.item_bias[items_pool]
+                    allpreds -= self.item_bias[items_pool]
             n = np.min([n, items_pool.shape[0]])
             
             rec = np.argpartition(allpreds, n-1)[:n]
