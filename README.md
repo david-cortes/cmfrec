@@ -50,11 +50,11 @@ recommender = CMF(k=20, k_main=3, k_user=2, k_item=1, reg_param=1e-4)
 recommender.fit(ratings=ratings, user_info=user_attributes, item_info=item_attributes,
 	cols_bin_user=None, cols_bin_item=None)
 recommender.topN(user=4, n=10)
-recommender.topN_cold(attributes=np.random.normal(size=item_dim), n=10)
+recommender.topN_cold(attributes=np.random.normal(size=user_dim), n=10)
 recommender.predict(user=0, item=0)
 recommender.predict(user=[0,0,1], item=[0,1,0])
 
-# adding nre users and items
+# adding more users and items without refitting
 recommender.add_item(new_id=10**3, attributes=np.random.normal(size=item_dim), reg='auto')
 recommender.add_user(new_id=10**3, attributes=np.random.normal(size=user_dim), reg=1e-3)
 recommender.topN(10**3)
