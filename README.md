@@ -28,6 +28,7 @@ from cmfrec import CMF
 nusers = 10**2
 nitems = 10**2
 nobs = 10**3
+np.random.seed(1)
 ratings = pd.DataFrame({
 	'UserId' : np.random.randint(nusers, size=nobs),
 	'ItemId' : np.random.randint(nitems, size=nobs),
