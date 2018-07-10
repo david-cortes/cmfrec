@@ -30,7 +30,7 @@ nitems = 10**2
 nobs = 10**3
 ratings = pd.DataFrame({
 	'UserId' : np.random.randint(nusers, size=nobs),
-	'ItemId' : np.random.randint(nitems, size=nitems),
+	'ItemId' : np.random.randint(nitems, size=nobs),
 	'Rating' : np.random.randint(low=1, high=6, size=nobs)
 	})
 
