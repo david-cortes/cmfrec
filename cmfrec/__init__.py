@@ -1843,7 +1843,7 @@ class CMF:
                                             attr_num:attributes, attr_bin:attributes_bin})
                     user_vec = Arow.eval(session=sess).reshape(-1)
             
-        user_vec = -np.r_[np.zeros(self.k_main, dtype=user_vec.dtype), user_vec[:self.k]]
+        user_vec = -np.r_[np.zeros(self.k_main, dtype=user_vec.dtype), user_vec.reshape(-1)[:self.k]]
 
         if items_pool is None:
             allpreds = user_vec.dot(self._Ba.T)
