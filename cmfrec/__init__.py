@@ -321,6 +321,8 @@ class CMF:
             self.w_item = None
         if self.reweight:
             self.standardize_err = False
+        if not self.reindex:
+            self.produce_dicts = False
 
 
         if self.add_user_bias or self.add_item_bias:
