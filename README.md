@@ -2,8 +2,12 @@
 
 Python implementation of collective matrix factorization, based on the paper _Relational learning via collective matrix factorization (A. Singh, 2008)_, with some enhancements. This is a collaborative filtering model for recommender systems that takes as input explicit item ratings and side information about users and/or items. The overall idea was extended here to also be able to do cold-start recommendations (of users and items that were not in the training data). Implementation is done in TensorFlow and optimization is with L-BFGS.
 
+Although the package was developed with recommender systems in mind, it can also be used in other domains - just take any mention of users as rows in the main matrix and any mention of items as columns.
+
 The extended version of the paper ("Relational learning via Collective Matrix Factorization") can be downloaded here:
 [http://ra.adm.cs.cmu.edu/anon/usr/ftp/ml2008/CMU-ML-08-109.pdf](http://ra.adm.cs.cmu.edu/anon/usr/ftp/ml2008/CMU-ML-08-109.pdf)
+
+For a similar package for recommender systems with implicit data see [ctpfrec](https://github.com/david-cortes/ctpfrec).
 
 ## Basic model
 
