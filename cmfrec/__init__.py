@@ -1025,13 +1025,13 @@ class CMF:
         if self.add_user_bias:
             self.init_u_bias = np.zeros(self.nusers, dtype='float32')
             user_avg = self._ratings.groupby('UserId', sort=True)['Rating'].mean()
-            self.init_u_bias[user_avg.index] = user_avg.values
+            self.init_u_bias[user_avg.index] = user_avg.values / 2
             del user_avg
 
         if self.add_item_bias:
             self.init_i_bias = np.zeros(self.nitems, dtype='float32')
             item_avg = self._ratings.groupby('ItemId', sort=True)['Rating'].mean()
-            self.init_i_bias[item_avg.index] = item_avg.values
+            self.init_i_bias[item_avg.index] = item_avg.values / 2
             del item_avg
 
         self._ix_u = self._ratings.UserId.values
