@@ -7,6 +7,8 @@ Although the package was developed with recommender systems in mind, it can also
 The extended version of the paper ("Relational learning via Collective Matrix Factorization") can be downloaded here:
 [http://ra.adm.cs.cmu.edu/anon/usr/ftp/ml2008/CMU-ML-08-109.pdf](http://ra.adm.cs.cmu.edu/anon/usr/ftp/ml2008/CMU-ML-08-109.pdf)
 
+For more information about the implementation here, or if you would like to cite this in your research, see the paper ["Cold-start recommendations in Collective Matrix Factorization"](https://arxiv.org/abs/1809.00366)
+
 For a similar package for recommender systems with implicit data see [ctpfrec](https://github.com/david-cortes/ctpfrec).
 
 ## Basic model
@@ -92,6 +94,8 @@ For a detailed example using the MovieLens data with user demographic info and m
 
 ## Model details
 
+For a full description of the implementation, see the paper ["Cold-start recommendations in Collective Matrix Factorization"](https://arxiv.org/abs/1809.00366).
+
 By default, the function to minimize is as follows:
 
 ```
@@ -154,5 +158,6 @@ This kind of model requires a lot more hyperparameter tuning that regular low-ra
 If your dataset is larger than the MovieLens ratings, adding product side information is unlikely to add more predictive power, but good user side information might still be valuable.
 
 ## References
+* Cortes, David. "Cold-start recommendations in Collective Matrix Factorization." arXiv preprint arXiv:1809.00366 (2018).
 * Singh, Ajit P., and Geoffrey J. Gordon. "Relational learning via collective matrix factorization." Proceedings of the 14th ACM SIGKDD international conference on Knowledge discovery and data mining. ACM, 2008.
 * Wang, Chong, and David M. Blei. "Collaborative topic modeling for recommending scientific articles." Proceedings of the 17th ACM SIGKDD international conference on Knowledge discovery and data mining. ACM, 201.
