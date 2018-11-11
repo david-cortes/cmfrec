@@ -127,7 +127,7 @@ Alternatively, it can also fit a different model formulation in which, in broad 
  L = sum_sq(X - (A+UC)(B+ID)' - Ubias_{u} - Ibias_{i}) + regl.
  ```
 
-This second formulation usually takes longer to fit (requires more iterations), and is more recommended if the side information about users and items is mostly binary columns, and for cold-start recommendations. To use this alternative formulation, pass `offsets_model=False` to the CMF constructor.
+This second formulation usually takes longer to fit (requires more iterations), and is more recommended if the side information about users and items is mostly binary columns, and for cold-start recommendations. To use this alternative formulation, pass `offsets_model=True` to the CMF constructor.
 
 For a web-scale implementation (without in-memory data) of the first algorithm see the implementation in Vowpal Wabbit:
 [https://github.com/JohnLangford/vowpal_wabbit/wiki/Matrix-factorization-example](https://github.com/JohnLangford/vowpal_wabbit/wiki/Matrix-factorization-example)
