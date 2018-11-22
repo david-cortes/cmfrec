@@ -461,6 +461,7 @@ class CMF:
         # faster method, can be reused with the same data
 
         if random_seed is not None:
+            tf.reset_default_graph()
             tf.set_random_seed(random_seed)
 
         if self.add_user_bias:
