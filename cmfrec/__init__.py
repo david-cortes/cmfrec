@@ -460,16 +460,18 @@ class CMF:
              random_seed=None, maxiter=1000):
         # faster method, can be reused with the same data
 
+        tf.reset_default_graph()
         # if random_seed is not None:
         #     tf.reset_default_graph()
         #     tf.set_random_seed(random_seed)
         if random_seed is None:
         	random_seed = 1
+        print("you are seeing this confirmation.")
 
         if self.add_user_bias:
-            user_bias = tf.Variable(self.init_u_bias)
+            user_bias = tf.Variable(self.init_u_bias.astype(np.float32))
         if self.add_item_bias:
-            item_bias = tf.Variable(self.init_i_bias)
+            item_bias = tf.Variable(self.init_i_bias.astype(np.float32))
         
         R = tf.placeholder(tf.float32, shape=(None,))
         U = tf.placeholder(tf.float32)
@@ -483,21 +485,22 @@ class CMF:
         I_nonmissing_bin = tf.placeholder(tf.float32)
         U_nonmissing_bin = tf.placeholder(tf.float32) 
 
+        np.random.seed(random_seed)
         ### original formulation
         if not self.offsets_model:
 
-            A = tf.Variable(tf.random_normal([self.nusers, k_main + k + k_user], seed=random_seed + 1))
-            B = tf.Variable(tf.random_normal([self.nitems, k_main + k + k_item], seed=random_seed + 2))
+            A = tf.Variable(np.random.normal(size=[self.nusers, k_main + k + k_user]).astype(np.float32))
+            B = tf.Variable(np.random.normal(size=[self.nitems, k_main + k + k_item]).astype(np.float32))
 
             if self._user_arr is not None:
-                C = tf.Variable(tf.random_normal([k + k_user, self.user_dim], seed=random_seed + 3))
+                C = tf.Variable(np.random.normal(size=[k + k_user, self.user_dim]).astype(np.float32))
                 if self.cols_bin_user is not None:
-                    C_bin = tf.Variable(tf.random_normal([k + k_user, self.cols_bin_user.shape[0]], seed=random_seed + 4))
+                    C_bin = tf.Variable(np.random.normal(size=[k + k_user, self.cols_bin_user.shape[0]]).astype(np.float32))
 
             if self._item_arr is not None:
-                D = tf.Variable(tf.random_normal([k + k_item, self.item_dim], seed=random_seed + 5))
+                D = tf.Variable(np.random.normal(size=[k + k_item, self.item_dim]).astype(np.float32))
                 if self.cols_bin_item is not None:
-                    D_bin = tf.Variable(tf.random_normal([k + k_item, self.cols_bin_item.shape[0]], seed=random_seed + 6))
+                    D_bin = tf.Variable(np.random.normal(size=[k + k_item, self.cols_bin_item.shape[0]]).astype(np.float32))
 
             Ab = A[:, :k_main + k]
             Ac = A[:, k_main:]
@@ -591,11 +594,11 @@ class CMF:
         ### model with offsets instead
         else:
 
-            A = tf.Variable(tf.random_normal([self.nusers, k], seed=random_seed + 7))
-            B = tf.Variable(tf.random_normal([self.nitems, k], seed=random_seed + 8))
+            A = tf.Variable(np.random.normal(size=[self.nusers, k]).astype(np.float32))
+            B = tf.Variable(np.random.normal(size=[self.nitems, k]).astype(np.float32))
 
             if self._user_arr is not None:
-                C = tf.Variable(tf.random_normal([self.user_dim, k], seed=random_seed + 9))
+                C = tf.Variable(np.random.normal(size=[self.user_dim, k]).astype(np.float32))
                 if self._user_arr_mismatch:
                     ## if tensorflow bug gets fixed, enable this
                     ## https://github.com/tensorflow/tensorflow/issues/19717
@@ -607,7 +610,7 @@ class CMF:
                 Acomp = A
 
             if self._item_arr is not None:
-                D = tf.Variable(tf.random_normal([self.item_dim, k], seed=random_seed + 10))
+                D = tf.Variable(np.random.normal(size=[self.item_dim, k]).astype(np.float32))
                 if self._item_arr_mismatch:
                     ## if tensorflow bug gets fixed, enable this
                     ## currently will fill all user_arr and item_arr with rows of NAs
