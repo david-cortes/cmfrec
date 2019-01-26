@@ -8,7 +8,7 @@ setup(
    'scipy',
    'tensorflow>=1.0.0'
 ],
-  version = '0.5.2.2',
+  version = '0.5.2.3',
   description = 'Collaborative filtering with user and item side information based on collective matrix factorization',
   author = 'David Cortes',
   author_email = 'david.cortes.rivera@gmail.com',

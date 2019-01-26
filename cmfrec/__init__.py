@@ -764,7 +764,7 @@ class CMF:
         if isinstance(ratings, np.ndarray):
             assert len(ratings.shape) > 1
             assert ratings.shape[1] >= 3
-            ratings = ratings.values[:,:4]
+            ratings = pd.DataFrame(ratings[:, :4])
             ratings.columns = ['UserId', 'ItemId', "Rating", "Weight"][:ratings.shape[1]]
 
         if type(ratings) == list:
