@@ -11,6 +11,10 @@ For more information about the implementation here, or if you would like to cite
 
 For a similar package for recommender systems with implicit data see [ctpfrec](https://github.com/david-cortes/ctpfrec).
 
+#### Important!!!
+
+This package was designed for TensorFlow v1, and will not work under TensorFlow v2. There are no plans to update this package to work with TF2 in the near future.
+
 ## Basic model
 
 The model consist in predicting the rating that a user would give to an item by performing a low-rank matrix factorization of explicit ratings `X~=AB'`, using side information about the items (such as movie tags) and/or users (such as their demographic info) by also factorizing the item side info matrix and/or the user side info matrix `X~=AB', U~=AC', I~=BD'`, sharing the same item/user-factor matrix used to factorize the ratings, or sharing only some of the latent factors.
