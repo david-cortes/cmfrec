@@ -223,8 +223,12 @@ class CMF:
 
     References
     ----------
-    [1] Relational learning via collective matrix factorization (A. Singh, 2008)
-    [2] Collaborative topic modeling for recommending scientific articles (C. Wang, D. Blei, 2011)
+    .. [1] Cortes, David. "Cold-start recommendations in Collective Matrix Factorization."
+           arXiv preprint arXiv:1809.00366 (2018).
+    .. [2] Singh, Ajit P., and Geoffrey J. Gordon. "Relational learning via collective matrix factorization."
+           Proceedings of the 14th ACM SIGKDD international conference on Knowledge discovery and data mining. ACM, 2008.
+    .. [3] Wang, Chong, and David M. Blei. "Collaborative topic modeling for recommending scientific articles."
+           Proceedings of the 17th ACM SIGKDD international conference on Knowledge discovery and data mining. ACM, 2011.
     """
     def __init__(self, k=30, k_main=0, k_user=0, k_item=0,
                  w_main=1.0, w_user=1.0, w_item=1.0, reg_param=1e-4,
