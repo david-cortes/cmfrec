@@ -3,12 +3,12 @@ setup(
   name = 'cmfrec',
   packages = ['cmfrec'],
   install_requires=[
-   'pandas>=0.21',
+   'pandas>=0.24',
    'numpy',
    'scipy',
-   'tensorflow>=1.0.0'
+   'tensorflow>=1.0.0,<2.0.0'
 ],
-  version = '0.5.2.3',
+  version = '0.5.3',
   description = 'Collaborative filtering with user and item side information based on collective matrix factorization',
   author = 'David Cortes',
   author_email = 'david.cortes.rivera@gmail.com',
