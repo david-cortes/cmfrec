@@ -22,7 +22,7 @@ import sys
 sys.path.insert(0, os.path.abspath('../'))
 
 import mock 
-MOCK_MODULES = ['tensorflow', 'numpy', 'pandas']
+MOCK_MODULES = ['cmfrec.wrapper_double', 'cmfrec.wrapper_float']
 sys.modules.update((mod_name, mock.MagicMock()) for mod_name in MOCK_MODULES)
 
 # -- General configuration ------------------------------------------------
