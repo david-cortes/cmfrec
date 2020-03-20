@@ -27,7 +27,7 @@ setup(
     packages = ["test_math"],
     cmdclass = {'build_ext': build_ext_subclass},
     ext_modules = [
-        Extension("test_math.test_math",
+        Extension("test_math",
           sources=["c_math_funs.pyx", "../src/collective.c", "../src/common.c",
                    "../src/offsets.c", "../src/helpers.c", "../src/lbfgs.c"],
           include_dirs=[np.get_include(), "../src"],
