@@ -1696,9 +1696,6 @@ class CMF_explicit(_CMF):
             have value ``np.nan``.
             Might additionally have a column 'Weight'. If passing a DataFrame,
             the IDs will be internally remapped.
-        y : None
-            Not used. Kept as a place-holder for compatibility with SciKit-Learn
-            pipelines.
         U : array(m, p), COO(m, p), DataFrame(m, p+1), or None
             User attributes information. If 'X' is a DataFrame, should also
             be a DataFrame, containing column 'UserId'. If 'U' is sparse,
@@ -4017,9 +4014,6 @@ class OMF_explicit(_OMF):
             have value ``np.nan``.
             Might additionally have a column 'Weight'. If passing a DataFrame,
             the IDs will be internally remapped.
-        y : None
-            Not used. Kept as a place-holder for compatibility with SciKit-Learn
-            pipelines.
         U : array(m, p), COO(m, p), DataFrame(m, p+1), or None
             User attributes information. If 'X' is a DataFrame, should also
             be a DataFrame, containing column 'UserId'. If 'U' is sparse,

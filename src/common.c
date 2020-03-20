@@ -245,6 +245,11 @@ FPnum fun_grad_cannonical_form
            gradients already have some information from a previous factorization
            to which these should add instead of overwrite them, it's necessary
            to apply the scaling observation-by-observation instead */
+    	/* TODO: applying the scaling like this can result in a too large
+    	   precision loss and make the L-BFGS line search fail. Should do
+    	   without this condition from the functions that call this, and
+    	   instead pass a zeroed-out matrix which should be latter summed to
+    	   the earlier matrix. */
         if (!overwrite_grad)
         {
             #ifdef _OPENMP
@@ -598,10 +603,10 @@ FPnum fun_grad_cannonical_form
     methods.
 
     Note that this function can accomodate weights and regulatization, but not
-    biases. In order to determine the bias for the given row 'a' of X, it
-    should be obtained from a simple average over the non-missing entries.
-    The X matrix should already be centered before passing it to this function,
-    and it might be modified in-place when passing dense inputs.
+    biases. In order to determine the bias for the given row 'a' of X, the B
+    matrix should get a column of all-ones appended at the end. Doing this
+    also requires passing a matrix 'X' with the bias already-subtracted from
+	it when solving for B.
 
     This function is not meant to exploit multi-threading, but it still calls
     BLAS and LAPACK functions, which set their number of threads externally.
@@ -752,7 +757,7 @@ void factors_closed_form
        This is however slow, and there is no intended use case that
        should end up here.
        If it has weights, could still use the precomputed transpose,
-       then adjust by substractingfrom it again. */
+       then adjust by substracting from it again. */
     else if (Xa_dense == NULL && NA_as_zero)
     {
         set_to_zero(a_vec, k, 1);
