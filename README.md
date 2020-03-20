@@ -1,27 +1,45 @@
 # Collective Matrix Factorization
 
-Python implementation of collective matrix factorization, based on the paper _Relational learning via collective matrix factorization (A. Singh, 2008)_, with some enhancements. This is a collaborative filtering model for recommender systems that takes as input explicit item ratings and side information about users and/or items. The overall idea was extended here to also be able to do cold-start recommendations (of users and items that were not in the training data). Implementation is done in TensorFlow and optimization is with L-BFGS.
+Implementation of collective matrix factorization, based on reference [2], with some enhancements and alternative models for cold-start recommendations as described in reference [1].
+
+This is a hybrid collaborative filtering model for recommender systems that takes as input either explicit item ratings or implicit-feedback data, and side information about users and/or items (although it can also fit pure collaborative-filtering and pure content-based models). The overall idea was extended here to also be able to do cold-start recommendations (for users and items that were not in the training data but which have side information available).
 
 Although the package was developed with recommender systems in mind, it can also be used in other domains - just take any mention of users as rows in the main matrix and any mention of items as columns.
 
-The extended version of the paper ("Relational learning via Collective Matrix Factorization") can be downloaded here:
-[http://ra.adm.cs.cmu.edu/anon/usr/ftp/ml2008/CMU-ML-08-109.pdf](http://ra.adm.cs.cmu.edu/anon/usr/ftp/ml2008/CMU-ML-08-109.pdf)
+For more information about the implementation here, or if you would like to cite this in your research, see ["Cold-start recommendations in Collective Matrix Factorization"](https://arxiv.org/abs/1809.00366)
 
-For more information about the implementation here, or if you would like to cite this in your research, see the paper ["Cold-start recommendations in Collective Matrix Factorization"](https://arxiv.org/abs/1809.00366)
+For a similar package with Poisson distributions see [ctpfrec](https://github.com/david-cortes/ctpfrec).
 
-For a similar package for recommender systems with implicit data see [ctpfrec](https://github.com/david-cortes/ctpfrec).
+Written in C with a Python interface. R version to come in the future.
 
-#### Important!!!
+## Update 2020-03-16
 
-This package was designed for TensorFlow v1, and will not work under TensorFlow v2. There are no plans to update this package to work with TF2 in the near future.
+The package has been rewritten in C with Python wrappers. If you've used earlier versions of this package which relied on Tensorflow for the calculations (and before that, Casadi), the optimal hyperparameters will be very different now as it has changed some details of the loss function such as not dividing some terms by the number of entries.
 
-## Basic model
+The new version is faster, multi-threaded, and has some new functionality, but if for some reason you still need the old one, it can be found under the git branch "tensorflow".
 
-The model consist in predicting the rating that a user would give to an item by performing a low-rank matrix factorization of explicit ratings `X~=AB'`, using side information about the items (such as movie tags) and/or users (such as their demographic info) by also factorizing the item side info matrix and/or the user side info matrix `X~=AB', U~=AC', I~=BD'`, sharing the same item/user-factor matrix used to factorize the ratings, or sharing only some of the latent factors.
+## Highlights
 
-This also has the side effect of allowing to recommend for users and items for which there is side information but no ratings, although these predictions might not be as high quality.
+* Can fit factorization models with or without user and/or item side information.
+* Can fit the usual explicit-feedback model as well as the implicit-feedback model with weighted binary entries (see [3]).
+* Can be used for cold-start recommendations (when using side information).
+* Supports user and item biases in the explicit-feedback models.
+* Provides an API for top-N recommended lists.
+* Can use either an alternating least-squares procedure (ALS) or a gradient-based procedure using an L-BFGS optimizer (depending on the specific model) (the package bundles a modified version of [Okazaki's C implementation](https://github.com/chokkan/liblbfgs)).
+* Provides a content-based model and other models aimed at better cold-start recommendations.
+* Provides an intercepts-only "most-popular" model for non-personalized recommendations, which can be used as a benchmark as it takes similar hyperparameters as the other models.
+* Allows variations of the original collective factorization models such as setting some factors to be used only for one factorization, setting different weights for the errors on each matrix, or setting different regularization parameters for each matrix.
+* Can use sigmoid transformations for binary-distributed columns in the side info data.
+* Can work with both sparse and dense matrices for each input (e.g. can also be used as a general missing-value imputer for 2-d data).
+* Supports observation weights (for the explicit-feedback models).
 
-For more details on the formulas, see the IPython notebook example.
+## Basic idea
+
+The model consist in predicting the rating (weighted confidence for implicit-feedback case) that a user would give to an item by performing a low-rank factorization of an interactions matrix (e.g. ratings) `X ~ A * t(B)`, using side information about the items (such as movie tags) and/or users (such as their demographic info) by also factorizing the item side info matrix and/or the user side info matrix `U ~ A * t(C), I ~ B * t(D)`, sharing the same item/user-factor matrix used to factorize the ratings, or sharing only some of the latent factors.
+
+This also has the side effect of allowing recommendations for users and items for which there is side information but no ratings, although these predictions might not be as high quality.
+
+Alternatively, can produce factorizations in wich the factor matrices are determined from the attributes directly (e.g. `A = U * C`), with or without a free offset.
 
 ## Instalation
 
@@ -29,139 +47,83 @@ Package is available on PyPI, can be installed with:
 
 ```pip install cmfrec```
 
-## Usage
+As it contains C code, it requires a C compiler. On Windows, this usually means it requires a Visual Studio Build Tools installation (with MSVC140 component for conda, or MinGW + GCC), and if using Anaconda, might also require configuring it to use said Visual Studio instead of MinGW.
+
+On Mac, installing this package will first require getting OpenMP modules for the default clang compiler (redistributions from apple don't come with this essential component, even though clang itself does fully support it), or installing gcc (by default, apple systems will alias gcc to clang, which causes problems).
+
+**Note:** this package relies heavily on BLAS and LAPACK functions for calculations. It's recommended to use MKL (comes by default in Anaconda) or OpenBLAS as backend for them, but note that, as of OpenBLAS 0.3.9, some of the functions used here might be significantly faster in MKL depending on CPU architecture.
+
+## Sample Usage
+
 ```python
-import pandas as pd, numpy as np
-from cmfrec import CMF
+import numpy as np, pandas as pd
+from cmfrec import CMF_explicit
 
-## simulating some movie ratings
-nusers = 10**2
-nitems = 10**2
-nobs = 10**3
+### Generate random data
+n_users = 4
+n_items = 5
+n_ratings = 10
+n_user_attr = 4
+n_item_attr = 5
+k = 3
 np.random.seed(1)
+
+### 'X' matrix (note that you can also pass it as SciPy COO)
 ratings = pd.DataFrame({
-	'UserId' : np.random.randint(nusers, size=nobs),
-	'ItemId' : np.random.randint(nitems, size=nobs),
-	'Rating' : np.random.randint(low=1, high=6, size=nobs)
-	})
+    "UserId" : np.random.randint(n_users, size=n_ratings),
+    "ItemId" : np.random.randint(n_items, size=n_ratings),
+    "Rating" : np.random.normal(loc=3., size=n_ratings)
+})
+### 'U' matrix
+user_info = pd.DataFrame(np.random.normal(size = (n_users, n_user_attr)))
+user_info["UserId"] = np.arange(n_users)
+### 'I' matrix
+item_info = pd.DataFrame(np.random.normal(size = (n_items, n_item_attr)))
+item_info["ItemId"] = np.arange(n_items)
 
-## random product side information
-user_dim = 10
-user_attributes = pd.DataFrame(np.random.normal(size=(nusers, user_dim)))
-user_attributes['UserId'] = np.arange(nusers)
-user_attributes = user_attributes.sample(int(nusers/2), replace=False)
+### Fit the model
+model = CMF_explicit(method="als", k=k)
+model.fit(X=ratings, U=user_info, I=item_info)
 
-item_dim = 5
-item_attributes = pd.DataFrame(np.random.normal(size=(nitems, item_dim)))
-item_attributes['ItemId'] = np.arange(nitems)
-item_attributes = item_attributes.sample(int(nitems/2), replace=False)
+### Predict rating that user 3 would give to items 2 and 4
+model.predict(user=[3, 3], item=[2, 4])
 
-# fitting a model and making some recommendations
-recommender = CMF(k=20, k_main=3, k_user=2, k_item=1, reg_param=1e-4)
-recommender.fit(ratings=ratings, user_info=user_attributes, item_info=item_attributes,
-	cols_bin_user=None, cols_bin_item=None)
-recommender.topN(user=4, n=10)
-recommender.topN_cold(attributes=np.random.normal(size=user_dim), n=10)
-recommender.predict(user=0, item=0)
-recommender.predict(user=[0,0,1], item=[0,1,0])
+### Top-5 highest predicted for user 3
+model.topN(user=3, n=5)
 
-# adding more users and items without refitting
-recommender.add_item(new_id=10**3, attributes=np.random.normal(size=item_dim), reg='auto')
-recommender.add_user(new_id=10**3, attributes=np.random.normal(size=user_dim), reg=1e-3)
-recommender.topN(10**3)
-recommender.predict(user=10**3, item=10**3)
+### Top-5 highest predicted for user 3, if it were a new user
+model.topN_warm(X_col=ratings.ItemId.loc[ratings.UserId == 3],
+                X_val=ratings.Rating.loc[ratings.UserId == 3],
+                n=5)
 
-## full constructor call
-recommender = CMF(k=30, k_main=0, k_user=0, k_item=0,
-	 w_main=1.0, w_user=1.0, w_item=1.0, reg_param=1e-4,
-	 offsets_model=False, nonnegative=False, maxiter=1000,
-	 standardize_err=True, reweight=False, reindex=True,
-	 center_ratings=True, add_user_bias=True, add_item_bias=True,
-	 center_user_info=False, center_item_info=False,
-	 user_info_nonneg=False, item_info_nonneg=False,
-	 keep_data=True, save_folder=None, produce_dicts=True,
-	 random_seed=None, verbose=True)
-
+### Top-5 highest predicted for user 3, based on side information
+model.topN_cold(U=user_info.iloc[[3]], n=5)
 ```
 
-Users and items are internally reindexed, so you can use strings or non-consecutive numbers as IDs when passing data to the `CMF` object's methods.
+Users and items can be reindexed internally (if passing data frames), so you can use strings or non-consecutive numbers as IDs when passing data to the object's methods.
 
 For more details see the online documentation.
 
+## Getting started
+
+For a longer example with real data see the notebook [MovieLens Recommender with Side Information](http://nbviewer.jupyter.org/github/david-cortes/cmfrec/blob/master/example/cmfrec_movielens_sideinfo.ipynb).
+
 ## Documentation
 
-Documentation is available at readthedocs: [http://cmfrec.readthedocs.io/en/latest/](http://cmfrec.readthedocs.io/en/latest/)
-
-It is also internally documented through docstrings (e.g. you can try `help(cmfrec.CMF))`, `help(cmfrec.CMF.fit)`, etc.
-
-For a detailed example using the MovieLens data with user demographic info and movie genres see the IPython notebook [Collaborative filtering with side information](http://nbviewer.jupyter.org/github/david-cortes/cmfrec/blob/master/example/cmfrec_movielens_sideinfo.ipynb).
-
-## Model details
-
-For a full description of the implementation, see the paper ["Cold-start recommendations in Collective Matrix Factorization"](https://arxiv.org/abs/1809.00366).
-
-By default, the function to minimize is as follows:
-
-```
-L(A,B,C,D) = w_main*sum_sq(X-AB' - Ubias_{u} - Ibias_{i})/|X| + w_user*sum_sq(U-AC')/|U| + w_item*sum_sq(I-BD')/|I| + regl.
-	regl. = reg*(norm(A)^2+norm(B)^2+norm(C)^2+norm(D)^2)
- ```
-
-Where:
-* X is the ratings matrix (considering only non-missing entries).
-* I is the item-attribute matrix (only supports dense inputs).
-* U is the user-attribute matrix (only supports dense inputs).
-* A, B, C, D are lower-dimensional matrices (the model parameters).
-* |X|, |I|, |U| are the number of non-missing entries in each matrix.
-* The matrix products might not use all the rows/columns of these matrices at each factorization
- (this is controlled with k_main, k_item and k_user).
-* Ubias_{u} and Ibias_{i} are user and item biases, defined for each user and item ID.
-
-Additionally, for binary columns (having only 0/1 values), it can apply a sigmoid function to force them to be between zero and one. The loss with respect to the real value is still squared loss though (`(sigmoid(pred) - real)^2`), so as to put it in the same scale as the rest of the variables.
-
-The matrix-products might not use all the rows/columns of these shared latent factor matrices at each factorization (this is controlled with `k_main`, `k_item` and `k_user` in the initialization). Although the package API has arguments for both user and item side information, you can fit the model with only one or none of them.
-
-The model benefits from adding side information about users and items for which there are no ratings, but recommendations about these users and items might not be very good.
-
-Note that, in the simplest case with all factors shared and all matrices weighted the same, the model simplifies to factorizing an extended block matrix `X_ext = [[X, U], [I', .]]`, which can be done using any other matrix factorization library (e.g. pyspark’s `ALS` module).
-
-Alternatively, it can also fit a different model formulation in which, in broad terms, ratings are predicted from latent 'coefficients' based on their attributes, and an offset is added to these coefficients based on the rating history of the users, similar in spirit to [2]  (see references at the bottom), but with all-normal distributions:
-
-```
- L = sum_sq(X - (A+UC)(B+ID)' - Ubias_{u} - Ibias_{i}) + regl.
- ```
-
-This second formulation usually takes longer to fit (requires more iterations), and is more recommended if the side information about users and items is mostly binary columns, and for cold-start recommendations. To use this alternative formulation, pass `offsets_model=True` to the CMF constructor.
-
-For a web-scale implementation (without in-memory data) of the first algorithm see the implementation in Vowpal Wabbit:
-[https://github.com/JohnLangford/vowpal_wabbit/wiki/Matrix-factorization-example](https://github.com/JohnLangford/vowpal_wabbit/wiki/Matrix-factorization-example)
-
-## Cold-start recommendations
-
-When using side information about users and/or items, it is possible to add new latent factor vectors based on the factorization of the side information alone. In a low-rank factorization, if one matrix is fixed, the other one can be calculated with a closed-form solution. In this case, the latent factor vectors for new users and items can be calculated with the same updates used in alternating least squares, in such a way that they minimize their error on the side information factorization - as these latent factors are shared with the factorization of the ratings (user feedback), they can at the same time be used for making recommendations.
-
-For the alternative 'offsets model' formulation, cold-start recommendations are obtained by a simple vector-matrix product of the attributes with the model coefficients.
-
-You might to tune the model parameters differently when optimizing for cold-start and warm-start recommendations. See the documentation for some tips.
-
-## Implementation Notes
-
-Calculations of objective and gradient are done with TensorFlow, interfacing an external optimizer. Since it allows for easy slight reformulations of the problem, you can easily control small aspects such as whether to divide the error by the number of entries in the matrices or not, whether or not to include user/item biases, etc.
-
-The implementation here is not entirely true to the paper, as the model is fit with full L-BFGS updates rather than stochastic gradient descent or stochastic Newton, i.e. it calculates errors for the whole data and updates all model parameters at once during each iteration. This usually leads to better local optima and less need for parameter tuning, but is not as scalable. The L-BFGS implementation used is from SciPy, which is not entirely multi-threaded, so  if your CPU has many cores or you have many GPUs, you can expect an speed up from parallelization on the calculations of the objective function and the gradient, but not so much on the calculations that happen inside  L-BFGS.
-
-As a reference point, 1,000 iterations (usually enough to fit a model with high regularization) over the movielens-1M and 1128 movie tags per movie + user demographics takes around 15 minutes in a regular desktop computer and uses around 2GB of RAM.
-
-The package has only been tested under Python 3.
-
+Documentation is available at ReadTheDocs: [http://cmfrec.readthedocs.io/en/latest/](http://cmfrec.readthedocs.io/en/latest/).
 
 ## Some comments
 
-This kind of model requires a lot more hyperparameter tuning that regular low-rank matrix factorization, and fitting a model with badly-tuned parameters might result in worse recommendations compared to discarding the side information. In general, using lower regularization parameters will require more iterations to converge. Also note that, by default, the sums of squared errors in the loss function are divided by the number of entries, so the optimal regularization parameters will likely be very, very small, and the larger the inputs, the smaller the optimal regularization values (you can change this behavior by passing `standardize_err=False`, but be sure to then tune the weights for each factorization).
+This kind of model requires a lot more hyperparameter tuning that regular low-rank matrix factorization, and fitting a model with badly-tuned parameters might result in worse recommendations compared to discarding the side information.
 
 If your dataset is larger than the MovieLens ratings, adding product side information is unlikely to add more predictive power, but good user side information might still be valuable.
 
+## Troubleshooting
+
+For any installation problems or errors encountered with this software, please open an issue in this GitHub page with a reproducible example, the error message that you see, and description of your setup (e.g. Python version, NumPy version, operating system).
+
 ## References
-* Cortes, David. "Cold-start recommendations in Collective Matrix Factorization." arXiv preprint arXiv:1809.00366 (2018).
-* Singh, Ajit P., and Geoffrey J. Gordon. "Relational learning via collective matrix factorization." Proceedings of the 14th ACM SIGKDD international conference on Knowledge discovery and data mining. ACM, 2008.
-* Wang, Chong, and David M. Blei. "Collaborative topic modeling for recommending scientific articles." Proceedings of the 17th ACM SIGKDD international conference on Knowledge discovery and data mining. ACM, 2011.
+
+* [1] Cortes, David. "Cold-start recommendations in Collective Matrix Factorization." arXiv preprint arXiv:1809.00366 (2018).
+* [2] Singh, Ajit P., and Geoffrey J. Gordon. "Relational learning via collective matrix factorization." Proceedings of the 14th ACM SIGKDD international conference on Knowledge discovery and data mining. ACM, 2008.
+* [3] Hu, Yifan, Yehuda Koren, and Chris Volinsky. "Collaborative filtering for implicit feedback datasets." 2008 Eighth IEEE International Conference on Data Mining. Ieee, 2008.

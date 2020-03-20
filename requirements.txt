@@ -1,3 +1,4 @@
+cython
 numpy
-pandas
-tensorflow 
+pandas>=0.25.0
+findblas

@@ -8,3 +8,6 @@ dist/
 *.tar.gz
 
 MANIFEST
+.directory
+
+cmfrec.egg-info/*

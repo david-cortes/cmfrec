@@ -17,6 +17,18 @@ Package is available on PyPI, can be installed with
 ::
 
     pip install cmfrec
+    
+Naming conventions
+==================
+
+This package uses the following general naming conventions on functions:
+* 'warm' -> predictions based on new, unseen 'X' data, and potentially including new 'U' data along.
+* 'cold' -> predictions based on new user attributes data 'U', without 'X'.
+* 'new' -> predictions about new items based on attributes data 'I'.
+
+And the following conventions in docs:
+* 'existing' -> the user/item was present in the training data that was passed to 'fit'.
+* 'new' -> the user/items was not present in the training data that was passed to 'fit'.
 
 .. toctree::
    :maxdepth: 2
