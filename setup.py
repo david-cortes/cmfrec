@@ -41,7 +41,7 @@ setup(
     keywords = ['collaborative filtering', 'collective matrix factorization',
                 'relational learning'],
     install_requires=[
-        'cython'
+        'cython',
         'numpy',
         'pandas>=0.25.0',
         'findblas'

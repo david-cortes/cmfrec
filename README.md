@@ -12,7 +12,7 @@ For a similar package with Poisson distributions see [ctpfrec](https://github.co
 
 Written in C with a Python interface. R version to come in the future.
 
-## Update 2020-03-16
+## Update 2020-03-20
 
 The package has been rewritten in C with Python wrappers. If you've used earlier versions of this package which relied on Tensorflow for the calculations (and before that, Casadi), the optimal hyperparameters will be very different now as it has changed some details of the loss function such as not dividing some terms by the number of entries.
 
