@@ -1,6 +1,7 @@
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
+*.so
 
 # dist files
 dist/
@@ -10,4 +11,9 @@ dist/
 MANIFEST
 .directory
 
+cmfrec/cfuns_double.c
+cmfrec/cfuns_float.c
+
 cmfrec.egg-info/*
+
+build/*
