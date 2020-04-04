@@ -1,6 +1,6 @@
 # Collective Matrix Factorization
 
-Implementation of collective matrix factorization, based on reference [2], with some enhancements and alternative models for cold-start recommendations as described in reference [1].
+Implementation of collective matrix factorization, based on _Relational learning via collective matrix factorization_, with some enhancements and alternative models for cold-start recommendations as described in _Cold-start recommendations in Collective Matrix Factorization_.
 
 This is a hybrid collaborative filtering model for recommender systems that takes as input either explicit item ratings or implicit-feedback data, and side information about users and/or items (although it can also fit pure collaborative-filtering and pure content-based models). The overall idea was extended here to also be able to do cold-start recommendations (for users and items that were not in the training data but which have side information available).
 
