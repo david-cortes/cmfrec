@@ -1545,9 +1545,9 @@ class CMF_explicit(_CMF):
         least squares problems. This was implemented for experimentation
         purposes only - will not provide any advantage over the default
         Cholesky solver.
-    random_state : int or RandomState
+    random_state : int, RandomState, or Generator
         Seed used to initialize parameters at random. If passing a NumPy
-        RandomState object, will use it to draw a random integer. Note
+        RandomState or Generator, will use it to draw a random integer. Note
         however that, if using more than one thread, results might not be
         100% reproducible with ``method='lbfgs'`` due to round-off errors
         in parallelized aggregations.
@@ -2693,9 +2693,9 @@ class CMF_implicit(_CMF):
         least squares problems. This was implemented for experimentation
         purposes only - will not provide any advantage over the default
         Cholesky solver.
-    random_state : int or RandomState
+    random_state : int, RandomState, or Generator
         Seed used to initialize parameters at random. If passing a NumPy
-        RandomState object, will use it to draw a random integer.
+        RandomState or Generator, will use it to draw a random integer.
     init : str, "normal" or "gamma"
         Distribution used to initialize the model parameters. Both
         distributions will reach similar end results, but the distribution
@@ -3880,9 +3880,9 @@ class OMF_explicit(_OMF):
         least squares problems. This was implemented for experimentation
         purposes only - will not provide any advantage over the default
         Cholesky solver.
-    random_state : int or RandomState
+    random_state : int, RandomState, or Generator
         Seed used to initialize parameters at random. If passing a NumPy
-        RandomState object, will use it to draw a random integer. Note
+        RandomState or Generator, will use it to draw a random integer. Note
         however that, if using more than one thread, results might not be
         100% reproducible with ``method='lbfgs'`` due to round-off errors
         in parallelized aggregations.
@@ -4673,9 +4673,9 @@ class OMF_implicit(_OMF):
         least squares problems. This was implemented for experimentation
         purposes only - will not provide any advantage over the default
         Cholesky solver.
-    random_state : int or RandomState
+    random_state : int, RandomState, or Generator
         Seed used to initialize parameters at random. If passing a NumPy
-        RandomState object, will use it to draw a random integer.
+        RandomState or Generator, will use it to draw a random integer.
     verbose : bool
         Whether to print informational messages about the optimization
         routine used to fit the model. Note that, if running this from a
@@ -5149,9 +5149,9 @@ class ContentBased(_OMF_Base):
     print_every : int
         Print L-BFGS convergence messages every n-iterations. Ignored
         when passing ``verbose=False``.
-    random_state : int or RandomState
+    random_state : int, RandomState, or Generator
         Seed used to initialize parameters at random. If passing a NumPy
-        RandomState object, will use it to draw a random integer. Note
+        RandomState or Generator, will use it to draw a random integer. Note
         however that, if using more than one thread, results might not be
         100% reproducible due to round-off errors in parallelized aggregations.
     use_float : bool

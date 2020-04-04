@@ -22,7 +22,7 @@ class build_ext_subclass( build_ext_with_blas ):
                 e.extra_compile_args += ['/O2', '/openmp']
         else: # everything else that cares about following standards
             for e in self.extensions:
-                e.extra_compile_args += ['-O3', '-fopenmp', '-march=native', '-std=c99', '-ggdb']
+                e.extra_compile_args += ['-O3', '-fopenmp', '-march=native', '-std=c99']
                 e.extra_link_args += ['-fopenmp']
                 # e.extra_compile_args += ['-O3', '-march=native', '-std=c99']
                 # e.extra_compile_args += ['-fsanitize=address', '-static-libasan']
@@ -33,7 +33,7 @@ class build_ext_subclass( build_ext_with_blas ):
 setup(
     name  = "cmfrec",
     packages = ["cmfrec"],
-    version = '1.0.1',
+    version = '1.0.2',
     description = 'Collective matrix factorization',
     author = 'David Cortes',
     author_email = 'david.cortes.rivera@gmail.com',
@@ -42,7 +42,7 @@ setup(
                 'relational learning'],
     install_requires=[
         'cython',
-        'numpy',
+        'numpy>=1.17',
         'pandas>=0.25.0',
         'findblas'
     ],
