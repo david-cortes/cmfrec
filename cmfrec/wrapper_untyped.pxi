@@ -1090,7 +1090,7 @@ def call_fit_collective_implicit_als(
     if init == "normal":
         values = rs.standard_normal(size = nvars, dtype = c_FPnum)
     elif init == "gamma":
-        values = rs.standard_gamma(1,1, size = nvars, dtype = c_FPnum)
+        values = rs.standard_gamma(1, size = nvars, dtype = c_FPnum)
     elif init == "uniform":
         values = rs.random(size = nvars, dtype = c_FPnum)
     else:
