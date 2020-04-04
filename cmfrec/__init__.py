@@ -75,8 +75,10 @@ class _CMF:
             corr_pairs = int(corr_pairs) if isinstance(corr_pairs, float) else corr_pairs
             assert isinstance(corr_pairs, int) and corr_pairs >= 2
 
-        if random_state.__class__.__name__ == "RandomState":
+        if isinstance(random_state, np.random.RandomState):
             random_state = random_state.randint(np.iinfo(np.int32).max)
+        elif isinstance(random_state, np.random.Generator):
+            random_state = random_state.integers(np.iinfo(np.int32).max)
 
         if (method == "lbfgs") and (NA_as_zero or NA_as_zero_user or NA_as_zero_item):
             raise ValueError("Option 'NA_as_zero' not supported with method='lbfgs'.")
