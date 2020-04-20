@@ -1515,7 +1515,7 @@ class CMF_explicit(_CMF):
         use-cases. Ignored when passing ``nthreads=1``, or ``method='als'``,
         or when compiling without OpenMP support.
     corr_pairs : int
-        Number of correction paris to use for the L-BFGS optimization routine.
+        Number of correction pairs to use for the L-BFGS optimization routine.
         Recommended values are between 3 and 7. Note that higher values
         translate into higher memory requirements. Ignored when passing
         ``method='als'``.
@@ -1546,7 +1546,7 @@ class CMF_explicit(_CMF):
         Whether to use a conjugate gradient method to solve the closed-form
         least squares problems. This was implemented for experimentation
         purposes only - will not provide any advantage over the default
-        Cholesky solver.
+        Cholesky solver. Ignored when passing ``method='lbfgs'``.
     random_state : int, RandomState, or Generator
         Seed used to initialize parameters at random. If passing a NumPy
         RandomState or Generator, will use it to draw a random integer. Note
@@ -3862,7 +3862,7 @@ class OMF_explicit(_OMF):
         use-cases. Ignored when passing ``nthreads=1`` or compiling without
         OpenMP support.
     corr_pairs : int
-        Number of correction paris to use for the L-BFGS optimization routine.
+        Number of correction pairs to use for the L-BFGS optimization routine.
         Recommended values are between 3 and 7. Note that higher values
         translate into higher memory requirements. Ignored when passing
         ``method='als'``.
@@ -3881,7 +3881,7 @@ class OMF_explicit(_OMF):
         Whether to use a conjugate gradient method to solve the closed-form
         least squares problems. This was implemented for experimentation
         purposes only - will not provide any advantage over the default
-        Cholesky solver.
+        Cholesky solver. Ignored when passing ``method='lbfgs'``.
     random_state : int, RandomState, or Generator
         Seed used to initialize parameters at random. If passing a NumPy
         RandomState or Generator, will use it to draw a random integer. Note
@@ -5129,7 +5129,7 @@ class ContentBased(_OMF_Base):
         without any significant decrease in the loss function or gradient norm,
         it's highly likely that the regularization is too low.
     corr_pairs : int
-        Number of correction paris to use for the L-BFGS optimization routine.
+        Number of correction pairs to use for the L-BFGS optimization routine.
         Recommended values are between 3 and 7. Note that higher values
         translate into higher memory requirements.
     parallelize : str, "separate" or "single"
