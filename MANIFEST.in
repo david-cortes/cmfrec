@@ -8,3 +8,5 @@ exclude .gitattributes
 exclude example/*
 exclude test_math/*
 exclude cmfrec/*.c
+exclude docs/*
+prune docs/*
