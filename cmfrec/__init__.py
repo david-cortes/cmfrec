@@ -936,7 +936,10 @@ class _CMF:
                         out = out[0]
                     return out
             else:
-                nan_entries = (user < 0) | (item < 0)
+                n_users = max(self._A_pred.shape[0], self.user_bias_.shape[0])
+                n_items = max(self._B_pred.shape[0], self.item_bias_.shape[0])
+                nan_entries = (user < 0) | (item < 0) | \
+                              (user >= n_users) | (item >= n_items)
                 if ~np.any(nan_entries):
                     return c_funs.call_predict_multiple(
                         self._A_pred,
@@ -950,8 +953,8 @@ class _CMF:
                         self.nthreads
                     )
                 else:
-                    non_na_user = (user >= 0)
-                    non_na_item = (item >= 0)
+                    non_na_user = (user >= 0) & (user < n_users)
+                    non_na_item = (item >= 0) & (item < n_items)
                     outp = c_funs.call_predict_multiple(
                         self._A_pred,
                         self._B_pred,
@@ -979,7 +982,8 @@ class _CMF:
     def _predict_new(self, user, B):
         n = B.shape[0]
         user, _1, _2, _3 = self._process_users_items(user, None, None, None)
-        nan_entries = (user < 0)
+        nan_entries = (user < 0) | \
+                      (user >= max(self._A_pred.shape[0], self.user_bias_.shape[0]))
 
         c_funs = wrapper_float if self.use_float else wrapper_double
 
@@ -1021,7 +1025,8 @@ class _CMF:
     def _predict_user_multiple(self, A, item, bias=None):
         m = A.shape[0]
         _1, item, _2, _3 = self._process_users_items(None, item, None, None)
-        nan_entries = (item < 0)
+        nan_entries = (item < 0) | \
+                      (item >= max(self._B_pred.shape[0], self.item_bias_.shape[0]))
 
         c_funs = wrapper_float if self.use_float else wrapper_double
 
@@ -3690,8 +3695,9 @@ class _OMF(_OMF_Base):
             fit was a  DataFrame, must match with the entries in its 'UserId'
             column, otherwise should match with the rows of 'X'.
         I : array(n, q), or COO matrix(n, q)
-            Attributes for the items for which to predict ratings/values. Data frames with 'ItemId' column are not supported. Must have one row per entry
-            in ``user``.
+            Attributes for the items for which to predict ratings/values.
+            Data frames with 'ItemId' column are not supported.
+            Must have one row per entry in ``user``.
 
         Returns
         -------

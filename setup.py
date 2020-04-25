@@ -33,7 +33,7 @@ class build_ext_subclass( build_ext_with_blas ):
 setup(
     name  = "cmfrec",
     packages = ["cmfrec"],
-    version = '1.0.4',
+    version = '1.0.5',
     description = 'Collective matrix factorization',
     author = 'David Cortes',
     author_email = 'david.cortes.rivera@gmail.com',
