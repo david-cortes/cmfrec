@@ -698,7 +698,7 @@ class _CMF:
             if include.shape[0]:
                 imin, imax = include.min(), include.max()
                 if (imin < 0) or (imax >= self._B_pred.shape[0]):
-                    raise ValueError(msg % ("include", "users", "rows"))
+                    raise ValueError(msg % ("include", "items", "columns"))
             if exclude.shape[0]:
                 emin, emax = exclude.min(), exclude.max()
                 if (emin < 0) or (emax >= self._B_pred.shape[0]):
