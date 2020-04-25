@@ -17,3 +17,5 @@ cmfrec/cfuns_float.c
 cmfrec.egg-info/*
 
 build/*
+
+docs/_build/*

@@ -22,23 +22,62 @@ Naming conventions
 ==================
 
 This package uses the following general naming conventions on functions:
-* 'warm' -> predictions based on new, unseen 'X' data, and potentially including new 'U' data along.
-* 'cold' -> predictions based on new user attributes data 'U', without 'X'.
-* 'new' -> predictions about new items based on attributes data 'I'.
+ - 'warm' -> predictions based on new, unseen 'X' data, and potentially including new 'U' data along.
+ - 'cold' -> predictions based on new user attributes data 'U', without 'X'.
+ - 'new' -> predictions about new items based on attributes data 'I'.
 
 And the following conventions in docs:
-* 'existing' -> the user/item was present in the training data that was passed to 'fit'.
-* 'new' -> the user/items was not present in the training data that was passed to 'fit'.
+ - 'existing' -> the user/item was present in the training data that was passed to 'fit'.
+ - 'new' -> the user/items was not present in the training data that was passed to 'fit'.
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 3
    :caption: Contents:
 
-.. automodule:: cmfrec
+Models
+======
+
+CMF_explicit
+------------
+
+.. autoclass:: cmfrec.CMF_explicit
     :members:
     :undoc-members:
-    :show-inheritance:
-    :inherited-members:
+
+CMF_implicit
+------------
+
+.. autoclass:: cmfrec.CMF_implicit
+    :members:
+    :undoc-members:
+
+OMF_explicit
+------------
+
+.. autoclass:: cmfrec.OMF_explicit
+    :members:
+    :undoc-members:
+
+OMF_implicit
+------------
+
+.. autoclass:: cmfrec.OMF_implicit
+    :members:
+    :undoc-members:
+
+ContentBased
+------------
+
+.. autoclass:: cmfrec.ContentBased
+    :members:
+    :undoc-members:
+
+MostPopular
+-----------
+
+.. autoclass:: cmfrec.MostPopular
+    :members:
+    :undoc-members:
 
 
 Indices and tables
