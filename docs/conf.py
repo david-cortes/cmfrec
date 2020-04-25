@@ -99,6 +99,7 @@ todo_include_todos = False
 html_theme_options = {
     'collapse_navigation': False,
     'sticky_navigation': False,
+    'navigation_depth': 4,
 }
 
 # Add any paths that contain custom static files (such as style sheets) here,
