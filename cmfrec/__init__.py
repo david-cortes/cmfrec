@@ -1450,7 +1450,7 @@ class CMF_explicit(_CMF):
         'X' matrix and the side info matrices. Additional non-shared components
         can also be specified through ``k_user``, ``k_item``, and ``k_main``.
     lambda_ : float or array(6,)
-        Regularization parameter. Can also use different regulatization for each
+        Regularization parameter. Can also use different regularization for each
         matrix, in which case it should be an array with 6 entries, corresponding,
         in this order, to: user_bias, item_bias, A, B, C, D.
     method : str, one of "lbfgs" or "als"
@@ -2639,9 +2639,9 @@ class CMF_implicit(_CMF):
         'X' matrix and the side info matrices. Additional non-shared components
         can also be specified through ``k_user``, ``k_item``, and ``k_main``.
     lambda_ : float or array(6,)
-        Regularization parameter. Can also use different regulatization for each
+        Regularization parameter. Can also use different regularization for each
         matrix, in which case it should be an array with 6 entries, corresponding,
-        in this order, to: user_bias, item_bias, A, B, C, D.
+        in this order, to: <ignored>, <ignored>, A, B, C, D.
     alpha : float
         Weighting parameter for the non-zero entries in the implicit-feedback
         model. See [3] for details.
@@ -3785,12 +3785,12 @@ class OMF_explicit(_OMF):
         component. Other additional separate factors can be specified through
         ``k_sec`` and ``k_main``.
     lambda_ : float or array(6,)
-        Regularization parameter. Can also use different regulatization for each
+        Regularization parameter. Can also use different regularization for each
         matrix, in which case it should be an array with 6 entries, corresponding,
         in this order, to: user_bias, item_bias, A, B, C, D.
         The attribute biases will have the same regularization as the matrices
         to which they apply (C and D).
-        Passing different regulatization for each matrix is not supported with
+        Passing different regularization for each matrix is not supported with
         ``method='als'``.
     method : str, one of "lbfgs" or "als"
         Optimization method used to fit the model. If passing ``'lbfgs'``, will
@@ -5113,7 +5113,7 @@ class ContentBased(_OMF_Base):
         Number of latent factors to use (dimensionality of the low-rank
         approximation).
     lambda_ : float or array(6,)
-        Regularization parameter. Can also use different regulatization for each
+        Regularization parameter. Can also use different regularization for each
         matrix, in which case it should be an array with 6 entries, corresponding,
         in this order, to: user_bias, item_bias, [ignored], [ignored], C, D.
     user_bias : bool
