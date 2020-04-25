@@ -30,6 +30,13 @@ And the following conventions in docs:
  - 'existing' -> the user/item was present in the training data that was passed to 'fit'.
  - 'new' -> the user/items was not present in the training data that was passed to 'fit'.
 
+.. toctree::
+   :maxdepth: 3
+   :caption: Contents:
+
+   index
+
+
 Models
 ======
 
@@ -39,6 +46,7 @@ CMF_explicit
 .. autoclass:: cmfrec.CMF_explicit
     :members:
     :undoc-members:
+    :inherited-members:
 
 CMF_implicit
 ------------
@@ -46,6 +54,7 @@ CMF_implicit
 .. autoclass:: cmfrec.CMF_implicit
     :members:
     :undoc-members:
+    :inherited-members:
 
 OMF_explicit
 ------------
@@ -53,6 +62,7 @@ OMF_explicit
 .. autoclass:: cmfrec.OMF_explicit
     :members:
     :undoc-members:
+    :inherited-members:
 
 OMF_implicit
 ------------
@@ -60,6 +70,7 @@ OMF_implicit
 .. autoclass:: cmfrec.OMF_implicit
     :members:
     :undoc-members:
+    :inherited-members:
 
 ContentBased
 ------------
@@ -67,6 +78,7 @@ ContentBased
 .. autoclass:: cmfrec.ContentBased
     :members:
     :undoc-members:
+    :inherited-members:
 
 MostPopular
 -----------
@@ -74,12 +86,15 @@ MostPopular
 .. autoclass:: cmfrec.MostPopular
     :members:
     :undoc-members:
+    :inherited-members:
 
-.. toctree::
-   :maxdepth: 3
-   :caption: Contents:
+CMF_imputer
+-----------
 
-   index
+.. autoclass:: cmfrec.CMF_imputer
+    :members:
+    :undoc-members:
+    :inherited-members:
 
 
 Indices and tables
