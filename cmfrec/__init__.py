@@ -2801,7 +2801,7 @@ class CMF_implicit(_CMF):
             msg += "Model has not been fitted to data.\n"
         return msg
 
-    def get_parms(self, deep=None):
+    def get_params(self, deep=None):
         return {
             "k" : self.k, "lambda_" : self.lambda_, "alpha" : self.alpha,
             "k_user" : self.k_user, "k_item" : self.k_item, "k_main" : self.k_main,
@@ -4781,7 +4781,7 @@ class OMF_implicit(_OMF):
             msg += "Model has not been fitted to data.\n"
         return msg
 
-    def get_parms(self, deep=None):
+    def get_params(self, deep=None):
         return {
             "k" : self.k, "lambda_" : self.lambda_, "alpha" : self.alpha,
             "downweight" : self.downweight,
