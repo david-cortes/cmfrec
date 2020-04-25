@@ -30,10 +30,6 @@ And the following conventions in docs:
  - 'existing' -> the user/item was present in the training data that was passed to 'fit'.
  - 'new' -> the user/items was not present in the training data that was passed to 'fit'.
 
-.. toctree::
-   :maxdepth: 3
-   :caption: Contents:
-
 Models
 ======
 
@@ -78,6 +74,12 @@ MostPopular
 .. autoclass:: cmfrec.MostPopular
     :members:
     :undoc-members:
+
+.. toctree::
+   :maxdepth: 3
+   :caption: Contents:
+
+   index
 
 
 Indices and tables
