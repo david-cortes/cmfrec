@@ -1713,10 +1713,12 @@ class CMF_explicit(_CMF):
             have value ``np.nan``.
             Might additionally have a column 'Weight'. If passing a DataFrame,
             the IDs will be internally remapped.
+            If passing sparse 'U' or sparse 'I', 'X' cannot be passed as
+            a DataFrame.
         U : array(m, p), COO(m, p), DataFrame(m, p+1), or None
             User attributes information. If 'X' is a DataFrame, should also
             be a DataFrame, containing column 'UserId'. If 'U' is sparse,
-            'X' should be passed as a sparse COO matrix too.
+            'X' should be passed as a sparse COO matrix or as a dense NumPy array.
             Might contain missing values.
         U_bin : array(m, p_bin), DataFrame(m, p_bin+1), or None
             User binary attributes information (all values should be zero, one,
@@ -1729,7 +1731,7 @@ class CMF_explicit(_CMF):
         I : array(n, q), COO(n, q), DataFrame(n, q+1), or None
             Item attributes information. If 'X' is a DataFrame, should also
             be a DataFrame, containing column 'ItemId'. If 'I' is sparse,
-            'X' should be passed as a sparse COO matrix too.
+            'X' should be passed as a sparse COO matrix or as a dense NumPy array.
             Might contain missing values.
         I_bin : array(n, q_bin), DataFrame(n, q_bin+1), or None
             Item binary attributes information (all values should be zero, one,
@@ -4046,15 +4048,17 @@ class OMF_explicit(_OMF):
             have value ``np.nan``.
             Might additionally have a column 'Weight'. If passing a DataFrame,
             the IDs will be internally remapped.
+            If passing sparse 'U' or sparse 'I', 'X' cannot be passed as
+            a DataFrame.
         U : array(m, p), COO(m, p), DataFrame(m, p+1), or None
             User attributes information. If 'X' is a DataFrame, should also
             be a DataFrame, containing column 'UserId'. If 'U' is sparse,
-            'X' should be passed as a sparse COO matrix too.
+            'X' should be passed as a sparse COO matrix or as a dense NumPy array.
             Should not contain any missing values.
         I : array(n, q), COO(n, q), DataFrame(n, q+1), or None
             Item attributes information. If 'X' is a DataFrame, should also
             be a DataFrame, containing column 'ItemId'. If 'I' is sparse,
-            'X' should be passed as a sparse COO matrix too.
+            'X' should be passed as a sparse COO matrix or as a dense NumPy array.
             Should not contain any missing values.
         W : None, array(nnz,), or array(m, n)
             Observation weights. Must have the same shape as 'X' - that is,
@@ -5293,15 +5297,17 @@ class ContentBased(_OMF_Base):
             have value ``np.nan``.
             Might additionally have a column 'Weight'. If passing a DataFrame,
             the IDs will be internally remapped.
+            If passing sparse 'U' or sparse 'I', 'X' cannot be passed as
+            a DataFrame.
         U : array(m, p), COO(m, p), DataFrame(m, p+1)
             User attributes information. If 'X' is a DataFrame, should also
             be a DataFrame, containing column 'UserId'. If 'U' is sparse,
-            'X' should be passed as a sparse COO matrix too.
+            'X' should be passed as a sparse COO matrix or as a dense NumPy array.
             Should not contain any missing values.
         I : array(n, q), COO(n, q), DataFrame(n, q+1)
             Item attributes information. If 'X' is a DataFrame, should also
             be a DataFrame, containing column 'ItemId'. If 'I' is sparse,
-            'X' should be passed as a sparse COO matrix too.
+            'X' should be passed as a sparse COO matrix or as a dense NumPy array.
             Should not contain any missing values.
         W : None, array(nnz,), or array(m, n)
             Observation weights. Must have the same shape as 'X' - that is,
