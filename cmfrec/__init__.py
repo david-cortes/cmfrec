@@ -1699,8 +1699,10 @@ class CMF_explicit(_CMF):
         matrices. If there are entries in e.g. 'U' or 'I' which 'X' doesn't have,
         and at the same time, entries in 'X' which 'U' or 'I' don't have,
         one of the matrices should be appended missing entries (``np.nan`` for
-        dense arrays, shapes for COO matrices). This is done internally when
-        passing data frames with 'UserId' and 'ItemId'.
+        dense arrays, shapes for COO matrices) - **if the data is passed as COO or
+        ``np.array`` and doesn't follow this order, the optimization procedure will
+        fail and might crash the Python process along with it**. This reordering is
+        done internally when passing data frames with 'UserId' and 'ItemId'.
 
         Parameters
         ----------
@@ -2829,8 +2831,10 @@ class CMF_implicit(_CMF):
         matrices. If there are entries in 'U' or 'I' which 'X' doesn't have,
         and at the same time, entries in 'X' which 'U' or 'I' don't have,
         one of the matrices should be appended missing entries (``np.nan`` for
-        dense arrays, shapes for COO matrices). This is done internally when
-        passing data frames with 'UserId' and 'ItemId'.
+        dense arrays, shapes for COO matrices) - **if the data
+        doesn't follow this order, the optimization procedure will
+        fail and might crash the Python process along with it**. This reordering is
+        done internally when passing data frames with 'UserId' and 'ItemId'.
 
         Parameters
         ----------
@@ -4036,6 +4040,14 @@ class OMF_explicit(_OMF):
     def fit(self, X, U=None, I=None, W=None):
         """
         Fit model to explicit-feedback data and user/item attributes
+
+        Note
+        ----
+        None of the inputs should have missing values. If passing side
+        information 'U' and/or 'I', all entries (users/items) must be present
+        in both the main matrix and the side info matrix.
+        **Passing a COO matrix as X with unmatched entries in 'U' or 'I' might
+        crash the Python process.**
         
         Parameters
         ----------
@@ -4799,6 +4811,14 @@ class OMF_implicit(_OMF):
         """
         Fit model to implicit-feedback data and user/item attributes
 
+        Note
+        ----
+        None of the inputs should have missing values. If passing side
+        information 'U' and/or 'I', all entries (users/items) must be present
+        in both the main matrix and the side info matrix.
+        **Passing a COO matrix as X with unmatched entries in 'U' or 'I' might
+        crash the Python process.**
+
         Parameters
         ----------
         X : DataFrame(nnz, 3), or sparse COO(m, n)
@@ -5285,6 +5305,13 @@ class ContentBased(_OMF_Base):
     def fit(self, X, U, I, W=None):
         """
         Fit model to explicit-feedback data based on user-item attributes
+
+        Note
+        ----
+        None of the inputs should have missing values. All entries (users/items)
+        must be present in both the main matrix and the side info matrix.
+        **Passing a COO matrix as X with unmatched entries in 'U' or 'I' might
+        crash the Python process.**
 
         Parameters
         ----------
