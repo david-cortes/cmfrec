@@ -44,9 +44,13 @@ Alternatively, can produce factorizations in wich the factor matrices are determ
 ## Instalation
 
 Linux, MacOS + GCC, Windows depending on `setuptools`:
-```pip install cmfrec```
+```
+pip install cmfrec
+```
 or
-```pip install git+https://www.github.com/david-cortes/cmfrec.git```
+```
+pip install git+https://www.github.com/david-cortes/cmfrec.git
+```
 
 Windows with unlucky `setuptools`: clone or download this repository and then install with `setup.py` - e.g.:
 ```
