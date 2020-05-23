@@ -43,9 +43,19 @@ Alternatively, can produce factorizations in wich the factor matrices are determ
 
 ## Instalation
 
-Package is available on PyPI, can be installed with:
-
+Linux, MacOS + GCC, Windows depending on `setuptools`:
 ```pip install cmfrec```
+or
+```pip install git+https://www.github.com/david-cortes/cmfrec.git```
+
+Windows with unlucky `setuptools`: clone or download this repository and then install with `setup.py` - e.g.:
+```
+git clone https://www.github.com/david-cortes/cmfrec.git
+cd cmfrec
+python setup.py install
+```
+(Requires package `findblas`, which can be install with `pip install findblas`)
+
 
 As it contains C code, it requires a C compiler. On Windows, this usually means it requires a Visual Studio Build Tools installation (with MSVC140 component for conda, or MinGW + GCC), and if using Anaconda, might also require configuring it to use said Visual Studio instead of MinGW.
 
