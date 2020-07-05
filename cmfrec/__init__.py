@@ -1452,7 +1452,8 @@ class CMF_explicit(_CMF):
     lambda_ : float or array(6,)
         Regularization parameter. Can also use different regularization for each
         matrix, in which case it should be an array with 6 entries, corresponding,
-        in this order, to: user_bias, item_bias, A, B, C, D.
+        in this order, to: user_bias, item_bias, A, B, C, D. Note that the default
+        value for ``lambda_`` here is much higher than in other software.
     method : str, one of "lbfgs" or "als"
         Optimization method used to fit the model. If passing ``'lbfgs'``, will
         fit it through a gradient-based approach using an L-BFGS optimizer.
@@ -2645,10 +2646,12 @@ class CMF_implicit(_CMF):
     lambda_ : float or array(6,)
         Regularization parameter. Can also use different regularization for each
         matrix, in which case it should be an array with 6 entries, corresponding,
-        in this order, to: <ignored>, <ignored>, A, B, C, D.
+        in this order, to: <ignored>, <ignored>, A, B, C, D. Note that the default
+        value for ``lambda_`` here is much higher than in other software.
     alpha : float
         Weighting parameter for the non-zero entries in the implicit-feedback
-        model. See [3] for details.
+        model. See [3] for details. Note that, while the author's suggestion for
+        this value is 40, other software such as ``implicit`` use a value of 1.
     k_user : int
         Number of factors in the factorizing A and C matrices which will be used
         only for the 'U' matrix, while being ignored for the 'X' matrix.
@@ -3796,6 +3799,8 @@ class OMF_explicit(_OMF):
         in this order, to: user_bias, item_bias, A, B, C, D.
         The attribute biases will have the same regularization as the matrices
         to which they apply (C and D).
+        Note that the default
+        value for ``lambda_`` here is much higher than in other software.
         Passing different regularization for each matrix is not supported with
         ``method='als'``.
     method : str, one of "lbfgs" or "als"
@@ -4673,10 +4678,12 @@ class OMF_implicit(_OMF):
         Number of latent factors to use (dimensionality of the low-rank
         approximation).
     lambda_ : float
-        Regularization parameter.
+        Regularization parameter. Note that the default
+        value for ``lambda_`` here is much higher than in other software.
     alpha : float
         Weighting parameter for the non-zero entries in the implicit-feedback
-        model. See [2] for details.
+        model. See [2] for details. Note that, while the author's suggestion for
+        this value is 40, other software such as ``implicit`` use a value of 1.
     downweight : bool
         Whether to decrease the weight of the 'X' matrix being factorized
         according to the number of present entries. This has the same effect
@@ -5140,6 +5147,8 @@ class ContentBased(_OMF_Base):
         Regularization parameter. Can also use different regularization for each
         matrix, in which case it should be an array with 6 entries, corresponding,
         in this order, to: user_bias, item_bias, [ignored], [ignored], C, D.
+        Note that the default
+        value for ``lambda_`` here is much higher than in other software.
     user_bias : bool
         Whether to add user biases (intercepts) to the model.
     item_bias : bool
@@ -5632,10 +5641,12 @@ class MostPopular(_CMF):
     lambda_ : float
         Regularization parameter. For the explicit-feedback case (default),
         lower values will tend to favor the highest-rated items regardless
-        of the number of observations.
+        of the number of observations. Note that the default
+        value for ``lambda_`` here is much higher than in other software.
     alpha : float
         Weighting parameter for the non-zero entries in the implicit-feedback
-        model. See [2] for details.
+        model. See [2] for details. Note that, while the author's suggestion for
+        this value is 40, other software such as ``implicit`` use a value of 1.
     downweight : bool
         (Only when passing ``implicit=True``) Whether to decrease the weight
         of the 'X' matrix being factorized according to the number of
