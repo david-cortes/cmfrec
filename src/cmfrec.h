@@ -75,9 +75,7 @@ extern "C" {
 #endif
 
 #ifdef _FOR_PYTHON
-    #if defined(_WIN32) || defined(_WIN64) || defined(_MSC_VER)
-        #include "findblas.h" /* https://www.github.com/david-cortes/findblas */
-    #endif
+    #include "findblas.h" /* https://www.github.com/david-cortes/findblas */
 #elif defined(_FOR_R)
     #include <R.h>
     #include <Rinternals.h>

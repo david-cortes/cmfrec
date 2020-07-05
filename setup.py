@@ -43,6 +43,7 @@ setup(
     install_requires=[
         'cython',
         'numpy>=1.17',
+        'scipy',
         'pandas>=0.25.0',
         'findblas'
     ],
