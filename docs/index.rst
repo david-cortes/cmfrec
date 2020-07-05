@@ -21,12 +21,19 @@ Package is available on PyPI, can be installed with
 Naming conventions
 ==================
 
-This package uses the following general naming conventions on functions:
+This package uses the following general naming conventions:
+
+About data:
+ - 'X' -> data about interactions between users/rows and items/columns (e.g. ratings given by users to items).
+ - 'U' -> data about user/row attributes (e.g. user's age).
+ - 'I' -> data about item/column attributes (e.g. a movie's genre).
+
+About function naming:
  - 'warm' -> predictions based on new, unseen 'X' data, and potentially including new 'U' data along.
  - 'cold' -> predictions based on new user attributes data 'U', without 'X'.
  - 'new' -> predictions about new items based on attributes data 'I'.
 
-And the following conventions in docs:
+About function descriptions:
  - 'existing' -> the user/item was present in the training data that was passed to 'fit'.
  - 'new' -> the user/items was not present in the training data that was passed to 'fit'.
 
