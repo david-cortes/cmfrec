@@ -582,7 +582,7 @@ def call_fit_collective_explicit_lbfgs(
         nvars += <size_t>pbin * <size_t>(k_user + k)
     if Ib.shape[0]:
         nvars += <size_t>qbin * <size_t>(k_item + k)
-    rs = np.random.default_rng(seed = seed)
+    rs = np.random.Generator(np.random.MT19937(seed = seed))
     cdef np.ndarray[FPnum, ndim=1] values = rs.standard_normal(size = nvars, dtype = c_FPnum)
 
     cdef np.ndarray[FPnum, ndim=2] B_plus_bias = np.empty((0,0), dtype=c_FPnum)
@@ -771,7 +771,7 @@ def call_fit_offsets_explicit_lbfgs(
     cdef np.ndarray[FPnum, ndim=2] Am = np.empty((m, k_sec+k+k_main), dtype=c_FPnum)
     cdef np.ndarray[FPnum, ndim=2] Bm = np.empty((n, k_sec+k+k_main), dtype=c_FPnum)
 
-    rs = np.random.default_rng(seed = seed)
+    rs = np.random.Generator(np.random.MT19937(seed = seed))
     cdef np.ndarray[FPnum, ndim=1] values = rs.standard_normal(size = nvars, dtype = c_FPnum)
 
     cdef np.ndarray[FPnum, ndim=2] Bm_plus_bias = np.empty((0,0), dtype=c_FPnum)
@@ -962,7 +962,7 @@ def call_fit_collective_explicit_als(
         nvars += <size_t>p * <size_t>(k_user + k)
     if I.shape[0] or I_sp.shape[0]:
         nvars += <size_t>q * <size_t>(k_item + k)
-    rs = np.random.default_rng(seed = seed)
+    rs = np.random.Generator(np.random.MT19937(seed = seed))
     cdef np.ndarray[FPnum, ndim=1] values = rs.standard_normal(size = nvars, dtype = c_FPnum)
 
     cdef np.ndarray[FPnum, ndim=2] B_plus_bias = np.empty((0,0), dtype=c_FPnum)
@@ -1085,12 +1085,12 @@ def call_fit_collective_implicit_als(
         nvars += <size_t>p * <size_t>(k_user + k)
     if I.shape[0] or I_sp.shape[0]:
         nvars += <size_t>q * <size_t>(k_item + k)
-    rs = np.random.default_rng(seed = seed)
+    rs = np.random.Generator(np.random.MT19937(seed = seed))
     cdef np.ndarray[FPnum, ndim=1] values
     if init == "normal":
         values = rs.standard_normal(size = nvars, dtype = c_FPnum)
     elif init == "gamma":
-        values = rs.standard_gamma(1, size = nvars, dtype = c_FPnum)
+        values = - np.log(rs.random(size = nvars, dtype = c_FPnum).clip(min=1e-6))
     elif init == "uniform":
         values = rs.random(size = nvars, dtype = c_FPnum)
     else:
