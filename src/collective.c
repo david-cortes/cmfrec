@@ -185,7 +185,7 @@
     At the beginning of each ALS iteration, assuming the 'A' matrix is being
     optimized, the procedure then subtracts from the already-centered X the
     current biases:
-        X_iter[m,n] = X[m,n] - b2[1,n] - mu[1])
+        X_iter[m,n] = X[m,n] - b1[m,1] - mu[1])
     and adds an extra column of all-ones at the end of the other factorizing
     matrix:
         B_iter[n+p, k_user+k+k_main+1] := [[Be[:n, :],  1[n,1] ],
