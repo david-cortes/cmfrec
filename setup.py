@@ -5,6 +5,7 @@ except:
     from distutils.extension import Extension
 import numpy as np
 from findblas.distutils import build_ext_with_blas
+import os, sys
 
 ## If you do not wish to use findblas:
 ## -uncomment the SciPy imports in 'wrapper_untyped.pxi'
@@ -46,9 +47,9 @@ use_omp = (("enable-omp" in sys.argv)
            or ("--enable-omp" in sys.argv))
 if use_omp:
     sys.argv = [a for a in sys.argv if a not in ("enable-omp", "-enable-omp", "--enable-omp")]
-if environ.get('ENABLE_OMP') is not None:
+if os.environ.get('ENABLE_OMP') is not None:
     use_omp = True
-if platform[:3] != "dar":
+if sys.platform[:3] != "dar":
     use_omp = True
 
 ### Shorthand for apple computer:
