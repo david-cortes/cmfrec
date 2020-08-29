@@ -2027,6 +2027,8 @@ FPnum wrapper_fun_grad_Adense_col
             );
 }
 
+/* TODO: this requires smaller buffers when using the CG method,
+   need to make this estimations more tighter */
 void buffer_size_optimizeA_collective
 (
     size_t *buffer_size, size_t *buffer_lbfgs_size,
@@ -2079,21 +2081,29 @@ void buffer_size_optimizeA_collective
 
     else
     {
+        /* maybe should be like this? need to revisit */
+        // if (!use_cg) {
+        //     *buffer_size = square(k_user+k+k_main);
+        // } else {
+        //     *buffer_size = (size_t)3 * (size_t)(k_user+k+k_main);
+        // }
+        /* instead of this */
         *buffer_size = square(k_user+k+k_main);
+        /* --end of comment-- */
         if (has_dense && !has_weight)
             *buffer_size += (size_t)n*(size_t)(k+k_main);
         if (has_dense_u && !full_dense_u)
             *buffer_size += (size_t)p*(size_t)(k_user+k);
         *buffer_size *= (size_t)nthreads;
 
+
+        /* continuation of comment: this one then should also sum k_item */
         *buffer_size += square(k_user+k);
         if (!has_weight) *buffer_size += square(k+k_main);
         if (do_B) *buffer_size += (size_t)n*(size_t)nthreads;
         if (do_B && has_weight) *buffer_size += (size_t)n*(size_t)(nthreads+1);
     }
 
-    if (use_cg)
-        *buffer_size += (size_t)nthreads + (size_t)6*(size_t)(k_user+k+k_main);
 
     if (m > m_u)
     {
