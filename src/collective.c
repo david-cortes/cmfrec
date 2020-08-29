@@ -2585,11 +2585,11 @@ void optimizeA_collective_implicit
     int k_totB = k_item + k + k_main;
     int k_totC = k_user + k;
     int m_x = m; /* <- later gets overwritten */
-    if (!use_cg || is_first_iter || m <= m_u)
+    if (!use_cg || m <= m_u)
         set_to_zero(A, (size_t)max2(m, m_u)*(size_t)k_totA, nthreads);
     else if (m_u > 0) {
         set_to_zero(A, m_u*(size_t)k_totA, nthreads);
-        if (k_user > 0)
+        if (k_user > 0 && is_first_iter)
             #pragma omp parallel for schedule(static) num_threads(min2(4, nthreads)) \
                     shared(A, k_totA, m_u)
             for (size_t ix = 0; ix < (size_t)m_u; ix++)
@@ -4211,11 +4211,9 @@ int fit_collective_implicit_als
             II != NULL, false
         );
 
-    if (use_cg) {
-        if (k < 3)
-            size_bufferA += (size_t)nthreads*(size_t)3*(size_t)(k_user+k+k_main);
-        if (k < 3)
-            size_bufferB += (size_t)nthreads*(size_t)3*(size_t)(k_item+k+k_main);
+    if (use_cg && k < 3) {
+        size_bufferA += (size_t)nthreads*(size_t)3*(size_t)(k_user+k+k_main);
+        size_bufferB += (size_t)nthreads*(size_t)3*(size_t)(k_item+k+k_main);
     }
 
     if (m_u > m) {
