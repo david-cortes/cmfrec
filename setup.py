@@ -28,7 +28,32 @@ class build_ext_subclass( build_ext_with_blas ):
                 # e.extra_compile_args += ['-fsanitize=address', '-static-libasan']
                 # e.extra_link_args += ['-fsanitize=address', '-static-libasan']
                 # e.extra_link_args += ["-lopenblas"]
+
+        ## Note: apple will by default alias 'gcc' to 'clang', and will ship its own "special"
+        ## 'clang' which has no OMP support and nowadays will purposefully fail to compile when passed
+        ## '-fopenmp' flags. If you are using mac, and have an OMP-capable compiler,
+        ## comment out the code below, or set 'use_omp' to 'True'.
+        if not use_omp:
+            for e in self.extensions:
+                e.extra_compile_args = [arg for arg in e.extra_compile_args if arg != '-fopenmp']
+                e.extra_link_args    = [arg for arg in e.extra_link_args    if arg != '-fopenmp']
+
         build_ext_with_blas.build_extensions(self)
+
+
+use_omp = (("enable-omp" in sys.argv)
+           or ("-enable-omp" in sys.argv)
+           or ("--enable-omp" in sys.argv))
+if use_omp:
+    sys.argv = [a for a in sys.argv if a not in ("enable-omp", "-enable-omp", "--enable-omp")]
+if environ.get('ENABLE_OMP') is not None:
+    use_omp = True
+if platform[:3] != "dar":
+    use_omp = True
+
+### Shorthand for apple computer:
+### uncomment line below
+# use_omp = True
 
 setup(
     name  = "cmfrec",
@@ -65,3 +90,11 @@ setup(
           ),
         ]
     )
+
+if not use_omp:
+    import warnings
+    apple_msg  = "\n\n\nMacOS detected. Package will be built without multi-threading capabilities, "
+    apple_msg += "due to Apple's lack of OpenMP support in default clang installs. In order to enable it, "
+    apple_msg += "reinstall with an environment variable 'export ENABLE_OMP=1' or install from GitHub. "
+    apple_msg += "You'll also need an OpenMP-capable compiler.\n\n\n"
+    warnings.warn(apple_msg)

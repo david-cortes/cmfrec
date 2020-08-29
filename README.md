@@ -44,27 +44,24 @@ Alternatively, can produce factorizations in wich the factor matrices are determ
 
 ## Instalation
 
-Linux, MacOS + GCC, Windows depending on `setuptools`:
+From PyPI:
 ```
 pip install cmfrec
 ```
-or
+From GitHub:
 ```
 pip install git+https://www.github.com/david-cortes/cmfrec.git
 ```
 
-Windows with unlucky `setuptools`: clone or download this repository and then install with `setup.py` - e.g.:
-```
-git clone https://www.github.com/david-cortes/cmfrec.git
-cd cmfrec
-python setup.py install
-```
-(Requires package `findblas`, which can be install with `pip install findblas`)
-
-
 As it contains C code, it requires a C compiler. On Windows, this usually means it requires a Visual Studio Build Tools installation (with MSVC140 component for conda, or MinGW + GCC), and if using Anaconda, might also require configuring it to use said Visual Studio instead of MinGW.
 
-On Mac, installing this package will first require getting OpenMP modules for the default clang compiler (redistributions from apple don't come with this essential component, even though clang itself does fully support it), or installing gcc (by default, apple systems will alias gcc to clang, which causes problems).
+**Note for macOS users:** on macOS, this package will compile without multi-threading capabilities. This is due to default apple's redistribution of clang not providing OpenMP modules, and aliasing it to gcc which causes confusions in build scripts. If you have a non-apple version of clang with the OpenMP modules, or if you have gcc installed, you can compile this package with multi-threading enabled by setting up an environment variable ENABLE_OMP=1:
+
+```
+export ENABLE_OMP=1
+pip install cmfrec
+```
+(Alternatively, can also pass argument enable-omp to the setup.py file: python setup.py install enable-omp)
 
 **Note:** this package relies heavily on BLAS and LAPACK functions for calculations. It's recommended to use MKL (comes by default in Anaconda) or OpenBLAS as backend for them, but note that, as of OpenBLAS 0.3.9, some of the functions used here might be significantly faster in MKL depending on CPU architecture.
 
