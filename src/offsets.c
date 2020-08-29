@@ -635,13 +635,13 @@ int offsets_factors_warm
             }
         }
         else
-            factors_implicit(
+            factors_implicit_chol(
                 a_vec, k_sec+k+k_main,
                 Bm, k_sec+k+k_main,
                 Xa, ixB, nnz,
                 lam, alpha,
                 precomputedBtBw, 0,
-                true, false,
+                true,
                 buffer_FPnum,
                 false
             );
@@ -1231,7 +1231,7 @@ int fit_offsets_als
     bool implicit, bool NA_as_zero_X, FPnum alpha,
     bool adjust_weight, FPnum *restrict w_main_multiplier,
     int niter, int seed,
-    int nthreads, bool use_cg,
+    int nthreads, bool use_cg, int max_cg_steps,
     bool verbose,
     FPnum *restrict Bm_plus_bias
 )
@@ -1279,7 +1279,8 @@ int fit_offsets_als
                     1., 1., 1.,
                     w_main_multiplier,
                     alpha, adjust_weight,
-                    niter, nthreads, seed, verbose, use_cg
+                    niter, nthreads, seed, verbose,
+                    use_cg, max_cg_steps
                 );
     if (retval == 1) return 1;
 

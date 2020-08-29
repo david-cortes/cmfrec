@@ -404,6 +404,28 @@ void factors_closed_form
     FPnum *restrict precomputedBtBchol, bool NA_as_zero, bool use_cg,
     bool force_add_diag
 );
+void factors_implicit_cg
+(
+    FPnum *restrict a_vec, int k,
+    FPnum *restrict B, size_t ldb,
+    FPnum *restrict Xa, int ixB[], size_t nnz,
+    FPnum lam, FPnum alpha,
+    FPnum *restrict precomputedBtBw, int strideBtB,
+    int max_cg_steps,
+    FPnum *restrict buffer_FPnum,
+    bool force_add_diag
+);
+void factors_implicit_chol
+(
+    FPnum *restrict a_vec, int k,
+    FPnum *restrict B, size_t ldb,
+    FPnum *restrict Xa, int ixB[], size_t nnz,
+    FPnum lam, FPnum alpha,
+    FPnum *restrict precomputedBtBw, int strideBtB,
+    bool zero_out,
+    FPnum *restrict buffer_FPnum,
+    bool force_add_diag
+);
 void factors_implicit
 (
     FPnum *restrict a_vec, int k,
@@ -411,7 +433,7 @@ void factors_implicit
     FPnum *restrict Xa, int ixB[], size_t nnz,
     FPnum lam, FPnum alpha,
     FPnum *restrict precomputedBtBw, int strideBtB,
-    bool zero_out, bool use_cg,
+    bool zero_out, bool use_cg, int max_cg_steps,
     FPnum *restrict buffer_FPnum,
     bool force_add_diag
 );
@@ -500,7 +522,7 @@ void optimizeA_implicit
     long Xcsr_p[], int Xcsr_i[], FPnum *restrict Xcsr,
     FPnum lam, FPnum alpha,
     int nthreads,
-    bool use_cg,
+    bool use_cg, int max_cg_steps,
     FPnum *restrict buffer_FPnum
 );
 int initialize_biases
@@ -715,7 +737,7 @@ void optimizeA_collective_implicit
     bool full_dense_u, bool near_dense_u, bool NA_as_zero_U,
     FPnum lam, FPnum alpha, FPnum w_main, FPnum w_user,
     int nthreads,
-    bool use_cg,
+    bool use_cg, int max_cg_steps, bool is_first_iter,
     FPnum *restrict buffer_FPnum,
     iteration_data_t *buffer_lbfgs_iter
 );
@@ -1006,7 +1028,8 @@ int fit_collective_implicit_als
     FPnum w_main, FPnum w_user, FPnum w_item,
     FPnum *restrict w_main_multiplier,
     FPnum alpha, bool adjust_weight,
-    int niter, int nthreads, int seed, bool verbose, bool use_cg
+    int niter, int nthreads, int seed, bool verbose,
+    bool use_cg, int max_cg_steps
 );
 int collective_factors_cold_multiple
 (
@@ -1245,7 +1268,7 @@ int fit_offsets_als
     bool implicit, bool NA_as_zero_X, FPnum alpha,
     bool adjust_weight, FPnum *restrict w_main_multiplier,
     int niter, int seed,
-    int nthreads, bool use_cg,
+    int nthreads, bool use_cg, int max_cg_steps,
     bool verbose,
     FPnum *restrict Bm_plus_bias
 );

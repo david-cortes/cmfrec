@@ -23,7 +23,8 @@ class _CMF:
         return self
 
     def _take_params(self, implicit=False, alpha=40., downweight=True,
-                     k=50, lambda_=1e2, method="als", use_cg=False,
+                     k=50, lambda_=1e2, method="als",
+                     use_cg=False, max_cg_steps=3,
                      user_bias=True, item_bias=True, k_user=0, k_item=0, k_main=0,
                      w_main=1., w_user=1., w_item=1.,
                      maxiter=400, niter=10, parallelize="separate", corr_pairs=4,
@@ -83,6 +84,9 @@ class _CMF:
         if (method == "lbfgs") and (NA_as_zero or NA_as_zero_user or NA_as_zero_item):
             raise ValueError("Option 'NA_as_zero' not supported with method='lbfgs'.")
 
+        if method == "als":
+            assert max_cg_steps > 0
+
         w_main = float(w_main) if isinstance(w_main, int) else w_main
         w_user = float(w_user) if isinstance(w_user, int) else w_user
         w_item = float(w_item) if isinstance(w_item, int) else w_item
@@ -111,6 +115,7 @@ class _CMF:
         self.item_bias = bool(item_bias)
         self.method = method
         self.use_cg = bool(use_cg)
+        self.max_cg_steps = int(max_cg_steps)
         self.maxiter = maxiter
         self.niter = niter
         self.parallelize = parallelize
@@ -2624,17 +2629,25 @@ class CMF_implicit(_CMF):
     Collective model for implicit-feedback data
 
     Tries to approximate the 'X' interactions matrix  by a formula as follows:
-    X ~ A * t(B)
+        X ~ A * t(B)
     While at the same time also approximating the user side information
     matrix 'U' and the item side information matrix 'I' as follows:
-    U ~ A * t(C)
-    I ~ B * t(D)
+        U ~ A * t(C)
+        I ~ B * t(D)
 
     Note
     ----
     This model is fit through the alternating least-squares method only,
     it does not offer a gradient-based approach like the explicit-feedback
     version.
+
+    Note
+    ----
+    The default hyperparameters in this software are very different from others.
+    For example, to match those of the package ``implicit``, the corresponding
+    hyperparameters here would be ``use_cg=True``, ``k=100``, ``lambda_=0.01``,
+    ``use_float=True``, `alpha=1.``, ``downweight=True`` (see the individual
+    documentation of each hyperarameter for details).
 
     Parameters
     ----------
@@ -2651,7 +2664,9 @@ class CMF_implicit(_CMF):
     alpha : float
         Weighting parameter for the non-zero entries in the implicit-feedback
         model. See [3] for details. Note that, while the author's suggestion for
-        this value is 40, other software such as ``implicit`` use a value of 1.
+        this value is 40, other software such as ``implicit`` use a value of 1,
+        and values higher than 10 are unlikely to improve results. Recommended to
+        use ``downweight=True`` when using higher "alpha".
     k_user : int
         Number of factors in the factorizing A and C matrices which will be used
         only for the 'U' matrix, while being ignored for the 'X' matrix.
@@ -2680,7 +2695,8 @@ class CMF_implicit(_CMF):
         Whether to decrease the weight of the 'X' matrix being factorized
         according to the number of present entries. This has the same effect
         as rescaling (increasing) the regularization parameter for the A and B
-        matrices while increasing ``w_user`` and ``w_item``.
+        matrices while increasing ``w_user`` and ``w_item``. Recommended to use
+        when passing ``alpha``.
     niter : int
         Number of alternating least-squares iterations to perform. Note that
         one iteration denotes an update round for all the matrices rather than
@@ -2704,16 +2720,23 @@ class CMF_implicit(_CMF):
         use less memory, at the expense of reduced numerical precision.
     use_cg : bool
         Whether to use a conjugate gradient method to solve the closed-form
-        least squares problems. This was implemented for experimentation
-        purposes only - will not provide any advantage over the default
-        Cholesky solver.
+        least squares problems. This is a faster alternative than the default
+        Cholesky solver, but less exact, less numerically stable, and will require
+        more ALS iterations (``niter``) to reach good a good optimum. Will only be
+        used for the matrices or parts of the matrices that are not shared between
+        factorizations.
+        Note that, if using this method, calculating factors through ``factors_warm``
+        will produce different results from the factors obtained after calling
+        ``fit`` with the same data.
+    max_cg_steps : int
+        Maximum number of conjugate gradient iterations to perform in an ALS round.
     random_state : int, RandomState, or Generator
         Seed used to initialize parameters at random. If passing a NumPy
         RandomState or Generator, will use it to draw a random integer.
     init : str, "normal" or "gamma"
         Distribution used to initialize the model parameters. Both
-        distributions will reach similar end results, but the distribution
-        of the factors themselves will be slightly different.
+        distributions are likely to reach similar end results, but the
+        distribution of the factors themselves will be different.
     verbose : bool
         Whether to print informational messages about the optimization
         routine used to fit the model. Note that, if running this from a
@@ -2778,15 +2801,17 @@ class CMF_implicit(_CMF):
            "Collaborative filtering for implicit feedback datasets."
            2008 Eighth IEEE International Conference on Data Mining. Ieee, 2008.
     """
-    def __init__(self, k=50, lambda_=1e3, alpha=40.,
+    def __init__(self, k=50, lambda_=1e0, alpha=1.,
                  k_user=0, k_item=0, k_main=0,
-                 w_main=1., w_user=1., w_item=1., downweight=True,
+                 w_main=1., w_user=1., w_item=1., downweight=False,
                  niter=10, NA_as_zero_user=False, NA_as_zero_item=False,
-                 precompute_for_predictions=True, use_float=False, use_cg=False,
+                 precompute_for_predictions=True, use_float=False,
+                 use_cg=False, max_cg_steps=3,
                  random_state=1, init="normal", verbose=False,
                  produce_dicts=False, copy_data=True, nthreads=-1):
         self._take_params(implicit=True, alpha=alpha, downweight=downweight,
-                          k=k, lambda_=lambda_, method="als", use_cg=use_cg,
+                          k=k, lambda_=lambda_, method="als",
+                          use_cg=use_cg, max_cg_steps=max_cg_steps,
                           user_bias=False, item_bias=False,
                           k_user=k_user, k_item=k_item, k_main=k_main,
                           w_main=w_main, w_user=w_user, w_item=w_item,
@@ -2897,8 +2922,8 @@ class CMF_implicit(_CMF):
                 self.alpha, self.downweight,
                 self.lambda_ if isinstance(self.lambda_, np.ndarray) else np.empty(0, dtype=self.dtype_),
                 self.verbose, self.niter,
-                self.nthreads, self.use_cg, self.random_state,
-                init=self.init
+                self.nthreads, self.use_cg, self.max_cg_steps,
+                self.random_state, init=self.init
             )
 
         self.A_, self.B_, self.C_, self.D_ = \
@@ -4701,9 +4726,16 @@ class OMF_implicit(_OMF):
         use less memory, at the expense of reduced numerical precision.
     use_cg : bool
         Whether to use a conjugate gradient method to solve the closed-form
-        least squares problems. This was implemented for experimentation
-        purposes only - will not provide any advantage over the default
-        Cholesky solver.
+        least squares problems. This is a faster alternative than the default
+        Cholesky solver, but less exact, less numerically stable, and will require
+        more ALS iterations (``niter``) to reach good a good optimum. Will only be
+        used for the matrices or parts of the matrices that are not shared between
+        factorizations.
+        Note that, if using this method, calculating factors through ``factors_warm``
+        will produce different results from the factors obtained after calling
+        ``fit`` with the same data.
+    max_cg_steps : int
+        Maximum number of conjugate gradient iterations to perform in an ALS round.
     random_state : int, RandomState, or Generator
         Seed used to initialize parameters at random. If passing a NumPy
         RandomState or Generator, will use it to draw a random integer.
@@ -4773,12 +4805,14 @@ class OMF_implicit(_OMF):
            "Collaborative filtering for implicit feedback datasets."
            2008 Eighth IEEE International Conference on Data Mining. Ieee, 2008.
     """
-    def __init__(self, k=50, lambda_=1e3, alpha=40., downweight=True,
-                 add_intercepts=True, niter=10, use_float=False, use_cg=False,
+    def __init__(self, k=50, lambda_=1e0, alpha=1., downweight=False,
+                 add_intercepts=True, niter=10, use_float=False,
+                 use_cg=False, max_cg_steps=3,
                  random_state=1, verbose=False,
                  produce_dicts=False, copy_data=True, nthreads=-1):
         self._take_params(implicit=True, alpha=alpha, downweight=downweight,
-                          k=k, lambda_=lambda_, method="als", use_cg=use_cg,
+                          k=k, lambda_=lambda_, method="als",
+                          use_cg=use_cg, max_cg_steps=max_cg_steps,
                           user_bias=False, item_bias=False,
                           k_user=0, k_item=0, k_main=0,
                           w_main=1., w_user=1., w_item=1.,
@@ -5647,6 +5681,7 @@ class MostPopular(_CMF):
         Weighting parameter for the non-zero entries in the implicit-feedback
         model. See [2] for details. Note that, while the author's suggestion for
         this value is 40, other software such as ``implicit`` use a value of 1.
+        See the documentation of ``CMF_implicit`` for more details.
     downweight : bool
         (Only when passing ``implicit=True``) Whether to decrease the weight
         of the 'X' matrix being factorized according to the number of
@@ -5716,8 +5751,8 @@ class MostPopular(_CMF):
            "Collaborative filtering for implicit feedback datasets."
            2008 Eighth IEEE International Conference on Data Mining. Ieee, 2008.
     """
-    def __init__(self, implicit=False, user_bias=False, lambda_=1e1, alpha=40.,
-                 downweight=True, use_float=False, produce_dicts=False,
+    def __init__(self, implicit=False, user_bias=False, lambda_=1e1, alpha=1.,
+                 downweight=False, use_float=False, produce_dicts=False,
                  copy_data=True, nthreads=-1):
         self._take_params(implicit=implicit, alpha=alpha, downweight=False,
                           k=1, lambda_=lambda_, method="als", use_cg=False,

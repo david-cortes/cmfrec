@@ -923,14 +923,85 @@ void factors_closed_form
         );
 }
 
-void factors_implicit
+
+/* https://www.benfrederickson.com/fast-implicit-matrix-factorization/ */
+void factors_implicit_cg
 (
     FPnum *restrict a_vec, int k,
     FPnum *restrict B, size_t ldb,
     FPnum *restrict Xa, int ixB[], size_t nnz,
     FPnum lam, FPnum alpha,
     FPnum *restrict precomputedBtBw, int strideBtB,
-    bool zero_out, bool use_cg,
+    int max_cg_steps,
+    FPnum *restrict buffer_FPnum,
+    bool force_add_diag
+)
+{
+    FPnum *restrict Ap = buffer_FPnum;
+    FPnum *restrict r  = Ap + k;
+    FPnum *restrict p  = r  + k;
+    FPnum coef;
+    FPnum r_old, r_new;
+    FPnum a;
+
+    if (force_add_diag) {
+        /* Note: there's no intended use-case that would end up here */
+        copy_arr(precomputedBtBw, buffer_FPnum, square(k), 1);
+        precomputedBtBw = buffer_FPnum;
+        add_to_diag(precomputedBtBw, lam, k);
+        buffer_FPnum += square((size_t)k);
+    }
+
+    cblas_tsymv(CblasRowMajor, CblasUpper, k,
+                -1., precomputedBtBw, k,
+                a_vec, 1,
+                0., r, 1);
+    for (size_t ix = 0; ix < nnz; ix++) {
+        coef = cblas_tdot(k, B + (size_t)ixB[ix]*ldb, 1, a_vec, 1);
+        cblas_taxpy(k,
+                    alpha*Xa[ix] - coef * (alpha*Xa[ix] - 1.),
+                    B + (size_t)ixB[ix]*ldb, 1,
+                    r, 1);
+    }
+
+    copy_arr(r, p, k, 1);
+    r_old = cblas_tdot(k, r, 1, r, 1);
+
+    for (int cg_step = 0; cg_step < max_cg_steps; cg_step++)
+    {
+        cblas_tsymv(CblasRowMajor, CblasUpper, k,
+                    1., precomputedBtBw, k,
+                    p, 1,
+                    0., Ap, 1);
+        for (size_t ix = 0; ix < nnz; ix++) {
+            coef = cblas_tdot(k, B + (size_t)ixB[ix]*ldb, 1, p, 1);
+            cblas_taxpy(k,
+                        coef * (alpha*Xa[ix] - 1.),
+                        B + (size_t)ixB[ix]*ldb, 1,
+                        Ap, 1);
+        }
+
+        a = r_old / cblas_tdot(k, Ap, 1, p, 1);
+        cblas_taxpy(k, a, p, 1, a_vec, 1);
+        cblas_taxpy(k, -a, Ap, 1, r, 1);
+        r_new = cblas_tdot(k, r, 1, r, 1);
+        if (r_new <= 1e-8)
+            break;
+        cblas_tscal(k, r_new / r_old, p, 1);
+        cblas_taxpy(k, 1., r, 1, p, 1);
+        r_old = r_new;
+    }
+}
+
+
+void factors_implicit_chol
+(
+    FPnum *restrict a_vec, int k,
+    FPnum *restrict B, size_t ldb,
+    FPnum *restrict Xa, int ixB[], size_t nnz,
+    FPnum lam, FPnum alpha,
+    FPnum *restrict precomputedBtBw, int strideBtB,
+    bool zero_out,
     FPnum *restrict buffer_FPnum,
     bool force_add_diag
 )
@@ -958,17 +1029,47 @@ void factors_implicit
     if (force_add_diag)
         add_to_diag(BtBw, lam, k);
 
-    if (!use_cg)
-        tposv_(&uplo, &k, &one,
-               BtBw, &k,
-               a_vec, &k,
-               &ignore);
-    else
-        solve_conj_grad(
-            BtBw, a_vec, k,
-            buffer_FPnum + square(k)
+    tposv_(&uplo, &k, &one,
+           BtBw, &k,
+           a_vec, &k,
+           &ignore);
+}
+
+void factors_implicit
+(
+    FPnum *restrict a_vec, int k,
+    FPnum *restrict B, size_t ldb,
+    FPnum *restrict Xa, int ixB[], size_t nnz,
+    FPnum lam, FPnum alpha,
+    FPnum *restrict precomputedBtBw, int strideBtB,
+    bool zero_out, bool use_cg, int max_cg_steps,
+    FPnum *restrict buffer_FPnum,
+    bool force_add_diag
+)
+{
+    if (use_cg)
+        factors_implicit_cg(
+            a_vec, k,
+            B, ldb,
+            Xa, ixB, nnz,
+            lam, alpha,
+            precomputedBtBw, strideBtB,
+            max_cg_steps,
+            buffer_FPnum,
+            force_add_diag
         );
-    }
+    else
+        factors_implicit_chol(
+            a_vec, k,
+            B, ldb,
+            Xa, ixB, nnz,
+            lam, alpha,
+            precomputedBtBw, strideBtB,
+            zero_out,
+            buffer_FPnum,
+            force_add_diag
+        );
+}
 
 FPnum fun_grad_Adense
 (
@@ -1429,7 +1530,7 @@ void optimizeA_implicit
     long Xcsr_p[], int Xcsr_i[], FPnum *restrict Xcsr,
     FPnum lam, FPnum alpha,
     int nthreads,
-    bool use_cg,
+    bool use_cg, int max_cg_steps,
     FPnum *restrict buffer_FPnum
 )
 {
@@ -1440,9 +1541,9 @@ void optimizeA_implicit
                 1., B, (int)ldb,
                 0., precomputedBtBw, k);
     add_to_diag(precomputedBtBw, lam, k);
-    set_to_zero(A, (size_t)m*(size_t)k - (lda-(size_t)k), nthreads);
-    size_t size_buffer = square(k);
-    if (use_cg) size_buffer += 6 * k;
+    if (!use_cg)
+        set_to_zero(A, (size_t)m*(size_t)k - (lda-(size_t)k), nthreads);
+    size_t size_buffer = use_cg? (3 * k) : (square(k));
 
     int ix = 0;
     #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
@@ -1456,7 +1557,7 @@ void optimizeA_implicit
             Xcsr + Xcsr_p[ix], Xcsr_i + Xcsr_p[ix], Xcsr_p[ix+1] - Xcsr_p[ix],
             lam, alpha,
             precomputedBtBw, 0,
-            false, use_cg,
+            false, use_cg, max_cg_steps,
             buffer_FPnum + ((size_t)omp_get_thread_num() * size_buffer),
             false
         );

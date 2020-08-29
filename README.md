@@ -24,8 +24,9 @@ The new version is faster, multi-threaded, and has some new functionality, but i
 * Can fit the usual explicit-feedback model as well as the implicit-feedback model with weighted binary entries (see [3]).
 * Can be used for cold-start recommendations (when using side information).
 * Supports user and item biases in the explicit-feedback models.
-* Provides an API for top-N recommended lists.
-* Can use either an alternating least-squares procedure (ALS) or a gradient-based procedure using an L-BFGS optimizer (depending on the specific model) (the package bundles a modified version of [Okazaki's C implementation](https://github.com/chokkan/liblbfgs)).
+* Provides an API for top-N recommended lists and for calculating latent factors from new data.
+* Can use either an alternating least-squares procedure (ALS) or a gradient-based procedure using an L-BFGS optimizer depending on the specific model (the package bundles a modified version of [Okazaki's C implementation](https://github.com/chokkan/liblbfgs)).
+* For the ALS option, can use either the exact Cholesky method or the faster conjugate gradient method.
 * Provides a content-based model and other models aimed at better cold-start recommendations.
 * Provides an intercepts-only "most-popular" model for non-personalized recommendations, which can be used as a benchmark as it takes similar hyperparameters as the other models.
 * Allows variations of the original collective factorization models such as setting some factors to be used only for one factorization, setting different weights for the errors on each matrix, or setting different regularization parameters for each matrix.

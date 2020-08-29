@@ -130,7 +130,8 @@ cdef extern from "cmfrec.h":
         FPnum w_main, FPnum w_user, FPnum w_item,
         FPnum *w_main_multiplier,
         FPnum alpha, bint adjust_weight,
-        int niter, int nthreads, int seed, bint verbose, bint use_cg
+        int niter, int nthreads, int seed, bint verbose,
+        bint use_cg, int max_cg_steps
     )
 
     int fit_offsets_als(
@@ -149,7 +150,7 @@ cdef extern from "cmfrec.h":
         bint adjust_weight, FPnum *w_main_multiplier,
         int niter, int seed,
         int nthreads,
-        bint use_cg,
+        bint use_cg, int max_cg_steps,
         bint verbose,
         FPnum *B_plus_bias
     )
@@ -1035,7 +1036,8 @@ def call_fit_collective_implicit_als(
         FPnum lam=1e2, FPnum alpha=40., bint adjust_weight=1,
         np.ndarray[FPnum, ndim=1] lam_unique=np.empty(0, dtype=c_FPnum),
         bint verbose=1, int niter=5,
-        int nthreads=1, bint use_cg=0, int seed=1, init="normal"
+        int nthreads=1, bint use_cg=0, int max_cg_steps=3,
+        int seed=1, init="normal"
     ):
     
     cdef FPnum *ptr_U = NULL
@@ -1086,11 +1088,11 @@ def call_fit_collective_implicit_als(
     if I.shape[0] or I_sp.shape[0]:
         nvars += <size_t>q * <size_t>(k_item + k)
     rs = np.random.Generator(np.random.MT19937(seed = seed))
-    cdef np.ndarray[FPnum, ndim=1] values
+    cdef np.ndarray[FPnum, ndim=1] values    
     if init == "normal":
         values = rs.standard_normal(size = nvars, dtype = c_FPnum)
     elif init == "gamma":
-        values = - np.log(rs.random(size = nvars, dtype = c_FPnum).clip(min=1e-6))
+        values = - np.log(rs.random(size = nvars, dtype = c_FPnum).clip(min=1e-6, max=20.))
     elif init == "uniform":
         values = rs.random(size = nvars, dtype = c_FPnum)
     else:
@@ -1113,7 +1115,8 @@ def call_fit_collective_implicit_als(
         w_main, w_user, w_item,
         &w_main_multiplier,
         alpha, adjust_weight,
-        niter, nthreads, 1, verbose, use_cg
+        niter, nthreads, 1, verbose,
+        use_cg, max_cg_steps
     )
 
     if retval == 1:
@@ -1224,7 +1227,7 @@ def call_fit_offsets_explicit_als(
         0, <FPnum*>NULL,
         niter, seed,
         nthreads,
-        use_cg,
+        use_cg, 0,
         verbose,
         ptr_Bm_plus_bias
     )
@@ -1261,7 +1264,8 @@ def call_fit_offsets_implicit_als(
         int m, int n, int p, int q,
         int k=50, bint add_intercepts=1,
         FPnum lam=1e2, FPnum alpha=40.,
-        bint verbose=1, int nthreads=1, bint use_cg=0,
+        bint verbose=1, int nthreads=1,
+        bint use_cg=0, int max_cg_steps=3,
         bint adjust_weight = 1,
         int seed=1, int niter=5
     ):
@@ -1316,7 +1320,7 @@ def call_fit_offsets_implicit_als(
         adjust_weight, &w_main_multiplier,
         niter, seed,
         nthreads,
-        use_cg,
+        use_cg, max_cg_steps,
         verbose,
         <FPnum*>NULL
     )

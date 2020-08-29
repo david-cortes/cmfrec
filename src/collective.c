@@ -1837,14 +1837,14 @@ int collective_factors_warm_implicit
     }
 
     else {
-        set_to_zero(a_vec, k_user, 1);
-        factors_implicit(
+        set_to_zero(a_vec, k_user+k+k_main, 1);
+        factors_implicit_chol(
             a_vec + k_user, k+k_main,
             B + k_item, (size_t)(k_item+k+k_main),
             Xa, ixB, nnz,
             lam/w_main, alpha,
             precomputedBtB_shrunk, 0,
-            true, false,
+            false,
             buffer_FPnum,
             true
         );
@@ -2576,7 +2576,7 @@ void optimizeA_collective_implicit
     bool full_dense_u, bool near_dense_u, bool NA_as_zero_U,
     FPnum lam, FPnum alpha, FPnum w_main, FPnum w_user,
     int nthreads,
-    bool use_cg,
+    bool use_cg, int max_cg_steps, bool is_first_iter,
     FPnum *restrict buffer_FPnum,
     iteration_data_t *buffer_lbfgs_iter
 )
@@ -2585,7 +2585,16 @@ void optimizeA_collective_implicit
     int k_totB = k_item + k + k_main;
     int k_totC = k_user + k;
     int m_x = m; /* <- later gets overwritten */
-    set_to_zero(A, (size_t)max2(m, m_u)*(size_t)k_totA, nthreads);
+    if (!use_cg || is_first_iter || m <= m_u)
+        set_to_zero(A, (size_t)max2(m, m_u)*(size_t)k_totA, nthreads);
+    else if (m_u > 0) {
+        set_to_zero(A, m_u*(size_t)k_totA, nthreads);
+        if (k_user > 0)
+            #pragma omp parallel for schedule(static) num_threads(min2(4, nthreads)) \
+                    shared(A, k_totA, m_u)
+            for (size_t ix = 0; ix < (size_t)m_u; ix++)
+                set_to_zero(A + ix * (size_t)k_totA, k_user, 1);
+    }
 
     /* If the X matrix has more rows, the extra rows will be independent
        from U and can be obtained from the single-matrix formula instead.
@@ -2599,7 +2608,7 @@ void optimizeA_collective_implicit
             m_diff, n, k + k_main,
             Xcsr_p + m_u, Xcsr_i, Xcsr,
             lam/w_main, alpha,
-            nthreads, use_cg,
+            nthreads, use_cg, max_cg_steps,
             buffer_FPnum
         );
         m = m_u;
@@ -4086,7 +4095,8 @@ int fit_collective_implicit_als
     FPnum w_main, FPnum w_user, FPnum w_item,
     FPnum *restrict w_main_multiplier,
     FPnum alpha, bool adjust_weight,
-    int niter, int nthreads, int seed, bool verbose, bool use_cg
+    int niter, int nthreads, int seed, bool verbose,
+    bool use_cg, int max_cg_steps
 )
 {
     int k_totA = k_user + k + k_main;
@@ -4202,8 +4212,10 @@ int fit_collective_implicit_als
         );
 
     if (use_cg) {
-        size_bufferA += (size_t)nthreads*(size_t)6*(size_t)(k_user+k+k_main);
-        size_bufferB += (size_t)nthreads*(size_t)6*(size_t)(k_item+k+k_main);
+        if (k < 3)
+            size_bufferA += (size_t)nthreads*(size_t)3*(size_t)(k_user+k+k_main);
+        if (k < 3)
+            size_bufferB += (size_t)nthreads*(size_t)3*(size_t)(k_item+k+k_main);
     }
 
     if (m_u > m) {
@@ -4340,7 +4352,7 @@ int fit_collective_implicit_als
                 full_dense_i, near_dense_i_row, NA_as_zero_I,
                 (lam_unique == NULL)? (lam) : (lam_unique[3]),
                 alpha, w_main, w_item,
-                nthreads, use_cg,
+                nthreads, use_cg, max_cg_steps, iter == 0,
                 buffer_FPnum,
                 buffer_lbfgs_iter
             );
@@ -4353,7 +4365,7 @@ int fit_collective_implicit_als
                 Xcsc_p, Xcsc_i, Xcsc,
                 (lam_unique == NULL)? (lam/w_main) : (lam_unique[3]/w_main),
                 alpha,
-                nthreads, use_cg,
+                nthreads, use_cg, max_cg_steps,
                 buffer_FPnum
             );
         if (verbose) { printf(" done\n"); fflush(stdout); }
@@ -4377,7 +4389,7 @@ int fit_collective_implicit_als
                 full_dense_u, near_dense_u_row, NA_as_zero_U,
                 (lam_unique == NULL)? (lam) : (lam_unique[2]),
                 alpha, w_main, w_user,
-                nthreads, use_cg,
+                nthreads, use_cg, max_cg_steps, iter == 0,
                 buffer_FPnum,
                 buffer_lbfgs_iter
             );
@@ -4390,7 +4402,8 @@ int fit_collective_implicit_als
                 Xcsr_p, Xcsr_i, Xcsr,
                 (lam_unique == NULL)? (lam/w_main) : (lam_unique[2]/w_main),
                 alpha,
-                nthreads, use_cg,
+                nthreads,
+                use_cg, max_cg_steps,
                 buffer_FPnum
             );
         if (verbose) { printf(" done\n"); fflush(stdout); }
