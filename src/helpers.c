@@ -820,8 +820,8 @@ void coo_to_csr_and_csc
     cnt_byrow = (int*)calloc(m, sizeof(int));
     cnt_bycol = (int*)calloc(n, sizeof(int));
 
-    #ifdef _OPENMP
-    omp_set_nested(1);
+    #if defined(_OPENMP) && (_OPENMP > 201305) /* OpenMP >= 4.0 */
+    omp_set_max_active_levels(2);
     #endif
 
     if (cnt_byrow != NULL && cnt_bycol != NULL) {
