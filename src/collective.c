@@ -175,10 +175,27 @@
     specialized procedures based on e.g. a Cholesky factorization, rather than
     a more general linear solver or matrix inversion.
 
-    To obtain the bias, **before** applying this closed form solution, first
-    center Xa and set that mean as the bias for that row - no regularization is
-    possible, but it is still a model parameter which becomes updated after
-    each iteration.
+    The row and column biases (b1/b2) for the factorization of 'X' are obtained
+    as follows: first, all the X[m,n] data are centered by subtracting their
+    global mean (mu). Then, the biases are initialized by an alternating
+    optimization procedure (between row/column biases), in which at each
+    iteration, the optimal biases are calculated in closed-form.
+    For a given row 'a', the closed-form minimizer of the bias is:
+        bias(a) = sum(X(a,:) - b2[1,n] - mu[1]) / (N_non_NA(X(a,:) + lambda))
+    At the beginning of each ALS iteration, assuming the 'A' matrix is being
+    optimized, the procedure then subtracts from the already-centered X the
+    current biases:
+        X_iter[m,n] = X[m,n] - b2[1,n] - mu[1])
+    and adds an extra column of all-ones at the end of the other factorizing
+    matrix:
+        B_iter[n+p, k_user+k+k_main+1] := [[Be[:n, :],  1[n,1] ],
+                                           [Be[n:, :],  0      ]]
+    The A matrix being solved for is also extended by 1 column.
+    The procedure is then run as usual with the altered X and Be matrices, and
+    after solving for A, the new values for b1[m,1] will correspond to its last
+    column, which will not be used any further when optimizing for the other
+    matrices. The 'X' matrix then needs to be restored to its original values,
+    and the all-ones column in 'Be' is also ignored.
 
 
     Both the gradient-based approach and the closed-form solution with these
@@ -190,6 +207,13 @@
             A<->C, X<->U
         For matrix 'D', replace:
             A->D, X->I, C->A, U->X
+
+
+    In addition, it's also possible to fit the weighted-implicit model in which:
+    - There are no biases and the global mean is not used.
+    - The values of 'X' are all zeros or ones.
+    - There is an associated weight to each non-zero value of 'X'.
+    Using the same procedures as explained earlier. 
     
 
     In order to obtain the factor matrices for new users, in a cold-start

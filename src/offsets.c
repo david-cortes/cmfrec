@@ -168,7 +168,8 @@
     have a dense matrix X, from which Xdiff = X - w_user*U*C could be computed,
     in order to build the closed-form on that, and then C would still need to
     somehow get a correction according to the regularization to account for
-    being multiplied by U and w_user.
+    being multiplied by U and w_user. See the file 'collective.c' for an
+    explanation of how the biases are obtained.
 
     As can be seen from the formulas, calculating the factors for new users is
     easier for both the cold-start (based only on user attributes Ua[1,p]) and
