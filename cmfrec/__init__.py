@@ -1440,11 +1440,11 @@ class CMF_explicit(_CMF):
     Collective model for explicit-feedback data
 
     Tries to approximate the 'X' interactions matrix  by a formula as follows:
-    X ~ A * t(B)
+        X ~ A * t(B)
     While at the same time also approximating the user side information
     matrix 'U' and the item side information matrix 'I' as follows:
-    U ~ A * t(C)
-    I ~ B * t(D)
+        U ~ A * t(C)
+        I ~ B * t(D)
     Might apply sigmoid transformations to binary columns in U and I too.
 
     Parameters
@@ -3782,7 +3782,7 @@ class OMF_explicit(_OMF):
 
     Tries to approximate the 'X' ratings matrix using the user side information
     'U' and item side information 'I' by a formula as follows:
-    X ~ (A + U*C) * t(B + I*D)
+        X ~ (A + U*C) * t(B + I*D)
 
     Note
     ----
@@ -4683,7 +4683,7 @@ class OMF_implicit(_OMF):
 
     Tries to approximate the 'X' interactions matrix using the user side information
     'U' and item side information 'I' by a formula as follows:
-    X ~ (A + U*C) * t(B + I*D)
+        X ~ (A + U*C) * t(B + I*D)
 
     Note
     ----
@@ -5151,7 +5151,7 @@ class ContentBased(_OMF_Base):
 
     The 'X' is approximated using the user side information
     'U' and item side information 'I' by a formula as follows:
-    X ~ (U*C) * t(I*D)
+        X ~ (U*C) * t(I*D)
 
     Note
     ----
