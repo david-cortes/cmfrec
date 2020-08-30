@@ -1127,6 +1127,9 @@ int fit_offsets_explicit_lbfgs
     {
         should_stop_procedure = false;
         fprintf(stderr, "Procedure terminated before starting optimization\n");
+        #if !defined(_FOR_R)
+        fflush(stderr);
+        #endif
         goto cleanup;
     }
 
@@ -1145,7 +1148,9 @@ int fit_offsets_explicit_lbfgs
         printf("\n\nOptimization terminated\n");
         printf("\t%s\n", lbfgs_strerror(retval));
         printf("\tniter:%3d, nfev:%3d\n", data.niter, data.nfev);
+        #if !defined(_FOR_R)
         fflush(stdout);
+        #endif
     }
     if (retval == LBFGSERR_OUTOFMEMORY)
         retval = 1;

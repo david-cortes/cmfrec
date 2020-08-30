@@ -18,6 +18,9 @@
             "Collaborative filtering for implicit feedback datasets."
             2008 Eighth IEEE International Conference on Data Mining.
             Ieee, 2008.
+        (d) Takacs, Gabor, Istvan Pilaszy, and Domonkos Tikk.
+            "Applications of the conjugate gradient method for implicit feedback collaborative filtering."
+            Proceedings of the fifth ACM conference on Recommender systems. 2011.
 
     For information about the models offered here and how they are fit to
     the data, see the files 'collective.c' and 'offsets.c'.
@@ -3320,6 +3323,9 @@ int fit_collective_explicit_lbfgs
     {
         should_stop_procedure = false;
         fprintf(stderr, "Procedure terminated before starting optimization\n");
+        #if !defined(_FOR_R)
+        fflush(stderr);
+        #endif
         goto cleanup;
     }
 
@@ -3338,7 +3344,9 @@ int fit_collective_explicit_lbfgs
         printf("\n\nOptimization terminated\n");
         printf("\t%s\n", lbfgs_strerror(retval));
         printf("\tniter:%3d, nfev:%3d\n", data.niter, data.nfev);
+        #if !defined(_FOR_R)
         fflush(stdout);
+        #endif
     }
     if (retval == LBFGSERR_OUTOFMEMORY)
         retval = 1;
@@ -3773,7 +3781,9 @@ int fit_collective_explicit_als
 
     if (verbose) {
         printf("Starting ALS optimization routine\n\n");
+        #if !defined(_FOR_R)
         fflush(stdout);
+        #endif
     }
 
     for (int iter = 0; iter < niter; iter++)
@@ -3782,7 +3792,12 @@ int fit_collective_explicit_als
         signal(SIGINT, set_interrup_global_variable);
         if (should_stop_procedure) goto check_interrupt;
         if (U != NULL || U_sp != NULL) {
-            if (verbose) { printf("Updating C..."); fflush(stdout); }
+            if (verbose) {
+                printf("Updating C...");
+                #if !defined(_FOR_R)
+                fflush(stdout);
+                #endif
+            }
 
             if (U_orig != NULL)
                 copy_arr(U, U_orig, (size_t)m_u*(size_t)p, nthreads);
@@ -3802,13 +3817,23 @@ int fit_collective_explicit_als
                 buffer_FPnum,
                 buffer_lbfgs_iter
             );
-            if (verbose) { printf(" done\n"); fflush(stdout); }
+            if (verbose) {
+                printf(" done\n");
+                #if !defined(_FOR_R)
+                fflush(stdout);
+                #endif
+            }
         }
 
         signal(SIGINT, set_interrup_global_variable);
         if (should_stop_procedure) goto check_interrupt;
         if (II != NULL || I_sp != NULL) {
-            if (verbose) { printf("Updating D..."); fflush(stdout); }
+            if (verbose) {
+                printf("Updating D...");
+                #if !defined(_FOR_R)
+                fflush(stdout);
+                #endif
+            }
 
             if (I_orig != NULL)
                 copy_arr(II, I_orig, (size_t)n_i*(size_t)q, nthreads);
@@ -3828,7 +3853,12 @@ int fit_collective_explicit_als
                 buffer_FPnum,
                 buffer_lbfgs_iter
             );
-            if (verbose) { printf(" done\n"); fflush(stdout); }
+            if (verbose) {
+                printf(" done\n");
+                #if !defined(_FOR_R)
+                fflush(stdout);
+                #endif
+            }
         }
 
         /* Apply bias beforehand, as its column will be fixed */
@@ -3874,7 +3904,12 @@ int fit_collective_explicit_als
         /* Optimize B */
         signal(SIGINT, set_interrup_global_variable);
         if (should_stop_procedure) goto check_interrupt;
-        if (verbose) { printf("Updating B..."); fflush(stdout); }
+        if (verbose) {
+            printf("Updating B...");
+            #if !defined(_FOR_R)
+            fflush(stdout);
+            #endif
+        }
         if (II != NULL || I_sp != NULL)
         {
             if (I_orig != NULL)
@@ -3918,7 +3953,12 @@ int fit_collective_explicit_als
                 buffer_FPnum,
                 buffer_lbfgs_iter
             );
-        if (verbose) { printf(" done\n"); fflush(stdout); }
+        if (verbose) {
+            printf(" done\n");
+            #if !defined(_FOR_R)
+            fflush(stdout);
+            #endif
+        }
 
         if (item_bias)
             cblas_tcopy(n_max, B_bias + k_item+k+k_main, k_item+k+k_main + 1,
@@ -3958,7 +3998,12 @@ int fit_collective_explicit_als
         /* Optimize A */
         signal(SIGINT, set_interrup_global_variable);
         if (should_stop_procedure) goto check_interrupt;
-        if (verbose) { printf("Updating A..."); fflush(stdout); }
+        if (verbose) {
+            printf("Updating A...");
+            #if !defined(_FOR_R)
+            fflush(stdout);
+            #endif
+        }
         if (U != NULL || U_sp != NULL)
         {
             if (U_orig != NULL)
@@ -4001,7 +4046,12 @@ int fit_collective_explicit_als
                 buffer_FPnum,
                 buffer_lbfgs_iter
             );
-        if (verbose) { printf(" done\n"); fflush(stdout); }
+        if (verbose) {
+            printf(" done\n");
+            #if !defined(_FOR_R)
+            fflush(stdout);
+            #endif
+        }
 
         if (user_bias)
             cblas_tcopy(m_max, A_bias + k_user+k+k_main, k_user+k+k_main + 1,
@@ -4009,7 +4059,9 @@ int fit_collective_explicit_als
 
         if (verbose) {
             printf("\tCompleted ALS iteration %2d\n\n", iter+1);
+            #if !defined(_FOR_R)
             fflush(stdout);
+            #endif
         }
         check_interrupt:
             if (should_stop_procedure) {
@@ -4023,7 +4075,9 @@ int fit_collective_explicit_als
             printf("ALS procedure terminated successfully\n");
         else
             printf("ALS procedure failed\n");
+        #if !defined(_FOR_R)
         fflush(stdout);
+        #endif
     }
 
     if (user_bias || item_bias)
@@ -4283,7 +4337,9 @@ int fit_collective_implicit_als
 
     if (verbose) {
         printf("Starting ALS optimization routine\n\n");
+        #if !defined(_FOR_R)
         fflush(stdout);
+        #endif
     }
 
     for (int iter = 0; iter < niter; iter++)
@@ -4292,7 +4348,12 @@ int fit_collective_implicit_als
         signal(SIGINT, set_interrup_global_variable);
         if (should_stop_procedure) goto check_interrupt;
         if (U != NULL || U_sp != NULL) {
-            if (verbose) { printf("Updating C..."); fflush(stdout); }
+            if (verbose) {
+                printf("Updating C...");
+                #if !defined(_FOR_R)
+                fflush(stdout);
+                #endif
+            }
 
             if (U_orig != NULL)
                 copy_arr(U, U_orig, (size_t)m_u*(size_t)p, nthreads);
@@ -4312,13 +4373,23 @@ int fit_collective_implicit_als
                 buffer_FPnum,
                 buffer_lbfgs_iter
             );
-            if (verbose) { printf(" done\n"); fflush(stdout); }
+            if (verbose) {
+                printf(" done\n");
+                #if !defined(_FOR_R)
+                fflush(stdout);
+                #endif
+            }
         }
 
         signal(SIGINT, set_interrup_global_variable);
         if (should_stop_procedure) goto check_interrupt;
         if (II != NULL || I_sp != NULL) {
-            if (verbose) { printf("Updating D..."); fflush(stdout); }
+            if (verbose) {
+                printf("Updating D...");
+                #if !defined(_FOR_R)
+                fflush(stdout);
+                #endif
+            }
 
             if (I_orig != NULL)
                 copy_arr(II, I_orig, (size_t)n_i*(size_t)q, nthreads);
@@ -4338,13 +4409,23 @@ int fit_collective_implicit_als
                 buffer_FPnum,
                 buffer_lbfgs_iter
             );
-            if (verbose) { printf(" done\n"); fflush(stdout); }
+            if (verbose) {
+                printf(" done\n");
+                #if !defined(_FOR_R)
+                fflush(stdout);
+                #endif
+            }
         }
 
         /* Optimize B */
         signal(SIGINT, set_interrup_global_variable);
         if (should_stop_procedure) goto check_interrupt;
-        if (verbose) { printf("Updating B..."); fflush(stdout); }
+        if (verbose) {
+            printf("Updating B...");
+            #if !defined(_FOR_R)
+            fflush(stdout);
+            #endif
+        }
         if (II != NULL || I_sp != NULL)
         {
             if (I_orig != NULL)
@@ -4376,12 +4457,22 @@ int fit_collective_implicit_als
                 nthreads, use_cg, max_cg_steps,
                 buffer_FPnum
             );
-        if (verbose) { printf(" done\n"); fflush(stdout); }
+        if (verbose) {
+            printf(" done\n");
+            #if !defined(_FOR_R)
+            fflush(stdout);
+            #endif
+        }
 
         /* Optimize A */
         signal(SIGINT, set_interrup_global_variable);
         if (should_stop_procedure) goto check_interrupt;
-        if (verbose) { printf("Updating A..."); fflush(stdout); }
+        if (verbose) {
+            printf("Updating A...");
+            #if !defined(_FOR_R)
+            fflush(stdout);
+            #endif
+        }
         if (U != NULL || U_sp != NULL)
         {
             if (U_orig != NULL)
@@ -4414,12 +4505,19 @@ int fit_collective_implicit_als
                 use_cg, max_cg_steps,
                 buffer_FPnum
             );
-        if (verbose) { printf(" done\n"); fflush(stdout); }
+        if (verbose) {
+            printf(" done\n");
+            #if !defined(_FOR_R)
+            fflush(stdout);
+            #endif
+        }
 
         
         if (verbose) {
             printf("\tCompleted ALS iteration %2d\n\n", iter+1);
+            #if !defined(_FOR_R)
             fflush(stdout);
+            #endif
         }
         check_interrupt:
             if (should_stop_procedure) {
@@ -4434,7 +4532,9 @@ int fit_collective_implicit_als
             printf("ALS procedure terminated successfully\n");
         else
             printf("ALS procedure failed\n");
+        #if !defined(_FOR_R)
         fflush(stdout);
+        #endif
     }
 
     cleanup:

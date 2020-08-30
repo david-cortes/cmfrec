@@ -924,6 +924,9 @@ bool should_stop_procedure = false;
 void set_interrup_global_variable(int s)
 {
     fprintf(stderr, "Error: procedure was interrupted\n");
+    #if !defined(_FOR_R)
+    fflush(stderr);
+    #endif
     should_stop_procedure = true;
 }
 
@@ -946,7 +949,9 @@ int lbfgs_printer_collective
     if ((k % print_every) == 0 && print_every > 0) {
         printf("Iteration %3d - f(x)=%7.03g - ||g(x)||=%5.03g - ls=%d\n",
                k, fx, gnorm, ls);
+        #if !defined(_FOR_R)
         fflush(stdout);
+        #endif
     }
     signal(SIGINT, set_interrup_global_variable);
     if (should_stop_procedure) {
@@ -975,7 +980,9 @@ int lbfgs_printer_offsets
     if ((k % print_every) == 0 && print_every > 0) {
         printf("Iteration %3d - f(x)=%7.03g - ||g(x)||=%5.03g - ls=%d\n",
                k, fx, gnorm, ls);
+        #if !defined(_FOR_R)
         fflush(stdout);
+        #endif
     }
     signal(SIGINT, set_interrup_global_variable);
     if (should_stop_procedure) {
