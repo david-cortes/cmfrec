@@ -358,11 +358,6 @@ int lbfgs_printer_offsets
 );
 bool check_is_sorted(int arr[], int n);
 void qs_argpartition(int arr[], FPnum values[], int n, int k);
-void solve_conj_grad
-(
-    FPnum *restrict A, FPnum *restrict b, int m,
-    FPnum *restrict buffer_FPnum
-);
 void append_ones_last_col
 (
     FPnum *restrict orig, int m, int n,
@@ -401,8 +396,29 @@ void factors_closed_form
     FPnum lam, FPnum w, FPnum lam_last,
     FPnum *restrict precomputedBtBinvBt,
     FPnum *restrict precomputedBtBw, int cnt_NA, int strideBtB,
-    FPnum *restrict precomputedBtBchol, bool NA_as_zero, bool use_cg,
+    FPnum *restrict precomputedBtBchol, bool NA_as_zero,
+    bool use_cg, int max_cg_steps,
     bool force_add_diag
+);
+void factors_explicit_cg
+(
+    FPnum *restrict a_vec, int k,
+    FPnum *restrict B, int n, int ldb,
+    FPnum *restrict Xa, int ixB[], size_t nnz,
+    FPnum *restrict weight,
+    FPnum *restrict buffer_FPnum,
+    FPnum lam, FPnum w, FPnum lam_last,
+    int max_cg_steps
+);
+void factors_explicit_cg_dense
+(
+    FPnum *restrict a_vec, int k,
+    FPnum *restrict B, int n, int ldb,
+    FPnum *restrict Xa_dense, bool full_dense,
+    FPnum *restrict weight,
+    FPnum *restrict buffer_FPnum,
+    FPnum lam, FPnum w, FPnum lam_last,
+    int max_cg_steps
 );
 void factors_implicit_cg
 (
@@ -510,7 +526,7 @@ void optimizeA
     FPnum lam, FPnum w, FPnum lam_last,
     bool do_B,
     int nthreads,
-    bool use_cg,
+    bool use_cg, int max_cg_steps,
     FPnum *restrict buffer_FPnum,
     iteration_data_t *buffer_lbfgs_iter
 );
@@ -858,7 +874,7 @@ void optimizeA_collective
     FPnum lam, FPnum w_main, FPnum w_user, FPnum lam_last,
     bool do_B,
     int nthreads,
-    bool use_cg,
+    bool use_cg, int max_cg_steps,
     FPnum *restrict buffer_FPnum,
     iteration_data_t *buffer_lbfgs_iter
 );
@@ -1009,7 +1025,8 @@ int fit_collective_explicit_als
     bool NA_as_zero_X, bool NA_as_zero_U, bool NA_as_zero_I,
     int k_main, int k_user, int k_item,
     FPnum w_main, FPnum w_user, FPnum w_item,
-    int niter, int nthreads, int seed, bool verbose, bool use_cg,
+    int niter, int nthreads, int seed, bool verbose,
+    bool use_cg, int max_cg_steps, bool finalize_chol,
     FPnum *restrict B_plus_bias
 );
 int fit_collective_implicit_als

@@ -111,7 +111,8 @@ cdef extern from "cmfrec.h":
         bint NA_as_zero_X, bint NA_as_zero_U, bint NA_as_zero_I,
         int k_main, int k_user, int k_item,
         FPnum w_main, FPnum w_user, FPnum w_item,
-        int niter, int nthreads, int seed, bint verbose, bint use_cg,
+        int niter, int nthreads, int seed, bint verbose,
+        bint use_cg, int max_cg_steps, bint finalize_chol,
         FPnum *B_plus_bias
     )
 
@@ -891,7 +892,9 @@ def call_fit_collective_explicit_als(
         bint user_bias=1, bint item_bias=1,
         FPnum lam=1e2,
         np.ndarray[FPnum, ndim=1] lam_unique=np.empty(0, dtype=c_FPnum),
-        bint verbose=1, int nthreads=1, bint use_cg = 0,
+        bint verbose=1, int nthreads=1,
+        bint use_cg = 0, int max_cg_steps=3,
+        bint finalize_chol=0,
         int seed=1, int niter=5
     ):
 
@@ -991,7 +994,8 @@ def call_fit_collective_explicit_als(
         NA_as_zero_X, NA_as_zero_U, NA_as_zero_I,
         k_main, k_user, k_item,
         w_main, w_user, w_item,
-        niter, nthreads, seed, verbose, use_cg,
+        niter, nthreads, seed, verbose,
+        use_cg, max_cg_steps, finalize_chol,
         ptr_B_plus_bias
     )
 
@@ -1156,7 +1160,9 @@ def call_fit_offsets_explicit_als(
         bint user_bias=1, bint item_bias=1,
         bint add_intercepts=1,
         FPnum lam=1e2,
-        bint verbose=1, int nthreads=1, bint use_cg=0,
+        bint verbose=1, int nthreads=1,
+        bint use_cg=0, int max_cg_steps=3,
+        bint finalize_chol=0,
         int seed=1, int niter=5
     ):
     cdef FPnum *ptr_Xfull = NULL
@@ -1228,7 +1234,7 @@ def call_fit_offsets_explicit_als(
         0, <FPnum*>NULL,
         niter, seed,
         nthreads,
-        use_cg, 0, 0,
+        use_cg, max_cg_steps, finalize_chol,
         verbose,
         ptr_Bm_plus_bias
     )

@@ -1047,47 +1047,6 @@ void qs_argpartition(int arr[], FPnum values[], int n, int k)
     }
 }
 
-void solve_conj_grad
-(
-    FPnum *restrict A, FPnum *restrict b, int m,
-    FPnum *restrict buffer_FPnum
-)
-{
-    FPnum tol = 1e-1;
-    FPnum *restrict residual = buffer_FPnum;
-    FPnum *restrict residual_prev = residual + m;
-    FPnum *restrict z = residual_prev + m;
-    FPnum *restrict z_prev = z + m;
-    FPnum *restrict Ap = z_prev + m;
-    FPnum *restrict p = Ap + m;
-
-    memcpy(residual, b, m*sizeof(FPnum));
-    set_to_zero(b, m, 1);
-    for (int ix = 0; ix < m; ix++) z[ix] = residual[ix] / A[ix + ix*m];
-    memcpy(p, z, m*sizeof(FPnum));
-
-    FPnum alpha = 0.;
-    FPnum beta  = 0.;
-
-    for (int iter = 0; iter < m; iter++)
-    {
-        cblas_tsymv(CblasRowMajor, CblasUpper, m,
-                    1., A, m, p, 1,
-                    0., Ap, 1);
-        alpha = cblas_tdot(m, residual, 1, z, 1) / cblas_tdot(m, Ap, 1, p, 1);
-        cblas_taxpy(m, alpha, p, 1, b, 1);
-        memcpy(residual_prev, residual, m*sizeof(FPnum));
-        cblas_taxpy(m, -alpha, Ap, 1, residual, 1);
-        if (cblas_tdot(m, residual, 1, residual, 1) < tol) {
-            break;
-        }
-        memcpy(z_prev, z, m*sizeof(FPnum));
-        for (int ix = 0; ix < m; ix++) z[ix] = residual[ix] / A[ix + ix*m];
-        beta = cblas_tdot(m, z, 1, residual, 1)
-                / cblas_tdot(m, z_prev, 1, residual_prev, 1);
-        for (int ix = 0; ix < m; ix++) p[ix] = beta*p[ix] + z[ix];
-    }
-}
 
 void append_ones_last_col
 (

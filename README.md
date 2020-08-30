@@ -18,6 +18,10 @@ The package has been rewritten in C with Python wrappers. If you've used earlier
 
 The new version is faster, multi-threaded, and has some new functionality, but if for some reason you still need the old one, it can be found under the git branch "tensorflow".
 
+## Update 2020-08-30
+
+The conjugate gradient solver has been improved, and is now similar in speed to that of other non-collective matrix factorization libraries when used with the same hyperparameters as them.
+
 ## Highlights
 
 * Can fit factorization models with or without user and/or item side information.
@@ -139,3 +143,4 @@ For any installation problems or errors encountered with this software, please o
 * [1] Cortes, David. "Cold-start recommendations in Collective Matrix Factorization." arXiv preprint arXiv:1809.00366 (2018).
 * [2] Singh, Ajit P., and Geoffrey J. Gordon. "Relational learning via collective matrix factorization." Proceedings of the 14th ACM SIGKDD international conference on Knowledge discovery and data mining. ACM, 2008.
 * [3] Hu, Yifan, Yehuda Koren, and Chris Volinsky. "Collaborative filtering for implicit feedback datasets." 2008 Eighth IEEE International Conference on Data Mining. Ieee, 2008.
+* [4] Takács, Gábor, István Pilászy, and Domonkos Tikk. "Applications of the conjugate gradient method for implicit feedback collaborative filtering." Proceedings of the fifth ACM conference on Recommender systems. 2011.

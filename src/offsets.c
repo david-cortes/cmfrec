@@ -616,8 +616,8 @@ int offsets_factors_warm
                                     lam, 1., lam,
                                     precomputedBtBinvBt,
                                     precomputedBtBw, cnt_NA, 0,
-                                    (FPnum*)NULL, false, false,
-                                    false);
+                                    (FPnum*)NULL, false,
+                                    false, 0, false);
             else {
                 factors_closed_form(a_plus_bias, k_sec+k+k_main+1,
                                     Bm_plus_bias, n, k_sec+k+k_main+1,
@@ -628,8 +628,8 @@ int offsets_factors_warm
                                     lam, 1., lam_bias,
                                     precomputedBtBinvBt,
                                     precomputedBtBw, cnt_NA, 0,
-                                    (FPnum*)NULL, false, false,
-                                    false);
+                                    (FPnum*)NULL, false,
+                                    false, 0, false);
                 memcpy(a_vec, a_plus_bias, (k_sec+k+k_main)*sizeof(FPnum));
                 *a_bias = a_plus_bias[k_sec+k+k_main];
             }
@@ -739,8 +739,8 @@ int offsets_factors_warm
                                     lam, 1., lam,
                                     (FPnum*)NULL,
                                     (FPnum*)NULL, 0, 0,
-                                    (FPnum*)NULL, false, false,
-                                    false);
+                                    (FPnum*)NULL, false,
+                                    false, 0, false);
             else {
                 factors_closed_form(a_plus_bias + k_sec, k+k_main+1,
                                     Bm_plus_bias + k_sec, n, k_sec+k+k_main+1,
@@ -751,8 +751,8 @@ int offsets_factors_warm
                                     lam, 1., lam_bias,
                                     (FPnum*)NULL,
                                     (FPnum*)NULL, 0, 0,
-                                    (FPnum*)NULL, false, false,
-                                    false);
+                                    (FPnum*)NULL, false,
+                                    false, 0, false);
                 memcpy(a_vec + k_sec, a_plus_bias + k_sec,
                        (k+k_main)*sizeof(FPnum));
                 *a_bias = a_plus_bias[k_sec+k+k_main];
@@ -1266,7 +1266,8 @@ int fit_offsets_als
                     NA_as_zero_X, false, false,
                     0, 0, 0,
                     1., 1., 1.,
-                    niter, nthreads, seed, verbose, use_cg,
+                    niter, nthreads, seed, verbose,
+                    use_cg, max_cg_steps, finalize_chol,
                     Bm_plus_bias
                 );
     else

@@ -678,13 +678,12 @@ void factors_closed_form
     FPnum lam, FPnum w, FPnum lam_last,
     FPnum *restrict precomputedBtBinvBt,
     FPnum *restrict precomputedBtBw, int cnt_NA, int strideBtB,
-    FPnum *restrict precomputedBtBchol, bool NA_as_zero, bool use_cg,
+    FPnum *restrict precomputedBtBchol, bool NA_as_zero,
+    bool use_cg, int max_cg_steps,
     bool force_add_diag
 )
 {
     FPnum *restrict bufferBtB = buffer_FPnum;
-    FPnum *restrict bufferB   = bufferBtB + square(k);
-    FPnum *restrict buffer_remainder = bufferBtB + square(k);
     if (ldb == 0) ldb = k;
     bool add_diag = true;
     char uplo = 'L';
@@ -708,8 +707,8 @@ void factors_closed_form
 
     /* If t(B*w)*B + diag(lam) is given, and there are very few mising
        values, can still be used as a shortcut by substracting from it */
-    else if (Xa_dense != NULL && precomputedBtBw != NULL &&
-             (FPnum)cnt_NA < .1*(FPnum)n)
+    else if (Xa_dense != NULL && precomputedBtBw != NULL && weight == NULL &&
+             (FPnum)cnt_NA < .2*(FPnum)n)
     {
         add_diag = false;
         copy_mat(k, k,
@@ -718,15 +717,12 @@ void factors_closed_form
         for (size_t ix = 0; ix < (size_t)n; ix++) {
             if (isnan(Xa_dense[ix])) {
                 cblas_tsyr(CblasRowMajor, CblasUpper, k,
-                           (weight == NULL)? -w : -w*weight[ix],
-                           B + ix*(size_t)ldb, 1,
+                           -w, B + ix*(size_t)ldb, 1,
                            bufferBtB, k);
                 Xa_dense[ix] = 0;
             }
         }
 
-        if (weight != NULL)
-            mult_elemwise(Xa_dense, weight, n, 1);
         cblas_tgemv(CblasRowMajor, CblasTrans,
                     n, k,
                     w, B, ldb, Xa_dense, 1,
@@ -753,7 +749,8 @@ void factors_closed_form
 
     /* In some cases, the sparse matrices might hold zeros instead
        of NAs - here the already-factorized BtBchol should be passed,
-       but if for some reason it wasn't, will be constructed on-the-fly.
+       but if for some reason it wasn't, will construct the usual
+       matrices on-the-fly.
        This is however slow, and there is no intended use case that
        should end up here.
        If it has weights, could still use the precomputed transpose,
@@ -761,52 +758,69 @@ void factors_closed_form
     else if (Xa_dense == NULL && NA_as_zero)
     {
         set_to_zero(a_vec, k, 1);
-        if (weight != NULL) {
-
-            if (precomputedBtBw != NULL) {
-                add_diag = false;
-                copy_mat(k, k,
-                         precomputedBtBw + strideBtB, k + strideBtB,
-                         bufferBtB, k);
-                for (size_t ix = 0; ix < nnz; ix++)
-                    cblas_tsyr(CblasRowMajor, CblasUpper,
-                               k, w*(weight[ix]-1.),
-                               B + (size_t)ixB[ix]*(size_t)ldb, 1,
-                               bufferBtB, k);
-
-                sgemv_dense_sp_weighted2(n, k, weight, w,
-                                         B, ldb,
-                                         ixB, Xa, nnz,
-                                         a_vec);
-            }
-
-            else {
-                copy_mat(n, k, B, ldb, bufferB, k);
-                for (size_t ix = 0; ix < nnz; ix++)
-                    cblas_tscal(k, w*weight[ix],
-                                bufferB + (size_t)ixB[ix]*(size_t)k, 1);
-
-                cblas_tgemm(CblasRowMajor, CblasTrans, CblasNoTrans,
-                            k, k, n,
-                            1., bufferB, k, B, ldb,
-                            0., bufferBtB, k);
-                sgemv_dense_sp(n, k,
-                               1., bufferB, (size_t)k,
-                               ixB, Xa, nnz,
-                               a_vec);
-            }
-        }
-
-        else {
+        if (precomputedBtBw == NULL)
             cblas_tsyrk(CblasRowMajor, CblasUpper, CblasTrans,
                         k, n,
                         w, B, ldb,
                         0., bufferBtB, k);
+        else {
+            copy_mat(k, k,
+                     precomputedBtBw + strideBtB, k + strideBtB,
+                     bufferBtB, k);
+            add_diag = false;
+        }
+
+        if (weight != NULL)
+        {
+            for (size_t ix = 0; ix < nnz; ix++)
+            {
+                cblas_tsyr(CblasRowMajor, CblasUpper,
+                           k, w * (weight[ix] - 1.),
+                           B + (size_t)ixB[ix]*(size_t)ldb, 1,
+                           bufferBtB, k);
+                cblas_taxpy(k,
+                            weight[ix] * Xa[ix],
+                            B + (size_t)ixB[ix]*(size_t)ldb, 1,
+                            a_vec, 1);
+            }
+        }
+
+        else {
             sgemv_dense_sp(n, k,
-                           w, B, (size_t)ldb,
+                           1., B, (size_t)ldb,
                            ixB, Xa, nnz,
                            a_vec);
         }
+
+        if (w != 1.) cblas_tscal(k, w, a_vec, 1);
+    }
+
+    /* If none of the above apply, it's faster to get an approximate
+       solution using the conjugate gradient method.
+       In this case, will exit the function afterwards as it will
+       not calculate the Cholesky. */
+    else if (use_cg)
+    {
+        if (Xa_dense != NULL)
+            return factors_explicit_cg_dense(
+                a_vec, k,
+                B, n, ldb,
+                Xa_dense, full_dense,
+                weight,
+                buffer_FPnum,
+                lam, w, lam_last,
+                max_cg_steps
+            );
+        else
+            return factors_explicit_cg(
+                a_vec, k,
+                B, n, ldb,
+                Xa, ixB, nnz,
+                weight,
+                buffer_FPnum,
+                lam, w, lam_last,
+                max_cg_steps
+            );
     }
 
     /* In more general cases, need to construct the following matrices:
@@ -826,7 +840,7 @@ void factors_closed_form
         set_to_zero(bufferBtB, square(k), 1);
         for (size_t ix = 0; ix < nnz; ix++)
             cblas_tsyr(CblasRowMajor, CblasUpper, k,
-                       (weight == NULL)? w : w*weight[ix],
+                       (weight == NULL)? (1.) : (weight[ix]),
                        B + (size_t)ixB[ix]*(size_t)ldb, 1,
                        bufferBtB, k);
 
@@ -836,7 +850,7 @@ void factors_closed_form
         set_to_zero(a_vec, k, 1);
         if (weight == NULL) {
             sgemv_dense_sp(n, k,
-                           w, B, (size_t)ldb,
+                           1., B, (size_t)ldb,
                            ixB, Xa, nnz,
                            a_vec);
         }
@@ -846,7 +860,11 @@ void factors_closed_form
                                     weight, B, (size_t)ldb,
                                     ixB, Xa, nnz,
                                     a_vec);
-            if (w != 1.) cblas_tscal(k, w, a_vec, 1);
+        }
+
+        if (w != 1.) {
+            cblas_tscal(k, w, a_vec, 1);
+            cblas_tscal(square(k), w, bufferBtB, 1);
         }
     }
 
@@ -858,47 +876,43 @@ void factors_closed_form
            when the entries of X are missing, then the following
            equalities will apply:
             t(B0)*B == t(B)*B0 == t(B0)*B0 */
-
-        if (weight == NULL)
+        if (full_dense && weight == NULL)
         {
-            if (full_dense) {
-                nnz = n;
-                bufferB = B;
-            }
-            else {
-                nnz = 0;
-                for (size_t ix = 0; ix < (size_t)n; ix++)
-                    if (isnan(Xa_dense[ix]))
-                        Xa_dense[ix] = 0;
-                    else
-                        memcpy(bufferB + (nnz++)*k,
-                               B + ix*(size_t)ldb, k*sizeof(FPnum));
-            }
+            /* this will only be encountered when calculating factors
+               after having called 'fit_*'. */
             cblas_tsyrk(CblasRowMajor, CblasUpper, CblasTrans,
-                        k, (int)nnz,
-                        w, bufferB, k,
+                        k, n,
+                        w, B, ldb,
                         0., bufferBtB, k);
+            cblas_tgemv(CblasRowMajor, CblasTrans,
+                        n, k,
+                        w, B, ldb,
+                        Xa_dense, 1,
+                        0., a_vec, 1);
         }
 
         else
         {
+            set_to_zero(a_vec, k, 1);
             set_to_zero(bufferBtB, square(k), 1);
-            for (size_t ix = 0; ix < (size_t)n; ix++)
-                if (isnan(Xa_dense[ix]))
-                    Xa_dense[ix] = 0;
-                else {
-                    Xa_dense[ix] *= weight[ix];
+            for (size_t ix = 0; ix < (size_t)n; ix++) {
+                if (!isnan(Xa_dense[ix])) {
                     cblas_tsyr(CblasRowMajor, CblasUpper,
-                               k, w*weight[ix],
+                               k, (weight == NULL)? (1.) : (weight[ix]),
                                B + ix*(size_t)ldb, 1,
                                bufferBtB, k);
+                    cblas_taxpy(k,
+                                ((weight == NULL)? (1.) : (weight[ix]))
+                                    * Xa_dense[ix],
+                                B + ix*(size_t)ldb, 1,
+                                a_vec, 1);
                 }
+            }
+            if (w != 1.) {
+                cblas_tscal(k, w, a_vec, 1);
+                cblas_tscal(square(k), w, bufferBtB, 1);
+            }
         }
-
-        cblas_tgemv(CblasRowMajor, CblasTrans,
-                    n, k,
-                    w, B, ldb, Xa_dense, 1,
-                    0., a_vec, 1);
     }
 
     /* Finally, obtain closed-form through Cholesky factorization,
@@ -907,20 +921,191 @@ void factors_closed_form
         add_to_diag(bufferBtB, lam, k);
         if (lam_last != lam) bufferBtB[square(k)-1] += (lam_last - lam);
     }
-    if (!use_cg)
-        tposv_(&uplo, &k, &one,
-               bufferBtB, &k,
-               a_vec, &k,
-               &ignore);
-    /* Note: Function 'sposv' is taken from LAPACK for FORTRAN.
+
+    tposv_(&uplo, &k, &one,
+           bufferBtB, &k,
+           a_vec, &k,
+           &ignore);
+    /* Note: Function 'posv' is taken from LAPACK for FORTRAN.
        If using LAPACKE for C with with Row-Major parameter,
        some implementations will copy the matrix to transpose it
-       and pass it to FORTRAN-sposv. */
+       and pass it to FORTRAN-posv. */
+}
+
+/* https://en.wikipedia.org/wiki/Conjugate_gradient_method */
+void factors_explicit_cg
+(
+    FPnum *restrict a_vec, int k,
+    FPnum *restrict B, int n, int ldb,
+    FPnum *restrict Xa, int ixB[], size_t nnz,
+    FPnum *restrict weight,
+    FPnum *restrict buffer_FPnum,
+    FPnum lam, FPnum w, FPnum lam_last,
+    int max_cg_steps
+)
+{
+    FPnum *restrict Ap = buffer_FPnum;
+    FPnum *restrict p  = Ap + k;
+    FPnum *restrict r  = p  + k;
+    set_to_zero(r, k, 1);
+    FPnum coef;
+    FPnum a;
+    FPnum r_old, r_new;
+
+    if (weight == NULL) {
+        sgemv_dense_sp(n, k,
+                       w, B, (size_t)ldb,
+                       ixB, Xa, nnz,
+                       r);
+    }
+
+    else {
+        sgemv_dense_sp_weighted(n, k,
+                                weight, B, (size_t)ldb,
+                                ixB, Xa, nnz,
+                                r);
+        if (w != 1.) cblas_tscal(k, w, r, 1);
+    }
+
+    for (size_t ix = 0; ix < nnz; ix++) {
+        coef = cblas_tdot(k, B + (size_t)ixB[ix]*(size_t)ldb, 1, a_vec, 1);
+        coef *= (weight == NULL)? w : w*weight[ix];
+        cblas_taxpy(k, -coef, B + (size_t)ixB[ix]*ldb, 1, r, 1);
+    }
+    cblas_taxpy(k, -lam, a_vec, 1, r, 1);
+    if (lam != lam_last)
+        r[k-1] -= (lam_last-lam) * a_vec[k-1];
+
+    copy_arr(r, p, k, 1);
+    r_old = cblas_tdot(k, r, 1, r, 1);
+
+    for (int cg_step = 0; cg_step < max_cg_steps; cg_step++)
+    {
+        set_to_zero(Ap, k, 1);
+        for (size_t ix = 0; ix < nnz; ix++) {
+            coef = cblas_tdot(k, B + (size_t)ixB[ix]*(size_t)ldb, 1, p, 1);
+            coef *= (weight == NULL)? w : w*weight[ix];
+            cblas_taxpy(k, coef, B + (size_t)ixB[ix]*ldb, 1, Ap, 1);
+        }
+        cblas_taxpy(k, lam, p, 1, Ap, 1);
+        if (lam != lam_last)
+            Ap[k-1] += (lam_last-lam) * p[k-1];
+
+        a = r_old / cblas_tdot(k, p, 1, Ap, 1);
+        cblas_taxpy(k,  a,  p, 1, a_vec, 1);
+        cblas_taxpy(k, -a, Ap, 1, r, 1);
+
+        r_new = cblas_tdot(k, r, 1, r, 1);
+        if (r_new <= 1e-8)
+            break;
+
+        cblas_tscal(k, r_new / r_old, p, 1);
+        cblas_taxpy(k, 1., r, 1, p, 1);
+        r_old = r_new;
+    }
+}
+
+void factors_explicit_cg_dense
+(
+    FPnum *restrict a_vec, int k,
+    FPnum *restrict B, int n, int ldb,
+    FPnum *restrict Xa_dense, bool full_dense,
+    FPnum *restrict weight,
+    FPnum *restrict buffer_FPnum,
+    FPnum lam, FPnum w, FPnum lam_last,
+    int max_cg_steps
+)
+{
+    FPnum *restrict Ap = buffer_FPnum;
+    FPnum *restrict p  = Ap + k;
+    FPnum *restrict r  = p  + k;
+    FPnum *restrict wr = r  + k; /* has length 'n' */
+    set_to_zero(r, k, 1);
+    FPnum r_new, r_old;
+    FPnum a, coef, w_this;
+
+    if (full_dense && weight == NULL)
+    {
+        /* there is no intended use case that would end up here */
+        cblas_tgemv(CblasRowMajor, CblasTrans,
+                    n, k,
+                    w, B, ldb,
+                    Xa_dense, 1,
+                    0., r, 1);
+        cblas_tgemv(CblasRowMajor, CblasNoTrans,
+                    n, k,
+                    -w, B, ldb,
+                    a_vec, 1,
+                    0., wr, 1);
+        cblas_tgemv(CblasRowMajor, CblasTrans,
+                    n, k,
+                    1., B, ldb,
+                    wr, 1,
+                    1., r, 1);
+    }
+
     else
-        solve_conj_grad(
-            bufferBtB, a_vec, k,
-            buffer_remainder
-        );
+    {
+        for (size_t ix = 0; ix < (size_t)n; ix++)
+            if (!isnan(Xa_dense[ix])) {
+                w_this = (weight == NULL)? (w) : (w * weight[ix]);
+                cblas_taxpy(k,
+                            w_this * Xa_dense[ix], B + ix*(size_t)ldb, 1,
+                            r, 1);
+                coef = cblas_tdot(k, B + ix*(size_t)ldb, 1, a_vec, 1);
+                cblas_taxpy(k, -w_this * coef, B + ix*(size_t)ldb, 1, r, 1);
+            }
+    }
+    
+    cblas_taxpy(k, -lam, a_vec, 1, r, 1);
+    if (lam != lam_last)
+        r[k-1] -= (lam_last-lam) * a_vec[k-1];
+
+    copy_arr(r, p, k, 1);
+    r_old = cblas_tdot(k, r, 1, r, 1);
+
+    for (int cg_step = 0; cg_step < max_cg_steps; cg_step++)
+    {
+        if (full_dense && weight == NULL) {
+            cblas_tgemv(CblasRowMajor, CblasNoTrans,
+                        n, k,
+                        w, B, ldb,
+                        p, 1,
+                        0., wr, 1);
+            cblas_tgemv(CblasRowMajor, CblasTrans,
+                        n, k,
+                        1., B, ldb,
+                        wr, 1,
+                        0., Ap, 1);
+        }
+        else
+        {
+            set_to_zero(Ap, k, 1);
+            for (size_t ix = 0; ix < (size_t)n; ix++)
+            {
+                if (!isnan(Xa_dense[ix])) {
+                    w_this = (weight == NULL)? (w) : (w * weight[ix]);
+                    coef = cblas_tdot(k, B + ix*(size_t)ldb, 1, p, 1);
+                    cblas_taxpy(k, w_this * coef, B + ix*(size_t)ldb, 1, Ap, 1);
+                }
+            }
+        }
+
+        cblas_taxpy(k, lam, p, 1, Ap, 1);
+        if (lam != lam_last)
+            Ap[k-1] += (lam_last-lam) * p[k-1];
+
+        a = r_old / cblas_tdot(k, p, 1, Ap, 1);
+        cblas_taxpy(k,  a,  p, 1, a_vec, 1);
+        cblas_taxpy(k, -a, Ap, 1, r, 1);
+        r_new = cblas_tdot(k, r, 1, r, 1);
+        if (r_new <= 1e-8)
+            break;
+
+        cblas_tscal(k, r_new / r_old, p, 1);
+        cblas_taxpy(k, 1., r, 1, p, 1);
+        r_old = r_new;
+    }
 }
 
 
@@ -1278,7 +1463,7 @@ void optimizeA
     FPnum lam, FPnum w, FPnum lam_last,
     bool do_B,
     int nthreads,
-    bool use_cg,
+    bool use_cg, int max_cg_steps,
     FPnum *restrict buffer_FPnum,
     iteration_data_t *buffer_lbfgs_iter
 )
@@ -1292,8 +1477,9 @@ void optimizeA
     char uplo = 'L';
     int ignore;
     lam /= w; /* 'w' and 'lam' only matter relative to each other */
+    lam_last /= w;
 
-    /* Case 1: X is full dense with no missing values.
+    /* Case 1: X is full dense with few or no missing values.
        Here can apply the closed-form solution with only
        one multiplication by B for all rows at once.
        If there is a small amount of observations with missing
@@ -1364,6 +1550,7 @@ void optimizeA
                         cblas_tcopy(n, Xfull + ix, m,
                                     bufferX + (n*omp_get_thread_num()), 1);
 
+                    /* TODO: revise the size of the thread-local space */
                     factors_closed_form(
                         A + ix*(size_t)lda, k,
                         B, n, ldb,
@@ -1377,7 +1564,8 @@ void optimizeA
                         lam, 1., lam_last,
                         (FPnum*)NULL,
                         bufferBtBcopy, cnt_NA[ix], 0,
-                        (FPnum*)NULL, false, use_cg,
+                        (FPnum*)NULL, false,
+                        use_cg, max_cg_steps,
                         false
                     );
                 }
@@ -1385,67 +1573,64 @@ void optimizeA
     }
 
     /* Case 2: X is dense, but has many missing values or has weights.
-       Here it's faster to minimize it with a gradient-based
-       approach, otherwise would have to calculate
-       t(B)*t(X) for each row separately, making adjustements
-       according to the missing values of each row */
+       Here will do them all individually, pre-calculating only
+         t(B)*B + diag(lam)
+       in case some rows have few missing values. */
     else if (Xfull != NULL)
     {
-        size_t nvars = (size_t)m * (size_t)lda - (size_t)(lda-k);
-        size_t m_lbfgs = 4;
-        size_t past = 0;
-        FPnum *restrict buffer_lbfgs = buffer_FPnum + (size_t)m*(size_t)n;
-        lbfgs_parameter_t lbfgs_params = {
-            m_lbfgs, 1e-5, past, 1e-5,
-            75, LBFGS_LINESEARCH_MORETHUENTE, 20,
-            1e-20, 1e20, 1e-4, 0.9, 0.9, 1.0e-16,
-            0.0, 0, -1,
-        };
-        lbfgs_progress_t callback = (lbfgs_progress_t)NULL;
-        set_to_zero(A, nvars, nthreads);
-        if (!do_B) {
-            data_fun_grad_Adense data = {
-                lda,
-                B, ldb,
-                m, n, k,
-                Xfull, weight,
-                lam, 1., lam_last,
-                nthreads,
-                buffer_FPnum
-            };
-            lbfgs(
-                nvars,
-                A,
-                (FPnum*)NULL,
-                wrapper_fun_grad_Adense,
-                callback,
-                (void*) &data,
-                &lbfgs_params,
-                buffer_lbfgs,
-                buffer_lbfgs_iter
-            );
-        }
+        FPnum *restrict bufferBtB = buffer_FPnum;
+        FPnum *restrict bufferX = bufferBtB + square(k);
+        FPnum *restrict bufferW = bufferX + (do_B? (n*nthreads) : (0));
+        FPnum *restrict buffer_remainder = bufferW + ((do_B && weight != NULL)?
+                                                      (n*nthreads) : (0));
 
-        else {
-            data_fun_grad_Bdense data = {
-                B, ldb,
-                lda,
-                n, m, k,
-                Xfull, weight,
+        if (weight == NULL)
+            bufferW = NULL;
+
+        cblas_tsyrk(CblasRowMajor, CblasUpper, CblasTrans,
+                    k, n,
+                    1., B, ldb,
+                    0., bufferBtB, k);
+        add_to_diag(bufferBtB, lam, k);
+        if (lam_last != lam) bufferBtB[square(k)-1] += (lam_last - lam);
+
+        #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
+                shared(Xfull, weight, do_B, m, n, k, A, lda, B, ldb, \
+                       lam, lam_last, bufferBtB, cnt_NA, buffer_remainder, \
+                       use_cg, max_cg_steps) \
+                firstprivate(bufferX, bufferW)
+        for (size_t_for ix = 0; ix < (size_t)m; ix++)
+        {
+            if (!do_B) {
+                bufferX = Xfull + ix*(size_t)n;
+                if (weight != NULL)
+                    bufferW = weight + ix*(size_t)n;
+            }
+            else {
+                cblas_tcopy(n, Xfull + ix, m,
+                            bufferX + (n*omp_get_thread_num()), 1);
+                if (weight != NULL)
+                    cblas_tcopy(n, weight + ix, m,
+                                bufferW + (n*omp_get_thread_num()), 1);
+            }
+
+            /* TODO: revise the size of the thread-local space */
+            factors_closed_form(
+                A + ix*(size_t)lda, k,
+                B, n, ldb,
+                bufferX + (do_B? (n*omp_get_thread_num()) : (0)), cnt_NA[ix]==0,
+                (FPnum*)NULL, (int*)NULL, (size_t)0,
+                bufferW + (do_B? (n*omp_get_thread_num()) : (0)),
+                buffer_remainder
+                 + (((size_t)n*(size_t)k + (size_t)square(k)
+                      + (use_cg? (size_t)6*(size_t)k : (size_t)0))
+                    * (size_t)omp_get_thread_num()),
                 lam, 1., lam_last,
-                nthreads,
-                buffer_FPnum
-            };
-            lbfgs(
-                nvars,
-                A,
                 (FPnum*)NULL,
-                wrapper_fun_grad_Bdense,
-                callback,
-                (void*) &data,
-                &lbfgs_params,
-                buffer_lbfgs,
-                buffer_lbfgs_iter
+                bufferBtB, cnt_NA[ix], 0,
+                (FPnum*)NULL, false,
+                use_cg, max_cg_steps,
+                false
             );
         }
     }
@@ -1496,6 +1681,7 @@ void optimizeA
             if (lam_last != lam) bufferBtB[square(k)-1] += (lam_last - lam);
         }
 
+        /* TODO: revisit buffer size here */
         size_t size_buffer = square(k);
         if (use_cg) size_buffer += 6 * k;
 
@@ -1516,7 +1702,8 @@ void optimizeA
                     lam, 1., lam_last,
                     (FPnum*)NULL,
                     bufferBtB, 0, 0,
-                    (FPnum*)NULL, NA_as_zero, use_cg,
+                    (FPnum*)NULL, NA_as_zero,
+                    use_cg, max_cg_steps,
                     false
                 );
     }

@@ -22,3 +22,5 @@ docs/_build/*
 
 test_math/build/*
 test_math/*.c
+test_math/failing.py
+test_math/run

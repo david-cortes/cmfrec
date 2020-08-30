@@ -1448,6 +1448,12 @@ class CMF_explicit(_CMF):
         I ~ B * t(D)
     Might apply sigmoid transformations to binary columns in U and I too.
 
+    Note
+    ----
+    The default hyperparameters are geared towards quality and numerical stability more
+    than speed. For faster fitting, use ``method="als"``, ``use_cg=True``,
+    ``use_float=True``, and pass COO matrices /NumPy arrays to ``fit``.
+
     Parameters
     ----------
     k : int
@@ -1467,6 +1473,20 @@ class CMF_explicit(_CMF):
         compared to ``'als'``, but tends to reach better local optima and allows
         some variations of the problem which ALS doesn't, such as applying sigmoid
         transformations for binary side information.
+    use_cg : bool
+        In the ALS method, whether to use a conjugate gradient method to solve the closed-form
+        least squares problems. This is a faster alternative than the default
+        Cholesky solver, but less exact, less numerically stable, and will require
+        more ALS iterations (``niter``) to reach good a good optimum. Will only be
+        used for the matrices or parts of the matrices that are not shared between
+        factorizations.
+        Note that, if using this method, calculating factors through ``factors_warm``
+        will produce different results from the factors obtained after calling
+        ``fit`` with the same data. A workaround for this issue is to use
+        ``finalize_chol=True``.
+        Even if passing "True" here, will use the Cholesky method in cases in which
+        it is faster (e.g. dense matrices with few or no missing values).
+        Ignored when passing ``method="lbfgs"``.
     user_bias : bool
         Whether to add user biases (intercepts) to the model.
     item_bias : bool
@@ -1531,6 +1551,14 @@ class CMF_explicit(_CMF):
         Recommended values are between 3 and 7. Note that higher values
         translate into higher memory requirements. Ignored when passing
         ``method='als'``.
+    max_cg_steps : int
+        Maximum number of conjugate gradient iterations to perform in an ALS round.
+        Ignored when passing ``use_cg=False`` or ``method="lbfgs"``.
+    finalize_chol : bool
+        When passing ``use_cg=True`` and ``method="lbfgs"``, whether to perform the last iteration with
+        the Cholesky solver. This will make it slower, but will avoid the issue
+        of potential mismatches between the result from ``fit`` and calls to
+        ``factors_warm`` with the same data.
     NA_as_zero : bool
         Whether to take missing entries in the 'X' matrix as zeros (only
         when the 'X' matrix is passed as sparse COO matrix or DataFrame)
@@ -1554,11 +1582,6 @@ class CMF_explicit(_CMF):
         ``np.float32``). If passing ``False``, will use C double (typically this
         is ``np.float64``). Using float types will speed up computations and
         use less memory, at the expense of reduced numerical precision.
-    use_cg : bool
-        Whether to use a conjugate gradient method to solve the closed-form
-        least squares problems. This was implemented for experimentation
-        purposes only - will not provide any advantage over the default
-        Cholesky solver. Ignored when passing ``method='lbfgs'``.
     random_state : int, RandomState, or Generator
         Seed used to initialize parameters at random. If passing a NumPy
         RandomState or Generator, will use it to draw a random integer. Note
@@ -1646,16 +1669,19 @@ class CMF_explicit(_CMF):
            Proceedings of the 14th ACM SIGKDD international conference on
            Knowledge discovery and data mining. 2008.
     """
-    def __init__(self, k=50, lambda_=1e1, method="als",
+    def __init__(self, k=50, lambda_=1e1, method="als", use_cg=False,
                  user_bias=True, item_bias=True, k_user=0, k_item=0, k_main=0,
                  w_main=1., w_user=1., w_item=1.,
                  maxiter=400, niter=10, parallelize="separate", corr_pairs=4,
+                 max_cg_steps=3, finalize_chol=False,
                  NA_as_zero=False, NA_as_zero_user=False, NA_as_zero_item=False,
-                 precompute_for_predictions=True, use_float=False, use_cg=False,
+                 precompute_for_predictions=True, use_float=False,
                  random_state=1, verbose=True, print_every=10,
                  produce_dicts=False, copy_data=True, nthreads=-1):
         self._take_params(implicit=False, alpha=0., downweight=False,
-                          k=k, lambda_=lambda_, method=method, use_cg=use_cg,
+                          k=k, lambda_=lambda_, method=method,
+                          use_cg=use_cg, max_cg_steps=max_cg_steps,
+                          finalize_chol=finalize_chol,
                           user_bias=user_bias, item_bias=item_bias,
                           k_user=k_user, k_item=k_item, k_main=k_main,
                           w_main=w_main, w_user=w_user, w_item=w_item,
@@ -1832,7 +1858,9 @@ class CMF_explicit(_CMF):
                     self.user_bias, self.item_bias,
                     self.lambda_ if isinstance(self.lambda_, float) else 0.,
                     self.lambda_ if isinstance(self.lambda_, np.ndarray) else np.empty(0, dtype=self.dtype_),
-                    self.verbose, self.nthreads, self.use_cg,
+                    self.verbose, self.nthreads,
+                    self.use_cg, self.max_cg_steps,
+                    self.finalize_chol,
                     self.random_state, self.niter
                 )
             self.user_bias_, self.item_bias_, self.A_, self.B_, self.C_, self.D_ = \
@@ -2638,6 +2666,12 @@ class CMF_implicit(_CMF):
 
     Note
     ----
+    The default hyperparameters are geared towards quality and numerical stability more
+    than speed. For faster fitting, use ``use_cg=True``, ``use_float=True``, and
+    pass COO matrices / NumPy arrays to ``fit``.
+
+    Note
+    ----
     This model is fit through the alternating least-squares method only,
     it does not offer a gradient-based approach like the explicit-feedback
     version.
@@ -2647,8 +2681,8 @@ class CMF_implicit(_CMF):
     The default hyperparameters in this software are very different from others.
     For example, to match those of the package ``implicit``, the corresponding
     hyperparameters here would be ``use_cg=True``, ``k=100``, ``lambda_=0.01``,
-    ``use_float=True``, `alpha=1.``, ``downweight=True`` (see the individual
-    documentation of each hyperarameter for details).
+    ``niter=15``, ``use_float=True``, `alpha=1.``, ``downweight=False`` (see the
+    individual documentation of each hyperarameter for details).
 
     Parameters
     ----------
@@ -2679,6 +2713,8 @@ class CMF_implicit(_CMF):
         will produce different results from the factors obtained after calling
         ``fit`` with the same data. A workaround for this issue is to use
         ``finalize_chol=True``.
+        Even if passing "True" here, will use the Cholesky method in cases in which
+        it is faster (e.g. dense matrices with few or no missing values).
     k_user : int
         Number of factors in the factorizing A and C matrices which will be used
         only for the 'U' matrix, while being ignored for the 'X' matrix.
@@ -2732,6 +2768,7 @@ class CMF_implicit(_CMF):
         use less memory, at the expense of reduced numerical precision.
     max_cg_steps : int
         Maximum number of conjugate gradient iterations to perform in an ALS round.
+        Ignored when passing ``use_cg=False``.
     finalize_chol : bool
         When passing ``use_cg=True``, whether to perform the last iteration with
         the Cholesky solver. This will make it slower, but will avoid the issue
@@ -3848,6 +3885,20 @@ class OMF_explicit(_OMF):
         model described in other papers), then reconstruct the model matrices
         by a least-squares approximation. The ALS approach was implemented for
         experimentation purposes only and is not recommended.
+    use_cg : bool
+        In the ALS method, whether to use a conjugate gradient method to solve the closed-form
+        least squares problems. This is a faster alternative than the default
+        Cholesky solver, but less exact, less numerically stable, and will require
+        more ALS iterations (``niter``) to reach good a good optimum. Will only be
+        used for the matrices or parts of the matrices that are not shared between
+        factorizations.
+        Note that, if using this method, calculating factors through ``factors_warm``
+        will produce different results from the factors obtained after calling
+        ``fit`` with the same data. A workaround for this issue is to use
+        ``finalize_chol=True``.
+        Even if passing "True" here, will use the Cholesky method in cases in which
+        it is faster (e.g. dense matrices with few or no missing values).
+        Ignored when passing ``method="lbfgs"``.
     user_bias : bool
         Whether to add user biases (intercepts) to the model.
     item_bias : bool
@@ -3920,6 +3971,14 @@ class OMF_explicit(_OMF):
         Recommended values are between 3 and 7. Note that higher values
         translate into higher memory requirements. Ignored when passing
         ``method='als'``.
+    max_cg_steps : int
+        Maximum number of conjugate gradient iterations to perform in an ALS round.
+        Ignored when passing ``use_cg=False`` or ``method="lbfgs"``.
+    finalize_chol : bool
+        When passing ``use_cg=True`` and ``method="lbfgs"``, whether to perform the last iteration with
+        the Cholesky solver. This will make it slower, but will avoid the issue
+        of potential mismatches between the result from ``fit`` and calls to
+        ``factors_warm`` with the same data.
     NA_as_zero : bool
         Whether to take missing entries in the 'X' matrix as zeros (only
         when the 'X' matrix is passed as sparse COO matrix or DataFrame)
@@ -3931,11 +3990,6 @@ class OMF_explicit(_OMF):
         ``np.float32``). If passing ``False``, will use C double (typically this
         is ``np.float64``). Using float types will speed up computations and
         use less memory, at the expense of reduced numerical precision.
-    use_cg : bool
-        Whether to use a conjugate gradient method to solve the closed-form
-        least squares problems. This was implemented for experimentation
-        purposes only - will not provide any advantage over the default
-        Cholesky solver. Ignored when passing ``method='lbfgs'``.
     random_state : int, RandomState, or Generator
         Seed used to initialize parameters at random. If passing a NumPy
         RandomState or Generator, will use it to draw a random integer. Note
@@ -4027,16 +4081,19 @@ class OMF_explicit(_OMF):
            "Cold-start recommendations in Collective Matrix Factorization."
            arXiv preprint arXiv:1809.00366 (2018).
     """
-    def __init__(self, k=50, lambda_=1e1, method="lbfgs",
+    def __init__(self, k=50, lambda_=1e1, method="lbfgs", use_cg=False,
                  user_bias=True, item_bias=True, k_sec=0, k_main=0,
                  add_intercepts=True, w_user=1., w_item=1.,
                  maxiter=10000, niter=10, parallelize="separate", corr_pairs=7,
-                 NA_as_zero=False, use_float=False, use_cg=False,
+                 max_cg_steps=3, finalize_chol=False,
+                 NA_as_zero=False, use_float=False,
                  random_state=1, verbose=True, print_every=100,
                  produce_dicts=False, copy_data=True, nthreads=-1):
         assert k>0 or k_sec>0 or k_main>0
         self._take_params(implicit=False, alpha=0., downweight=False,
-                          k=1, lambda_=lambda_, method=method, use_cg=use_cg,
+                          k=1, lambda_=lambda_, method=method,
+                          use_cg=use_cg, max_cg_steps=max_cg_steps,
+                          finalize_chol=finalize_chol,
                           user_bias=user_bias, item_bias=item_bias,
                           k_user=0, k_item=0, k_main=0,
                           w_main=1., w_user=w_user, w_item=w_item,
@@ -4201,7 +4258,9 @@ class OMF_explicit(_OMF):
                     self.user_bias, self.item_bias,
                     self.add_intercepts,
                     self.lambda_,
-                    self.verbose, self.nthreads, self.use_cg,
+                    self.verbose, self.nthreads,
+                    self.use_cg, self.max_cg_steps,
+                    self.finalize_chol,
                     self.random_state, self.niter
                 )
             self.user_bias_, self.item_bias_, self.A_, self.B_, self.C_, self.D_, \
@@ -4750,6 +4809,7 @@ class OMF_implicit(_OMF):
         use less memory, at the expense of reduced numerical precision.
     max_cg_steps : int
         Maximum number of conjugate gradient iterations to perform in an ALS round.
+        Ignored when passing ``use_cg=False``.
     finalize_chol : bool
         When passing ``use_cg=True``, whether to perform the last iteration with
         the Cholesky solver. This will make it slower, but will avoid the issue

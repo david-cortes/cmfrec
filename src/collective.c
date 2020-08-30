@@ -1287,16 +1287,10 @@ void collective_closed_form_block
     int one = 1;
     int ignore;
 
-    if (!use_cg)
-        tposv_(&uplo, &k_tot, &one,
-               bufferBeTBe, &k_tot,
-               a_vec, &k_tot,
-               &ignore);
-    else
-        solve_conj_grad(
-            bufferBeTBe, a_vec, k_tot,
-            bufferBeTBe + square(k_tot)
-        );
+    tposv_(&uplo, &k_tot, &one,
+           bufferBeTBe, &k_tot,
+           a_vec, &k_tot,
+           &ignore);
 }
 
 void collective_closed_form_block_implicit
@@ -1427,16 +1421,10 @@ void collective_closed_form_block_implicit
                     a_vec + k_user, 1);
     }
 
-    if (!use_cg)
-        tposv_(&uplo, &k_totA, &one,
-               BtB, &k_totA,
-               a_vec, &k_totA,
-               &ignore);
-    else
-        solve_conj_grad(
-            BtB, a_vec, k_totA,
-            buffer_FPnum + square(k_totA)
-        );
+    tposv_(&uplo, &k_totA, &one,
+           BtB, &k_totA,
+           a_vec, &k_totA,
+           &ignore);
 }
 
 /*******************************************************************************
@@ -1527,8 +1515,8 @@ int collective_factors_cold
                             (FPnum*)NULL,
                             buffer_FPnum, lam, w_user, lam,
                             CtCinvCt, CtCw, cnt_NA_u_vec, 0,
-                            CtCchol, NA_as_zero_U, false,
-                            true);
+                            CtCchol, NA_as_zero_U,
+                            false, 0, true);
         if (buffer_FPnum != NULL) free(buffer_FPnum);
         return 0;
     }
@@ -1669,8 +1657,8 @@ int collective_factors_warm
                                 buffer_FPnum,
                                 lam, w_main, lam,
                                 BtBinvBt, BtBw, cnt_NA_x, k_item_BtB,
-                                BtBchol, NA_as_zero_X, false,
-                                true);
+                                BtBchol, NA_as_zero_X,
+                                false, 0, true);
         else
             factors_closed_form(a_plus_bias + k_user, k+k_main+1,
                                 B_plus_bias + k_item, n, k_item+k+k_main+1,
@@ -1680,8 +1668,8 @@ int collective_factors_warm
                                 buffer_FPnum,
                                 lam, w_main, lam_bias,
                                 BtBinvBt, BtBw, cnt_NA_x, k_item_BtB,
-                                BtBchol, NA_as_zero_X, false,
-                                true);
+                                BtBchol, NA_as_zero_X,
+                                false, 0, true);
         retval = 0;
     }
 
@@ -2154,7 +2142,7 @@ void optimizeA_collective
     FPnum lam, FPnum w_main, FPnum w_user, FPnum lam_last,
     bool do_B,
     int nthreads,
-    bool use_cg,
+    bool use_cg, int max_cg_steps,
     FPnum *restrict buffer_FPnum,
     iteration_data_t *buffer_lbfgs_iter
 )
@@ -2200,7 +2188,7 @@ void optimizeA_collective
             lam, w_main, lam_last,
             false,
             nthreads,
-            use_cg,
+            use_cg, max_cg_steps,
             buffer_FPnum,
             buffer_lbfgs_iter
         );
@@ -2223,7 +2211,7 @@ void optimizeA_collective
             lam, w_user, lam,
             false,
             nthreads,
-            use_cg,
+            use_cg, max_cg_steps,
             buffer_FPnum,
             buffer_lbfgs_iter
         );
@@ -3412,7 +3400,8 @@ int fit_collective_explicit_als
     bool NA_as_zero_X, bool NA_as_zero_U, bool NA_as_zero_I,
     int k_main, int k_user, int k_item,
     FPnum w_main, FPnum w_user, FPnum w_item,
-    int niter, int nthreads, int seed, bool verbose, bool use_cg,
+    int niter, int nthreads, int seed, bool verbose,
+    bool use_cg, int max_cg_steps, bool finalize_chol,
     FPnum *restrict B_plus_bias
 )
 {
@@ -3788,6 +3777,9 @@ int fit_collective_explicit_als
 
     for (int iter = 0; iter < niter; iter++)
     {
+        if (iter == niter - 1 && use_cg && finalize_chol)
+            use_cg = false;
+
         /* Optimize C and D (they are independent of each other) */
         signal(SIGINT, set_interrup_global_variable);
         if (should_stop_procedure) goto check_interrupt;
@@ -3813,7 +3805,8 @@ int fit_collective_explicit_als
                 (lam_unique == NULL)? (lam) : (lam_unique[4]), w_user,
                 (lam_unique == NULL)? (lam) : (lam_unique[4]),
                 (U != NULL && near_dense_u_col)? (false) : (true),
-                nthreads, use_cg,
+                nthreads,
+                use_cg, max_cg_steps,
                 buffer_FPnum,
                 buffer_lbfgs_iter
             );
@@ -3849,7 +3842,8 @@ int fit_collective_explicit_als
                 (lam_unique == NULL)? (lam) : (lam_unique[5]), w_item,
                 (lam_unique == NULL)? (lam) : (lam_unique[5]),
                 (II != NULL && near_dense_i_col)? (false) : (true),
-                nthreads, use_cg,
+                nthreads,
+                use_cg, max_cg_steps,
                 buffer_FPnum,
                 buffer_lbfgs_iter
             );
@@ -3932,7 +3926,8 @@ int fit_collective_explicit_als
                 w_main, w_item,
                 (lam_unique == NULL)? (lam) : (lam_unique[1]),
                 Xfull != NULL && Xtrans == NULL,
-                nthreads, use_cg,
+                nthreads,
+                use_cg, max_cg_steps,
                 buffer_FPnum,
                 buffer_lbfgs_iter
             );
@@ -3949,7 +3944,8 @@ int fit_collective_explicit_als
                 (lam_unique == NULL)? (lam) : (lam_unique[3]), w_main,
                 (lam_unique == NULL)? (lam) : (lam_unique[1]),
                 Xfull != NULL && Xtrans == NULL,
-                nthreads, use_cg,
+                nthreads,
+                use_cg, max_cg_steps,
                 buffer_FPnum,
                 buffer_lbfgs_iter
             );
@@ -4025,7 +4021,8 @@ int fit_collective_explicit_als
                 w_main, w_user,
                 (lam_unique == NULL)? (lam) : (lam_unique[0]),
                 false,
-                nthreads, use_cg,
+                nthreads,
+                use_cg, max_cg_steps,
                 buffer_FPnum,
                 buffer_lbfgs_iter
             );
@@ -4042,7 +4039,8 @@ int fit_collective_explicit_als
                 (lam_unique == NULL)? (lam) : (lam_unique[2]), w_main,
                 (lam_unique == NULL)? (lam) : (lam_unique[0]),
                 false,
-                nthreads, use_cg,
+                nthreads,
+                use_cg, max_cg_steps,
                 buffer_FPnum,
                 buffer_lbfgs_iter
             );
@@ -4372,7 +4370,8 @@ int fit_collective_implicit_als
                 (lam_unique == NULL)? (lam) : (lam_unique[4]), w_user,
                 (lam_unique == NULL)? (lam) : (lam_unique[4]),
                 (U != NULL && near_dense_u_col)? (false) : (true),
-                nthreads, use_cg,
+                nthreads,
+                use_cg, max_cg_steps,
                 buffer_FPnum,
                 buffer_lbfgs_iter
             );
@@ -4408,7 +4407,8 @@ int fit_collective_implicit_als
                 (lam_unique == NULL)? (lam) : (lam_unique[5]), w_item,
                 (lam_unique == NULL)? (lam) : (lam_unique[5]),
                 (II != NULL && near_dense_i_col)? (false) : (true),
-                nthreads, use_cg,
+                nthreads,
+                use_cg, max_cg_steps,
                 buffer_FPnum,
                 buffer_lbfgs_iter
             );

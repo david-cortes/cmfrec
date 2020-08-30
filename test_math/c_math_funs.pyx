@@ -12,7 +12,8 @@ cdef extern from "cmfrec.h":
         double lam, double w, double lam_last,
         double *precomputedBtBinvBt,
         double *precomputedBtBw, int cnt_NA, int strideBtB,
-        double *precomputedBtBchol, bint NA_as_zero, bint use_cg,
+        double *precomputedBtBchol, bint NA_as_zero,
+        bint use_cg, int max_cg_steps,
         bint force_add_diag
     )
 
@@ -146,7 +147,7 @@ cdef extern from "cmfrec.h":
         double lam, double w, double lam_last,
         bint do_B,
         int nthreads,
-        bint use_cg,
+        bint use_cg, int max_cg_steps,
         double *buffer_double,
         iteration_data_t *buffer_lbfgs_iter
     )
@@ -175,7 +176,7 @@ cdef extern from "cmfrec.h":
         double lam, double w_main, double w_user, double lam_last,
         bint do_B,
         int nthreads,
-        bint use_cg,
+        bint use_cg, int max_cg_steps,
         double* buffer_double,
         iteration_data_t *buffer_lbfgs_iter
     )
@@ -282,11 +283,6 @@ cdef extern from "cmfrec.h":
         int n_top, int n, int nthreads
     )
 
-    void solve_conj_grad(
-        double *A, double *b, int m,
-        double *buffer_float
-    )
-
 import ctypes
 
 def py_factors_closed_form(
@@ -338,7 +334,8 @@ def py_factors_closed_form(
         lam, 1., lam,
         ptr_BtBinvBt,
         ptr_BtBw, np.sum(np.isnan(Xa_dense)), 0,
-        ptr_BtBchol, 0, 0,
+        ptr_BtBchol, 0,
+        0, 0,
         0
     )
     return outp
@@ -919,7 +916,7 @@ def py_optimizeA(
         lam, w, lam,
         is_B,
         nthreads,
-        0,
+        0, 0,
         &buffer_double[0],
         <iteration_data_t*> &buffer_lbfgs_iter[0]
     )
@@ -1008,7 +1005,7 @@ def py_optimizeA_collective(
         lam, w_main, w_user, lam,
         is_B,
         nthreads,
-        0,
+        0, 0,
         &buffer_double[0],
         <iteration_data_t*> &buffer_lbfgs_iter[0]
     )
@@ -1471,17 +1468,3 @@ def py_topN(
     )
 
     return outp_ix, outp_score
-
-def py_conj_grad(
-        np.ndarray[double, ndim=2] A,
-        np.ndarray[double, ndim=1] b,
-        np.ndarray[double, ndim=1] buffer_double
-    ):
-    
-    cdef np.ndarray[double, ndim=1] outp = b.copy()
-    solve_conj_grad(
-        &A[0,0], &outp[0],
-        b.shape[0],
-        &buffer_double[0]
-    )
-    return outp
