@@ -4160,7 +4160,7 @@ int fit_collective_implicit_als
     FPnum *restrict w_main_multiplier,
     FPnum alpha, bool adjust_weight,
     int niter, int nthreads, int seed, bool verbose,
-    bool use_cg, int max_cg_steps
+    bool use_cg, int max_cg_steps, bool finalize_chol
 )
 {
     int k_totA = k_user + k + k_main;
@@ -4344,6 +4344,9 @@ int fit_collective_implicit_als
 
     for (int iter = 0; iter < niter; iter++)
     {
+        if (iter == niter - 1 && use_cg && finalize_chol)
+            use_cg = false;
+
         /* Optimize C and D (they are independent of each other) */
         signal(SIGINT, set_interrup_global_variable);
         if (should_stop_procedure) goto check_interrupt;

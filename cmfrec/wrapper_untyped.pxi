@@ -131,7 +131,7 @@ cdef extern from "cmfrec.h":
         FPnum *w_main_multiplier,
         FPnum alpha, bint adjust_weight,
         int niter, int nthreads, int seed, bint verbose,
-        bint use_cg, int max_cg_steps
+        bint use_cg, int max_cg_steps, bint finalize_chol
     )
 
     int fit_offsets_als(
@@ -149,8 +149,8 @@ cdef extern from "cmfrec.h":
         bint implicit, bint NA_as_zero_X, FPnum alpha,
         bint adjust_weight, FPnum *w_main_multiplier,
         int niter, int seed,
-        int nthreads,
-        bint use_cg, int max_cg_steps,
+        int nthreads, bint use_cg,
+        int max_cg_steps, bint finalize_chol,
         bint verbose,
         FPnum *B_plus_bias
     )
@@ -1036,7 +1036,8 @@ def call_fit_collective_implicit_als(
         FPnum lam=1e2, FPnum alpha=40., bint adjust_weight=1,
         np.ndarray[FPnum, ndim=1] lam_unique=np.empty(0, dtype=c_FPnum),
         bint verbose=1, int niter=5,
-        int nthreads=1, bint use_cg=0, int max_cg_steps=3,
+        int nthreads=1, bint use_cg=0,
+        int max_cg_steps=3, bint finalize_chol=0,
         int seed=1, init="normal"
     ):
     
@@ -1116,7 +1117,7 @@ def call_fit_collective_implicit_als(
         &w_main_multiplier,
         alpha, adjust_weight,
         niter, nthreads, 1, verbose,
-        use_cg, max_cg_steps
+        use_cg, max_cg_steps, finalize_chol
     )
 
     if retval == 1:
@@ -1227,7 +1228,7 @@ def call_fit_offsets_explicit_als(
         0, <FPnum*>NULL,
         niter, seed,
         nthreads,
-        use_cg, 0,
+        use_cg, 0, 0,
         verbose,
         ptr_Bm_plus_bias
     )
@@ -1266,6 +1267,7 @@ def call_fit_offsets_implicit_als(
         FPnum lam=1e2, FPnum alpha=40.,
         bint verbose=1, int nthreads=1,
         bint use_cg=0, int max_cg_steps=3,
+        bint finalize_chol=0,
         bint adjust_weight = 1,
         int seed=1, int niter=5
     ):
@@ -1319,8 +1321,8 @@ def call_fit_offsets_implicit_als(
         1, 0, alpha,
         adjust_weight, &w_main_multiplier,
         niter, seed,
-        nthreads,
-        use_cg, max_cg_steps,
+        nthreads, use_cg,
+        max_cg_steps, finalize_chol,
         verbose,
         <FPnum*>NULL
     )

@@ -1029,7 +1029,7 @@ int fit_collective_implicit_als
     FPnum *restrict w_main_multiplier,
     FPnum alpha, bool adjust_weight,
     int niter, int nthreads, int seed, bool verbose,
-    bool use_cg, int max_cg_steps
+    bool use_cg, int max_cg_steps, bool finalize_chol
 );
 int collective_factors_cold_multiple
 (
@@ -1268,7 +1268,8 @@ int fit_offsets_als
     bool implicit, bool NA_as_zero_X, FPnum alpha,
     bool adjust_weight, FPnum *restrict w_main_multiplier,
     int niter, int seed,
-    int nthreads, bool use_cg, int max_cg_steps,
+    int nthreads, bool use_cg,
+    int max_cg_steps, bool finalize_chol,
     bool verbose,
     FPnum *restrict Bm_plus_bias
 );
