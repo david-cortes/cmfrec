@@ -874,7 +874,7 @@ void optimizeA_collective
     FPnum lam, FPnum w_main, FPnum w_user, FPnum lam_last,
     bool do_B,
     int nthreads,
-    bool use_cg, int max_cg_steps,
+    bool use_cg, int max_cg_steps, bool is_first_iter,
     FPnum *restrict buffer_FPnum,
     iteration_data_t *buffer_lbfgs_iter
 );

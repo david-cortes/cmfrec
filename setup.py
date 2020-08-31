@@ -4,8 +4,9 @@ except:
     from distutils.core import setup
     from distutils.extension import Extension
 import numpy as np
-from findblas.distutils import build_ext_with_blas
+# from findblas.distutils import build_ext_with_blas
 import os, sys
+from Cython.Distutils import build_ext as build_ext_with_blas
 
 ## If you do not wish to use findblas:
 ## -uncomment the SciPy imports in 'wrapper_untyped.pxi'
@@ -25,10 +26,12 @@ class build_ext_subclass( build_ext_with_blas ):
             for e in self.extensions:
                 e.extra_compile_args += ['-O3', '-fopenmp', '-march=native', '-std=c99']
                 e.extra_link_args += ['-fopenmp']
+
                 # e.extra_compile_args += ['-O3', '-march=native', '-std=c99']
                 # e.extra_compile_args += ['-fsanitize=address', '-static-libasan']
                 # e.extra_link_args += ['-fsanitize=address', '-static-libasan']
-                # e.extra_link_args += ["-lopenblas"]
+                e.extra_link_args += ["-lopenblas"]
+                e.include_dirs += ["/home/david/anaconda3/lib/python3.7/site-packages/findblas/"]
 
         ## Note: apple will by default alias 'gcc' to 'clang', and will ship its own "special"
         ## 'clang' which has no OMP support and nowadays will purposefully fail to compile when passed

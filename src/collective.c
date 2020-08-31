@@ -19,8 +19,10 @@
             2008 Eighth IEEE International Conference on Data Mining.
             Ieee, 2008.
         (d) Takacs, Gabor, Istvan Pilaszy, and Domonkos Tikk.
-            "Applications of the conjugate gradient method for implicit feedback collaborative filtering."
-            Proceedings of the fifth ACM conference on Recommender systems. 2011.
+            "Applications of the conjugate gradient method for
+            implicit feedback collaborative filtering."
+            Proceedings of the fifth ACM conference on
+            Recommender systems. 2011.
 
     For information about the models offered here and how they are fit to
     the data, see the files 'collective.c' and 'offsets.c'.
@@ -2142,7 +2144,7 @@ void optimizeA_collective
     FPnum lam, FPnum w_main, FPnum w_user, FPnum lam_last,
     bool do_B,
     int nthreads,
-    bool use_cg, int max_cg_steps,
+    bool use_cg, int max_cg_steps, bool is_first_iter,
     FPnum *restrict buffer_FPnum,
     iteration_data_t *buffer_lbfgs_iter
 )
@@ -2164,12 +2166,20 @@ void optimizeA_collective
     int m_x = m; /* 'm' will be overwritten later */
     /* TODO: here should only need to set straight away the lower half,
        and only when there are un-even entries in each matrix */
-    set_to_zero(A, (size_t)max2(m, m_u)*(size_t)k_totA, nthreads);
+    if (!use_cg)
+        set_to_zero(A, (size_t)max2(m, m_u)*(size_t)k_totA, nthreads);
 
     /* If one of the matrices has more rows than the other, the rows
        for the larger matrix will be independent and can be obtained
        from the single-matrix formula instead. */
     if (m > m_u) {
+        if (use_cg && is_first_iter && k_user > 0)
+            #pragma omp parallel for schedule(static) \
+                        num_threads(min2(2, nthreads)) \
+                        shared(m_u, m, k_totA, k_user, A)
+            for (size_t_for ix = m_u; ix < m; ix++)
+                set_to_zero(A + ix*(size_t)k_totA, k_user, 1);
+
         int m_diff = m - m_u;
         optimizeA(
             A + (size_t)k_user + (size_t)m_u*(size_t)k_totA, k_totA,
@@ -2195,6 +2205,14 @@ void optimizeA_collective
     }
 
     else if (m_u > m) {
+        if (use_cg && is_first_iter && k_main > 0)
+            #pragma omp parallel for schedule(static) \
+                        num_threads(min2(2, nthreads)) \
+                        shared(m_u, m, k_totA, k_user, k, k_main, A)
+            for (size_t_for ix = m; ix < m_u; ix++)
+                set_to_zero(A + ix*(size_t)k_totA + (size_t)(k_user+k),
+                            k_main, 1);
+
         int m_diff = m_u - m;
         optimizeA(
             A + (size_t)m*(size_t)k_totA, k_totA,
@@ -2586,22 +2604,24 @@ void optimizeA_collective_implicit
     int k_totB = k_item + k + k_main;
     int k_totC = k_user + k;
     int m_x = m; /* <- later gets overwritten */
-    if (!use_cg || m <= m_u)
+
+    int ix;
+
+    if (!use_cg)
         set_to_zero(A, (size_t)max2(m, m_u)*(size_t)k_totA, nthreads);
-    else if (m_u > 0) {
-        set_to_zero(A, m_u*(size_t)k_totA, nthreads);
-        if (k_user > 0 && is_first_iter)
-            #pragma omp parallel for schedule(static) num_threads(min2(4, nthreads)) \
-                    shared(A, k_totA, m_u)
-            for (size_t ix = 0; ix < (size_t)m_u; ix++)
-                set_to_zero(A + ix * (size_t)k_totA, k_user, 1);
-    }
 
     /* If the X matrix has more rows, the extra rows will be independent
        from U and can be obtained from the single-matrix formula instead.
        However, if the U matrix has more rows, those still need to be
        considered as having a value of zero in X. */
     if (m > m_u) {
+        if (use_cg && is_first_iter && k_user > 0)
+            #pragma omp parallel for schedule(static) \
+                        num_threads(min2(2, nthreads)) \
+                        shared(m_u, m, k_totA, k_user, A)
+            for (size_t_for ix = m_u; ix < m; ix++)
+                set_to_zero(A + ix*(size_t)k_totA, k_user, 1);
+
         int m_diff = m - m_u;
         optimizeA_implicit(
             A + (size_t)k_user + (size_t)m_u * (size_t)k_totA, (size_t)k_totA,
@@ -2614,6 +2634,14 @@ void optimizeA_collective_implicit
         );
         m = m_u;
     }
+
+    else if (use_cg && is_first_iter && k_main > 0)
+        #pragma omp parallel for schedule(static) \
+                        num_threads(min2(2, nthreads)) \
+                        shared(m_u, m, k_totA, k_user, k, k_main, A)
+            for (size_t_for ix = m; ix < m_u; ix++)
+                set_to_zero(A + ix*(size_t)k_totA + (size_t)(k_user+k),
+                            k_main, 1);
 
     /* Lower-right square of Be */
     FPnum *restrict precomputedBeTBe = buffer_FPnum;
@@ -2655,9 +2683,7 @@ void optimizeA_collective_implicit
     }
 
     size_t size_buffer = square(k_totA);
-    if (use_cg) size_buffer += (size_t)6 *(size_t)k_totA;
 
-    int ix = 0;
     #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
             shared(A, B, C, m, n, p, k, k_user, k_item, k_main, lam, alpha, \
                    Xcsr, Xcsr_p, Xcsr_i, U, U_csr, U_csr_i, U_csr_p, \
@@ -3927,7 +3953,7 @@ int fit_collective_explicit_als
                 (lam_unique == NULL)? (lam) : (lam_unique[1]),
                 Xfull != NULL && Xtrans == NULL,
                 nthreads,
-                use_cg, max_cg_steps,
+                use_cg, max_cg_steps, iter == 0,
                 buffer_FPnum,
                 buffer_lbfgs_iter
             );
@@ -4022,7 +4048,7 @@ int fit_collective_explicit_als
                 (lam_unique == NULL)? (lam) : (lam_unique[0]),
                 false,
                 nthreads,
-                use_cg, max_cg_steps,
+                use_cg, max_cg_steps, iter == 0,
                 buffer_FPnum,
                 buffer_lbfgs_iter
             );

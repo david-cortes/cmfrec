@@ -1558,7 +1558,7 @@ void optimizeA
                         (FPnum*)NULL, (int*)NULL, (size_t)0,
                         (FPnum*)NULL,
                         buffer_remainder
-                         + (((size_t)n*(size_t)k + (size_t)square(k)
+                         + ((3*(size_t)square(k)
                               + (use_cg? (size_t)6*(size_t)k : (size_t)0))
                             * (size_t)omp_get_thread_num()),
                         lam, 1., lam_last,
@@ -1620,9 +1620,12 @@ void optimizeA
                 B, n, ldb,
                 bufferX + (do_B? (n*omp_get_thread_num()) : (0)), cnt_NA[ix]==0,
                 (FPnum*)NULL, (int*)NULL, (size_t)0,
-                bufferW + (do_B? (n*omp_get_thread_num()) : (0)),
+                (weight != NULL)?
+                    (bufferW + (do_B? (n*omp_get_thread_num()) : (0)))
+                      :
+                    ((FPnum*)NULL),
                 buffer_remainder
-                 + (((size_t)n*(size_t)k + (size_t)square(k)
+                 + (((size_t)n*2 + 3*(size_t)square(k)
                       + (use_cg? (size_t)6*(size_t)k : (size_t)0))
                     * (size_t)omp_get_thread_num()),
                 lam, 1., lam_last,

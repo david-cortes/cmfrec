@@ -176,7 +176,7 @@ cdef extern from "cmfrec.h":
         double lam, double w_main, double w_user, double lam_last,
         bint do_B,
         int nthreads,
-        bint use_cg, int max_cg_steps,
+        bint use_cg, int max_cg_steps, bint is_first_iter,
         double* buffer_double,
         iteration_data_t *buffer_lbfgs_iter
     )
@@ -1005,7 +1005,7 @@ def py_optimizeA_collective(
         lam, w_main, w_user, lam,
         is_B,
         nthreads,
-        0, 0,
+        0, 0, 1,
         &buffer_double[0],
         <iteration_data_t*> &buffer_lbfgs_iter[0]
     )
