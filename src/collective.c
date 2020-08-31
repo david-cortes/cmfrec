@@ -1327,7 +1327,7 @@ void collective_closed_form_block_implicit
     bool add_C = false;
 
     if (nnz == 0 && ((u_vec != NULL && cnt_NA_u == 0) || NA_as_zero_U) &&
-        precomputedBeTBeChol != NULL)
+        precomputedBeTBeChol != NULL && !add_U)
     {
         return tpotrs_(&uplo, &k_totA, &one,
                        precomputedBeTBeChol, &k_totA,
@@ -1335,7 +1335,11 @@ void collective_closed_form_block_implicit
                        &ignore);
     }
 
-    else if (u_vec_sp != NULL && nnz_u_vec == 0 && nnz == 0)
+    else if (nnz == 0 && (
+                (u_vec_sp != NULL && nnz_u_vec == 0)
+                    ||
+                (u_vec != NULL && cnt_NA_u == p)
+            ))
         return set_to_zero(a_vec, k_totA, 1);
     
 
@@ -2700,9 +2704,10 @@ void optimizeA_collective_implicit
                 nthreads, use_cg, max_cg_steps,
                 buffer_FPnum
             );
-        else if (use_cg)
+        else if (use_cg && is_first_iter)
             set_to_zero(A + (size_t)k_user + (size_t)m_u * (size_t)k_totA,
-                        (size_t)m_diff*(size_t)k_totA, nthreads);
+                        (size_t)m_diff*(size_t)k_totA - (size_t)k_user,
+                        nthreads);
         m = m_u;
     }
 
@@ -3095,8 +3100,7 @@ int precompute_matrices_collective
     {
         if (has_U && !has_U_bin)
             size_buffer = (size_t)p * (size_t)(k_user+k);
-        if (!implicit)
-            size_buffer = max2(size_buffer, (size_t)n * (size_t)(k+k_main));
+        size_buffer = max2(size_buffer, (size_t)n * (size_t)(k+k_main));
 
         buffer_FPnum = (FPnum*)malloc(size_buffer*sizeof(FPnum));
         if (buffer_FPnum == NULL) return 1;
