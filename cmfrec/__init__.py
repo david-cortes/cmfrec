@@ -1178,22 +1178,36 @@ class _CMF:
         else:
             lambda_ = self.lambda_
         
-        a_vec = c_funs.call_factors_collective_cold(
-            U,
-            U_val,
-            U_col,
-            U_bin,
-            self.C_,
-            self.Cbin_,
-            self._CtCinvCt,
-            self._CtC,
-            self._CtCchol,
-            self._U_colmeans,
-            self.C_.shape[0], self.k,
-            self.k_user, self.k_main,
-            lambda_, self.w_user,
-            self.NA_as_zero_user
-        )
+        if not self._implicit:
+            a_vec = c_funs.call_factors_collective_cold(
+                U,
+                U_val,
+                U_col,
+                U_bin,
+                self.C_,
+                self.Cbin_,
+                self._CtCinvCt,
+                self._CtC,
+                self._CtCchol,
+                self._U_colmeans,
+                self.C_.shape[0], self.k,
+                self.k_user, self.k_main,
+                lambda_, self.w_user,
+                self.NA_as_zero_user
+            )
+        else:
+            a_vec = c_funs.call_factors_collective_cold_implicit(
+                U,
+                U_val,
+                U_col,
+                self.C_,
+                self._BtB_padded,
+                self._U_colmeans,
+                self.C_.shape[0], self.k,
+                self.k_user, self.k_main,
+                lambda_, self.w_user,
+                self.NA_as_zero_user
+            )
         return a_vec
 
     def _factors_warm_common(self, X=None, X_col=None, X_val=None, W=None,
@@ -3010,7 +3024,7 @@ class CMF_implicit(_CMF):
         else:
             lambda_ = self.lambda_
         c_funs = wrapper_float if self.use_float else wrapper_double
-        self._BeTBe, self._BtB_padded, self._BtB_shrunk, self._CtCinvCt, self._CtC, self._CtCchol = \
+        self._BeTBe, self._BtB_padded, self._BtB_shrunk = \
             c_funs.precompute_matrices_collective_implicit(
                 self.B_,
                 self.k, self.k_main, self.k_user, self.k_item,
@@ -3496,9 +3510,6 @@ class CMF_implicit(_CMF):
             self._BeTBe,
             self._BtB_padded,
             self._BtB_shrunk,
-            self._CtCinvCt,
-            self._CtC,
-            self._CtCchol,
             n, m_u, m_x,
             self.k, self.k_user, self.k_item, self.k_main,
             lambda_, self.alpha,

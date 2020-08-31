@@ -1307,6 +1307,7 @@ void collective_closed_form_block_implicit
     FPnum lam, FPnum alpha, FPnum w_main, FPnum w_user,
     FPnum *restrict precomputedBeTBe,
     FPnum *restrict precomputedBtB,
+    FPnum *restrict precomputedBeTBeChol,
     bool add_U, bool shapes_match, bool use_cg,
     FPnum *restrict buffer_FPnum
 )
@@ -1319,11 +1320,25 @@ void collective_closed_form_block_implicit
     int k_totC = k_user + k;
     alpha *= w_main;
     bool few_NAs = (u_vec != NULL && (FPnum)cnt_NA_u < 0.1*(FPnum)p);
-    if (add_U || cnt_NA_u > 0) set_to_zero(a_vec, k_totA, 1);
-
+    if ((add_U || cnt_NA_u > 0) && !use_cg)
+        set_to_zero(a_vec, k_totA, 1);
 
     FPnum *restrict BtB = buffer_FPnum;
     bool add_C = false;
+
+    if (nnz == 0 && ((u_vec != NULL && cnt_NA_u == 0) || NA_as_zero_U) &&
+        precomputedBeTBeChol != NULL)
+    {
+        return tpotrs_(&uplo, &k_totA, &one,
+                       precomputedBeTBeChol, &k_totA,
+                       a_vec, &k_totA,
+                       &ignore);
+    }
+
+    else if (u_vec_sp != NULL && nnz_u_vec == 0 && nnz == 0)
+        return set_to_zero(a_vec, k_totA, 1);
+    
+
     if ((u_vec != NULL && few_NAs) || (u_vec == NULL && NA_as_zero_U)) {
         if (precomputedBeTBe != NULL)
             memcpy(BtB, precomputedBeTBe, square(k_totA)*sizeof(FPnum));
@@ -1546,6 +1561,57 @@ int collective_factors_cold
         free(buffer_FPnum);
         return retval;
     }
+}
+
+int collective_factors_cold_implicit
+(
+    FPnum *restrict a_vec,
+    FPnum *restrict u_vec, int p,
+    FPnum *restrict u_vec_sp, int u_vec_ixB[], size_t nnz_u_vec,
+    FPnum *restrict precomputedBtBw,
+    FPnum *restrict C,
+    FPnum *restrict col_means,
+    int k, int k_user, int k_main,
+    FPnum lam, FPnum w_user,
+    bool NA_as_zero_U
+)
+{
+    int k_totA = k_user + k + k_main;
+    FPnum *restrict buffer_FPnum = (FPnum*)malloc(square(k_totA)*sizeof(FPnum));
+    if (buffer_FPnum == NULL) return 1;
+
+    int cnt_NA_u_vec = 0;
+    if (u_vec != NULL || (u_vec_sp != NULL && !NA_as_zero_U))
+        preprocess_vec(u_vec, p, u_vec_ixB, u_vec_sp, nnz_u_vec,
+                       0., 0., col_means, (FPnum*)NULL, &cnt_NA_u_vec);
+
+    if ((u_vec != NULL && cnt_NA_u_vec == p)
+          ||
+        (u_vec_sp != NULL && nnz_u_vec == 0))
+    {
+        set_to_zero(a_vec, k_totA, 1);
+        goto cleanup;
+    }
+
+    collective_closed_form_block_implicit(
+        a_vec,
+        k, k_user, 0, k_main,
+        (FPnum*)NULL, 0, C, p,
+        (FPnum*)NULL, (int*)NULL, (size_t)0,
+        u_vec, cnt_NA_u_vec,
+        u_vec_sp, u_vec_ixB, nnz_u_vec,
+        NA_as_zero_U,
+        lam, 1., 1., w_user,
+        (FPnum*)NULL,
+        precomputedBtBw,
+        (FPnum*)NULL,
+        true, true, false,
+        buffer_FPnum
+    );
+
+    cleanup:
+        free(buffer_FPnum);
+        return 0;
 }
 
 /*******************************************************************************
@@ -1802,7 +1868,7 @@ int collective_factors_warm_implicit
     int k_item_BtB
 )
 {
-    int k_totA = k_user + k + k_item;
+    int k_totA = k_user + k + k_main;
     FPnum *restrict buffer_FPnum = (FPnum*)malloc(square(k_totA)*sizeof(FPnum));
     if (buffer_FPnum == NULL) return 1;
 
@@ -1824,6 +1890,7 @@ int collective_factors_warm_implicit
             lam, alpha, w_main, w_user,
             precomputedBeTBe,
             precomputedBtB,
+            (FPnum*)NULL,
             true, true, false,
             buffer_FPnum
         );
@@ -2177,7 +2244,7 @@ void optimizeA_collective
             #pragma omp parallel for schedule(static) \
                         num_threads(min2(2, nthreads)) \
                         shared(m_u, m, k_totA, k_user, A)
-            for (size_t_for ix = m_u; ix < m; ix++)
+            for (size_t_for ix = m_u; ix < (size_t)m; ix++)
                 set_to_zero(A + ix*(size_t)k_totA, k_user, 1);
 
         int m_diff = m - m_u;
@@ -2209,7 +2276,7 @@ void optimizeA_collective
             #pragma omp parallel for schedule(static) \
                         num_threads(min2(2, nthreads)) \
                         shared(m_u, m, k_totA, k_user, k, k_main, A)
-            for (size_t_for ix = m; ix < m_u; ix++)
+            for (size_t_for ix = m; ix < (size_t)m_u; ix++)
                 set_to_zero(A + ix*(size_t)k_totA + (size_t)(k_user+k),
                             k_main, 1);
 
@@ -2603,9 +2670,9 @@ void optimizeA_collective_implicit
     int k_totA = k_user + k + k_main;
     int k_totB = k_item + k + k_main;
     int k_totC = k_user + k;
-    int m_x = m; /* <- later gets overwritten */
+    int m_x = m; /* <- 'm' later gets overwritten */
 
-    int ix;
+    int ix = 0;
 
     if (!use_cg)
         set_to_zero(A, (size_t)max2(m, m_u)*(size_t)k_totA, nthreads);
@@ -2619,29 +2686,39 @@ void optimizeA_collective_implicit
             #pragma omp parallel for schedule(static) \
                         num_threads(min2(2, nthreads)) \
                         shared(m_u, m, k_totA, k_user, A)
-            for (size_t_for ix = m_u; ix < m; ix++)
+            for (ix = m_u; ix < m; ix++)
                 set_to_zero(A + ix*(size_t)k_totA, k_user, 1);
 
         int m_diff = m - m_u;
-        optimizeA_implicit(
-            A + (size_t)k_user + (size_t)m_u * (size_t)k_totA, (size_t)k_totA,
-            B + k_item, (size_t)k_totB,
-            m_diff, n, k + k_main,
-            Xcsr_p + m_u, Xcsr_i, Xcsr,
-            lam/w_main, alpha,
-            nthreads, use_cg, max_cg_steps,
-            buffer_FPnum
-        );
+        if (Xcsr_p[m_u] < Xcsr_p[m])
+            optimizeA_implicit(
+                A + (size_t)k_user + (size_t)m_u*(size_t)k_totA, (size_t)k_totA,
+                B + k_item, (size_t)k_totB,
+                m_diff, n, k + k_main,
+                Xcsr_p + m_u, Xcsr_i, Xcsr,
+                lam/w_main, alpha,
+                nthreads, use_cg, max_cg_steps,
+                buffer_FPnum
+            );
+        else if (use_cg)
+            set_to_zero(A + (size_t)k_user + (size_t)m_u * (size_t)k_totA,
+                        (size_t)m_diff*(size_t)k_totA, nthreads);
         m = m_u;
     }
 
     else if (use_cg && is_first_iter && k_main > 0)
         #pragma omp parallel for schedule(static) \
                         num_threads(min2(2, nthreads)) \
-                        shared(m_u, m, k_totA, k_user, k, k_main, A)
-            for (size_t_for ix = m; ix < m_u; ix++)
+                        shared(m_u, m_x, k_totA, k_user, k, k_main, A)
+            for (size_t_for ix = m_x; ix < (size_t)m_u; ix++)
                 set_to_zero(A + ix*(size_t)k_totA + (size_t)(k_user+k),
                             k_main, 1);
+
+    FPnum *restrict precomputedBeTBeChol = NULL;
+    if (m_u > m_x) {
+        precomputedBeTBeChol = buffer_FPnum;
+        buffer_FPnum += square(k_totA);
+    }
 
     /* Lower-right square of Be */
     FPnum *restrict precomputedBeTBe = buffer_FPnum;
@@ -2668,19 +2745,30 @@ void optimizeA_collective_implicit
     /* Lower half of Xe (reuse if possible) */
     if (U != NULL) {
         cblas_tgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,
-                    m, k_user + k, p,
+                    m_u, k_user + k, p,
                     w_user, U, p, C, k_totC,
                     0., A, k_totA);
     }
     else {
         sgemm_sp_dense(
-            m, k_user + k, w_user,
+            m_u, k_user + k, w_user,
             U_csr_p, U_csr_i, U_csr,
             C, k_totC,
             A, k_totA,
             nthreads
         );
     }
+
+    /* If there are no positive entries for some X and no missing values
+       in U, can reuse a single Cholesky factorization for them. */
+    if (m_u > m_x) {
+        copy_arr(precomputedBeTBe, precomputedBeTBeChol,
+                 square(k_totA), nthreads);
+        char lo = 'L';
+        tpotrf_(&lo, &k_totA, precomputedBeTBeChol, &k_totA, &ix);
+    }
+
+    m = max2(m, m_u);
 
     size_t size_buffer = square(k_totA);
 
@@ -2706,6 +2794,7 @@ void optimizeA_collective_implicit
             lam, alpha, w_main, w_user,
             precomputedBeTBe,
             precomputedBtB,
+            precomputedBeTBeChol,
             false, true, use_cg,
             buffer_remainder + ((size_t)omp_get_thread_num() * size_buffer)
         );
@@ -2975,11 +3064,11 @@ int precompute_matrices_collective
     FPnum *restrict BtBchol,  /* explicit, NA as zero */
     int k, int k_main, int k_user, int k_item,
     FPnum *restrict C, int p,
-    FPnum *restrict CtCinvCt,   /* cold-start, no NAs, no binaries */
-    FPnum *restrict CtC,        /* cold-start, few NAs, no bin. */
-    FPnum *restrict CtCchol,    /* cold-start, NA as zero, no bin. */
+    FPnum *restrict CtCinvCt,   /* explicit, cold-start, no NAs, no binaries */
+    FPnum *restrict CtC,        /* explicit, cold-start, few NAs, no bin. */
+    FPnum *restrict CtCchol,    /* explicit, cold-start, NA as zero, no bin. */
     FPnum *restrict BeTBe,      /* implicit, warm-start, few NAs or NA as zero*/
-    FPnum *restrict BtB_padded, /* implicit, warm-start, many NAs */
+    FPnum *restrict BtB_padded, /* implicit, cold & warm-start, many NAs */
     FPnum *restrict BtB_shrunk, /* implicit, no side info */
     FPnum lam, FPnum w_main, FPnum w_user, FPnum lam_last,
     FPnum w_main_multiplier,
@@ -3002,16 +3091,19 @@ int precompute_matrices_collective
     */
     FPnum *restrict buffer_FPnum = NULL;
     size_t size_buffer = 0;
-    if (has_U && (!has_U_bin || implicit))
-        size_buffer = (size_t)p * (size_t)(k_user+k);
     if (!implicit)
-        size_buffer = max2(size_buffer, (size_t)n * (size_t)(k+k_main));
+    {
+        if (has_U && !has_U_bin)
+            size_buffer = (size_t)p * (size_t)(k_user+k);
+        if (!implicit)
+            size_buffer = max2(size_buffer, (size_t)n * (size_t)(k+k_main));
 
-    buffer_FPnum = (FPnum*)malloc(size_buffer*sizeof(FPnum));
-    if (buffer_FPnum == NULL) return 1;
+        buffer_FPnum = (FPnum*)malloc(size_buffer*sizeof(FPnum));
+        if (buffer_FPnum == NULL) return 1;
+    }
 
     /* For cold-start predictions */
-    if (has_U && (!has_U_bin || implicit))
+    if (has_U && !has_U_bin && !implicit)
         AtAinvAt_plus_chol(C, k_user+k, 0,
                            CtCinvCt,
                            CtC,
@@ -3029,17 +3121,15 @@ int precompute_matrices_collective
                     k+k_main, n,
                     w_main, B + k_item, k_item+k+k_main,
                     0., BeTBe + k_user + k_user*k_totA, k_totA);
+        add_to_diag(BeTBe, lam, k_user+k+k_main);
 
         if (has_U) {
             memcpy(BtB_padded, BeTBe, square(k_totA)*sizeof(FPnum));
             copy_mat(k+k_main, k+k_main, BeTBe, k_totA, BtB_shrunk, k+k_main);
-            add_to_diag(BtB_shrunk, lam, k+k_main);
-
-            sum_mat(k_user+k, k_user+k, CtC, k_user+k, BeTBe, k_totA);
-            for (int ix = k_user+k; ix < k_totA; ix++)
-                BeTBe[ix + ix*k_totA] += lam;
-        } else {
-            add_to_diag(BeTBe, lam, k_totA);
+            cblas_tsyrk(CblasRowMajor, CblasUpper, CblasTrans,
+                        k_user + k, n,
+                        w_user, C, k_user + k,
+                        1., BeTBe, k_totA);
         }
     }
 
@@ -3055,7 +3145,8 @@ int precompute_matrices_collective
                            true);
     }
 
-    free(buffer_FPnum);
+    if (buffer_FPnum != NULL)
+        free(buffer_FPnum);
     return 0;
 }
 
@@ -4900,9 +4991,6 @@ int collective_factors_warm_implicit_multiple
     FPnum *restrict precomputedBeTBe,
     FPnum *restrict precomputedBtB,
     FPnum *restrict precomputedBtB_shrunk,
-    FPnum *restrict CtCinvCt,
-    FPnum *restrict CtCw,
-    FPnum *restrict CtCchol,
     int k_item_BtB,
     int nthreads
 )
@@ -4999,9 +5087,9 @@ int collective_factors_warm_implicit_multiple
                    U, U_csr_p_use, U_csr_i_use, U_csr_use, \
                    col_means, NA_as_zero_U, \
                    k, k_user, k_main, lam, w_user, \
-                   CtCinvCt, CtCw, CtCchol)
+                   precomputedBtB)
     for (size_t_for ix = m_x; ix < (size_t)m; ix++)
-        ret[ix] = collective_factors_cold(
+        ret[ix] = collective_factors_cold_implicit(
                     A + ix*k_totA,
                     (U == NULL || (int)ix >= m_u)?
                       ((FPnum*)NULL)
@@ -5015,18 +5103,13 @@ int collective_factors_warm_implicit_multiple
                       : (U_csr_i_use + U_csr_p_use[ix]),
                     (U_csr_p_use == NULL)?
                       (0) : (U_csr_p_use[ix+1] - U_csr_p_use[ix]),
-                    (FPnum*)NULL,
-                    0,
-                    C, (FPnum*)NULL,
-                    CtCinvCt,
-                    CtCw,
-                    CtCchol,
+                    precomputedBtB,
+                    C,
                     col_means,
                     k, k_user, k_main,
                     lam, w_user,
                     NA_as_zero_U
                 );
-
 
     for (int ix = 0; ix < m; ix++)
         retval = (ret[ix] != 0)? 1 : retval;

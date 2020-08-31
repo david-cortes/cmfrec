@@ -133,9 +133,9 @@ for utype in utry:
                                 f2 = py_eval(res_module.reshape(-1))
 
                                 err = np.linalg.norm(res_scipy - res_module.reshape(-1))
-                                df = f2 - f1
+                                df = f2 / f1
                                 
-                                is_wrong = (err>1e1) or (f2/f1 > 1.05) or np.any(np.isnan(res_module))
+                                is_wrong = (f2/f1 > 1.05) or np.any(np.isnan(res_module))
                                 if is_wrong:
                                     print("\n\n\n****ERROR BELOW****")
 

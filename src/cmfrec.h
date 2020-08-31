@@ -739,6 +739,7 @@ void collective_closed_form_block_implicit
     FPnum lam, FPnum alpha, FPnum w_main, FPnum w_user,
     FPnum *restrict precomputedBeTBe,
     FPnum *restrict precomputedBtB,
+    FPnum *restrict precomputedBeTBeChol,
     bool add_U, bool shapes_match, bool use_cg,
     FPnum *restrict buffer_FPnum
 );
@@ -767,6 +768,18 @@ int collective_factors_cold
     FPnum *restrict CtCinvCt,
     FPnum *restrict CtCw,
     FPnum *restrict CtCchol,
+    FPnum *restrict col_means,
+    int k, int k_user, int k_main,
+    FPnum lam, FPnum w_user,
+    bool NA_as_zero_U
+);
+int collective_factors_cold_implicit
+(
+    FPnum *restrict a_vec,
+    FPnum *restrict u_vec, int p,
+    FPnum *restrict u_vec_sp, int u_vec_ixB[], size_t nnz_u_vec,
+    FPnum *restrict precomputedBtBw,
+    FPnum *restrict C,
     FPnum *restrict col_means,
     int k, int k_user, int k_main,
     FPnum lam, FPnum w_user,
@@ -1110,9 +1123,6 @@ int collective_factors_warm_implicit_multiple
     FPnum *restrict precomputedBeTBe,
     FPnum *restrict precomputedBtB,
     FPnum *restrict precomputedBtB_shrunk,
-    FPnum *restrict CtCinvCt,
-    FPnum *restrict CtCw,
-    FPnum *restrict CtCchol,
     int k_item_BtB,
     int nthreads
 );

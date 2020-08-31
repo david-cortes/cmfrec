@@ -16,6 +16,8 @@ class build_ext_subclass( build_ext_with_blas ):
             for e in self.extensions:
                 e.extra_compile_args += ['-O2', '-fopenmp', '-march=native', '-std=c99', "-ggdb"]
                 e.extra_link_args += ['-fopenmp']
+                
+                # e.extra_compile_args += ['-O2', '-march=native', '-std=c99', "-ggdb"]
 
                 # e.extra_compile_args += ["-fsanitize=address", "-static-libasan"]
                 # e.extra_link_args += ["-fsanitize=address", "-static-libasan"]
