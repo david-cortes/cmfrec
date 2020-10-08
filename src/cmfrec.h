@@ -410,6 +410,16 @@ void factors_explicit_cg
     FPnum lam, FPnum w, FPnum lam_last,
     int max_cg_steps
 );
+void factors_explicit_cg_NA_as_zero_weighted
+(
+    FPnum *restrict a_vec, int k,
+    FPnum *restrict B, int n, int ldb,
+    FPnum *restrict Xa, int ixB[], size_t nnz,
+    FPnum *restrict weight,
+    FPnum *restrict buffer_FPnum,
+    FPnum lam, FPnum w, FPnum lam_last,
+    int max_cg_steps
+);
 void factors_explicit_cg_dense
 (
     FPnum *restrict a_vec, int k,
@@ -524,7 +534,7 @@ void optimizeA
     FPnum *restrict Xfull, bool full_dense, bool near_dense,
     int cnt_NA[], FPnum *restrict weight, bool NA_as_zero,
     FPnum lam, FPnum w, FPnum lam_last,
-    bool do_B,
+    bool do_B, bool is_first_iter,
     int nthreads,
     bool use_cg, int max_cg_steps,
     FPnum *restrict buffer_FPnum,
@@ -538,7 +548,7 @@ void optimizeA_implicit
     long Xcsr_p[], int Xcsr_i[], FPnum *restrict Xcsr,
     FPnum lam, FPnum alpha,
     int nthreads,
-    bool use_cg, int max_cg_steps,
+    bool use_cg, int max_cg_steps, bool force_set_to_zero,
     FPnum *restrict buffer_FPnum
 );
 int initialize_biases
@@ -724,7 +734,7 @@ void collective_closed_form_block
     FPnum lam, FPnum w_user, FPnum w_main, FPnum lam_last,
     FPnum *restrict precomputedBtBw, int cnt_NA_x,
     FPnum *restrict precomputedCtCw, int cnt_NA_u,
-    bool add_X, bool add_U, bool use_cg,
+    bool add_X, bool add_U, bool use_cg, int max_cg_steps,
     FPnum *restrict buffer_FPnum
 );
 void collective_closed_form_block_implicit
@@ -741,6 +751,23 @@ void collective_closed_form_block_implicit
     FPnum *restrict precomputedBtB,
     FPnum *restrict precomputedBeTBeChol,
     bool add_U, bool shapes_match, bool use_cg,
+    FPnum *restrict buffer_FPnum
+);
+void collective_block_cg
+(
+    FPnum *restrict a_vec,
+    int k, int k_user, int k_item, int k_main,
+    FPnum *restrict Xa_dense,
+    FPnum *restrict Xa, int ixB[], size_t nnz,
+    int u_vec_ixB[], FPnum *restrict u_vec_sp, size_t nnz_u_vec,
+    FPnum *restrict u_vec,
+    bool NA_as_zero_X, bool NA_as_zero_U,
+    FPnum *restrict B, int n,
+    FPnum *restrict C, int p,
+    FPnum *restrict weight,
+    FPnum lam, FPnum w_user, FPnum w_main, FPnum lam_last,
+    int cnt_NA_x, int cnt_NA_u,
+    int max_cg_steps,
     FPnum *restrict buffer_FPnum
 );
 void optimizeA_collective_implicit

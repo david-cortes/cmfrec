@@ -33,7 +33,9 @@ setup(
           sources=["c_math_funs.pyx", "../src/collective.c", "../src/common.c",
                    "../src/offsets.c", "../src/helpers.c", "../src/lbfgs.c"],
           include_dirs=[np.get_include(), "../src"],
-          define_macros = [("_FOR_PYTHON", None), ("USE_DOUBLE", None)]
+          define_macros = [("_FOR_PYTHON", None), ("USE_DOUBLE", None),
+                           ("FORCE_CG", None)
+                          ]
           ),
         ]
     )

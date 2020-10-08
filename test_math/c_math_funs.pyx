@@ -145,7 +145,7 @@ cdef extern from "cmfrec.h":
         double *Xfull, bint full_dense, bint near_dense,
         int cnt_NA[], double *weight, bint NA_as_zero,
         double lam, double w, double lam_last,
-        bint do_B,
+        bint do_B, bint is_first_iter,
         int nthreads,
         bint use_cg, int max_cg_steps,
         double *buffer_double,
@@ -159,7 +159,7 @@ cdef extern from "cmfrec.h":
         long Xcsr_p[], int Xcsr_i[], double *Xcsr,
         double lam, double alpha,
         int nthreads,
-        bint use_cg, int max_cg_steps,
+        bint use_cg, int max_cg_steps, bint force_set_to_zero,
         double *buffer_double
     )
 
@@ -914,7 +914,7 @@ def py_optimizeA(
         ptr_Xfull, full_dense, as_near_dense,
         ptr_cnt_NA, ptr_weight, NA_as_zero,
         lam, w, lam,
-        is_B,
+        is_B, 1,
         nthreads,
         0, 0,
         &buffer_double[0],
@@ -1033,7 +1033,7 @@ def py_optimizeA_implicit(
         &Xcsr_p[0], &Xcsr_i[0], &Xcsr[0],
         lam, alpha,
         nthreads,
-        0, 0,
+        0, 0, 1,
         &buffer_double[0]
     )
     return A
