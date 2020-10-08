@@ -18,6 +18,11 @@
             "Collaborative filtering for implicit feedback datasets."
             2008 Eighth IEEE International Conference on Data Mining.
             Ieee, 2008.
+        (d) Takacs, Gabor, Istvan Pilaszy, and Domonkos Tikk.
+            "Applications of the conjugate gradient method for
+            implicit feedback collaborative filtering."
+            Proceedings of the fifth ACM conference on
+            Recommender systems. 2011.
 
     For information about the models offered here and how they are fit to
     the data, see the files 'collective.c' and 'offsets.c'.
@@ -972,24 +977,25 @@ void factors_explicit_cg
     FPnum a;
     FPnum r_old, r_new;
 
-    if (weight == NULL) {
-        sgemv_dense_sp(n, k,
-                       w, B, (size_t)ldb,
-                       ixB, Xa, nnz,
-                       r);
+    if (w != 1.) {
+        lam /= w;
+        lam_last /= w;
     }
 
-    else {
+    if (weight == NULL)
+        sgemv_dense_sp(n, k,
+                       1., B, (size_t)ldb,
+                       ixB, Xa, nnz,
+                       r);
+    else
         sgemv_dense_sp_weighted(n, k,
                                 weight, B, (size_t)ldb,
                                 ixB, Xa, nnz,
                                 r);
-        if (w != 1.) cblas_tscal(k, w, r, 1);
-    }
 
     for (size_t ix = 0; ix < nnz; ix++) {
         coef = cblas_tdot(k, B + (size_t)ixB[ix]*(size_t)ldb, 1, a_vec, 1);
-        coef *= (weight == NULL)? w : w*weight[ix];
+        coef *= (weight == NULL)? 1. : weight[ix];
         cblas_taxpy(k, -coef, B + (size_t)ixB[ix]*ldb, 1, r, 1);
     }
     cblas_taxpy(k, -lam, a_vec, 1, r, 1);
@@ -1012,7 +1018,7 @@ void factors_explicit_cg
         set_to_zero(Ap, k, 1);
         for (size_t ix = 0; ix < nnz; ix++) {
             coef = cblas_tdot(k, B + (size_t)ixB[ix]*(size_t)ldb, 1, p, 1);
-            coef *= (weight == NULL)? w : w*weight[ix];
+            coef *= (weight == NULL)? 1. : weight[ix];
             cblas_taxpy(k, coef, B + (size_t)ixB[ix]*ldb, 1, Ap, 1);
         }
         cblas_taxpy(k, lam, p, 1, Ap, 1);
@@ -1057,15 +1063,19 @@ void factors_explicit_cg_NA_as_zero_weighted
     FPnum a;
     FPnum r_old, r_new;
 
+    if (w != 1.) {
+        lam /= w;
+        lam_last /= w;
+    }
+
 
     sgemv_dense_sp_weighted(n, k,
                             weight, B, (size_t)ldb,
                             ixB, Xa, nnz,
                             r);
-    if (w != 1.) cblas_tscal(k, w, r, 1);
     cblas_tgemv(CblasRowMajor, CblasNoTrans,
                 n, k,
-                -w, B, k,
+                -1., B, k,
                 a_vec, 1,
                 0., wr, 1);
     for (size_t ix = 0; ix < nnz; ix++)
@@ -1096,7 +1106,7 @@ void factors_explicit_cg_NA_as_zero_weighted
     {
         cblas_tgemv(CblasRowMajor, CblasNoTrans,
                     n, k,
-                    w, B, ldb,
+                    1., B, ldb,
                     p, 1,
                     0., wr, 1);
         for (size_t ix = 0; ix < nnz; ix++)
@@ -1148,11 +1158,16 @@ void factors_explicit_cg_dense
     FPnum r_new, r_old;
     FPnum a, coef, w_this;
 
+    if (w != 1.) {
+        lam /= w;
+        lam_last /= w;
+    }
+
     for (size_t ix = 0; ix < (size_t)n; ix++)
     {
         if (!isnan(Xa_dense[ix]))
         {
-            w_this = (weight == NULL)? (w) : (w * weight[ix]);
+            w_this = (weight == NULL)? 1. : weight[ix];
             cblas_taxpy(k,
                         w_this * Xa_dense[ix], B + ix*(size_t)ldb, 1,
                         r, 1);
@@ -1183,7 +1198,7 @@ void factors_explicit_cg_dense
         {
             if (!isnan(Xa_dense[ix]))
             {
-                w_this = (weight == NULL)? (w) : (w * weight[ix]);
+                w_this = (weight == NULL)? 1. : weight[ix];
                 coef = cblas_tdot(k, B + ix*(size_t)ldb, 1, p, 1);
                 cblas_taxpy(k, w_this * coef, B + ix*(size_t)ldb, 1, Ap, 1);
             }

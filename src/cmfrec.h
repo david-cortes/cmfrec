@@ -750,7 +750,8 @@ void collective_closed_form_block_implicit
     FPnum *restrict precomputedBeTBe,
     FPnum *restrict precomputedBtB,
     FPnum *restrict precomputedBeTBeChol,
-    bool add_U, bool shapes_match, bool use_cg,
+    bool add_U, bool shapes_match,
+    bool use_cg, int max_cg_steps,
     FPnum *restrict buffer_FPnum
 );
 void collective_block_cg
@@ -768,6 +769,22 @@ void collective_block_cg
     FPnum lam, FPnum w_user, FPnum w_main, FPnum lam_last,
     int cnt_NA_x, int cnt_NA_u,
     int max_cg_steps,
+    FPnum *restrict buffer_FPnum
+);
+void collective_block_cg_implicit
+(
+    FPnum *restrict a_vec,
+    int k, int k_user, int k_item, int k_main,
+    FPnum *restrict Xa, int ixB[], size_t nnz,
+    int u_vec_ixB[], FPnum *restrict u_vec_sp, size_t nnz_u_vec,
+    FPnum *restrict u_vec,
+    bool NA_as_zero_U,
+    FPnum *restrict B, int n,
+    FPnum *restrict C, int p,
+    FPnum lam, FPnum alpha, FPnum w_main, FPnum w_user,
+    int cnt_NA_u,
+    int max_cg_steps,
+    FPnum *restrict precomputedBtBw,
     FPnum *restrict buffer_FPnum
 );
 void optimizeA_collective_implicit
