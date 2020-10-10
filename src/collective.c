@@ -1418,7 +1418,7 @@ void collective_closed_form_block_implicit
     bool add_C = false;
 
     if (nnz == 0 && ((u_vec != NULL && cnt_NA_u == 0) || NA_as_zero_U) &&
-        precomputedBeTBeChol != NULL && (!add_U || use_cg))
+        precomputedBeTBeChol != NULL && (!add_U || (use_cg && p < k_totA)))
     {
         if (use_cg)
         {
@@ -2860,7 +2860,7 @@ int collective_factors_warm_implicit
             a_vec + k_user, k+k_main,
             B + k_item, (size_t)(k_item+k+k_main),
             Xa, ixB, nnz,
-            lam/w_main, alpha,
+            lam, alpha, w_main,
             precomputedBtB_shrunk, 0,
             false,
             buffer_FPnum,
@@ -3728,6 +3728,9 @@ void optimizeA_collective_implicit
     if (!use_cg || is_first_iter)
         set_to_zero(A, (size_t)max2(m, m_u)*(size_t)k_totA, nthreads);
 
+    FPnum *restrict precomputedBtB = NULL;
+    bool precalculated_BtB = false;
+
     /* If the X matrix has more rows, the extra rows will be independent
        from U and can be obtained from the single-matrix formula instead.
        However, if the U matrix has more rows, those still need to be
@@ -3737,6 +3740,16 @@ void optimizeA_collective_implicit
     /* TODO: revisit whether it is correct to divide lambda but not alpha */
     if (m > m_u)
     {
+        precomputedBtB = buffer_FPnum;
+        buffer_FPnum += square(k+k_main);
+        cblas_tsyrk(CblasRowMajor, CblasUpper, CblasTrans,
+                    k+k_main, n,
+                    use_cg? 1. : w_main, B + k_item, k_totB,
+                    0., precomputedBtB, k+k_main);
+        if (!use_cg)
+            add_to_diag(precomputedBtB, lam, k+k_main);
+        precalculated_BtB = true;
+
         int m_diff = m - m_u;
         if (Xcsr_p[m_u] < Xcsr_p[m])
             optimizeA_implicit(
@@ -3745,16 +3758,38 @@ void optimizeA_collective_implicit
                 m_diff, n, k + k_main,
                 Xcsr_p + m_u, Xcsr_i, Xcsr,
                 // lam/w_main, alpha,
-                lam, alpha,
+                lam, alpha, w_main,
                 nthreads, use_cg, max_cg_steps, false,
+                precomputedBtB,
                 buffer_FPnum
             );
         m = m_u;
+
+        /* In 'optimizeA_implicit, 'precomputedBtB' has size 'square(k+k_main)',
+           but for the rest of this function, it's needed with size
+           'square(k_totA)', so this will resize it by temporarily copying it
+           further in the buffer array */
+        if (k_user > 0 && !use_cg)
+        {
+            size_t diff = (size_t)square(k_totA) - (size_t)square(k+k_main);
+            copy_arr(buffer_FPnum + diff, precomputedBtB,
+                     square(k+k_main), nthreads);
+            set_to_zero(precomputedBtB, square(k_totA), 1);
+            copy_mat(
+                square(k+k_main), square(k+k_main),
+                buffer_FPnum + diff, square(k+k_main),
+                precomputedBtB + k_user + k_user*k_totA, square(k_totA)
+            );
+            buffer_FPnum += diff;
+        }
     }
 
 
     FPnum *restrict precomputedBeTBeChol = NULL;
-    if (m_u > m_x && !(U == NULL && U_csr != NULL && !NA_as_zero_U)) {
+    if (m_u > m_x &&
+        !(U == NULL && U_csr != NULL && !NA_as_zero_U) &&
+        (!use_cg || p > 2 * k_totA))
+    {
         precomputedBeTBeChol = buffer_FPnum;
         buffer_FPnum += square(k_totA);
     }
@@ -3774,11 +3809,14 @@ void optimizeA_collective_implicit
 
     /* Lower-right square of Be */
     FPnum *restrict precomputedBeTBe = NULL;
-    FPnum *restrict precomputedBtB = buffer_FPnum;
-    if (use_cg)
-        buffer_FPnum += square(k+k_main);
-    else
-        buffer_FPnum += square(k_totA);
+    if (!precalculated_BtB)
+    {
+        precomputedBtB = buffer_FPnum;
+        if (use_cg)
+            buffer_FPnum += square(k+k_main);
+        else
+            buffer_FPnum += square(k_totA);
+    }
     /* Note: 'precomputedBtB' will have different sizes for CG and Cholesky */
     if (!use_cg || precomputedBeTBeChol != NULL) {
         precomputedBeTBe = buffer_FPnum;
@@ -3788,26 +3826,35 @@ void optimizeA_collective_implicit
 
     if (precomputedBeTBe != NULL)
     {
-        set_to_zero(precomputedBeTBe, square(k_totA), 1);
-        cblas_tsyrk(CblasRowMajor, CblasUpper, CblasTrans,
-                    k+k_main, n,
-                    use_cg? 1. : w_main, B + k_item, k_totB,
-                    0., precomputedBeTBe + k_user + k_user*k_totA, k_totA);
-        if (use_cg)
-            copy_mat(
-                k+k_main, k+k_main,
-                precomputedBeTBe + k_user + k_user*k_totA, k_totA,
-                precomputedBtB, k+k_main
-            );
-        if (w_main != 1.)
-            tscal_large(precomputedBeTBe +  + k_user + k_user*k_totA, w_main,
-                        square(k_totA) - (k_user + k_user*k_totA) - k_main,
-                        nthreads);
-        add_to_diag(precomputedBeTBe, lam, k_totA);
-        if (!use_cg)
-            copy_arr(precomputedBeTBe, precomputedBtB, square(k_totA),nthreads);
+        if (precalculated_BtB)
+        {
+            copy_arr(precomputedBtB, precomputedBeTBe, square(k_totA),nthreads);
+        }
+
+        else
+        {
+            set_to_zero(precomputedBeTBe, square(k_totA), 1);
+            cblas_tsyrk(CblasRowMajor, CblasUpper, CblasTrans,
+                        k+k_main, n,
+                        use_cg? 1. : w_main, B + k_item, k_totB,
+                        0., precomputedBeTBe + k_user + k_user*k_totA, k_totA);
+            if (use_cg)
+                copy_mat(
+                    k+k_main, k+k_main,
+                    precomputedBeTBe + k_user + k_user*k_totA, k_totA,
+                    precomputedBtB, k+k_main
+                );
+            if (w_main != 1.)
+                tscal_large(precomputedBeTBe + k_user + k_user*k_totA, w_main,
+                            square(k_totA) - (k_user + k_user*k_totA) - k_main,
+                            nthreads);
+            add_to_diag(precomputedBeTBe, lam, k_totA);
+            if (!use_cg)
+                copy_arr(precomputedBeTBe, precomputedBtB,
+                         square(k_totA), nthreads);
+        }
     }
-    else {
+    else if (!precalculated_BtB) {
         cblas_tsyrk(CblasRowMajor, CblasUpper, CblasTrans,
                     k+k_main, n,
                     1., B + k_item, k_totB,
@@ -5624,8 +5671,9 @@ int fit_collective_implicit_als
                 Xcsc_p, Xcsc_i, Xcsc,
                 // (lam_unique == NULL)? (lam/w_main) : (lam_unique[3]/w_main),
                 (lam_unique == NULL)? (lam) : (lam_unique[3]),
-                alpha,
+                alpha, w_main,
                 nthreads, use_cg, max_cg_steps, iter == 0,
+                (FPnum*)NULL,
                 buffer_FPnum
             );
         if (verbose) {
@@ -5667,9 +5715,10 @@ int fit_collective_implicit_als
                 Xcsr_p, Xcsr_i, Xcsr,
                 // (lam_unique == NULL)? (lam/w_main) : (lam_unique[2]/w_main),
                 (lam_unique == NULL)? (lam) : (lam_unique[2]),
-                alpha,
+                alpha, w_main,
                 nthreads,
                 use_cg, max_cg_steps, iter == 0,
+                (FPnum*)NULL,
                 buffer_FPnum
             );
         if (verbose) {

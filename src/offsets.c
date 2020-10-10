@@ -586,7 +586,8 @@ int offsets_factors_warm
         if (a_plus_bias == NULL) { retval = 1; goto cleanup; }
     }
 
-    if (implicit) lam /= w_main_multiplier;
+    /* TODO: revisit this */
+    // if (implicit) lam /= w_main_multiplier;
 
     if ((!exact && k_sec == 0) || implicit)
     {
@@ -644,7 +645,7 @@ int offsets_factors_warm
                 a_vec, k_sec+k+k_main,
                 Bm, k_sec+k+k_main,
                 Xa, ixB, nnz,
-                lam, alpha,
+                lam, alpha, w_main_multiplier,
                 precomputedBtBw, 0,
                 true,
                 buffer_FPnum,

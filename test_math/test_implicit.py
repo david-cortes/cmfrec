@@ -12,6 +12,7 @@ nz = int(m*n*0.25)
 
 lam = 2.5
 alpha = 1.234
+w = 3.4456
 
 nthreads = 4
 buffer_double = np.empty(int(1e6), dtype=ctypes.c_double)
@@ -45,7 +46,7 @@ res_module = test_math.py_optimizeA_implicit(
     Xcsr.indptr.astype(ctypes.c_long).copy(),
     Xcsr.indices.astype(ctypes.c_int).copy(),
     Xcsr.data.astype(ctypes.c_double).copy(),
-    lam, alpha,
+    lam, alpha, w,
     nthreads,
     buffer_double
     )

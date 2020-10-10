@@ -1275,7 +1275,7 @@ void factors_implicit_cg
     FPnum *restrict a_vec, int k,
     FPnum *restrict B, size_t ldb,
     FPnum *restrict Xa, int ixB[], size_t nnz,
-    FPnum lam, FPnum alpha,
+    FPnum lam, FPnum alpha, FPnum w,
     FPnum *restrict precomputedBtBw, int strideBtB,
     int max_cg_steps,
     FPnum *restrict buffer_FPnum,
@@ -1308,6 +1308,7 @@ void factors_implicit_cg
                     B + (size_t)ixB[ix]*ldb, 1,
                     r, 1);
     }
+    if (w != 1.) cblas_tscal(k, w, r, 1);
 
     copy_arr(r, p, k, 1);
     r_old = cblas_tdot(k, r, 1, r, 1);
@@ -1333,6 +1334,7 @@ void factors_implicit_cg
                         B + (size_t)ixB[ix]*ldb, 1,
                         Ap, 1);
         }
+        if (w != 1.) cblas_tscal(k, w, Ap, 1);
 
         a = r_old / cblas_tdot(k, Ap, 1, p, 1);
         cblas_taxpy(k,  a,  p, 1, a_vec, 1);
@@ -1357,13 +1359,14 @@ void factors_implicit_chol
     FPnum *restrict a_vec, int k,
     FPnum *restrict B, size_t ldb,
     FPnum *restrict Xa, int ixB[], size_t nnz,
-    FPnum lam, FPnum alpha,
+    FPnum lam, FPnum alpha, FPnum w,
     FPnum *restrict precomputedBtBw, int strideBtB,
     bool zero_out,
     FPnum *restrict buffer_FPnum,
     bool force_add_diag
 )
 {
+    /* TODO: make use of 'w' in here */
     char uplo = 'L';
     int one = 1;
     int ignore;
@@ -1398,7 +1401,7 @@ void factors_implicit
     FPnum *restrict a_vec, int k,
     FPnum *restrict B, size_t ldb,
     FPnum *restrict Xa, int ixB[], size_t nnz,
-    FPnum lam, FPnum alpha,
+    FPnum lam, FPnum alpha, FPnum w,
     FPnum *restrict precomputedBtBw, int strideBtB,
     bool zero_out, bool use_cg, int max_cg_steps,
     FPnum *restrict buffer_FPnum,
@@ -1413,7 +1416,7 @@ void factors_implicit
             a_vec, k,
             B, ldb,
             Xa, ixB, nnz,
-            lam, alpha,
+            lam, alpha, w,
             precomputedBtBw, strideBtB,
             max_cg_steps,
             buffer_FPnum,
@@ -1424,7 +1427,7 @@ void factors_implicit
             a_vec, k,
             B, ldb,
             Xa, ixB, nnz,
-            lam, alpha,
+            lam, alpha, w,
             precomputedBtBw, strideBtB,
             zero_out,
             buffer_FPnum,
@@ -2032,19 +2035,25 @@ void optimizeA_implicit
     FPnum *restrict B, size_t ldb,
     int m, int n, int k,
     long Xcsr_p[], int Xcsr_i[], FPnum *restrict Xcsr,
-    FPnum lam, FPnum alpha,
+    FPnum lam, FPnum alpha, FPnum w,
     int nthreads,
     bool use_cg, int max_cg_steps, bool force_set_to_zero,
+    FPnum *restrict precomputedBtBw, /* <- will be calculated if not passed */
     FPnum *restrict buffer_FPnum
 )
 {
-    FPnum *restrict precomputedBtBw = buffer_FPnum;
-    buffer_FPnum += square(k);
-    cblas_tsyrk(CblasRowMajor, CblasUpper, CblasTrans,
-                k, n,
-                1., B, (int)ldb,
-                0., precomputedBtBw, k);
-    add_to_diag(precomputedBtBw, lam, k);
+    /* TODO: this needs to incorporate a 'w', otherwise results are wrong */
+    if (precomputedBtBw == NULL)
+    {
+        precomputedBtBw = buffer_FPnum;
+        buffer_FPnum += square(k);
+        cblas_tsyrk(CblasRowMajor, CblasUpper, CblasTrans,
+                    k, n,
+                    1., B, (int)ldb,
+                    0., precomputedBtBw, k);
+        if (!use_cg)
+            add_to_diag(precomputedBtBw, lam, k);
+    }
     if (!use_cg || force_set_to_zero)
         set_to_zero(A, (size_t)m*(size_t)k - (lda-(size_t)k), nthreads);
     size_t size_buffer = use_cg? (3 * k) : (square(k));
@@ -2059,7 +2068,7 @@ void optimizeA_implicit
             A + (size_t)ix*lda, k,
             B, ldb,
             Xcsr + Xcsr_p[ix], Xcsr_i + Xcsr_p[ix], Xcsr_p[ix+1] - Xcsr_p[ix],
-            lam, alpha,
+            lam, alpha, w,
             precomputedBtBw, 0,
             false, use_cg, max_cg_steps,
             buffer_FPnum + ((size_t)omp_get_thread_num() * size_buffer),

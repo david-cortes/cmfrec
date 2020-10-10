@@ -436,7 +436,7 @@ void factors_implicit_cg
     FPnum *restrict a_vec, int k,
     FPnum *restrict B, size_t ldb,
     FPnum *restrict Xa, int ixB[], size_t nnz,
-    FPnum lam, FPnum alpha,
+    FPnum lam, FPnum alpha, FPnum w,
     FPnum *restrict precomputedBtBw, int strideBtB,
     int max_cg_steps,
     FPnum *restrict buffer_FPnum,
@@ -447,7 +447,7 @@ void factors_implicit_chol
     FPnum *restrict a_vec, int k,
     FPnum *restrict B, size_t ldb,
     FPnum *restrict Xa, int ixB[], size_t nnz,
-    FPnum lam, FPnum alpha,
+    FPnum lam, FPnum alpha, FPnum w,
     FPnum *restrict precomputedBtBw, int strideBtB,
     bool zero_out,
     FPnum *restrict buffer_FPnum,
@@ -458,7 +458,7 @@ void factors_implicit
     FPnum *restrict a_vec, int k,
     FPnum *restrict B, size_t ldb,
     FPnum *restrict Xa, int ixB[], size_t nnz,
-    FPnum lam, FPnum alpha,
+    FPnum lam, FPnum alpha, FPnum w,
     FPnum *restrict precomputedBtBw, int strideBtB,
     bool zero_out, bool use_cg, int max_cg_steps,
     FPnum *restrict buffer_FPnum,
@@ -554,9 +554,10 @@ void optimizeA_implicit
     FPnum *restrict B, size_t ldb,
     int m, int n, int k,
     long Xcsr_p[], int Xcsr_i[], FPnum *restrict Xcsr,
-    FPnum lam, FPnum alpha,
+    FPnum lam, FPnum alpha, FPnum w,
     int nthreads,
     bool use_cg, int max_cg_steps, bool force_set_to_zero,
+    FPnum *restrict precomputedBtBw,
     FPnum *restrict buffer_FPnum
 );
 int initialize_biases

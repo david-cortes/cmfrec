@@ -157,9 +157,10 @@ cdef extern from "cmfrec.h":
         double *B, size_t ldb,
         int m, int n, int k,
         long Xcsr_p[], int Xcsr_i[], double *Xcsr,
-        double lam, double alpha,
+        double lam, double alpha, double w,
         int nthreads,
         bint use_cg, int max_cg_steps, bint force_set_to_zero,
+        double *precomputedBtB,
         double *buffer_double
     )
 
@@ -1018,7 +1019,7 @@ def py_optimizeA_implicit(
     np.ndarray[long, ndim=1] Xcsr_p,
     np.ndarray[int, ndim=1] Xcsr_i,
     np.ndarray[double, ndim=1] Xcsr,
-    double lam, double alpha,
+    double lam, double alpha, double w,
     int nthreads,
     np.ndarray[double, ndim=1] buffer_double
     ):
@@ -1031,9 +1032,10 @@ def py_optimizeA_implicit(
         &B[0,0], ldb,
         m, n, k,
         &Xcsr_p[0], &Xcsr_i[0], &Xcsr[0],
-        lam, alpha,
+        lam, alpha, w,
         nthreads,
         0, 0, 1,
+        <double*>NULL,
         &buffer_double[0]
     )
     return A
