@@ -3772,15 +3772,14 @@ void optimizeA_collective_implicit
         if (k_user > 0 && !use_cg)
         {
             size_t diff = (size_t)square(k_totA) - (size_t)square(k+k_main);
-            copy_arr(buffer_FPnum + diff, precomputedBtB,
-                     square(k+k_main), nthreads);
-            set_to_zero(precomputedBtB, square(k_totA), 1);
-            copy_mat(
-                square(k+k_main), square(k+k_main),
-                buffer_FPnum + diff, square(k+k_main),
-                precomputedBtB + k_user + k_user*k_totA, square(k_totA)
-            );
             buffer_FPnum += diff;
+            copy_arr(precomputedBtB, buffer_FPnum, square(k+k_main), nthreads);
+            set_to_zero(precomputedBtB, square(k_totA), nthreads);
+            copy_mat(
+                k+k_main, k+k_main,
+                buffer_FPnum, k+k_main,
+                precomputedBtB + k_user + k_user*k_totA, k_totA
+            );
         }
     }
 
@@ -3809,26 +3808,43 @@ void optimizeA_collective_implicit
 
     /* Lower-right square of Be */
     FPnum *restrict precomputedBeTBe = NULL;
-    if (!precalculated_BtB)
-    {
-        precomputedBtB = buffer_FPnum;
-        if (use_cg)
-            buffer_FPnum += square(k+k_main);
-        else
-            buffer_FPnum += square(k_totA);
-    }
-    /* Note: 'precomputedBtB' will have different sizes for CG and Cholesky */
     if (!use_cg || precomputedBeTBeChol != NULL) {
         precomputedBeTBe = buffer_FPnum;
         buffer_FPnum += square(k_totA);
     }
+    if (!precalculated_BtB)
+    {
+        precomputedBtB = buffer_FPnum;
+        buffer_FPnum += use_cg? (square(k+k_main)) : (square(k_totA));
+    }
+    /* Note: 'precomputedBtB' will have different sizes for CG and Cholesky */
     FPnum *restrict buffer_remainder = buffer_FPnum;
 
     if (precomputedBeTBe != NULL)
     {
         if (precalculated_BtB)
         {
-            copy_arr(precomputedBtB, precomputedBeTBe, square(k_totA),nthreads);
+            if (!use_cg || k_user == 0)
+                copy_arr(precomputedBtB, precomputedBeTBe,
+                         square(k_totA), nthreads);
+            else {
+                set_to_zero(precomputedBeTBe, square(k_totA), nthreads);
+                copy_mat(
+                    k+k_main, k+k_main,
+                    precomputedBtB, k+k_main,
+                    precomputedBeTBe + k_user + k_user*k_totA, k_totA
+                );
+            }
+
+            if (!use_cg)
+            {
+                if (w_main != 1.)
+                    tscal_large(precomputedBeTBe + k_user + k_user*k_totA,
+                                w_main,
+                                square(k_totA) -(k_user + k_user*k_totA)-k_main,
+                                nthreads);
+                add_to_diag(precomputedBeTBe, lam, k_totA);
+            }
         }
 
         else
@@ -3854,7 +3870,7 @@ void optimizeA_collective_implicit
                          square(k_totA), nthreads);
         }
     }
-    else if (!precalculated_BtB) {
+    else if (!precalculated_BtB && use_cg) {
         cblas_tsyrk(CblasRowMajor, CblasUpper, CblasTrans,
                     k+k_main, n,
                     1., B + k_item, k_totB,
