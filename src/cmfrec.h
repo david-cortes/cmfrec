@@ -243,8 +243,8 @@ void nan_to_zero(FPnum *restrict arr, FPnum *restrict comp, size_t n, int nthrea
 void mult_if_non_nan(FPnum *restrict arr, FPnum *restrict comp, FPnum *restrict w, size_t n, int nthreads);
 void mult_elemwise(FPnum *restrict inout, FPnum *restrict other, size_t n, int nthreads);
 FPnum sum_squares(FPnum *restrict arr, size_t n, int nthreads);
-void saxpy_large(FPnum *restrict A, FPnum x, FPnum *restrict Y, size_t n, int nthreads);
-void sscal_large(FPnum *restrict arr, FPnum alpha, size_t n, int nthreads);
+void taxpy_large(FPnum *restrict A, FPnum x, FPnum *restrict Y, size_t n, int nthreads);
+void tscal_large(FPnum *restrict arr, FPnum alpha, size_t n, int nthreads);
 int rnorm(FPnum *restrict arr, size_t n, int seed, int nthreads);
 void reduce_mat_sum(FPnum *restrict outp, size_t lda, FPnum *restrict inp,
                     int m, int n, int nthreads);
@@ -758,6 +758,7 @@ void collective_closed_form_block_implicit
     FPnum *restrict precomputedBeTBe,
     FPnum *restrict precomputedBtB,
     FPnum *restrict precomputedBeTBeChol,
+    FPnum *restrict precomputedCtCw,
     bool add_U, bool shapes_match,
     bool use_cg, int max_cg_steps,
     FPnum *restrict buffer_FPnum

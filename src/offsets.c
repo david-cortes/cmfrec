@@ -382,7 +382,7 @@ FPnum offsets_fun_grad
 
     /* If all matrices have the same regulatization, can do it in one pass */
     if (lam_unique == NULL) {
-        saxpy_large(values, lam, grad, nvars, nthreads);
+        taxpy_large(values, lam, grad, nvars, nthreads);
         f += (lam / 2.) * sum_squares(values, nvars, nthreads);
     }
 
@@ -390,15 +390,15 @@ FPnum offsets_fun_grad
         long double freg = 0;
         if (user_bias) cblas_taxpy(m, lam_unique[0], biasA, 1, g_biasA, 1);
         if (item_bias) cblas_taxpy(n, lam_unique[1], biasB, 1, g_biasB, 1);
-        saxpy_large(A, lam_unique[2], g_A, (size_t)m*(size_t)k_szA, nthreads);
-        saxpy_large(B, lam_unique[3], g_B, (size_t)n*(size_t)k_szB, nthreads);
+        taxpy_large(A, lam_unique[2], g_A, (size_t)m*(size_t)k_szA, nthreads);
+        taxpy_large(B, lam_unique[3], g_B, (size_t)n*(size_t)k_szB, nthreads);
 
         if (has_U)
-            saxpy_large(C, lam_unique[4], g_C,
+            taxpy_large(C, lam_unique[4], g_C,
                         (size_t)(p + (int)add_intercepts)*(size_t)(k_sec+k),
                         nthreads);
         if (has_I)
-            saxpy_large(D, lam_unique[5], g_D,
+            taxpy_large(D, lam_unique[5], g_D,
                         (size_t)(q + (int)add_intercepts)*(size_t)(k_sec+k),
                         nthreads);
 

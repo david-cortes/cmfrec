@@ -404,7 +404,7 @@ FPnum sum_squares(FPnum *restrict arr, size_t n, int nthreads)
     return (FPnum)res;
 }
 
-void saxpy_large(FPnum *restrict A, FPnum x, FPnum *restrict Y, size_t n, int nthreads)
+void taxpy_large(FPnum *restrict A, FPnum x, FPnum *restrict Y, size_t n, int nthreads)
 {
     if (n < (size_t)INT_MAX)
         cblas_taxpy((int)n, x, A, 1, Y, 1);
@@ -422,7 +422,7 @@ void saxpy_large(FPnum *restrict A, FPnum x, FPnum *restrict Y, size_t n, int nt
     }
 }
 
-void sscal_large(FPnum *restrict arr, FPnum alpha, size_t n, int nthreads)
+void tscal_large(FPnum *restrict arr, FPnum alpha, size_t n, int nthreads)
 {
     if (n < (size_t)INT_MAX)
         cblas_tscal((int)n, alpha, arr, 1);
@@ -634,7 +634,7 @@ void sum_mat
 )
 {
     if (lda == n && ldb == n)
-        saxpy_large(A, 1., B, (size_t)m*(size_t)n, 1);
+        taxpy_large(A, 1., B, (size_t)m*(size_t)n, 1);
     else
         for (int row = 0; row < m; row++)
             for (int col = 0; col < n; col++)

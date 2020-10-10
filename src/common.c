@@ -519,7 +519,7 @@ FPnum fun_grad_cannonical_form
 
             #pragma omp barrier
             if (scaling != 1.)
-                sscal_large(g_biasA, scaling,
+                tscal_large(g_biasA, scaling,
                             (user_bias? m : 0)
                             + (item_bias? n : 0)
                             + m*lda + n*ldb,
@@ -1521,7 +1521,7 @@ void add_lam_to_grad_and_fun
     #endif
     if (lda == k)
     {
-        saxpy_large(A, lam, grad, (size_t)m*(size_t)k, nthreads);
+        taxpy_large(A, lam, grad, (size_t)m*(size_t)k, nthreads);
         *fun += lam * sum_squares(A, (size_t)m*(size_t)k, nthreads);
     }
 

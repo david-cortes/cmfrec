@@ -605,7 +605,7 @@ FPnum collective_fun_grad
 
     /* If all matrices have the same regulatization, can do it in one pass */
     if (lam_unique == NULL) {
-        saxpy_large(values, lam, grad, nvars, nthreads);
+        taxpy_large(values, lam, grad, nvars, nthreads);
         f += (lam / 2.) * sum_squares(values, nvars, nthreads);
     }
 
@@ -618,14 +618,14 @@ FPnum collective_fun_grad
 
         if (user_bias) cblas_taxpy(m_max, lam_unique[0], biasA, 1, g_biasA, 1);
         if (item_bias) cblas_taxpy(n_max, lam_unique[1], biasB, 1, g_biasB, 1);
-        saxpy_large(A, lam_unique[2],g_A,(size_t)m_max*(size_t)k_totA,nthreads);
-        saxpy_large(B, lam_unique[3],g_B,(size_t)n_max*(size_t)k_totB,nthreads);
+        taxpy_large(A, lam_unique[2],g_A,(size_t)m_max*(size_t)k_totA,nthreads);
+        taxpy_large(B, lam_unique[3],g_B,(size_t)n_max*(size_t)k_totB,nthreads);
 
         if (U != NULL || U_sp != NULL || U_csr != NULL || Ub != NULL)
-            saxpy_large(C, lam_unique[4], g_C,
+            taxpy_large(C, lam_unique[4], g_C,
                         (size_t)(p+pbin)*(size_t)(k_user+k), nthreads);
         if (II != NULL || I_sp != NULL || I_csr != NULL || Ib != NULL)
-            saxpy_large(D, lam_unique[5], g_D,
+            taxpy_large(D, lam_unique[5], g_D,
                         (size_t)(q+qbin)*(size_t)(k_item+k), nthreads);
 
         if (user_bias)
@@ -1220,6 +1220,9 @@ void collective_closed_form_block
                            B + (size_t)k_item +(size_t)ixB[ix]*(size_t)k_totB,1,
                            bufferBeTBe + k_user + k_user*k_tot, k_tot);
         }
+
+        /* Note: nothing extra is required when having 'NA_as_zero_X' without
+           weights, hence the if-else chain stops without checking for it. */
     }
 
     else if (Xa_dense != NULL)
@@ -1380,6 +1383,7 @@ void collective_closed_form_block_implicit
     FPnum *restrict precomputedBeTBe,
     FPnum *restrict precomputedBtB,
     FPnum *restrict precomputedBeTBeChol,
+    FPnum *restrict precomputedCtCw,
     bool add_U, bool shapes_match,
     bool use_cg, int max_cg_steps,
     FPnum *restrict buffer_FPnum
@@ -1403,8 +1407,10 @@ void collective_closed_form_block_implicit
     int k_totA = k_user + k + k_main;
     size_t k_totB = k_item + k + k_main;
     int k_totC = k_user + k;
-    alpha *= w_main;
+    if (!use_cg)
+        alpha *= w_main;
     bool few_NAs = (u_vec != NULL && (FPnum)cnt_NA_u < 0.1*(FPnum)p);
+    /* TODO: revisit the calculation for 'few_NAs' */
     if ((add_U || cnt_NA_u > 0) && !use_cg)
         set_to_zero(a_vec, k_totA, 1);
 
@@ -1418,6 +1424,26 @@ void collective_closed_form_block_implicit
                        precomputedBeTBeChol, &k_totA,
                        a_vec, &k_totA,
                        &ignore);
+    }
+
+    else if (use_cg)
+    {
+        return collective_block_cg_implicit(
+                a_vec,
+                k, k_user, k_item, k_main,
+                Xa, ixB, nnz,
+                u_vec_ixB, u_vec_sp, nnz_u_vec,
+                u_vec,
+                NA_as_zero_U,
+                B, n,
+                C, p,
+                lam, alpha, w_main, w_user,
+                cnt_NA_u,
+                max_cg_steps,
+                precomputedBtB,
+                precomputedCtCw,
+                buffer_FPnum
+            );
     }
     
 
@@ -2092,8 +2118,8 @@ void collective_block_cg_implicit
     FPnum lam, FPnum alpha, FPnum w_main, FPnum w_user,
     int cnt_NA_u,
     int max_cg_steps,
-    FPnum *restrict precomputedBtBw,
-    FPnum *restrict precomputedCtCw,
+    FPnum *restrict precomputedBtBw, /* should NOT be multiplied by weight */
+    FPnum *restrict precomputedCtCw, /* should NOT be multiplied by weight */
     FPnum *restrict buffer_FPnum
 )
 {
@@ -2515,6 +2541,7 @@ int collective_factors_cold_implicit
         (FPnum*)NULL,
         precomputedBtBw,
         (FPnum*)NULL,
+        (FPnum*)NULL,
         true, true, false, 0,
         buffer_FPnum
     );
@@ -2800,6 +2827,7 @@ int collective_factors_warm_implicit
             lam, alpha, w_main, w_user,
             precomputedBeTBe,
             precomputedBtB,
+            (FPnum*)NULL,
             (FPnum*)NULL,
             true, true, false, 0,
             buffer_FPnum
@@ -3707,48 +3735,99 @@ void optimizeA_collective_implicit
         buffer_FPnum += square(k_totA);
     }
 
-    /* Lower-right square of Be */
-    FPnum *restrict precomputedBeTBe = buffer_FPnum;
-    FPnum *restrict precomputedBtB = precomputedBeTBe + square(k_totA);
-    FPnum *restrict buffer_remainder = precomputedBtB + square(k_totA);
-
-    set_to_zero(precomputedBeTBe, square(k_totA), 1);
-    cblas_tsyrk(CblasRowMajor, CblasUpper, CblasTrans,
-                k+k_main, n,
-                w_main, B + k_item, k_totB,
-                0., precomputedBeTBe + k_user + k_user*k_totA, k_totA);
-    add_to_diag(precomputedBeTBe, lam, k_totA);
-    memcpy(precomputedBtB, precomputedBeTBe, square(k_totA)*sizeof(FPnum));
-
-    /* Upper-left square of Be if possible */
-    if (U != NULL || NA_as_zero_U)
+    FPnum *restrict precomputedCtCw = NULL;
+    bool prefer_CtC = !(U == NULL && U_csr != NULL && !NA_as_zero_U);
+    if (use_cg && prefer_CtC)
     {
+        precomputedCtCw = buffer_FPnum;
+        buffer_FPnum += square(k_user+k);
+
         cblas_tsyrk(CblasRowMajor, CblasUpper, CblasTrans,
                     k_user+k, p,
-                    w_user, C, k_totC,
-                    1., precomputedBeTBe, k_totA);
+                    1., C, k_user+k,
+                    0., precomputedCtCw, k_user+k);
+    }
+
+    /* Lower-right square of Be */
+    FPnum *restrict precomputedBeTBe = NULL;
+    FPnum *restrict precomputedBtB = buffer_FPnum;
+    if (use_cg)
+        buffer_FPnum += square(k+k_main);
+    else
+        buffer_FPnum += square(k_totA);
+    /* Note: 'precomputedBtB' will have different sizes for CG and Cholesky */
+    if (!use_cg || m_u > m_x) {
+        precomputedBeTBe = buffer_FPnum;
+        buffer_FPnum += square(k_totA);
+    }
+    FPnum *restrict buffer_remainder = buffer_FPnum;
+
+    if (precomputedBeTBe != NULL)
+    {
+        set_to_zero(precomputedBeTBe, square(k_totA), 1);
+        cblas_tsyrk(CblasRowMajor, CblasUpper, CblasTrans,
+                    k+k_main, n,
+                    use_cg? 1. : w_main, B + k_item, k_totB,
+                    0., precomputedBeTBe + k_user + k_user*k_totA, k_totA);
+        if (use_cg)
+            copy_mat(
+                k+k_main, k+k_main,
+                precomputedBeTBe, k_totA,
+                precomputedBtB, k+k_main
+            );
+        if (w_main != 1.)
+            tscal_large(precomputedBeTBe, w_main, square(k_totA), nthreads);
+        add_to_diag(precomputedBeTBe, lam, k_totA);
+        if (!use_cg)
+            copy_arr(precomputedBeTBe, precomputedBtB, square(k_totA),nthreads);
+    }
+    else {
+        cblas_tsyrk(CblasRowMajor, CblasUpper, CblasTrans,
+                    k+k_main, n,
+                    1., B + k_item, k_totB,
+                    0., precomputedBtB, k+k_main);
+    }
+
+    /* Upper-left square of Be if possible */
+    if (precomputedBeTBe != NULL && (U != NULL || NA_as_zero_U))
+    {
+        if (precomputedCtCw != NULL && w_user == 1.)
+            sum_mat(
+                k_user+k, k_user+k,
+                precomputedBeTBe, k_totA,
+                precomputedCtCw, k_user+k
+            );
+        else
+            cblas_tsyrk(CblasRowMajor, CblasUpper, CblasTrans,
+                        k_user+k, p,
+                        w_user, C, k_totC,
+                        1., precomputedBeTBe, k_totA);
     }
 
     /* Lower half of Xe (reuse if possible) */
-    if (U != NULL) {
-        cblas_tgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,
-                    m_u, k_user + k, p,
-                    w_user, U, p, C, k_totC,
-                    0., A, k_totA);
-    }
-    else {
-        sgemm_sp_dense(
-            m_u, k_user + k, w_user,
-            U_csr_p, U_csr_i, U_csr,
-            C, k_totC,
-            A, k_totA,
-            nthreads
-        );
+    if (!use_cg)
+    {
+        if (U != NULL) {
+            cblas_tgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,
+                        m_u, k_user + k, p,
+                        w_user, U, p, C, k_totC,
+                        0., A, k_totA);
+        }
+        else {
+            sgemm_sp_dense(
+                m_u, k_user + k, w_user,
+                U_csr_p, U_csr_i, U_csr,
+                C, k_totC,
+                A, k_totA,
+                nthreads
+            );
+        }
     }
 
     /* If there are no positive entries for some X and no missing values
        in U, can reuse a single Cholesky factorization for them. */
-    if (m_u > m_x) {
+    if (m_u > m_x && precomputedBeTBeChol != NULL)
+    {
         copy_arr(precomputedBeTBe, precomputedBeTBeChol,
                  square(k_totA), nthreads);
         char lo = 'L';
@@ -3757,7 +3836,7 @@ void optimizeA_collective_implicit
 
     m = max2(m, m_u);
 
-    size_t size_buffer = square(k_totA);
+    size_t size_buffer = use_cg? (3 * k_totA) : (square(k_totA));
 
     #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
             shared(A, B, C, m, n, p, k, k_user, k_item, k_main, lam, alpha, \
@@ -3782,6 +3861,7 @@ void optimizeA_collective_implicit
             precomputedBeTBe,
             precomputedBtB,
             precomputedBeTBeChol,
+            precomputedCtCw,
             false, true, use_cg, max_cg_steps,
             buffer_remainder + ((size_t)omp_get_thread_num() * size_buffer)
         );
