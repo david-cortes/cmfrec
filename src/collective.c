@@ -1527,11 +1527,6 @@ void collective_block_cg
     bool prefer_BtB = max2((size_t)cnt_NA_x, nnz) < (size_t)(2*(k+k_main));
     bool prefer_CtC = max2((size_t)cnt_NA_u,nnz_u_vec) < (size_t)(2*(k+k_user));
 
-    /* TODO: delete */
-    prefer_BtB = true;
-    prefer_CtC = true;
-    /* end of delete */
-
     /* TODO: this function can be simplified. Many of the code paths are
        redundant and/or do not provide a speed up - these are a result of
        earlier experimentation which was not porperly cleaned up later. */

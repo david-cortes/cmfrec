@@ -719,31 +719,31 @@ void factors_closed_form
         copy_mat(k, k,
                  precomputedBtBw + strideBtB, k + strideBtB,
                  bufferBtB, k);
-        for (size_t ix = 0; ix < (size_t)n; ix++) {
-            if (isnan(Xa_dense[ix])) {
-                cblas_tsyr(CblasRowMajor, CblasUpper, k,
-                           -w, B + ix*(size_t)ldb, 1,
-                           bufferBtB, k);
-                Xa_dense[ix] = 0;
-            }
-        }
-
-        cblas_tgemv(CblasRowMajor, CblasTrans,
-                    n, k,
-                    w, B, ldb, Xa_dense, 1,
-                    0., a_vec, 1);
-
-        // set_to_zero(a_vec, k, 1);
-        // for (size_t ix = 0; ix < (size_t)n; ix++)
-        // {
-        //     if (isnan(Xa_dense[ix]))
+        // for (size_t ix = 0; ix < (size_t)n; ix++) {
+        //     if (isnan(Xa_dense[ix])) {
         //         cblas_tsyr(CblasRowMajor, CblasUpper, k,
         //                    -w, B + ix*(size_t)ldb, 1,
         //                    bufferBtB, k);
-        //     else
-        //         cblas_taxpy(k, Xa_dense[ix], B + ix*(size_t)ldb, 1, a_vec, 1);
+        //         Xa_dense[ix] = 0;
+        //     }
         // }
-        // if (w != 1.) cblas_tscal(k, w, a_vec, 1);
+
+        // cblas_tgemv(CblasRowMajor, CblasTrans,
+        //             n, k,
+        //             w, B, ldb, Xa_dense, 1,
+        //             0., a_vec, 1);
+
+        set_to_zero(a_vec, k, 1);
+        for (size_t ix = 0; ix < (size_t)n; ix++)
+        {
+            if (isnan(Xa_dense[ix]))
+                cblas_tsyr(CblasRowMajor, CblasUpper, k,
+                           -w, B + ix*(size_t)ldb, 1,
+                           bufferBtB, k);
+            else
+                cblas_taxpy(k, Xa_dense[ix], B + ix*(size_t)ldb, 1, a_vec, 1);
+        }
+        if (w != 1.) cblas_tscal(k, w, a_vec, 1);
     }
 
     /* If the input is sparse and it's assumed that the non-present
@@ -842,6 +842,7 @@ void factors_closed_form
                 B, n, ldb,
                 Xa, ixB, nnz,
                 weight,
+                precomputedBtBw,
                 buffer_FPnum,
                 lam, w, lam_last,
                 max_cg_steps
@@ -1062,6 +1063,7 @@ void factors_explicit_cg_NA_as_zero_weighted
     FPnum *restrict B, int n, int ldb,
     FPnum *restrict Xa, int ixB[], size_t nnz,
     FPnum *restrict weight,
+    FPnum *restrict precomputedBtBw, /* should NOT be multiplied by 'w' */
     FPnum *restrict buffer_FPnum,
     FPnum lam, FPnum w, FPnum lam_last,
     int max_cg_steps
@@ -1073,7 +1075,9 @@ void factors_explicit_cg_NA_as_zero_weighted
     FPnum *restrict wr = r  + k; /* length is 'n' */
     set_to_zero(r, k, 1);
     FPnum a;
-    FPnum r_old, r_new;
+    FPnum r_old, r_new, coef;
+
+    bool prefer_BtB = nnz < (size_t)(2*k);
 
     if (w != 1.) {
         lam /= w;
@@ -1085,18 +1089,38 @@ void factors_explicit_cg_NA_as_zero_weighted
                             weight, B, (size_t)ldb,
                             ixB, Xa, nnz,
                             r);
-    cblas_tgemv(CblasRowMajor, CblasNoTrans,
-                n, k,
-                -1., B, k,
-                a_vec, 1,
-                0., wr, 1);
-    for (size_t ix = 0; ix < nnz; ix++)
-        wr[ixB[ix]] *= weight[ix];
-    cblas_tgemv(CblasRowMajor, CblasTrans,
-                n, k,
-                1., B, k,
-                wr, 1,
-                1., r, 1);
+    if (precomputedBtBw != NULL && prefer_BtB)
+    {
+        cblas_tsymv(CblasRowMajor, CblasUpper, k,
+                    -1., precomputedBtBw, k,
+                    a_vec, 1,
+                    1., r, 1);
+        for (size_t ix = 0; ix < nnz; ix++)
+        {
+            coef = cblas_tdot(k,
+                              B + (size_t)ixB[ix]*(size_t)ldb, 1,
+                              a_vec, 1);
+            cblas_taxpy(k, -((weight[ix]-1.) * coef),
+                        B + ix*(size_t)ldb, 1,
+                        r, 1);
+        }
+    }
+
+    else
+    {
+        cblas_tgemv(CblasRowMajor, CblasNoTrans,
+                    n, k,
+                    -1., B, ldb,
+                    a_vec, 1,
+                    0., wr, 1);
+        for (size_t ix = 0; ix < nnz; ix++)
+            wr[ixB[ix]] *= weight[ix];
+        cblas_tgemv(CblasRowMajor, CblasTrans,
+                    n, k,
+                    1., B, ldb,
+                    wr, 1,
+                    1., r, 1);
+    }
 
 
     cblas_taxpy(k, -lam, a_vec, 1, r, 1);
@@ -1116,18 +1140,37 @@ void factors_explicit_cg_NA_as_zero_weighted
 
     for (int cg_step = 0; cg_step < max_cg_steps; cg_step++)
     {
-        cblas_tgemv(CblasRowMajor, CblasNoTrans,
-                    n, k,
-                    1., B, ldb,
-                    p, 1,
-                    0., wr, 1);
-        for (size_t ix = 0; ix < nnz; ix++)
-            wr[ixB[ix]] *= weight[ix];
-        cblas_tgemv(CblasRowMajor, CblasTrans,
-                    n, k,
-                    1., B, ldb,
-                    wr, 1,
-                    0., Ap, 1);
+        if (precomputedBtBw != NULL && prefer_BtB)
+        {
+            cblas_tsymv(CblasRowMajor, CblasUpper, k,
+                        1., precomputedBtBw, k,
+                        p, 1,
+                        0., Ap, 1);
+            for (size_t ix = 0; ix < nnz; ix++) {
+                coef = cblas_tdot(k,
+                                  B + (size_t)ixB[ix]*(size_t)ldb, 1,
+                                  p, 1);
+                cblas_taxpy(k, (weight[ix] - 1.) * coef,
+                            B + (size_t)ixB[ix]*(size_t)ldb, 1,
+                            Ap, 1);
+            }
+        }
+
+        else
+        {
+            cblas_tgemv(CblasRowMajor, CblasNoTrans,
+                        n, k,
+                        1., B, ldb,
+                        p, 1,
+                        0., wr, 1);
+            for (size_t ix = 0; ix < nnz; ix++)
+                wr[ixB[ix]] *= weight[ix];
+            cblas_tgemv(CblasRowMajor, CblasTrans,
+                        n, k,
+                        1., B, ldb,
+                        wr, 1,
+                        0., Ap, 1);
+        }
 
         cblas_taxpy(k, lam, p, 1, Ap, 1);
         if (lam != lam_last)
@@ -1691,8 +1734,10 @@ void optimizeA
     #endif
     char uplo = 'L';
     int ignore;
-    lam /= w; /* 'w' and 'lam' only matter relative to each other */
-    lam_last /= w;
+    if (w != 1.) {
+        lam /= w; /* 'w' and 'lam' only matter relative to each other */
+        lam_last /= w;
+    }
 
     /* Case 1: X is full dense with few or no missing values.
        Here can apply the closed-form solution with only
@@ -1949,7 +1994,7 @@ void optimizeA
     {
         /* When NAs are treated as zeros, can use a precomputed t(B)*B */
         FPnum *restrict bufferBtB = NULL;
-        if (Xfull == NULL && NA_as_zero && !use_cg)
+        if (Xfull == NULL && NA_as_zero && (!use_cg || weight != NULL))
         {
             bufferBtB = buffer_FPnum;
             buffer_FPnum += square(k);
@@ -1957,8 +2002,11 @@ void optimizeA
                         k, n,
                         1., B, ldb,
                         0., bufferBtB, k);
-            add_to_diag(bufferBtB, lam, k);
-            if (lam_last != lam) bufferBtB[square(k)-1] += (lam_last - lam);
+            if (!(use_cg && Xfull == NULL && NA_as_zero))
+            {
+                add_to_diag(bufferBtB, lam, k);
+                if (lam_last != lam) bufferBtB[square(k)-1] += (lam_last - lam);
+            }
         }
 
         size_t size_buffer = square(k);

@@ -416,6 +416,7 @@ void factors_explicit_cg_NA_as_zero_weighted
     FPnum *restrict B, int n, int ldb,
     FPnum *restrict Xa, int ixB[], size_t nnz,
     FPnum *restrict weight,
+    FPnum *restrict precomputedBtBw,
     FPnum *restrict buffer_FPnum,
     FPnum lam, FPnum w, FPnum lam_last,
     int max_cg_steps
