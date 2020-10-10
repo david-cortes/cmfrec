@@ -18,6 +18,11 @@
             "Collaborative filtering for implicit feedback datasets."
             2008 Eighth IEEE International Conference on Data Mining.
             Ieee, 2008.
+        (d) Takacs, Gabor, Istvan Pilaszy, and Domonkos Tikk.
+            "Applications of the conjugate gradient method for
+            implicit feedback collaborative filtering."
+            Proceedings of the fifth ACM conference on
+            Recommender systems. 2011.
 
     For information about the models offered here and how they are fit to
     the data, see the files 'collective.c' and 'offsets.c'.
@@ -565,7 +570,7 @@ void sgemm_sp_dense
 }
 
 /* x <- alpha*t(A)*v + x | A[m,n] is dense, v[m] is sparse, x[n] is dense */
-void sgemv_dense_sp
+void tgemv_dense_sp
 (
     int m, int n,
     FPnum alpha, FPnum DenseMat[], size_t lda,
@@ -578,7 +583,7 @@ void sgemv_dense_sp
 }
 
 /* Same but with an array of weights */
-void sgemv_dense_sp_weighted
+void tgemv_dense_sp_weighted
 (
     int m, int n,
     FPnum alpha[], FPnum DenseMat[], size_t lda,
@@ -591,7 +596,7 @@ void sgemv_dense_sp_weighted
 }
 
 /* Same, but with both array of weights and scalar weight */
-void sgemv_dense_sp_weighted2
+void tgemv_dense_sp_weighted2
 (
     int m, int n,
     FPnum alpha[], FPnum alpha2, FPnum DenseMat[], size_t lda,

@@ -175,7 +175,6 @@ void tgels_(const char*, const int*, const int*, const int*,
             const FPnum*, const int*, const int*);
 #endif
 
-#if !defined(_WIN32) && !defined(_WIN64) && !defined(_MSC_VER)
 #ifndef CBLAS_H
 typedef enum CBLAS_ORDER     {CblasRowMajor=101, CblasColMajor=102} CBLAS_ORDER;
 typedef enum CBLAS_TRANSPOSE {CblasNoTrans=111, CblasTrans=112, CblasConjTrans=113, CblasConjNoTrans=114} CBLAS_TRANSPOSE;
@@ -197,7 +196,8 @@ void cblas_tgemv(const CBLAS_ORDER order,  const CBLAS_TRANSPOSE trans,  const i
 void cblas_tsymv(const CBLAS_ORDER order, const CBLAS_UPLO Uplo, const int N, const FPnum alpha, const FPnum *A,
                  const int lda, const FPnum *X, const int incX, const FPnum beta, FPnum *Y, const int incY);
 #endif
-#endif
+
+/* TODO: maybe should add LAPACK function prototypes here */
 
 #include "lbfgs.h"
 
@@ -259,21 +259,21 @@ void sgemm_sp_dense
     FPnum OutputMat[], size_t ldc,
     int nthreads
 );
-void sgemv_dense_sp
+void tgemv_dense_sp
 (
     int m, int n,
     FPnum alpha, FPnum DenseMat[], size_t lda,
     int ixB[], FPnum vec_sp[], size_t nnz,
     FPnum OutputVec[]
 );
-void sgemv_dense_sp_weighted
+void tgemv_dense_sp_weighted
 (
     int m, int n,
     FPnum alpha[], FPnum DenseMat[], size_t lda,
     int ixB[], FPnum vec_sp[], size_t nnz,
     FPnum OutputVec[]
 );
-void sgemv_dense_sp_weighted2
+void tgemv_dense_sp_weighted2
 (
     int m, int n,
     FPnum alpha[], FPnum alpha2, FPnum DenseMat[], size_t lda,
@@ -521,9 +521,16 @@ void buffer_size_optimizeA
 (
     size_t *buffer_size, size_t *buffer_lbfgs_size,
     int m, int n, int k, int lda, int nthreads,
-    bool do_B, bool NA_as_zero, bool use_cg,
+    bool do_B, bool NA_as_zero,
+    bool use_cg, bool finalize_chol,
     bool full_dense, bool near_dense,
     bool has_dense, bool has_weight
+);
+void buffer_size_optimizeA_implicit
+(
+    size_t *buffer_size,
+    int k, int nthreads,
+    bool use_cg, bool finalize_chol
 );
 void optimizeA
 (
@@ -768,6 +775,8 @@ void collective_block_cg
     FPnum *restrict weight,
     FPnum lam, FPnum w_user, FPnum w_main, FPnum lam_last,
     int cnt_NA_x, int cnt_NA_u,
+    FPnum *restrict precomputedBtBw,
+    FPnum *restrict precomputedCtCw,
     int max_cg_steps,
     FPnum *restrict buffer_FPnum
 );
@@ -785,6 +794,7 @@ void collective_block_cg_implicit
     int cnt_NA_u,
     int max_cg_steps,
     FPnum *restrict precomputedBtBw,
+    FPnum *restrict precomputedCtCw,
     FPnum *restrict buffer_FPnum
 );
 void optimizeA_collective_implicit
@@ -912,7 +922,8 @@ void buffer_size_optimizeA_collective
     size_t *buffer_size, size_t *buffer_lbfgs_size,
     int m, int n, int k, int k_user, int k_main, int padding,
     int m_u, int p, int nthreads,
-    bool do_B, bool NA_as_zero_X, bool NA_as_zero_U, bool use_cg,
+    bool do_B, bool NA_as_zero_X, bool NA_as_zero_U,
+    bool use_cg, bool finalize_chol,
     bool full_dense, bool near_dense,
     bool has_dense, bool has_weight,
     bool full_dense_u, bool near_dense_u, bool has_dense_u

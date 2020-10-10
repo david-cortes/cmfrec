@@ -18,6 +18,11 @@
             "Collaborative filtering for implicit feedback datasets."
             2008 Eighth IEEE International Conference on Data Mining.
             Ieee, 2008.
+        (d) Takacs, Gabor, Istvan Pilaszy, and Domonkos Tikk.
+            "Applications of the conjugate gradient method for
+            implicit feedback collaborative filtering."
+            Proceedings of the fifth ACM conference on
+            Recommender systems. 2011.
 
     For information about the models offered here and how they are fit to
     the data, see the files 'collective.c' and 'offsets.c'.
@@ -525,7 +530,7 @@ int offsets_factors_cold
                     u_vec, 1,
                     0., a_vec, 1);
     else {
-        sgemv_dense_sp(p, k_pred,
+        tgemv_dense_sp(p, k_pred,
                        w_user, C, k_sec+k,
                        u_vec_ixB, u_vec_sp, nnz_u_vec,
                        a_vec);
@@ -1454,7 +1459,7 @@ void factors_content_based
     else
     {
         set_to_zero(a_vec, k_sec, 1);
-        sgemv_dense_sp(
+        tgemv_dense_sp(
             p, k_sec,
             1., C, (size_t)k_sec,
             u_vec_ixB, u_vec_sp, nnz_u_vec,

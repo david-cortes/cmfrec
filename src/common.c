@@ -732,6 +732,18 @@ void factors_closed_form
                     n, k,
                     w, B, ldb, Xa_dense, 1,
                     0., a_vec, 1);
+
+        // set_to_zero(a_vec, k, 1);
+        // for (size_t ix = 0; ix < (size_t)n; ix++)
+        // {
+        //     if (isnan(Xa_dense[ix]))
+        //         cblas_tsyr(CblasRowMajor, CblasUpper, k,
+        //                    -w, B + ix*(size_t)ldb, 1,
+        //                    bufferBtB, k);
+        //     else
+        //         cblas_taxpy(k, Xa_dense[ix], B + ix*(size_t)ldb, 1, a_vec, 1);
+        // }
+        // if (w != 1.) cblas_tscal(k, w, a_vec, 1);
     }
 
     /* If the input is sparse and it's assumed that the non-present
@@ -741,7 +753,7 @@ void factors_closed_form
              Xa_dense == NULL && precomputedBtBchol != NULL)
     {
         set_to_zero(a_vec, k, 1);
-        sgemv_dense_sp(n, k,
+        tgemv_dense_sp(n, k,
                        w, B, (size_t)ldb,
                        ixB, Xa, nnz,
                        a_vec);
@@ -791,7 +803,7 @@ void factors_closed_form
         }
 
         else {
-            sgemv_dense_sp(n, k,
+            tgemv_dense_sp(n, k,
                            1., B, (size_t)ldb,
                            ixB, Xa, nnz,
                            a_vec);
@@ -874,14 +886,14 @@ void factors_closed_form
            stored in 'a_vec', despite the name */
         set_to_zero(a_vec, k, 1);
         if (weight == NULL) {
-            sgemv_dense_sp(n, k,
+            tgemv_dense_sp(n, k,
                            1., B, (size_t)ldb,
                            ixB, Xa, nnz,
                            a_vec);
         }
 
         else {
-            sgemv_dense_sp_weighted(n, k,
+            tgemv_dense_sp_weighted(n, k,
                                     weight, B, (size_t)ldb,
                                     ixB, Xa, nnz,
                                     a_vec);
@@ -983,12 +995,12 @@ void factors_explicit_cg
     }
 
     if (weight == NULL)
-        sgemv_dense_sp(n, k,
+        tgemv_dense_sp(n, k,
                        1., B, (size_t)ldb,
                        ixB, Xa, nnz,
                        r);
     else
-        sgemv_dense_sp_weighted(n, k,
+        tgemv_dense_sp_weighted(n, k,
                                 weight, B, (size_t)ldb,
                                 ixB, Xa, nnz,
                                 r);
@@ -1069,7 +1081,7 @@ void factors_explicit_cg_NA_as_zero_weighted
     }
 
 
-    sgemv_dense_sp_weighted(n, k,
+    tgemv_dense_sp_weighted(n, k,
                             weight, B, (size_t)ldb,
                             ixB, Xa, nnz,
                             r);
@@ -1550,11 +1562,40 @@ void buffer_size_optimizeA
 (
     size_t *buffer_size, size_t *buffer_lbfgs_size,
     int m, int n, int k, int lda, int nthreads,
-    bool do_B, bool NA_as_zero, bool use_cg,
+    bool do_B, bool NA_as_zero,
+    bool use_cg, bool finalize_chol,
     bool full_dense, bool near_dense,
     bool has_dense, bool has_weight
 )
 {
+    if (finalize_chol)
+    {
+        size_t buffer_size_cg = 0;
+        size_t buffer_size_chol = 0;
+        size_t buffer_lbfgs_size_cg = 0;
+        size_t buffer_lbfgs_size_chol = 0;
+        buffer_size_optimizeA(
+            &buffer_size_chol, &buffer_lbfgs_size_chol,
+            m, n, k, lda, nthreads,
+            do_B, NA_as_zero,
+            true, false,
+            full_dense, near_dense,
+            has_dense, has_weight
+        );
+        buffer_size_optimizeA(
+            &buffer_size_cg, &buffer_lbfgs_size_cg,
+            m, n, k, lda, nthreads,
+            do_B, NA_as_zero,
+            false, false,
+            full_dense, near_dense,
+            has_dense, has_weight
+        );
+
+        *buffer_size = max2(buffer_size_cg, buffer_size_chol);
+        *buffer_lbfgs_size = max2(buffer_lbfgs_size_cg, buffer_lbfgs_size_chol);
+        return;
+    }
+
     if (has_dense && (full_dense || near_dense) && !has_weight)
     {
         *buffer_size = (size_t)2 * (size_t)square(k);
@@ -1594,6 +1635,35 @@ void buffer_size_optimizeA
             *buffer_size += square(k);
 
     }
+}
+
+void buffer_size_optimizeA_implicit
+(
+    size_t *buffer_size,
+    int k, int nthreads,
+    bool use_cg, bool finalize_chol
+)
+{
+    if (finalize_chol)
+    {
+        size_t buffer_size_chol = 0;
+        size_t buffer_size_cg = 0;
+        buffer_size_optimizeA_implicit(
+            &buffer_size_chol,
+            k, nthreads,
+            false, false
+        );
+        buffer_size_optimizeA_implicit(
+            &buffer_size_cg,
+            k, nthreads,
+            true, false
+        );
+        *buffer_size = max2(buffer_size_chol, buffer_size_cg);
+        return;
+    }
+
+    size_t size_thread_buffer = use_cg? (3 * k) : (square(k));
+    *buffer_size = (size_t)square(k) + (size_t)nthreads * size_thread_buffer;
 }
 
 void optimizeA
@@ -1717,6 +1787,8 @@ void optimizeA
                 }
         }
     }
+
+    /* TODO: avoid using L-BFGS when using 'use_cg' */
 
     /* Case 2: X is dense, but has many missing values or has weights.
        Here will do them all individually, pre-calculating only

@@ -1107,6 +1107,7 @@ void collective_closed_form_block
             weight,
             lam, w_user, w_main, lam_last,
             cnt_NA_x, cnt_NA_u,
+            precomputedBtBw, precomputedCtCw,
             max_cg_steps,
             buffer_FPnum
         );
@@ -1284,14 +1285,14 @@ void collective_closed_form_block
         else
         {
             if (weight == NULL) {
-                sgemv_dense_sp(n, k+k_main,
+                tgemv_dense_sp(n, k+k_main,
                                w_main, B + k_item, (size_t)k_totB,
                                ixB, Xa, nnz,
                                a_vec + k_user);
             }
 
             else {
-                sgemv_dense_sp_weighted2(n, k+k_main,
+                tgemv_dense_sp_weighted2(n, k+k_main,
                                          weight, w_main,
                                          B + k_item, (size_t)k_totB,
                                          ixB, Xa, nnz,
@@ -1310,7 +1311,7 @@ void collective_closed_form_block
                         w_user, C, k_user+k, u_vec, 1,
                         1., a_vec, 1);
         else
-            sgemv_dense_sp(p, k_user+k,
+            tgemv_dense_sp(p, k_user+k,
                            w_user, C, (size_t)k_user+(size_t)k,
                            u_vec_ixB, u_vec_sp, nnz_u_vec,
                            a_vec);
@@ -1383,13 +1384,6 @@ void collective_closed_form_block_implicit
                        a_vec, &k_totA,
                        &ignore);
     }
-
-    else if (nnz == 0 && (
-                (u_vec_sp != NULL && nnz_u_vec == 0)
-                    ||
-                (u_vec != NULL && cnt_NA_u == p)
-            ))
-        return set_to_zero(a_vec, k_totA, 1);
     
 
     if ((u_vec != NULL && few_NAs) || (u_vec == NULL && NA_as_zero_U)) {
@@ -1439,7 +1433,7 @@ void collective_closed_form_block_implicit
                            C + (size_t)u_vec_ixB[ix]*(size_t)k_totC, 1,
                            BtB, k_totA);
         if (add_U)
-            sgemv_dense_sp(p, k_user+k,
+            tgemv_dense_sp(p, k_user+k,
                            w_user, C, (size_t)k_totC,
                            u_vec_ixB, u_vec_sp, nnz_u_vec,
                            a_vec);
@@ -1511,6 +1505,8 @@ void collective_block_cg
     FPnum *restrict weight,
     FPnum lam, FPnum w_user, FPnum w_main, FPnum lam_last,
     int cnt_NA_x, int cnt_NA_u,
+    FPnum *restrict precomputedBtBw, /* should NOT be multiplied by 'w_main' */
+    FPnum *restrict precomputedCtCw, /* should NOT be multiplied by 'w_user' */
     int max_cg_steps,
     FPnum *restrict buffer_FPnum
 )
@@ -1528,6 +1524,13 @@ void collective_block_cg
     FPnum r_new, r_old;
     FPnum a, coef, w_this;
 
+    bool prefer_BtB = max2((size_t)cnt_NA_x, nnz) < (size_t)(2*(k+k_main));
+    bool prefer_CtC = max2((size_t)cnt_NA_u,nnz_u_vec) < (size_t)(2*(k+k_user));
+
+    /* TODO: delete */
+    prefer_BtB = true;
+    prefer_CtC = true;
+    /* end of delete */
 
     /* TODO: this function can be simplified. Many of the code paths are
        redundant and/or do not provide a speed up - these are a result of
@@ -1542,45 +1545,78 @@ void collective_block_cg
                     1., B + k_item, k_totB,
                     Xa_dense, 1,
                     0., r + k_user, 1);
-        for (size_t ix = 0; ix < (size_t)n; ix++) {
-            coef = cblas_tdot(k + k_main,
-                              B + (size_t)k_item + ix*(size_t)k_totB, 1,
-                              a_vec + k_user, 1);
-            cblas_taxpy(k + k_main, -coef,
-                        B + (size_t)k_item + ix*(size_t)k_totB, 1,
-                        r + k_user, 1);
+        if (precomputedBtBw != NULL && prefer_BtB)
+            cblas_tsymv(CblasRowMajor, CblasUpper, k+k_main,
+                        -1., precomputedBtBw, k+k_main,
+                        a_vec + k_user, 1,
+                        1., r + k_user, 1);
+        else
+            for (size_t ix = 0; ix < (size_t)n; ix++) {
+                coef = cblas_tdot(k + k_main,
+                                  B + (size_t)k_item + ix*(size_t)k_totB, 1,
+                                  a_vec + k_user, 1);
+                cblas_taxpy(k + k_main, -coef,
+                            B + (size_t)k_item + ix*(size_t)k_totB, 1,
+                            r + k_user, 1);
         }
     }
 
     else if (Xa_dense != NULL)
     {
-        for (size_t ix = 0; ix < (size_t)n; ix++)
-            if (!isnan(Xa_dense[ix])) {
-                w_this = (weight == NULL)? 1. : weight[ix];
-                cblas_taxpy(k + k_main,
-                            w_this * Xa_dense[ix],
-                            B + (size_t)k_item + ix*(size_t)k_totB, 1,
-                            r + k_user, 1);
-                coef = cblas_tdot(k + k_main,
-                                  B + (size_t)k_item + ix*(size_t)k_totB, 1,
-                                  a_vec + k_user, 1);
-                cblas_taxpy(k + k_main, -w_this * coef,
-                            B + (size_t)k_item + ix*(size_t)k_totB, 1,
-                            r + k_user, 1);
+        if (weight == NULL && precomputedBtBw != NULL && prefer_BtB)
+        {
+            cblas_tsymv(CblasRowMajor, CblasUpper, k+k_main,
+                        -1., precomputedBtBw, k+k_main,
+                        a_vec + k_user, 1,
+                        0., r + k_user, 1);
+            for (size_t ix = 0; ix < (size_t)n; ix++)
+            {
+                if (isnan(Xa_dense[ix])) {
+                    coef = cblas_tdot(k + k_main,
+                                      B + (size_t)k_item + ix*(size_t)k_totB, 1,
+                                      a_vec + k_user, 1);
+                    cblas_taxpy(k + k_main, coef,
+                                B + (size_t)k_item + ix*(size_t)k_totB, 1,
+                                r + k_user, 1);
+                }
+                
+                else {
+                    cblas_taxpy(k + k_main,
+                                Xa_dense[ix],
+                                B + (size_t)k_item + ix*(size_t)k_totB, 1,
+                                r + k_user, 1);
+                }
             }
+        }
+
+        else
+            for (size_t ix = 0; ix < (size_t)n; ix++)
+                if (!isnan(Xa_dense[ix])) {
+                    w_this = (weight == NULL)? 1. : weight[ix];
+                    cblas_taxpy(k + k_main,
+                                w_this * Xa_dense[ix],
+                                B + (size_t)k_item + ix*(size_t)k_totB, 1,
+                                r + k_user, 1);
+                    coef = cblas_tdot(k + k_main,
+                                      B + (size_t)k_item + ix*(size_t)k_totB, 1,
+                                      a_vec + k_user, 1);
+                    cblas_taxpy(k + k_main, -w_this * coef,
+                                B + (size_t)k_item + ix*(size_t)k_totB, 1,
+                                r + k_user, 1);
+                }
     }
 
     else if (NA_as_zero_X)
     {
         if (weight == NULL)
-            sgemv_dense_sp(
+            tgemv_dense_sp(
                 n, k+k_main,
                 1., B + k_item, k_totB,
                 ixB, Xa, nnz,
                 r + k_user
             );
         else {
-            sgemv_dense_sp_weighted(
+            tgemv_dense_sp_weighted(
                 n, k+k_main,
                 weight, B + k_item, k_totB,
                 ixB, Xa, nnz,
@@ -1589,28 +1625,59 @@ void collective_block_cg
         }
         
         if (weight == NULL)
-            for (size_t ix = 0; ix < (size_t)n; ix++) {
-                coef = cblas_tdot(k + k_main,
-                                  B + (size_t)k_item + ix*(size_t)k_totB,
-                                  1,
-                                  a_vec + k_user, 1);
-                cblas_taxpy(k + k_main, -coef,
-                            B + (size_t)k_item + ix*(size_t)k_totB, 1,
-                            r + k_user, 1);
+        {
+            if (precomputedBtBw != NULL && prefer_BtB)
+                cblas_tsymv(CblasRowMajor, CblasUpper, k+k_main,
+                            -1., precomputedBtBw, k+k_main,
+                            a_vec + k_user, 1,
+                            1., r + k_user, 1);
+            else
+                for (size_t ix = 0; ix < (size_t)n; ix++) {
+                    coef = cblas_tdot(k + k_main,
+                                      B + (size_t)k_item + ix*(size_t)k_totB, 1,
+                                      a_vec + k_user, 1);
+                    cblas_taxpy(k + k_main, -coef,
+                                B + (size_t)k_item + ix*(size_t)k_totB, 1,
+                                r + k_user, 1);
+                }
+        }
+        
+        else
+        {
+            if (precomputedBtBw != NULL && prefer_BtB)
+            {
+                cblas_tsymv(CblasRowMajor, CblasUpper, k+k_main,
+                            -1., precomputedBtBw, k+k_main,
+                            a_vec + k_user, 1,
+                            1., r + k_user, 1);
+                for (size_t ix = 0; ix < nnz; ix++)
+                {
+                    coef = cblas_tdot(k + k_main,
+                                      B
+                                        + (size_t)k_item
+                                        + (size_t)ixB[ix]*(size_t)k_totB, 1,
+                                      a_vec + k_user, 1);
+                    cblas_taxpy(k + k_main, -((weight[ix]-1.) * coef),
+                                B + (size_t)k_item + ix*(size_t)k_totB, 1,
+                                r + k_user, 1);
+                }
             }
-        else {
-            cblas_tgemv(CblasRowMajor, CblasNoTrans,
-                        n, k+k_main,
-                        -1., B + k_item, k_totB,
-                        a_vec + k_user, 1,
-                        0., wr, 1);
-            for (size_t ix = 0; ix < nnz; ix++)
-                wr[ixB[ix]] *= weight[ix];
-            cblas_tgemv(CblasRowMajor, CblasTrans,
-                        n, k+k_main,
-                        1., B + k_item, k_totB,
-                        wr, 1,
-                        1., r + k_user, 1);
+
+            else
+            {
+                cblas_tgemv(CblasRowMajor, CblasNoTrans,
+                            n, k+k_main,
+                            -1., B + k_item, k_totB,
+                            a_vec + k_user, 1,
+                            0., wr, 1);
+                for (size_t ix = 0; ix < nnz; ix++)
+                    wr[ixB[ix]] *= weight[ix];
+                cblas_tgemv(CblasRowMajor, CblasTrans,
+                            n, k+k_main,
+                            1., B + k_item, k_totB,
+                            wr, 1,
+                            1., r + k_user, 1);
+            }
         }
     }
 
@@ -1645,24 +1712,13 @@ void collective_block_cg
                     w_user, C, k_totC,
                     u_vec, 1,
                     1., r, 1);
-        for (size_t ix = 0; ix < (size_t)p; ix++) {
-            coef = cblas_tdot(k_user+k,
-                              C + ix*(size_t)k_totC, 1,
-                              a_vec, 1);
-            cblas_taxpy(k, -w_user * coef,
-                        C + ix*(size_t)k_totC, 1,
-                        r, 1);
-        }
-    }
-
-    else if (u_vec != NULL)
-    {
-        for (size_t ix = 0; ix < (size_t)p; ix++)
-            if (!isnan(u_vec[ix])) {
-                cblas_taxpy(k_user+k,
-                            w_user * u_vec[ix],
-                            C + ix*(size_t)k_totC, 1,
-                            r, 1);
+        if (precomputedCtCw != NULL && prefer_CtC)
+            cblas_tsymv(CblasRowMajor, CblasUpper, k_user+k,
+                        -w_user, precomputedCtCw, k_user+k,
+                        a_vec, 1,
+                        1., r, 1);
+        else
+            for (size_t ix = 0; ix < (size_t)p; ix++) {
                 coef = cblas_tdot(k_user+k,
                                   C + ix*(size_t)k_totC, 1,
                                   a_vec, 1);
@@ -1672,22 +1728,73 @@ void collective_block_cg
             }
     }
 
+    else if (u_vec != NULL)
+    {
+        if (precomputedCtCw != NULL && prefer_CtC)
+        {
+            cblas_tsymv(CblasRowMajor, CblasUpper, k_user+k,
+                        -w_user, precomputedCtCw, k_user+k,
+                        a_vec, 1,
+                        1., r, 1);
+            for (size_t ix = 0; ix < (size_t)p; ix++)
+            {
+                if (isnan(u_vec[ix])) {
+                    coef = cblas_tdot(k_user+k,
+                                      C + ix*(size_t)k_totC, 1,
+                                      a_vec, 1);
+                    cblas_taxpy(k, w_user * coef,
+                                C + ix*(size_t)k_totC, 1,
+                                r, 1);
+                }
+
+                else {
+                    cblas_taxpy(k_user+k,
+                                w_user * u_vec[ix],
+                                C + ix*(size_t)k_totC, 1,
+                                r, 1);
+                }
+            }
+        }
+
+        else
+            for (size_t ix = 0; ix < (size_t)p; ix++)
+                if (!isnan(u_vec[ix])) {
+                    cblas_taxpy(k_user+k,
+                                w_user * u_vec[ix],
+                                C + ix*(size_t)k_totC, 1,
+                                r, 1);
+                    coef = cblas_tdot(k_user+k,
+                                      C + ix*(size_t)k_totC, 1,
+                                      a_vec, 1);
+                    cblas_taxpy(k, -w_user * coef,
+                                C + ix*(size_t)k_totC, 1,
+                                r, 1);
+                }
+    }
+
     else if (u_vec_sp != NULL && NA_as_zero_U)
     {
-        sgemv_dense_sp(
+        tgemv_dense_sp(
                 p, k_user+k,
                 w_user, C, k_totC,
                 u_vec_ixB, u_vec_sp, nnz_u_vec,
                 r
             );
-        for (size_t ix = 0; ix < (size_t)p; ix++) {
-            coef = cblas_tdot(k_user+k,
-                              C + ix*(size_t)k_totC, 1,
-                              a_vec, 1);
-            cblas_taxpy(k, -w_user * coef,
-                        C + ix*(size_t)k_totC, 1,
-                        r, 1);
-        }
+
+        if (precomputedCtCw != NULL && prefer_CtC)
+            cblas_tsymv(CblasRowMajor, CblasUpper, k_user+k,
+                        -w_user, precomputedCtCw, k_user+k,
+                        a_vec, 1,
+                        1., r, 1);
+        else
+            for (size_t ix = 0; ix < (size_t)p; ix++) {
+                coef = cblas_tdot(k_user+k,
+                                  C + ix*(size_t)k_totC, 1,
+                                  a_vec, 1);
+                cblas_taxpy(k, -w_user * coef,
+                            C + ix*(size_t)k_totC, 1,
+                            r, 1);
+            }
     }
 
     else if (u_vec_sp != NULL)
@@ -1732,39 +1839,14 @@ void collective_block_cg
         if ((Xa_dense != NULL && cnt_NA_x == 0) ||
             (Xa_dense == NULL && NA_as_zero_X && weight == NULL))
         {
-            for (size_t ix = 0; ix < (size_t)n; ix++)
-            {
-                w_this = (weight == NULL)? 1. : weight[ix];
-                coef = cblas_tdot(k+k_main,
-                                  B + (size_t)k_item + ix*(size_t)k_totB, 1,
-                                  pp + k_user, 1);
-                cblas_taxpy(k+k_main, w_this * coef,
-                            B + (size_t)k_item + ix*(size_t)k_totB, 1,
-                            Ap + k_user, 1);
-            }
-        }
-
-        else if (Xa_dense == NULL && NA_as_zero_X && weight != NULL)
-        {
-            cblas_tgemv(CblasRowMajor, CblasNoTrans,
-                        n, k+k_main,
-                        1., B + k_item, k_totB,
-                        pp + k_user, 1,
-                        0., wr, 1);
-            for (size_t ix = 0; ix < nnz; ix++)
-                wr[ixB[ix]] *= weight[ix];
-            cblas_tgemv(CblasRowMajor, CblasTrans,
-                        n, k+k_main,
-                        1., B + k_item, k_totB,
-                        wr, 1,
-                        0., Ap + k_user, 1);
-        }
-
-        else if (Xa_dense != NULL)
-        {
-            for (size_t ix = 0; ix < (size_t)n; ix++)
-            {
-                if (!isnan(Xa_dense[ix])) {
+            if (weight == NULL && precomputedBtBw != NULL && prefer_BtB)
+                cblas_tsymv(CblasRowMajor, CblasUpper, k+k_main,
+                            1., precomputedBtBw, k+k_main,
+                            pp + k_user, 1,
+                            0., Ap + k_user, 1);
+            else
+                for (size_t ix = 0; ix < (size_t)n; ix++)
+                {
                     w_this = (weight == NULL)? 1. : weight[ix];
                     coef = cblas_tdot(k+k_main,
                                       B + (size_t)k_item + ix*(size_t)k_totB, 1,
@@ -1773,7 +1855,85 @@ void collective_block_cg
                                 B + (size_t)k_item + ix*(size_t)k_totB, 1,
                                 Ap + k_user, 1);
                 }
+        }
+
+        else if (Xa_dense == NULL && NA_as_zero_X && weight != NULL)
+        {
+            if (precomputedBtBw != NULL && prefer_BtB)
+            {
+                cblas_tsymv(CblasRowMajor, CblasUpper, k+k_main,
+                            1., precomputedBtBw, k+k_main,
+                            pp + k_user, 1,
+                            0., Ap + k_user, 1);
+                for (size_t ix = 0; ix < nnz; ix++) {
+                    coef = cblas_tdot(k+k_main,
+                                      B
+                                        + (size_t)k_item
+                                        + (size_t)ixB[ix]*(size_t)k_totB,
+                                      1,
+                                      pp + k_user, 1);
+                    cblas_taxpy(k+k_main, (weight[ix] - 1.) * coef,
+                                B
+                                  + (size_t)k_item
+                                  + (size_t)ixB[ix]*(size_t)k_totB,
+                                1,
+                                Ap + k_user, 1);
+                }
             }
+
+            else
+            {
+                cblas_tgemv(CblasRowMajor, CblasNoTrans,
+                            n, k+k_main,
+                            1., B + k_item, k_totB,
+                            pp + k_user, 1,
+                            0., wr, 1);
+                for (size_t ix = 0; ix < nnz; ix++)
+                    wr[ixB[ix]] *= weight[ix];
+                cblas_tgemv(CblasRowMajor, CblasTrans,
+                            n, k+k_main,
+                            1., B + k_item, k_totB,
+                            wr, 1,
+                            0., Ap + k_user, 1);
+            }
+        }
+
+        else if (Xa_dense != NULL)
+        {
+            if (weight == NULL && precomputedBtBw != NULL && prefer_BtB)
+            {
+                cblas_tsymv(CblasRowMajor, CblasUpper, k+k_main,
+                            1., precomputedBtBw, k+k_main,
+                            pp + k_user, 1,
+                            0., Ap + k_user, 1);
+                for (size_t ix = 0; ix < (size_t)n; ix++)
+                    if (isnan(Xa_dense[ix])) {
+                        coef = cblas_tdot(k+k_main,
+                                          B
+                                            + (size_t)k_item
+                                            + ix*(size_t)k_totB, 1,
+                                          pp + k_user, 1);
+                        cblas_taxpy(k+k_main, -coef,
+                                    B + (size_t)k_item + ix*(size_t)k_totB, 1,
+                                    Ap + k_user, 1);
+                    }
+            }
+
+            else
+                for (size_t ix = 0; ix < (size_t)n; ix++)
+                {
+                    if (!isnan(Xa_dense[ix])) {
+                        w_this = (weight == NULL)? 1. : weight[ix];
+                        coef = cblas_tdot(k+k_main,
+                                          B
+                                            + (size_t)k_item
+                                            + ix*(size_t)k_totB, 1,
+                                          pp + k_user, 1);
+                        cblas_taxpy(k+k_main, w_this * coef,
+                                    B + (size_t)k_item + ix*(size_t)k_totB, 1,
+                                    Ap + k_user, 1);
+                    }
+                }
         }
 
         else
@@ -1802,21 +1962,13 @@ void collective_block_cg
         if ((u_vec != NULL && cnt_NA_u == 0) ||
             (NA_as_zero_U && u_vec_sp != NULL))
         {
-            for (size_t ix = 0; ix < (size_t)p; ix++) {
-                coef = cblas_tdot(k_user+k,
-                                  C + ix*(size_t)k_totC, 1,
-                                  pp, 1);
-                cblas_taxpy(k_user+k, w_user * coef,
-                            C + ix*(size_t)k_totC, 1,
-                            Ap, 1);
-            }
-        }
-
-        else if (u_vec != NULL)
-        {
-            for (size_t ix = 0; ix < (size_t)p; ix++)
-            {
-                if (!isnan(u_vec[ix])) {
+            if (precomputedCtCw != NULL && prefer_CtC)
+                cblas_tsymv(CblasRowMajor, CblasUpper, k_user+k,
+                            w_user, precomputedCtCw, k_user+k,
+                            pp, 1,
+                            1., Ap, 1);
+            else
+                for (size_t ix = 0; ix < (size_t)p; ix++) {
                     coef = cblas_tdot(k_user+k,
                                       C + ix*(size_t)k_totC, 1,
                                       pp, 1);
@@ -1824,7 +1976,39 @@ void collective_block_cg
                                 C + ix*(size_t)k_totC, 1,
                                 Ap, 1);
                 }
+        }
+
+        else if (u_vec != NULL)
+        {
+            if (precomputedCtCw != NULL && prefer_CtC)
+            {
+                cblas_tsymv(CblasRowMajor, CblasUpper, k_user+k,
+                            w_user, precomputedCtCw, k_user+k,
+                            pp, 1,
+                            1., Ap, 1);
+                for (size_t ix = 0; ix < (size_t)p; ix++)
+                    if (isnan(u_vec[ix])) {
+                        coef = cblas_tdot(k_user+k,
+                                          C + ix*(size_t)k_totC, 1,
+                                          pp, 1);
+                        cblas_taxpy(k_user+k, -w_user * coef,
+                                    C + ix*(size_t)k_totC, 1,
+                                    Ap, 1);
+                    }
             }
+
+            else
+                for (size_t ix = 0; ix < (size_t)p; ix++)
+                {
+                    if (!isnan(u_vec[ix])) {
+                        coef = cblas_tdot(k_user+k,
+                                          C + ix*(size_t)k_totC, 1,
+                                          pp, 1);
+                        cblas_taxpy(k_user+k, w_user * coef,
+                                    C + ix*(size_t)k_totC, 1,
+                                    Ap, 1);
+                    }
+                }
         }
 
         else if (u_vec_sp != NULL)
@@ -1879,6 +2063,7 @@ void collective_block_cg_implicit
     int cnt_NA_u,
     int max_cg_steps,
     FPnum *restrict precomputedBtBw,
+    FPnum *restrict precomputedCtCw,
     FPnum *restrict buffer_FPnum
 )
 {
@@ -1891,6 +2076,8 @@ void collective_block_cg_implicit
     set_to_zero(r, k_user, 1);
     FPnum r_new, r_old;
     FPnum a, coef;
+
+    bool prefer_CtC = max2((size_t)cnt_NA_u,nnz_u_vec) < (size_t)(2*(k+k_user));
 
     cblas_tsymv(CblasRowMajor, CblasUpper, k+k_main,
                 -1., precomputedBtBw, k+k_main,
@@ -1915,24 +2102,13 @@ void collective_block_cg_implicit
                     w_user, C, k_totC,
                     u_vec, 1,
                     1., r, 1);
-        for (size_t ix = 0; ix < (size_t)p; ix++) {
-            coef = cblas_tdot(k_user+k,
-                              C + ix*(size_t)k_totC, 1,
-                              a_vec, 1);
-            cblas_taxpy(k, -w_user * coef,
-                        C + ix*(size_t)k_totC, 1,
-                        r, 1);
-        }
-    }
-
-    else if (u_vec != NULL)
-    {
-        for (size_t ix = 0; ix < (size_t)p; ix++)
-            if (!isnan(u_vec[ix])) {
-                cblas_taxpy(k_user+k,
-                            w_user * u_vec[ix],
-                            C + ix*(size_t)k_totC, 1,
-                            r, 1);
+        if (precomputedCtCw != NULL && prefer_CtC)
+            cblas_tsymv(CblasRowMajor, CblasUpper, k_user+k,
+                        -w_user, precomputedCtCw, k_user+k,
+                        a_vec, 1,
+                        1., r, 1);
+        else
+            for (size_t ix = 0; ix < (size_t)p; ix++) {
                 coef = cblas_tdot(k_user+k,
                                   C + ix*(size_t)k_totC, 1,
                                   a_vec, 1);
@@ -1942,22 +2118,73 @@ void collective_block_cg_implicit
             }
     }
 
+    else if (u_vec != NULL)
+    {
+        if (precomputedCtCw != NULL && prefer_CtC)
+        {
+            cblas_tsymv(CblasRowMajor, CblasUpper, k_user+k,
+                        -w_user, precomputedCtCw, k_user+k,
+                        a_vec, 1,
+                        1., r, 1);
+            for (size_t ix = 0; ix < (size_t)p; ix++)
+            {
+                if (isnan(u_vec[ix])) {
+                    coef = cblas_tdot(k_user+k,
+                                      C + ix*(size_t)k_totC, 1,
+                                      a_vec, 1);
+                    cblas_taxpy(k, w_user * coef,
+                                C + ix*(size_t)k_totC, 1,
+                                r, 1);
+                }
+
+                else {
+                    cblas_taxpy(k_user+k,
+                                w_user * u_vec[ix],
+                                C + ix*(size_t)k_totC, 1,
+                                r, 1);
+                }
+            }
+        }
+
+        else
+            for (size_t ix = 0; ix < (size_t)p; ix++)
+                if (!isnan(u_vec[ix])) {
+                    cblas_taxpy(k_user+k,
+                                w_user * u_vec[ix],
+                                C + ix*(size_t)k_totC, 1,
+                                r, 1);
+                    coef = cblas_tdot(k_user+k,
+                                      C + ix*(size_t)k_totC, 1,
+                                      a_vec, 1);
+                    cblas_taxpy(k, -w_user * coef,
+                                C + ix*(size_t)k_totC, 1,
+                                r, 1);
+                }
+    }
+
     else if (u_vec_sp != NULL && NA_as_zero_U)
     {
-        sgemv_dense_sp(
+        tgemv_dense_sp(
                 p, k_user+k,
                 w_user, C, k_totC,
                 u_vec_ixB, u_vec_sp, nnz_u_vec,
                 r
             );
-        for (size_t ix = 0; ix < (size_t)p; ix++) {
-            coef = cblas_tdot(k_user+k,
-                              C + ix*(size_t)k_totC, 1,
-                              a_vec, 1);
-            cblas_taxpy(k, -w_user * coef,
-                        C + ix*(size_t)k_totC, 1,
-                        r, 1);
-        }
+
+        if (precomputedCtCw != NULL && prefer_CtC)
+            cblas_tsymv(CblasRowMajor, CblasUpper, k_user+k,
+                        -w_user, precomputedCtCw, k_user+k,
+                        a_vec, 1,
+                        1., r, 1);
+        else
+            for (size_t ix = 0; ix < (size_t)p; ix++) {
+                coef = cblas_tdot(k_user+k,
+                                  C + ix*(size_t)k_totC, 1,
+                                  a_vec, 1);
+                cblas_taxpy(k, -w_user * coef,
+                            C + ix*(size_t)k_totC, 1,
+                            r, 1);
+            }
     }
 
     else if (u_vec_sp != NULL)
@@ -2013,21 +2240,13 @@ void collective_block_cg_implicit
         if ((u_vec != NULL && cnt_NA_u == 0) ||
             (NA_as_zero_U && u_vec_sp != NULL))
         {
-            for (size_t ix = 0; ix < (size_t)p; ix++) {
-                coef = cblas_tdot(k_user+k,
-                                  C + ix*(size_t)k_totC, 1,
-                                  pp, 1);
-                cblas_taxpy(k_user+k, w_user * coef,
-                            C + ix*(size_t)k_totC, 1,
-                            Ap, 1);
-            }
-        }
-
-        else if (u_vec != NULL)
-        {
-            for (size_t ix = 0; ix < (size_t)p; ix++)
-            {
-                if (!isnan(u_vec[ix])) {
+            if (precomputedCtCw != NULL && prefer_CtC)
+                cblas_tsymv(CblasRowMajor, CblasUpper, k_user+k,
+                            w_user, precomputedCtCw, k_user+k,
+                            pp, 1,
+                            1., Ap, 1);
+            else
+                for (size_t ix = 0; ix < (size_t)p; ix++) {
                     coef = cblas_tdot(k_user+k,
                                       C + ix*(size_t)k_totC, 1,
                                       pp, 1);
@@ -2035,7 +2254,39 @@ void collective_block_cg_implicit
                                 C + ix*(size_t)k_totC, 1,
                                 Ap, 1);
                 }
+        }
+
+        else if (u_vec != NULL)
+        {
+            if (precomputedCtCw != NULL && prefer_CtC)
+            {
+                cblas_tsymv(CblasRowMajor, CblasUpper, k_user+k,
+                            w_user, precomputedCtCw, k_user+k,
+                            pp, 1,
+                            1., Ap, 1);
+                for (size_t ix = 0; ix < (size_t)p; ix++)
+                    if (isnan(u_vec[ix])) {
+                        coef = cblas_tdot(k_user+k,
+                                          C + ix*(size_t)k_totC, 1,
+                                          pp, 1);
+                        cblas_taxpy(k_user+k, -w_user * coef,
+                                    C + ix*(size_t)k_totC, 1,
+                                    Ap, 1);
+                    }
             }
+
+            else
+                for (size_t ix = 0; ix < (size_t)p; ix++)
+                {
+                    if (!isnan(u_vec[ix])) {
+                        coef = cblas_tdot(k_user+k,
+                                          C + ix*(size_t)k_totC, 1,
+                                          pp, 1);
+                        cblas_taxpy(k_user+k, w_user * coef,
+                                    C + ix*(size_t)k_totC, 1,
+                                    Ap, 1);
+                    }
+                }
         }
 
         else if (u_vec_sp != NULL)
@@ -2721,12 +2972,45 @@ void buffer_size_optimizeA_collective
     size_t *buffer_size, size_t *buffer_lbfgs_size,
     int m, int n, int k, int k_user, int k_main, int padding,
     int m_u, int p, int nthreads,
-    bool do_B, bool NA_as_zero_X, bool NA_as_zero_U, bool use_cg,
+    bool do_B, bool NA_as_zero_X, bool NA_as_zero_U,
+    bool use_cg, bool finalize_chol,
     bool full_dense, bool near_dense,
     bool has_dense, bool has_weight,
     bool full_dense_u, bool near_dense_u, bool has_dense_u
 )
 {
+    if (finalize_chol)
+    {
+        size_t buffer_size_cg = 0;
+        size_t buffer_size_chol = 0;
+        size_t buffer_lbfgs_size_cg = 0;
+        size_t buffer_lbfgs_size_chol = 0;
+        buffer_size_optimizeA_collective(
+            &buffer_size_cg, &buffer_lbfgs_size_cg,
+            m, n, k, k_user, k_main, padding,
+            m_u, p, nthreads,
+            do_B, NA_as_zero_X, NA_as_zero_U,
+            true, false,
+            full_dense, near_dense,
+            has_dense, has_weight,
+            full_dense_u, near_dense_u, has_dense_u
+        );
+        buffer_size_optimizeA_collective(
+            &buffer_size_chol, &buffer_lbfgs_size_chol,
+            m, n, k, k_user, k_main, padding,
+            m_u, p, nthreads,
+            do_B, NA_as_zero_X, NA_as_zero_U,
+            false, false,
+            full_dense, near_dense,
+            has_dense, has_weight,
+            full_dense_u, near_dense_u, has_dense_u
+        );
+
+        *buffer_size = max2(buffer_size_cg, buffer_size_chol);
+        *buffer_lbfgs_size = max2(buffer_lbfgs_size_cg, buffer_lbfgs_size_chol);
+        return;
+    }
+
     if (has_dense && has_dense_u && !has_weight &&
         (full_dense || near_dense) && (full_dense_u || near_dense_u))
     {
@@ -2799,7 +3083,7 @@ void buffer_size_optimizeA_collective
         buffer_size_optimizeA(
             &alt_size, &alt_lbfgs,
             m-m_u, n, k+k_main, k_user+k+k_main+padding, nthreads,
-            do_B, NA_as_zero_X, use_cg,
+            do_B, NA_as_zero_X, use_cg, finalize_chol,
             full_dense, near_dense,
             has_dense, has_weight
         );
@@ -2814,7 +3098,7 @@ void buffer_size_optimizeA_collective
         buffer_size_optimizeA(
             &alt_size, &alt_lbfgs,
             m_u-m, p, k_user+k, k_user+k+k_main+padding, nthreads,
-            false, NA_as_zero_U, use_cg,
+            false, NA_as_zero_U, use_cg, finalize_chol,
             full_dense_u, near_dense_u,
             has_dense_u, false
         );
@@ -2992,24 +3276,23 @@ void optimizeA_collective
 
         if ((Xfull != NULL && !full_dense) || (U != NULL && !full_dense_u))
         {
-            FPnum *restrict bufferBtB = NULL;
-            FPnum *restrict bufferCtC = NULL;
+            FPnum *restrict bufferBtB = buffer_FPnum;
+            FPnum *restrict bufferCtC = bufferBtB + square(k + k_main);
+            buffer_FPnum += square(k+k_main);
+            buffer_FPnum += square(k_user+k);
 
             /* The LHS matrices can be precomputed and then sum or subtract
-               from them as more efficient according to the number of NAs. */
-            if (!use_cg)
-            {
-                bufferBtB = buffer_FPnum; buffer_FPnum += square(k+k_main);
-                bufferCtC = buffer_FPnum; buffer_FPnum += square(k_user+k);
-                build_BtB_CtC(
-                    bufferBtB, bufferCtC,
-                    B, n,
-                    C, p,
-                    k, k_user, k_main, k_item, padding,
-                    w_main, w_user,
-                    weight
-                );
-            }
+               from them as more efficient according to the number of NAs.
+               Can also be used in the CG method to shorten calculations. */
+            build_BtB_CtC(
+                bufferBtB, bufferCtC,
+                B, n,
+                C, p,
+                k, k_user, k_main, k_item, padding,
+                use_cg? 1. : w_main, use_cg? 1. : w_user,
+                (use_cg && NA_as_zero_X && Xfull == NULL && weight != NULL)?
+                    ((FPnum*)NULL) : (weight)
+            );
 
             /* When doing the B matrix, the X matrix will be transposed
                and need to make a copy of the column for each observation,
@@ -3150,11 +3433,35 @@ void optimizeA_collective
        when beneficial, determined on a case-by-case basis. */
     else
     {
-        FPnum *restrict bufferCtC = buffer_FPnum;
-        FPnum *restrict bufferBtB = bufferCtC + square(k_user+k);
-        FPnum *restrict bufferX = bufferBtB + (
-                                        (weight == NULL)? square(k+k_main) : 0
-                                        );
+        bool prefer_BtB = true;
+        bool prefer_CtC = true;
+        if (use_cg)
+        {
+            if (Xfull == NULL && Xcsr != NULL && !NA_as_zero_X)
+                prefer_BtB = false;
+            if (Xfull != NULL && weight != NULL)
+                prefer_BtB = false;
+            if (U == NULL && U_csr != NULL && !NA_as_zero_U)
+                prefer_CtC = false;
+        }
+
+        else {
+            if (weight != NULL)
+                prefer_BtB = false;
+        }
+
+        FPnum *restrict bufferBtB = NULL;
+        FPnum *restrict bufferCtC = NULL;
+        if (prefer_BtB) {
+            bufferBtB = buffer_FPnum;
+            buffer_FPnum += square(k+k_main);
+        }
+        if (prefer_CtC) {
+            bufferCtC = buffer_FPnum;
+            buffer_FPnum += square(k_user+k);
+        }
+
+        FPnum *restrict bufferX = buffer_FPnum;
         FPnum *restrict bufferX_zeros = bufferX + (do_B?
                                                    ((size_t)n*(size_t)nthreads)
                                                    : (0));
@@ -3174,11 +3481,10 @@ void optimizeA_collective
             B, n,
             C, p,
             k, k_user, k_main, k_item, padding,
-            w_main, w_user,
-            weight
+            use_cg? 1. : w_main, use_cg? 1. : w_user,
+            (use_cg && NA_as_zero_X && Xfull == NULL && weight != NULL)?
+                ((FPnum*)NULL) : (weight)
         );
-        if (weight != NULL)
-            bufferBtB = NULL;
 
         if (use_cg) goto skip_chol_simplifications;
 
@@ -3478,16 +3784,17 @@ void build_BtB_CtC
 )
 {
     int k_totB = k_item + k + k_main + padding;
-    if (weight == NULL) {
+    if (weight == NULL && BtB != NULL) {
         cblas_tsyrk(CblasRowMajor, CblasUpper, CblasTrans,
                     k + k_main, n,
                     w_main, B + k_item, k_totB,
                     0., BtB, k+k_main);
     }
-    cblas_tsyrk(CblasRowMajor, CblasUpper, CblasTrans,
-                k_user + k, p,
-                w_user, C, k_user + k,
-                0., CtC, k_user + k);
+    if (CtC != NULL)
+        cblas_tsyrk(CblasRowMajor, CblasUpper, CblasTrans,
+                    k_user + k, p,
+                    w_user, C, k_user + k,
+                    0., CtC, k_user + k);
 }
 
 void build_XBw
@@ -4418,7 +4725,7 @@ int fit_collective_explicit_als
         buffer_size_optimizeA(
             &size_bufferC, &size_buffer_lbfgs,
             p, m_u, k_user+k, k_user+k, nthreads,
-            false, NA_as_zero_U, use_cg,
+            false, NA_as_zero_U, use_cg, finalize_chol,
             full_dense_u, near_dense_u_col,
             U != NULL, false
         );
@@ -4426,7 +4733,7 @@ int fit_collective_explicit_als
         buffer_size_optimizeA(
             &size_bufferD, &size_buffer_lbfgs,
             q, n_i, k_item+k, k_item+k, nthreads,
-            false, NA_as_zero_I, use_cg,
+            false, NA_as_zero_I, use_cg, finalize_chol,
             full_dense_i, near_dense_i_col,
             II != NULL, false
         );
@@ -4436,7 +4743,7 @@ int fit_collective_explicit_als
             &size_bufferA, &size_buffer_lbfgs,
             m, n, k, k_user, k_main+(int)user_bias, paddingA,
             m_u, p, nthreads,
-            false, NA_as_zero_X, NA_as_zero_U, use_cg,
+            false, NA_as_zero_X, NA_as_zero_U, use_cg, finalize_chol,
             full_dense, near_dense_row,
             Xfull != NULL, weight != NULL,
             full_dense_u, near_dense_u_row, U != NULL
@@ -4447,7 +4754,7 @@ int fit_collective_explicit_als
             m, n, k+k_main+(int)user_bias,
             k_user+k+k_main+(int)(user_bias||item_bias),
             nthreads,
-            false, NA_as_zero_X, use_cg,
+            false, NA_as_zero_X, use_cg, finalize_chol,
             full_dense, near_dense_row,
             Xfull != NULL, weight != NULL
         );
@@ -4458,7 +4765,7 @@ int fit_collective_explicit_als
             n, m, k, k_item, k_main+(int)item_bias, paddingB,
             n_i, q, nthreads,
             (Xfull != NULL && Xtrans == NULL),
-            NA_as_zero_X, NA_as_zero_I, use_cg,
+            NA_as_zero_X, NA_as_zero_I, use_cg, finalize_chol,
             full_dense, near_dense_col,
             Xfull != NULL, weight != NULL,
             full_dense_i, near_dense_i_row, II != NULL
@@ -4469,7 +4776,8 @@ int fit_collective_explicit_als
             n, m, k+k_main+(int)item_bias,
             k_item+k+k_main+(int)(user_bias||item_bias),
             nthreads,
-            (Xfull != NULL && Xtrans == NULL), NA_as_zero_X, use_cg,
+            (Xfull != NULL && Xtrans == NULL), NA_as_zero_X,
+            use_cg, finalize_chol,
             full_dense, near_dense_col,
             Xfull != NULL, weight != NULL
         );
@@ -5008,7 +5316,7 @@ int fit_collective_implicit_als
         buffer_size_optimizeA(
             &size_bufferC, &size_buffer_lbfgs,
             p, m_u, k_user+k, k_user+k, nthreads,
-            false, NA_as_zero_U, use_cg,
+            false, NA_as_zero_U, use_cg, finalize_chol,
             full_dense_u, near_dense_u_col,
             U != NULL, false
         );
@@ -5029,7 +5337,7 @@ int fit_collective_implicit_als
         buffer_size_optimizeA(
             &size_bufferD, &size_buffer_lbfgs,
             q, n_i, k_item+k, k_item+k, nthreads,
-            false, NA_as_zero_I, use_cg,
+            false, NA_as_zero_I, use_cg, finalize_chol,
             full_dense_i, near_dense_i_col,
             II != NULL, false
         );
@@ -5043,7 +5351,7 @@ int fit_collective_implicit_als
         buffer_size_optimizeA(
             &alt_size, &alt_lbfgs,
             m_u-m, p, k, k_user+k+k_main, nthreads,
-            false, NA_as_zero_U, use_cg,
+            false, NA_as_zero_U, use_cg, finalize_chol,
             full_dense_u, near_dense_u_row,
             U != NULL, false
         );
@@ -5055,7 +5363,7 @@ int fit_collective_implicit_als
         buffer_size_optimizeA(
             &alt_size, &alt_lbfgs,
             n_i-n, q, k, k_item+k+k_main, nthreads,
-            false, NA_as_zero_I, use_cg,
+            false, NA_as_zero_I, use_cg, finalize_chol,
             full_dense_i, near_dense_i_col,
             II != NULL, false
         );
