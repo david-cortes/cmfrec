@@ -1401,7 +1401,7 @@ void collective_closed_form_block_implicit
         return;
     }
 
-    char uplo = 'L';
+    char lo = 'L';
     int one = 1;
     int ignore;
     int k_totA = k_user + k + k_main;
@@ -1418,9 +1418,29 @@ void collective_closed_form_block_implicit
     bool add_C = false;
 
     if (nnz == 0 && ((u_vec != NULL && cnt_NA_u == 0) || NA_as_zero_U) &&
-        precomputedBeTBeChol != NULL && !add_U)
+        precomputedBeTBeChol != NULL && (!add_U || use_cg))
     {
-        return tpotrs_(&uplo, &k_totA, &one,
+        if (use_cg)
+        {
+            if (u_vec != NULL)
+                cblas_tgemv(CblasRowMajor, CblasTrans,
+                            p, k_user+k,
+                            1., C, k_user+k,
+                            u_vec, 1,
+                            0., a_vec, 1);
+            else {
+                set_to_zero(a_vec, k_user+k, 1);
+                tgemv_dense_sp(
+                    p, k_user+k,
+                    1., C, k_user+k,
+                    u_vec_ixB, u_vec_sp, nnz_u_vec,
+                    a_vec
+                );
+            }
+            if (w_user != 1.)
+                cblas_tscal(k_user+k, w_user, a_vec, 1);
+        }
+        return tpotrs_(&lo, &k_totA, &one,
                        precomputedBeTBeChol, &k_totA,
                        a_vec, &k_totA,
                        &ignore);
@@ -1546,7 +1566,7 @@ void collective_closed_form_block_implicit
                     a_vec + k_user, 1);
     }
 
-    tposv_(&uplo, &k_totA, &one,
+    tposv_(&lo, &k_totA, &one,
            BtB, &k_totA,
            a_vec, &k_totA,
            &ignore);
@@ -3712,6 +3732,9 @@ void optimizeA_collective_implicit
        from U and can be obtained from the single-matrix formula instead.
        However, if the U matrix has more rows, those still need to be
        considered as having a value of zero in X. */
+    /* TODO: this one will also calculate t(B)*B, could pass it pre-calculated
+       to avoid one extra un-needed calculation. */
+    /* TODO: revisit whether it is correct to divide lambda but not alpha */
     if (m > m_u)
     {
         int m_diff = m - m_u;
@@ -3721,7 +3744,8 @@ void optimizeA_collective_implicit
                 B + k_item, (size_t)k_totB,
                 m_diff, n, k + k_main,
                 Xcsr_p + m_u, Xcsr_i, Xcsr,
-                lam/w_main, alpha,
+                // lam/w_main, alpha,
+                lam, alpha,
                 nthreads, use_cg, max_cg_steps, false,
                 buffer_FPnum
             );
@@ -3730,7 +3754,7 @@ void optimizeA_collective_implicit
 
 
     FPnum *restrict precomputedBeTBeChol = NULL;
-    if (m_u > m_x) {
+    if (m_u > m_x && !(U == NULL && U_csr != NULL && !NA_as_zero_U)) {
         precomputedBeTBeChol = buffer_FPnum;
         buffer_FPnum += square(k_totA);
     }
@@ -3756,7 +3780,7 @@ void optimizeA_collective_implicit
     else
         buffer_FPnum += square(k_totA);
     /* Note: 'precomputedBtB' will have different sizes for CG and Cholesky */
-    if (!use_cg || m_u > m_x) {
+    if (!use_cg || precomputedBeTBeChol != NULL) {
         precomputedBeTBe = buffer_FPnum;
         buffer_FPnum += square(k_totA);
     }
@@ -3772,11 +3796,13 @@ void optimizeA_collective_implicit
         if (use_cg)
             copy_mat(
                 k+k_main, k+k_main,
-                precomputedBeTBe, k_totA,
+                precomputedBeTBe + k_user + k_user*k_totA, k_totA,
                 precomputedBtB, k+k_main
             );
         if (w_main != 1.)
-            tscal_large(precomputedBeTBe, w_main, square(k_totA), nthreads);
+            tscal_large(precomputedBeTBe +  + k_user + k_user*k_totA, w_main,
+                        square(k_totA) - (k_user + k_user*k_totA) - k_main,
+                        nthreads);
         add_to_diag(precomputedBeTBe, lam, k_totA);
         if (!use_cg)
             copy_arr(precomputedBeTBe, precomputedBtB, square(k_totA),nthreads);
@@ -3841,7 +3867,8 @@ void optimizeA_collective_implicit
     #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
             shared(A, B, C, m, n, p, k, k_user, k_item, k_main, lam, alpha, \
                    Xcsr, Xcsr_p, Xcsr_i, U, U_csr, U_csr_i, U_csr_p, \
-                   NA_as_zero_U, cnt_NA_u, precomputedBeTBe, precomputedBtB, \
+                   NA_as_zero_U, cnt_NA_u, \
+                   precomputedBeTBe, precomputedBtB, precomputedBeTBeChol, \
                    k_totA, buffer_remainder, use_cg, m_x)
     for (ix = 0; ix < m; ix++)
         collective_closed_form_block_implicit(
@@ -5562,6 +5589,9 @@ int fit_collective_implicit_als
             }
         }
 
+        /* TODO: revisit whether it is correct to divide 'lam' without
+           changing alpha. */
+
         /* Optimize B */
         signal(SIGINT, set_interrup_global_variable);
         if (should_stop_procedure) goto check_interrupt;
@@ -5592,7 +5622,8 @@ int fit_collective_implicit_als
                 A + k_user, k_user+k+k_main,
                 n, m, k+k_main,
                 Xcsc_p, Xcsc_i, Xcsc,
-                (lam_unique == NULL)? (lam/w_main) : (lam_unique[3]/w_main),
+                // (lam_unique == NULL)? (lam/w_main) : (lam_unique[3]/w_main),
+                (lam_unique == NULL)? (lam) : (lam_unique[3]),
                 alpha,
                 nthreads, use_cg, max_cg_steps, iter == 0,
                 buffer_FPnum
@@ -5634,7 +5665,8 @@ int fit_collective_implicit_als
                 B + k_item, k_item+k+k_main,
                 m, n, k+k_main,
                 Xcsr_p, Xcsr_i, Xcsr,
-                (lam_unique == NULL)? (lam/w_main) : (lam_unique[2]/w_main),
+                // (lam_unique == NULL)? (lam/w_main) : (lam_unique[2]/w_main),
+                (lam_unique == NULL)? (lam) : (lam_unique[2]),
                 alpha,
                 nthreads,
                 use_cg, max_cg_steps, iter == 0,
