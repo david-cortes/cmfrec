@@ -1042,7 +1042,7 @@ int fit_offsets_explicit_lbfgs
         retval = preprocess_sideinfo_matrix(
             (FPnum*)NULL, m, p,
             U_row, U_col, U_sp, nnz_U,
-            (FPnum*)NULL, (FPnum**)NULL, (FPnum**)NULL,
+            (FPnum*)NULL, (FPnum**)NULL,
             &U_csr_p, &U_csr_i, &U_csr,
             &U_csc_p, &U_csc_i, &U_csc,
             (int**)NULL, (int**)NULL,
@@ -1057,7 +1057,7 @@ int fit_offsets_explicit_lbfgs
         retval = preprocess_sideinfo_matrix(
             (FPnum*)NULL, n, q,
             I_row, I_col, I_sp, nnz_I,
-            (FPnum*)NULL, (FPnum**)NULL, (FPnum**)NULL,
+            (FPnum*)NULL, (FPnum**)NULL,
             &I_csr_p, &I_csr_i, &I_csr,
             &I_csc_p, &I_csc_i, &I_csc,
             (int**)NULL, (int**)NULL,

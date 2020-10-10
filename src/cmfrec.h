@@ -993,7 +993,7 @@ int preprocess_sideinfo_matrix
 (
     FPnum *U, int m_u, int p,
     int U_row[], int U_col[], FPnum *U_sp, size_t nnz_U,
-    FPnum *U_colmeans, FPnum *restrict *Utrans, FPnum *restrict *U_orig,
+    FPnum *U_colmeans, FPnum *restrict *Utrans,
     long **U_csr_p, int **U_csr_i, FPnum *restrict *U_csr,
     long **U_csc_p, int **U_csc_i, FPnum *restrict *U_csc,
     int *restrict *cnt_NA_u_byrow, int *restrict *cnt_NA_u_bycol,

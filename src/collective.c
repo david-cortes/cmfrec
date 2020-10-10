@@ -1114,12 +1114,10 @@ void collective_closed_form_block
 
     int k_tot = k_user + k + k_main;
     int k_totB = k_item + k + k_main + padding;
+    size_t k_totC = k_user + k;
     FPnum *restrict bufferBeTBe = buffer_FPnum;
-    FPnum *restrict bufferBw = bufferBeTBe + square(k_tot);
-    FPnum *restrict bufferCw = bufferBeTBe + (square(k_tot)
-                                + ((Xa_dense != NULL && weight == NULL)?
-                                   ((size_t)n*(size_t)(k+k_main)) : 0));
     set_to_zero(bufferBeTBe, square(k_tot), 1);
+    
     if (add_X && add_U)
         set_to_zero(a_vec, k_tot, 1);
     else if (add_U)
@@ -1127,13 +1125,20 @@ void collective_closed_form_block
     else if (add_X)
         set_to_zero(a_vec + k_user+k, k_main, 1);
 
+    bool prefer_BtB = max2((size_t)cnt_NA_x, nnz) < (size_t)2*(k+k_main+1);
+    bool prefer_CtC = max2((size_t)cnt_NA_u, nnz_u_vec) <(size_t)2*(k_user+k+1);
+
+    /* TODO: for better precision, here could do the parts from matrix B
+       before the parts from matrix C, then rescale according to 'w_main',
+       instead of multiplying each row by 'w_main'. */
+
     /* =================== Part 1 =====================
        Constructing t(Be)*Be, upper-left square (from C) */
     if (u_vec != NULL || NA_as_zero_U) /* Dense u_vec */
     {
         /* If it's full or near full, can use the precomputed matrix
            and subtract missing entries from it if necessary */
-        if ((FPnum)cnt_NA_u < (FPnum)p*0.1 || NA_as_zero_U)
+        if (prefer_CtC || NA_as_zero_U)
         {
             if (precomputedCtCw != NULL) {
                 sum_mat(k_user+k, k_user+k,
@@ -1151,27 +1156,20 @@ void collective_closed_form_block
                     {
                         cblas_tsyr(CblasRowMajor, CblasUpper,
                                    k_user+k, -w_user,
-                                   C + ix*(size_t)(k_user+k), 1,
+                                   C + ix*k_totC, 1,
                                    bufferBeTBe, k_tot);
-                        u_vec[ix] = 0;
                     }
         }
 
         /* Otherwise, will need to construct it one-by-one */
         else
         {
-            nnz_u_vec = 0;
             for (size_t ix = 0; ix < (size_t)p; ix++)
-                if (isnan(u_vec[ix]))
-                    u_vec[ix] = 0;
-                else
-                    memcpy(bufferCw + (nnz_u_vec++)*((size_t)(k_user+k)),
-                           C + ix*(size_t)(k_user+k),
-                           (k_user+k)*sizeof(FPnum));
-            cblas_tsyrk(CblasRowMajor, CblasUpper, CblasTrans,
-                        k_user+k, (int)nnz_u_vec,
-                        w_user, bufferCw, k_user+k,
-                        0., bufferBeTBe, k_tot);
+                if (!isnan(u_vec[ix]))
+                    cblas_tsyr(CblasRowMajor, CblasUpper,
+                               k_user+k, w_user,
+                               C + ix*k_totC, 1,
+                               bufferBeTBe, k_tot);
         }
     }
 
@@ -1180,7 +1178,7 @@ void collective_closed_form_block
         for (size_t ix = 0; ix < nnz_u_vec; ix++)
             cblas_tsyr(CblasRowMajor, CblasUpper,
                        k_user+k, w_user,
-                       C + (size_t)u_vec_ixB[ix]*(size_t)(k_user+k), 1,
+                       C + (size_t)u_vec_ixB[ix]*k_totC, 1,
                        bufferBeTBe, k_tot);
     }
 
@@ -1189,7 +1187,7 @@ void collective_closed_form_block
     if (
         (Xa_dense != NULL || NA_as_zero_X) &&
         (Xa_dense == NULL || weight == NULL) &&
-        ((Xa_dense == NULL && NA_as_zero_X) || (FPnum)cnt_NA_x < (FPnum)n*0.1)
+        ((Xa_dense == NULL && NA_as_zero_X) || prefer_BtB)
         )
     {
         if (precomputedBtBw != NULL) {
@@ -1209,13 +1207,10 @@ void collective_closed_form_block
         if (cnt_NA_x > 0 && Xa_dense != NULL) {
             for (size_t ix = 0; ix < (size_t)n; ix++)
                 if (isnan(Xa_dense[ix]))
-                {
                     cblas_tsyr(CblasRowMajor, CblasUpper,
                                k+k_main, -w_main,
                                B + (size_t)k_item + ix*(size_t)k_totB, 1,
                                bufferBeTBe + k_user + k_user*k_tot, k_tot);
-                    Xa_dense[ix] = 0;
-                }
         }
 
         else if (Xa_dense == NULL && NA_as_zero_X && weight != NULL) {
@@ -1230,31 +1225,21 @@ void collective_closed_form_block
     else if (Xa_dense != NULL)
     {
         if (weight == NULL) {
-            nnz = 0;
             for (size_t ix = 0; ix < (size_t)n; ix++)
-                if (isnan(Xa_dense[ix]))
-                    Xa_dense[ix] = 0;
-                else
-                    memcpy(bufferBw + (nnz++)*((size_t)(k+k_main)),
-                           B + (size_t)k_item + ix*(size_t)k_totB,
-                           (k+k_main)*sizeof(FPnum));
-            cblas_tsyrk(CblasRowMajor, CblasUpper, CblasTrans,
-                        k+k_main, (int)nnz,
-                        w_main, bufferBw, k+k_main,
-                        1., bufferBeTBe + k_user + k_user*k_tot, k_tot);
+                if (!isnan(Xa_dense[ix]))
+                    cblas_tsyr(CblasRowMajor, CblasUpper,
+                               k+k_main, w_main,
+                               B + (size_t)k_item + ix*(size_t)k_totB, 1,
+                               bufferBeTBe + k_user + k_user*k_tot, k_tot);
         }
 
         else {
             for (size_t ix = 0; ix < (size_t)n; ix++)
-                if (isnan(Xa_dense[ix]))
-                    Xa_dense[ix] = 0;
-                else {
-                    Xa_dense[ix] *= weight[ix];
+                if (!isnan(Xa_dense[ix]))
                     cblas_tsyr(CblasRowMajor, CblasUpper,
                                k+k_main, weight[ix]*w_main,
                                B + (size_t)k_item + ix*(size_t)k_totB, 1,
                                bufferBeTBe + k_user + k_user*k_tot, k_tot);
-                }
         }
     }
 
@@ -1275,28 +1260,71 @@ void collective_closed_form_block
     {
         if (Xa_dense != NULL)
         {
-            cblas_tgemv(CblasRowMajor, CblasTrans,
-                        n, k+k_main,
-                        w_main, B + k_item, k_totB, Xa_dense, 1,
-                        add_U? 0. : 1., a_vec + k_user, 1);
-            /* Note: 'Xa_dense' was already multiplied by the weights earlier */
+            if (weight == NULL && cnt_NA_x == 0)
+                cblas_tgemv(CblasRowMajor, CblasTrans,
+                            n, k+k_main,
+                            w_main, B + k_item, k_totB, Xa_dense, 1,
+                            add_U? 0. : 1., a_vec + k_user, 1);
+            else {
+                if (add_U)
+                {
+                    set_to_zero(a_vec + k_user, k+k_main, 1);
+                    for (size_t ix = 0; ix < (size_t)n; ix++)
+                        if  (!isnan(Xa_dense[ix]))
+                            cblas_taxpy(k+k_main,
+                                        ((weight == NULL)?
+                                            1. : weight[ix]) * Xa_dense[ix],
+                                        B +(size_t)k_item + ix*(size_t)k_totB,1,
+                                        a_vec + k_user, 1);
+                    if (w_main != 1.)
+                        cblas_tscal(k+k_main, w_main, a_vec + k_user, 1);
+                }
+
+                else
+                {
+                    for (size_t ix = 0; ix < (size_t)n; ix++)
+                        if (!isnan(Xa_dense[ix]))
+                            cblas_taxpy(k+k_main,
+                                        ((weight == NULL)?
+                                            1. : weight[ix])
+                                        * w_main * Xa_dense[ix],
+                                        B +(size_t)k_item + ix*(size_t)k_totB,1,
+                                        a_vec + k_user, 1);
+                }
+            }
         }
 
         else
         {
-            if (weight == NULL) {
-                tgemv_dense_sp(n, k+k_main,
-                               w_main, B + k_item, (size_t)k_totB,
-                               ixB, Xa, nnz,
-                               a_vec + k_user);
+            if (!add_U && w_main != 1.)
+            {
+                if (weight == NULL)
+                    tgemv_dense_sp(n, k+k_main,
+                                   w_main, B + k_item, (size_t)k_totB,
+                                   ixB, Xa, nnz,
+                                   a_vec + k_user);
+                else
+                    tgemv_dense_sp_weighted2(n, k+k_main,
+                                             weight, w_main,
+                                             B + k_item, (size_t)k_totB,
+                                             ixB, Xa, nnz,
+                                             a_vec + k_user);
             }
 
-            else {
-                tgemv_dense_sp_weighted2(n, k+k_main,
-                                         weight, w_main,
-                                         B + k_item, (size_t)k_totB,
-                                         ixB, Xa, nnz,
-                                         a_vec + k_user);
+            else
+            {
+                if (weight == NULL)
+                    tgemv_dense_sp(n, k+k_main,
+                                   1., B + k_item, (size_t)k_totB,
+                                   ixB, Xa, nnz,
+                                   a_vec + k_user);
+                else
+                    tgemv_dense_sp_weighted(n, k+k_main, weight,
+                                            B + k_item, (size_t)k_totB,
+                                            ixB, Xa, nnz,
+                                            a_vec + k_user);
+                if (w_main != 1.)
+                    cblas_tscal(k+k_main, w_main, a_vec + k_user, 1);
             }
         }
     }
@@ -1305,11 +1333,18 @@ void collective_closed_form_block
        Constructing Be*t(Xe), lower part (from U) */
     if (add_U)
     {
-        if (u_vec != NULL)
+        if (u_vec != NULL && cnt_NA_u == 0)
             cblas_tgemv(CblasRowMajor, CblasTrans,
                         p, k_user+k,
                         w_user, C, k_user+k, u_vec, 1,
                         1., a_vec, 1);
+        else if (u_vec != NULL) {
+            for (size_t ix = 0; ix < (size_t)p; ix++)
+                if (!isnan(u_vec[ix]))
+                    cblas_taxpy(k_user+k, w_user * u_vec[ix],
+                                C + ix*(size_t)(k_user+k), 1,
+                                a_vec, 1);
+        }
         else
             tgemv_dense_sp(p, k_user+k,
                            w_user, C, (size_t)k_user+(size_t)k,
@@ -3217,6 +3252,7 @@ void optimizeA_collective
                 (U == NULL && U_csr != NULL && NA_as_zero_U) )
         )
     {
+        // printf("case1\n"); fflush(stdout);
         FPnum *restrict bufferBeTBe = buffer_FPnum;
         build_BeTBe(
             bufferBeTBe,
@@ -3297,10 +3333,11 @@ void optimizeA_collective
             FPnum *restrict bufferX = buffer_FPnum;
             FPnum *restrict buffer_remainder = bufferX
                                                 + (do_B? (n*nthreads) : (0));
-            size_t size_buffer = square(k_pred)
-                                  + ((size_t)n * (size_t)(k+k_main))
-                                  + ((size_t)p * (size_t)(k_user+k));
-            if (use_cg) size_buffer += (size_t)6 * (size_t)k_pred;
+            // size_t size_buffer = square(k_pred)
+            //                       + ((size_t)n * (size_t)(k+k_main))
+            //                       + ((size_t)p * (size_t)(k_user+k));
+            // if (use_cg) size_buffer += (size_t)6 * (size_t)k_pred;
+            size_t size_buffer = use_cg? (3*k_totA) : (square(k_totA));
             /* TODO: correct the buffer size here for CG method */
 
             #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
@@ -3353,10 +3390,11 @@ void optimizeA_collective
                         lam, w_user, w_main, lam_last,
                         bufferBtB, (Xfull != NULL)? cnt_NA_x[ix] : 0,
                         bufferCtC, (U != NULL)? cnt_NA_u[ix] : 0,
-                        (Xfull != NULL && cnt_NA_x[ix]) || use_cg,
-                        (U != NULL && cnt_NA_u[ix]) || use_cg,
+                        // (Xfull != NULL && cnt_NA_x[ix]) || use_cg,
+                        // (U != NULL && cnt_NA_u[ix]) || use_cg,
+                        true, true,
                         // use_cg, 3 * max_cg_steps,
-                        use_cg, k_pred,
+                        use_cg, k_pred, /* <- more steps to reach optimum */
                         buffer_remainder
                           + (size_buffer*(size_t)omp_get_thread_num())
                     );
@@ -3377,6 +3415,7 @@ void optimizeA_collective
              (Xfull != NULL || !NA_as_zero_X) && (U != NULL || !NA_as_zero_U)
             )
     {
+        // printf("case2\n"); fflush(stdout);
         size_t nvars = (size_t)m * (size_t)(k_user + k + k_main + padding);
         size_t m_lbfgs = 4;
         size_t past = 0;
@@ -3428,6 +3467,7 @@ void optimizeA_collective
        when beneficial, determined on a case-by-case basis. */
     else
     {
+        // printf("case3\n"); fflush(stdout);
         bool prefer_BtB = true;
         bool prefer_CtC = true;
         if (use_cg)
@@ -3529,14 +3569,17 @@ void optimizeA_collective
 
         skip_chol_simplifications:
             {};
-        size_t size_buffer = square(k_totA)
-                              + ((Xfull != NULL && weight == NULL)?
-                                  ((size_t)n*(size_t)(k+k_main)) : (0))
-                              + ((U != NULL && !full_dense_u)?
-                                    ((size_t)p*(size_t)(k_user+k)) : (0));
+        // size_t size_buffer = square(k_totA)
+        //                       + ((Xfull != NULL && weight == NULL)?
+        //                           ((size_t)n*(size_t)(k+k_main)) : (0))
+        //                       + ((U != NULL && !full_dense_u)?
+        //                             ((size_t)p*(size_t)(k_user+k)) : (0));
         
-        if (use_cg) size_buffer += (size_t)6*(size_t)k_totA;
-        if (use_cg) size_buffer += (size_t)max2(n, p);
+        // if (use_cg) size_buffer += (size_t)6*(size_t)k_totA;
+        // if (use_cg) size_buffer += (size_t)max2(n, p);
+        size_t size_buffer = use_cg? (3*k_totA) : (square(k_totA));
+        if (use_cg && Xfull == NULL && NA_as_zero_X && weight != NULL)
+            size_buffer += n;
 
         #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
                 shared(A, k_totA, B, k_totB, C, k, k_user, k_item, k_main, \
@@ -3929,7 +3972,7 @@ int preprocess_sideinfo_matrix
 (
     FPnum *U, int m_u, int p,
     int U_row[], int U_col[], FPnum *U_sp, size_t nnz_U,
-    FPnum *U_colmeans, FPnum *restrict *Utrans, FPnum *restrict *U_orig,
+    FPnum *U_colmeans, FPnum *restrict *Utrans,
     long **U_csr_p, int **U_csr_i, FPnum *restrict *U_csr,
     long **U_csc_p, int **U_csc_i, FPnum *restrict *U_csc,
     int *restrict *cnt_NA_u_byrow, int *restrict *cnt_NA_u_bycol,
@@ -3988,14 +4031,6 @@ int preprocess_sideinfo_matrix
         if (*Utrans == NULL)
             return 1;
         transpose_mat2(U, m_u, p, *Utrans);
-    }
-
-    if (U != NULL && !full_dense_u && U_orig != NULL)
-    {
-        *U_orig = malloc((size_t)m_u*(size_t)p*sizeof(FPnum));
-        if (*U_orig == NULL)
-            return 1;
-        copy_arr(U, *U_orig, (size_t)m_u*(size_t)p, nthreads);
     }
 
     return 0;
@@ -4244,7 +4279,7 @@ int fit_collective_explicit_lbfgs
                 retval = preprocess_sideinfo_matrix(
                     (FPnum*)NULL, m_u, p,
                     U_row, U_col, U_sp, nnz_U,
-                    (FPnum*)NULL, (FPnum**)NULL, (FPnum**)NULL,
+                    (FPnum*)NULL, (FPnum**)NULL,
                     &U_csr_p, &U_csr_i, &U_csr,
                     &U_csc_p, &U_csc_i, &U_csc,
                     (int**)NULL, (int**)NULL,
@@ -4259,7 +4294,7 @@ int fit_collective_explicit_lbfgs
                 retval = preprocess_sideinfo_matrix(
                     (FPnum*)NULL, n_i, q,
                     I_row, I_col, I_sp, nnz_I,
-                    (FPnum*)NULL, (FPnum**)NULL, (FPnum**)NULL,
+                    (FPnum*)NULL, (FPnum**)NULL,
                     &I_csr_p, &I_csr_i, &I_csr,
                     &I_csc_p, &I_csc_i, &I_csc,
                     (int**)NULL, (int**)NULL,
@@ -4497,8 +4532,6 @@ int fit_collective_explicit_als
     FPnum *restrict Xcsc_orig = NULL;
     FPnum *restrict Xfull_orig = NULL;
     FPnum *restrict Xtrans_orig = NULL;
-    FPnum *restrict U_orig = NULL;
-    FPnum *restrict I_orig = NULL;
 
     int retval = 0;
     FPnum *restrict buffer_FPnum = NULL;
@@ -4667,22 +4700,9 @@ int fit_collective_explicit_als
     }
 
     else {
+        /* these are only used as place-holders, do not get overwritten */
         A_bias = A;
         B_bias = B;
-
-        if (Xfull != NULL && weight == NULL)
-        {
-            Xfull_orig = (FPnum*)malloc((size_t)m*(size_t)n*sizeof(FPnum));
-            if (Xfull_orig == NULL) { retval = 1; goto cleanup; }
-            copy_arr(Xfull, Xfull_orig, (size_t)m*(size_t)n, nthreads);
-        }
-
-        if (Xtrans != NULL && weight == NULL)
-        {
-            Xtrans_orig = (FPnum*)malloc((size_t)m*(size_t)n*sizeof(FPnum));
-            if (Xtrans_orig == NULL) { retval = 1; goto cleanup; }
-            copy_arr(Xtrans, Xtrans_orig, (size_t)m*(size_t)n, nthreads);
-        }
     }
 
     if (U != NULL || U_sp != NULL)
@@ -4690,7 +4710,7 @@ int fit_collective_explicit_als
         retval = preprocess_sideinfo_matrix(
             U, m_u, p,
             U_row, U_col, U_sp, nnz_U,
-            U_colmeans, &Utrans, &U_orig,
+            U_colmeans, &Utrans,
             &U_csr_p, &U_csr_i, &U_csr,
             &U_csc_p, &U_csc_i, &U_csc,
             &cnt_NA_u_byrow, &cnt_NA_u_bycol,
@@ -4705,7 +4725,7 @@ int fit_collective_explicit_als
         retval = preprocess_sideinfo_matrix(
             II, n_i, q,
             I_row, I_col, I_sp, nnz_I,
-            I_colmeans, &Itrans, &I_orig,
+            I_colmeans, &Itrans,
             &I_csr_p, &I_csr_i, &I_csr,
             &I_csc_p, &I_csc_i, &I_csc,
             &cnt_NA_i_byrow, &cnt_NA_i_bycol,
@@ -4853,9 +4873,6 @@ int fit_collective_explicit_als
                 #endif
             }
 
-            if (U_orig != NULL)
-                copy_arr(U, U_orig, (size_t)m_u*(size_t)p, nthreads);
-
             optimizeA(
                 C, k_user+k,
                 A_bias, k_user+k+k_main+(int)(user_bias||item_bias),
@@ -4890,9 +4907,6 @@ int fit_collective_explicit_als
                 fflush(stdout);
                 #endif
             }
-
-            if (I_orig != NULL)
-                copy_arr(II, I_orig, (size_t)n_i*(size_t)q, nthreads);
 
             optimizeA(
                 D, k_item+k,
@@ -4969,10 +4983,6 @@ int fit_collective_explicit_als
             #endif
         }
         if (II != NULL || I_sp != NULL)
-        {
-            if (I_orig != NULL)
-                copy_arr(II, I_orig, (size_t)n_i*(size_t)q, nthreads);
-
             optimizeA_collective(
                 B_bias, A_bias, D,
                 n, n_i, m, q,
@@ -4995,7 +5005,6 @@ int fit_collective_explicit_als
                 buffer_FPnum,
                 buffer_lbfgs_iter
             );
-        }
         else
             optimizeA(
                 B_bias + k_item, k_item+k+k_main+(int)(user_bias||item_bias),
@@ -5065,10 +5074,6 @@ int fit_collective_explicit_als
             #endif
         }
         if (U != NULL || U_sp != NULL)
-        {
-            if (U_orig != NULL)
-                copy_arr(U, U_orig, (size_t)m_u*(size_t)p, nthreads);
-
             optimizeA_collective(
                 A_bias, B_bias, C,
                 m, m_u, n, p,
@@ -5090,7 +5095,6 @@ int fit_collective_explicit_als
                 buffer_FPnum,
                 buffer_lbfgs_iter
             );
-        }
         else
             optimizeA(
                 A_bias + k_user, k_user+k+k_main+(int)(user_bias||item_bias),
@@ -5196,10 +5200,10 @@ int fit_collective_explicit_als
             free(Xcsr_orig);
             free(Xcsc_orig);
         }
-        free(Xfull_orig);
-        free(Xtrans_orig);
-        free(U_orig);
-        free(I_orig);
+        if (Xfull_orig != NULL)
+            free(Xfull_orig);
+        if (Xtrans_orig != NULL)
+            free(Xtrans_orig);
     if (retval == 1) return 1;
 
     return 0;
@@ -5272,8 +5276,6 @@ int fit_collective_implicit_als
     int *restrict cnt_NA_u_bycol = NULL;
     int *restrict cnt_NA_i_byrow = NULL;
     int *restrict cnt_NA_i_bycol = NULL;
-    FPnum *restrict U_orig = NULL;
-    FPnum *restrict I_orig = NULL;
     bool full_dense_u = false;
     bool near_dense_u_row = false;
     bool near_dense_u_col = false;
@@ -5299,7 +5301,7 @@ int fit_collective_implicit_als
     retval = preprocess_sideinfo_matrix(
         U, m_u, p,
         U_row, U_col, U_sp, nnz_U,
-        U_colmeans, &Utrans, &U_orig,
+        U_colmeans, &Utrans,
         &U_csr_p, &U_csr_i, &U_csr,
         &U_csc_p, &U_csc_i, &U_csc,
         &cnt_NA_u_byrow, &cnt_NA_u_bycol,
@@ -5320,7 +5322,7 @@ int fit_collective_implicit_als
     retval = preprocess_sideinfo_matrix(
         II, n_i, q,
         I_row, I_col, I_sp, nnz_I,
-        I_colmeans, &Itrans, &I_orig,
+        I_colmeans, &Itrans,
         &I_csr_p, &I_csr_i, &I_csr,
         &I_csc_p, &I_csc_i, &I_csc,
         &cnt_NA_i_byrow, &cnt_NA_i_bycol,
@@ -5420,9 +5422,6 @@ int fit_collective_implicit_als
                 #endif
             }
 
-            if (U_orig != NULL)
-                copy_arr(U, U_orig, (size_t)m_u*(size_t)p, nthreads);
-
             optimizeA(
                 C, k_user+k,
                 A, k_user+k+k_main,
@@ -5457,9 +5456,6 @@ int fit_collective_implicit_als
                 fflush(stdout);
                 #endif
             }
-
-            if (I_orig != NULL)
-                copy_arr(II, I_orig, (size_t)n_i*(size_t)q, nthreads);
 
             optimizeA(
                 D, k_item+k,
@@ -5496,10 +5492,6 @@ int fit_collective_implicit_als
             #endif
         }
         if (II != NULL || I_sp != NULL)
-        {
-            if (I_orig != NULL)
-                copy_arr(II, I_orig, (size_t)n_i*(size_t)q, nthreads);
-
             optimizeA_collective_implicit(
                 B, A, D,
                 n, n_i, m, q,
@@ -5514,7 +5506,6 @@ int fit_collective_implicit_als
                 buffer_FPnum,
                 buffer_lbfgs_iter
             );
-        }
         else
             optimizeA_implicit(
                 B + k_item, k_item+k+k_main,
@@ -5543,10 +5534,6 @@ int fit_collective_implicit_als
             #endif
         }
         if (U != NULL || U_sp != NULL)
-        {
-            if (U_orig != NULL)
-                copy_arr(U, U_orig, (size_t)m_u*(size_t)p, nthreads);
-
             optimizeA_collective_implicit(
                 A, B, C,
                 m, m_u, n, p,
@@ -5561,7 +5548,6 @@ int fit_collective_implicit_als
                 buffer_FPnum,
                 buffer_lbfgs_iter
             );
-        }
         else
             optimizeA_implicit(
                 A + k_user, k_user+k+k_main,
@@ -5633,8 +5619,6 @@ int fit_collective_implicit_als
         free(cnt_NA_u_bycol);
         free(cnt_NA_i_byrow);
         free(cnt_NA_i_bycol);
-        free(U_orig);
-        free(I_orig);
     if (retval == 1) return 1;
 
     return 0;

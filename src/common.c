@@ -719,19 +719,6 @@ void factors_closed_form
         copy_mat(k, k,
                  precomputedBtBw + strideBtB, k + strideBtB,
                  bufferBtB, k);
-        // for (size_t ix = 0; ix < (size_t)n; ix++) {
-        //     if (isnan(Xa_dense[ix])) {
-        //         cblas_tsyr(CblasRowMajor, CblasUpper, k,
-        //                    -w, B + ix*(size_t)ldb, 1,
-        //                    bufferBtB, k);
-        //         Xa_dense[ix] = 0;
-        //     }
-        // }
-
-        // cblas_tgemv(CblasRowMajor, CblasTrans,
-        //             n, k,
-        //             w, B, ldb, Xa_dense, 1,
-        //             0., a_vec, 1);
 
         set_to_zero(a_vec, k, 1);
         for (size_t ix = 0; ix < (size_t)n; ix++)
