@@ -424,6 +424,8 @@ void taxpy_large(FPnum *restrict A, FPnum x, FPnum *restrict Y, size_t n, int nt
 
 void tscal_large(FPnum *restrict arr, FPnum alpha, size_t n, int nthreads)
 {
+    if (alpha == 1.)
+        return;
     if (n < (size_t)INT_MAX)
         cblas_tscal((int)n, alpha, arr, 1);
     else {

@@ -1415,6 +1415,8 @@ void collective_closed_form_block_implicit
     FPnum *restrict BtB = buffer_FPnum;
     bool add_C = false;
 
+    /* TODO: need to avoid modifying u_vec in-place */
+
     if (nnz == 0 && ((u_vec != NULL && cnt_NA_u == 0) || NA_as_zero_U) &&
         precomputedBeTBeChol != NULL && (!add_U || (use_cg && p < k_totA)))
     {
@@ -1521,6 +1523,7 @@ void collective_closed_form_block_implicit
     else
     {
         if (few_NAs && cnt_NA_u > 0 && !add_C)
+        {
             for (size_t ix = 0; ix < (size_t)p; ix++) {
                 if (isnan(u_vec[ix])) {
                     cblas_tsyr(CblasRowMajor, CblasUpper,
@@ -1530,7 +1533,9 @@ void collective_closed_form_block_implicit
                     u_vec[ix] = 0;
                 }
             }
+        }
         else if (add_C)
+        {
             for (size_t ix = 0; ix < (size_t)p; ix++) {
                 if (!isnan(u_vec[ix]))
                     cblas_tsyr(CblasRowMajor, CblasUpper,
@@ -1540,9 +1545,12 @@ void collective_closed_form_block_implicit
                 else
                     u_vec[ix] = 0;
             }
+        }
         else if (cnt_NA_u > 0)
+        {
             for (int ix = 0; ix < p; ix++)
                 u_vec[ix] = (!isnan(u_vec[ix]))? (u_vec[ix]) : (0);
+        }
 
         if (add_U || cnt_NA_u > 0)
             cblas_tgemv(CblasRowMajor, CblasTrans,
@@ -1556,10 +1564,10 @@ void collective_closed_form_block_implicit
        Be*t(Xe), upper part (from X) */
     for (size_t ix = 0; ix < nnz; ix++) {
         cblas_tsyr(CblasRowMajor, CblasUpper, k+k_main,
-                   Xa[ix],
+                   w_main * Xa[ix],
                    B + (size_t)k_item + (size_t)ixB[ix]*k_totB, 1,
                    BtB + k_user + k_user*k_totA, k_totA);
-        cblas_taxpy(k + k_main, Xa[ix] + w_main,
+        cblas_taxpy(k + k_main, w_main * (Xa[ix] + 1.),
                     B + (size_t)k_item + (size_t)ixB[ix]*k_totB, 1,
                     a_vec + k_user, 1);
     }
@@ -3742,18 +3750,25 @@ void optimizeA_collective_implicit
        from U and can be obtained from the single-matrix formula instead.
        However, if the U matrix has more rows, those still need to be
        considered as having a value of zero in X. */
-    /* TODO: this one will also calculate t(B)*B, could pass it pre-calculated
-       to avoid one extra un-needed calculation. */
     if (m > m_u)
     {
+        bool need_extra_buffer = !use_cg && (w_main != 1. || k_user > 0);
         precomputedBtB = buffer_FPnum;
         buffer_FPnum += square(k+k_main);
+        size_t diff = (size_t)square(k_totA) - (size_t)square(k+k_main);
+        size_t reserve_buff = (use_cg || !need_extra_buffer)?
+                                0 : (diff + square(k+k_main));
         cblas_tsyrk(CblasRowMajor, CblasUpper, CblasTrans,
                     k+k_main, n,
-                    use_cg? 1. : w_main, B + k_item, k_totB,
+                    1., B + k_item, k_totB,
                     0., precomputedBtB, k+k_main);
         if (!use_cg)
-            add_to_diag(precomputedBtB, lam, k+k_main);
+        {
+            if (need_extra_buffer)
+                copy_arr(precomputedBtB, buffer_FPnum + diff,
+                         square(k+k_main), nthreads);
+            add_to_diag(precomputedBtB, lam/w_main, k+k_main);
+        }
         precalculated_BtB = true;
 
         int m_diff = m - m_u;
@@ -3766,25 +3781,32 @@ void optimizeA_collective_implicit
                 lam/w_main,
                 nthreads, use_cg, max_cg_steps, false,
                 precomputedBtB,
-                buffer_FPnum
+                buffer_FPnum + reserve_buff
             );
         m = m_u;
 
-        /* In 'optimizeA_implicit, 'precomputedBtB' has size 'square(k+k_main)',
-           but for the rest of this function, it's needed with size
-           'square(k_totA)', so this will resize it by temporarily copying it
-           further in the buffer array */
-        if (k_user > 0 && !use_cg)
+        if (need_extra_buffer)
         {
-            size_t diff = (size_t)square(k_totA) - (size_t)square(k+k_main);
+            if (k_user == 0)
+            {
+                copy_arr(buffer_FPnum, precomputedBtB,
+                         square(k+k_main), nthreads);
+            }
+
+            else
+            {
+                set_to_zero(precomputedBtB, square(k_totA), 1);
+                copy_mat(
+                    k+k_main, k+k_main,
+                    buffer_FPnum + diff, k+k_main,
+                    precomputedBtB + k_user + k_user*k_totA, k_totA
+                );
+            }
+
+            if (w_main != 1.)
+                tscal_large(precomputedBtB, w_main, square(k_totA), nthreads);
+            add_to_diag(precomputedBtB, lam, k_totA);
             buffer_FPnum += diff;
-            copy_arr(precomputedBtB, buffer_FPnum, square(k+k_main), nthreads);
-            set_to_zero(precomputedBtB, square(k_totA), nthreads);
-            copy_mat(
-                k+k_main, k+k_main,
-                buffer_FPnum, k+k_main,
-                precomputedBtB + k_user + k_user*k_totA, k_totA
-            );
         }
     }
 
@@ -3841,13 +3863,11 @@ void optimizeA_collective_implicit
                 );
             }
 
-            if (!use_cg)
+            if (use_cg)
             {
-                if (w_main != 1.)
-                    tscal_large(precomputedBeTBe + k_user + k_user*k_totA,
-                                w_main,
-                                square(k_totA) -(k_user + k_user*k_totA)-k_main,
-                                nthreads);
+                tscal_large(precomputedBeTBe + k_user + k_user*k_totA, w_main,
+                            square(k_totA) - (k_user + k_user*k_totA),
+                            nthreads);
                 add_to_diag(precomputedBeTBe, lam, k_totA);
             }
         }
@@ -3865,9 +3885,9 @@ void optimizeA_collective_implicit
                     precomputedBeTBe + k_user + k_user*k_totA, k_totA,
                     precomputedBtB, k+k_main
                 );
-            if (w_main != 1.)
+            if (use_cg && w_main != 1.)
                 tscal_large(precomputedBeTBe + k_user + k_user*k_totA, w_main,
-                            square(k_totA) - (k_user + k_user*k_totA) - k_main,
+                            square(k_totA) - (k_user + k_user*k_totA),
                             nthreads);
             add_to_diag(precomputedBeTBe, lam, k_totA);
             if (!use_cg)
