@@ -1407,15 +1407,16 @@ void collective_closed_form_block_implicit
     int k_totA = k_user + k + k_main;
     size_t k_totB = k_item + k + k_main;
     int k_totC = k_user + k;
-    bool few_NAs = (u_vec != NULL && (FPnum)cnt_NA_u < 0.1*(FPnum)p);
-    /* TODO: revisit the calculation for 'few_NAs' */
+    bool few_NAs = (u_vec != NULL && cnt_NA_u < k_user+k);
     if ((add_U || cnt_NA_u > 0) && !use_cg)
         set_to_zero(a_vec, k_totA, 1);
 
     FPnum *restrict BtB = buffer_FPnum;
     bool add_C = false;
 
-    /* TODO: need to avoid modifying u_vec in-place */
+    /* TODO: for better numerical precision, perhaps should add the
+       values that come from 'X' first, then rescale by 'w_main', as
+       those numbers will be larger. */
 
     if (nnz == 0 && ((u_vec != NULL && cnt_NA_u == 0) || NA_as_zero_U) &&
         precomputedBeTBeChol != NULL && (!add_U || (use_cg && p < k_totA)))
@@ -1530,7 +1531,6 @@ void collective_closed_form_block_implicit
                                k_totC, -w_user,
                                C + ix*(size_t)k_totC, 1,
                                BtB, k_totA);
-                    u_vec[ix] = 0;
                 }
             }
         }
@@ -1542,21 +1542,31 @@ void collective_closed_form_block_implicit
                                k_totC, w_user,
                                C + ix*(size_t)k_totC, 1,
                                BtB, k_totA);
-                else
-                    u_vec[ix] = 0;
             }
-        }
-        else if (cnt_NA_u > 0)
-        {
-            for (int ix = 0; ix < p; ix++)
-                u_vec[ix] = (!isnan(u_vec[ix]))? (u_vec[ix]) : (0);
         }
 
         if (add_U || cnt_NA_u > 0)
-            cblas_tgemv(CblasRowMajor, CblasTrans,
-                        p, k_user+k,
-                        w_user, C, k_user+k, u_vec, 1,
-                        0., a_vec, 1);
+        {
+            if (cnt_NA_u == 0)
+            {
+                cblas_tgemv(CblasRowMajor, CblasTrans,
+                            p, k_user+k,
+                            w_user, C, k_user+k, u_vec, 1,
+                            0., a_vec, 1);
+            }
+
+            else
+            {
+                set_to_zero(a_vec, k_user+k, 1);
+                for (size_t ix = 0; ix < (size_t)p; ix++)
+                    if (!isnan(u_vec[ix]))
+                        cblas_taxpy(k_user+k, u_vec[ix],
+                                    C + ix*(size_t)k_totC, 1,
+                                    a_vec, 1);
+                if (w_user != 1.)
+                    cblas_tscal(k_user+k, w_user, a_vec, 1);
+            }
+        }
     }
 
     /* t(Be)*Be, lower-right square (from B)
