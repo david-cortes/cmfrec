@@ -579,6 +579,12 @@ int offsets_factors_warm
                        glob_mean, lam_bias, biasB,
                        (Bm_plus_bias == NULL)? a_bias : (FPnum*)NULL,
                        &cnt_NA);
+    else if (alpha != 1.) {
+        if (Xa != NULL)
+            tscal_large(Xa, alpha, nnz, 1);
+        else
+            cblas_tscal(n, alpha, Xa_dense, 1); /* should not be reached */
+    }
 
     FPnum *restrict a_plus_bias = NULL;
     if (append_bias) {
@@ -587,7 +593,7 @@ int offsets_factors_warm
     }
 
     /* TODO: revisit this */
-    // if (implicit) lam /= w_main_multiplier;
+    if (implicit) lam /= w_main_multiplier;
 
     if ((!exact && k_sec == 0) || implicit)
     {
@@ -645,7 +651,7 @@ int offsets_factors_warm
                 a_vec, k_sec+k+k_main,
                 Bm, k_sec+k+k_main,
                 Xa, ixB, nnz,
-                lam, alpha, w_main_multiplier,
+                lam,
                 precomputedBtBw, 0,
                 true,
                 buffer_FPnum,
@@ -1874,6 +1880,14 @@ int offsets_factors_warm_multiple
         weightR = weight;
     }
 
+    /* this should NOT be reached */
+    if (implicit && alpha != 1.) {
+        if (Xcsr_use != NULL)
+            tscal_large(Xcsr_use, alpha, nnz, nthreads);
+        else
+            cblas_tscal(n, alpha, X, 1);
+    }
+
     if (U_sp != NULL && U_csr == NULL) {
         retval = coo_to_csr_plus_alloc(
                     U_row, U_col, U_sp, (FPnum*)NULL,
@@ -1894,7 +1908,7 @@ int offsets_factors_warm_multiple
                    Xcsr_p_use, Xcsr_i_use, Xcsr_use, Xfull, weight, weightR, \
                    Bm_plus_bias, output_A, glob_mean, k, k_sec, k_main, \
                    w_user, w_main_multiplier, lam, exact, lam_bias, \
-                   implicit, alpha, precomputedBtBw, precomputedBtBinvBt)
+                   implicit, precomputedBtBw, precomputedBtBinvBt)
     for (size_t_for ix = 0; ix < (size_t)m; ix++)
         ret[ix] = offsets_factors_warm(
                     A + ix*(size_t)k_totA,
@@ -1931,7 +1945,7 @@ int offsets_factors_warm_multiple
                     k, k_sec, k_main,
                     p, w_user,
                     lam, exact, lam_bias,
-                    implicit, alpha,
+                    implicit, 1.,
                     w_main_multiplier,
                     precomputedBtBinvBt,
                     precomputedBtBw,

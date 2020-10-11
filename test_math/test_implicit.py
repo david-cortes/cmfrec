@@ -11,7 +11,7 @@ nz = int(m*n*0.25)
 
 
 lam = 2.5
-alpha = 1.234
+alpha = 4.234
 w = 3.4456
 
 nthreads = 4

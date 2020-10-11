@@ -1275,7 +1275,7 @@ void factors_implicit_cg
     FPnum *restrict a_vec, int k,
     FPnum *restrict B, size_t ldb,
     FPnum *restrict Xa, int ixB[], size_t nnz,
-    FPnum lam, FPnum alpha, FPnum w,
+    FPnum lam,
     FPnum *restrict precomputedBtBw, int strideBtB,
     int max_cg_steps,
     FPnum *restrict buffer_FPnum,
@@ -1304,11 +1304,10 @@ void factors_implicit_cg
     for (size_t ix = 0; ix < nnz; ix++) {
         coef = cblas_tdot(k, B + (size_t)ixB[ix]*ldb, 1, a_vec, 1);
         cblas_taxpy(k,
-                    alpha*Xa[ix] - coef * (alpha*Xa[ix] - 1.),
+                    Xa[ix] - coef * (Xa[ix] - 1.),
                     B + (size_t)ixB[ix]*ldb, 1,
                     r, 1);
     }
-    if (w != 1.) cblas_tscal(k, w, r, 1);
 
     copy_arr(r, p, k, 1);
     r_old = cblas_tdot(k, r, 1, r, 1);
@@ -1330,11 +1329,10 @@ void factors_implicit_cg
         for (size_t ix = 0; ix < nnz; ix++) {
             coef = cblas_tdot(k, B + (size_t)ixB[ix]*ldb, 1, p, 1);
             cblas_taxpy(k,
-                        coef * (alpha*Xa[ix] - 1.),
+                        coef * (Xa[ix] - 1.),
                         B + (size_t)ixB[ix]*ldb, 1,
                         Ap, 1);
         }
-        if (w != 1.) cblas_tscal(k, w, Ap, 1);
 
         a = r_old / cblas_tdot(k, Ap, 1, p, 1);
         cblas_taxpy(k,  a,  p, 1, a_vec, 1);
@@ -1359,7 +1357,7 @@ void factors_implicit_chol
     FPnum *restrict a_vec, int k,
     FPnum *restrict B, size_t ldb,
     FPnum *restrict Xa, int ixB[], size_t nnz,
-    FPnum lam, FPnum alpha, FPnum w,
+    FPnum lam,
     FPnum *restrict precomputedBtBw, int strideBtB,
     bool zero_out,
     FPnum *restrict buffer_FPnum,
@@ -1381,9 +1379,9 @@ void factors_implicit_chol
 
     for (size_t ix = 0; ix < nnz; ix++) {
         cblas_tsyr(CblasRowMajor, CblasUpper, k,
-                   alpha*Xa[ix], B + (size_t)ixB[ix]*ldb, 1,
+                   Xa[ix], B + (size_t)ixB[ix]*ldb, 1,
                    BtBw, k);
-        cblas_taxpy(k, alpha*Xa[ix] + 1.,
+        cblas_taxpy(k, Xa[ix] + 1.,
                     B + (size_t)ixB[ix]*ldb, 1, a_vec, 1);
     }
 
@@ -1401,7 +1399,7 @@ void factors_implicit
     FPnum *restrict a_vec, int k,
     FPnum *restrict B, size_t ldb,
     FPnum *restrict Xa, int ixB[], size_t nnz,
-    FPnum lam, FPnum alpha, FPnum w,
+    FPnum lam,
     FPnum *restrict precomputedBtBw, int strideBtB,
     bool zero_out, bool use_cg, int max_cg_steps,
     FPnum *restrict buffer_FPnum,
@@ -1416,7 +1414,7 @@ void factors_implicit
             a_vec, k,
             B, ldb,
             Xa, ixB, nnz,
-            lam, alpha, w,
+            lam,
             precomputedBtBw, strideBtB,
             max_cg_steps,
             buffer_FPnum,
@@ -1427,7 +1425,7 @@ void factors_implicit
             a_vec, k,
             B, ldb,
             Xa, ixB, nnz,
-            lam, alpha, w,
+            lam,
             precomputedBtBw, strideBtB,
             zero_out,
             buffer_FPnum,
@@ -2035,14 +2033,13 @@ void optimizeA_implicit
     FPnum *restrict B, size_t ldb,
     int m, int n, int k,
     long Xcsr_p[], int Xcsr_i[], FPnum *restrict Xcsr,
-    FPnum lam, FPnum alpha, FPnum w,
+    FPnum lam,
     int nthreads,
     bool use_cg, int max_cg_steps, bool force_set_to_zero,
     FPnum *restrict precomputedBtBw, /* <- will be calculated if not passed */
     FPnum *restrict buffer_FPnum
 )
 {
-    /* TODO: this needs to incorporate a 'w', otherwise results are wrong */
     if (precomputedBtBw == NULL)
     {
         precomputedBtBw = buffer_FPnum;
@@ -2060,7 +2057,7 @@ void optimizeA_implicit
 
     int ix = 0;
     #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
-            shared(A, B, lda, ldb, m, n, k, lam, alpha, \
+            shared(A, B, lda, ldb, m, n, k, lam, \
                    Xcsr, Xcsr_i, Xcsr_p, precomputedBtBw, buffer_FPnum, \
                    size_buffer, use_cg)
     for (ix = 0; ix < m; ix++)
@@ -2068,7 +2065,7 @@ void optimizeA_implicit
             A + (size_t)ix*lda, k,
             B, ldb,
             Xcsr + Xcsr_p[ix], Xcsr_i + Xcsr_p[ix], Xcsr_p[ix+1] - Xcsr_p[ix],
-            lam, alpha, w,
+            lam,
             precomputedBtBw, 0,
             false, use_cg, max_cg_steps,
             buffer_FPnum + ((size_t)omp_get_thread_num() * size_buffer),

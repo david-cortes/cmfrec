@@ -157,7 +157,7 @@ cdef extern from "cmfrec.h":
         double *B, size_t ldb,
         int m, int n, int k,
         long Xcsr_p[], int Xcsr_i[], double *Xcsr,
-        double lam, double alpha, double w,
+        double lam,
         int nthreads,
         bint use_cg, int max_cg_steps, bint force_set_to_zero,
         double *precomputedBtB,
@@ -190,7 +190,7 @@ cdef extern from "cmfrec.h":
         long U_csr_p[], int U_csr_i[], double *U_csr,
         double *U, int cnt_NA_u[],
         double full_dense_u, double near_dense_u, double NA_as_zero_U,
-        double lam, double alpha, double w_main, double w_user,
+        double lam, double w_main, double w_user,
         int nthreads,
         bint use_cg, int max_cg_steps, bint is_first_iter,
         double *buffer_double,
@@ -1026,13 +1026,15 @@ def py_optimizeA_implicit(
     
     cdef size_t lda = A.shape[1]
     cdef size_t ldb = B.shape[1]
+
+    cdef np.ndarray[double, ndim=1] Xcsr_pass = Xcsr * alpha
     
     optimizeA_implicit(
         &A[0,0], lda,
         &B[0,0], ldb,
         m, n, k,
-        &Xcsr_p[0], &Xcsr_i[0], &Xcsr[0],
-        lam, alpha, w,
+        &Xcsr_p[0], &Xcsr_i[0], &Xcsr_pass[0],
+        lam/w,
         nthreads,
         0, 0, 1,
         <double*>NULL,
@@ -1066,7 +1068,10 @@ def py_optimizeA_collective_implicit(
     cdef double *ptr_Xcsr = NULL
     ptr_Xcsr_p = &Xcsr_p[0]
     ptr_Xcsr_i = &Xcsr_i[0]
-    ptr_Xcsr = &Xcsr[0]
+    # ptr_Xcsr = &Xcsr[0]
+
+    cdef np.ndarray[double, ndim=1] Xcsr_pass = alpha * Xcsr
+    ptr_Xcsr = &Xcsr_pass[0]
 
     cdef np.ndarray[int, ndim=1] cnt_NA_u
     cdef bint full_dense_u = 0
@@ -1096,7 +1101,7 @@ def py_optimizeA_collective_implicit(
         ptr_Ucsr_p, ptr_Ucsr_i, ptr_Ucsr,
         ptr_U, ptr_cnt_NA_u,
         full_dense_u, as_near_dense_u, NA_as_zero_U,
-        lam, alpha, w_main, w_user,
+        lam, w_main, w_user,
         nthreads,
         0, 0, 1,
         &buffer_double[0],
