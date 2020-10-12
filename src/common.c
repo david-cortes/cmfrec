@@ -1364,7 +1364,6 @@ void factors_implicit_chol
     bool force_add_diag
 )
 {
-    /* TODO: make use of 'w' in here */
     char uplo = 'L';
     int one = 1;
     int ignore;
@@ -1766,6 +1765,7 @@ void optimizeA
                         1., Xfull, m, B, ldb,
                         0., A, lda);
 
+        /* TODO: is this still needed? */
         if (near_dense)
             #pragma omp parallel for schedule(static) \
                     num_threads(min2(4, nthreads)) \
@@ -1948,7 +1948,7 @@ void optimizeA
     }
 
     /* Case 3: X is sparse, with missing-as-zero, and no weights.
-       Here can also use the closed-form for all rows at once. */
+       Here can also use one Cholesky for all rows at once. */
     else if (Xfull == NULL && NA_as_zero && weight == NULL)
     {
         FPnum *restrict bufferBtB = buffer_FPnum;
@@ -1963,7 +1963,7 @@ void optimizeA
         else
             for (size_t row = 0; row < (size_t)m; row++)
                 memset(A + row*(size_t)lda, 0, k*sizeof(FPnum));
-        sgemm_sp_dense(
+        tgemm_sp_dense(
             m, k, 1.,
             Xcsr_p, Xcsr_i, Xcsr,
             B, (size_t)ldb,
@@ -2001,7 +2001,7 @@ void optimizeA
         if (use_cg)
             size_buffer = max2(size_buffer, (size_t)(3 * k));
         if (use_cg && Xfull == NULL)
-            size_buffer = 3 * k + (NA_as_zero? n : 0);
+            size_buffer = (size_t)(3 * k) + (size_t)(NA_as_zero? n : 0);
 
         #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
                 shared(A, lda, B, ldb, m, n, k, lam, lam_last, weight, cnt_NA, \

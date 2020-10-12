@@ -1080,8 +1080,7 @@ void collective_closed_form_block
             (Xa_dense == NULL && nnz == 0 && !NA_as_zero_X)  )
                 &&
           (  (u_vec != NULL && cnt_NA_u == p) ||
-             (u_vec_sp != NULL && nnz_u_vec == 0 && !NA_as_zero_U) ||
-             (u_vec == NULL && u_vec_sp == NULL)  )
+             (u_vec == NULL && nnz_u_vec == 0 && !NA_as_zero_U)  )
         )
     {
         set_to_zero(a_vec, k_user + k + k_main, 1);
@@ -2664,16 +2663,17 @@ int collective_factors_warm
 
     /* If there's no side info, just need to apply the closed-form
        on the X data */
-    if (u_vec == NULL && u_vec_sp == NULL && u_bin_vec == NULL)
+    /* TODO: revise the buffer size in here */
+    if (u_vec == NULL && (nnz_u_vec == 0 && !NA_as_zero_U) && u_bin_vec == NULL)
     {
         if (BtBinvBt == NULL || Xa_dense == NULL ||
             cnt_NA_x > 0 || weight != NULL || NA_as_zero_X)
         {
             size_buffer = square(k + k_main + append_bias);
-            if (Xa_dense != NULL || (NA_as_zero_X && weight != NULL)) {
-                if (cnt_NA_x > 0 || k_item != 0 || weight != NULL)
-                    size_buffer += (size_t)n * (size_t)(k + k_main+append_bias);
-            }
+            // if (Xa_dense != NULL || (NA_as_zero_X && weight != NULL)) {
+            //     if (cnt_NA_x > 0 || k_item != 0 || weight != NULL)
+            //         size_buffer += (size_t)n * (size_t)(k + k_main+append_bias);
+            // }
             buffer_FPnum = (FPnum*)malloc(size_buffer*sizeof(FPnum));
             if (buffer_FPnum == NULL) return 1;
         }
@@ -2763,13 +2763,14 @@ int collective_factors_warm
     else
     {
         size_buffer = square(k_user+k+k_main+(int)append_bias);
-        bool alloc_B = false;
-        bool alloc_C = false;
-        if (Xa_dense != NULL && weight == NULL) alloc_B = true;
-        if (u_vec != NULL && (FPnum)cnt_NA_u_vec >= (FPnum)p*0.1) alloc_C=true;
-        size_buffer += (k+k_main)
-                        * ((alloc_B && alloc_C)?
-                            max2(p, n) : (alloc_B? n : (alloc_C? p : 0)));
+        /* TODO: revisit buffer size */
+        // bool alloc_B = false;
+        // bool alloc_C = false;
+        // if (Xa_dense != NULL && weight == NULL) alloc_B = true;
+        // if (u_vec != NULL && (FPnum)cnt_NA_u_vec >= (FPnum)p*0.1) alloc_C=true;
+        // size_buffer += (k+k_main)
+        //                 * ((alloc_B && alloc_C)?
+        //                     max2(p, n) : (alloc_B? n : (alloc_C? p : 0)));
         buffer_FPnum = (FPnum*)malloc(size_buffer*sizeof(FPnum));
         if (buffer_FPnum == NULL) return 1;
 
@@ -3348,7 +3349,7 @@ void optimizeA_collective
                 do_B, true
             );
         else if (Xcsr != NULL)
-            sgemm_sp_dense(
+            tgemm_sp_dense(
                 m, k+k_main, w_main,
                 Xcsr_p, Xcsr_i, Xcsr,
                 B + k_item, (size_t)k_totB,
@@ -3362,7 +3363,7 @@ void optimizeA_collective
                         w_user, U, p, C, k_user + k,
                         1., A, k_totA);
         else if (U_csr != NULL)
-            sgemm_sp_dense(
+            tgemm_sp_dense(
                 m, k_user+k, w_user,
                 U_csr_p, U_csr_i, U_csr,
                 C, (size_t)k_totC,
@@ -3403,12 +3404,7 @@ void optimizeA_collective
             FPnum *restrict bufferX = buffer_FPnum;
             FPnum *restrict buffer_remainder = bufferX
                                                 + (do_B? (n*nthreads) : (0));
-            // size_t size_buffer = square(k_pred)
-            //                       + ((size_t)n * (size_t)(k+k_main))
-            //                       + ((size_t)p * (size_t)(k_user+k));
-            // if (use_cg) size_buffer += (size_t)6 * (size_t)k_pred;
             size_t size_buffer = use_cg? (3*k_totA) : (square(k_totA));
-            /* TODO: correct the buffer size here for CG method */
 
             #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
                     shared(A, k_totA, B, k_totB, C, k, k_user, k_item, k_main, \
@@ -3609,7 +3605,7 @@ void optimizeA_collective
 
         else if (Xfull == NULL && weight == NULL && NA_as_zero_X) {
             add_X = false;
-            sgemm_sp_dense(
+            tgemm_sp_dense(
                 m, k+k_main, w_main,
                 Xcsr_p, Xcsr_i, Xcsr,
                 B + k_item, (size_t)k_totB,
@@ -3628,7 +3624,7 @@ void optimizeA_collective
 
         else if (U == NULL && NA_as_zero_U) {
             add_U = false;
-            sgemm_sp_dense(
+            tgemm_sp_dense(
                 m, k_user+k, w_user,
                 U_csr_p, U_csr_i, U_csr,
                 C, (size_t)k_totC,
@@ -3938,7 +3934,7 @@ void optimizeA_collective_implicit
                         0., A, k_totA);
         }
         else {
-            sgemm_sp_dense(
+            tgemm_sp_dense(
                 m_u, k_user + k, w_user,
                 U_csr_p, U_csr_i, U_csr,
                 C, k_totC,

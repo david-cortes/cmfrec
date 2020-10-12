@@ -251,7 +251,7 @@ void reduce_mat_sum(FPnum *restrict outp, size_t lda, FPnum *restrict inp,
 void exp_neg_x(FPnum *restrict arr, size_t n, int nthreads);
 void add_to_diag(FPnum *restrict A, FPnum val, int n);
 FPnum sum_sq_div_w(FPnum *restrict arr, FPnum *restrict w, size_t n, bool compensated, int nthreads);
-void sgemm_sp_dense
+void tgemm_sp_dense
 (
     int m, int n, FPnum alpha,
     long indptr[], int indices[], FPnum values[],

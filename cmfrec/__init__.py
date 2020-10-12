@@ -428,26 +428,32 @@ class _CMF:
             if Mat.shape[0] == 0:
                 raise ValueError("Model was not fit to %s data." % name)
             U_val = np.array(U_val).reshape(-1).astype(self.dtype_)
-            if self.reindex_:
-                if len(dct):
-                    try:
-                        U_col = np.array([dct[u] for u in U_col])
-                    except:
-                        raise ValueError("Sparse inputs cannot contain missing values.")
-                else:
-                    U_col = pd.Categorical(U_col, mapping).codes.astype(ctypes.c_int)
-                    if np.any(U_col < 0):
-                        raise ValueError("Sparse inputs cannot contain missing values.")
-                U_col = U_col.astype(ctypes.c_int)
+            if U_val.shape[0] == 0:
+                if np.array(U_col).shape[0] > 0:
+                    raise ValueError("'%s_col' and '%s_val' must have the same number of entries." % (letter, letter))
+                U_col = np.empty(0, dtype=ctypes.c_int)
+                U_val = np.empty(0, dtype=self.dtype_)
             else:
-                U_col = np.array(U_col).reshape(-1).astype(ctypes.c_int)
-                imin, imax = U_col.min(), U_col.max()
-                if np.isnan(imin) or np.isnan(imax):
-                    raise ValueError("Sparse inputs cannot contain missing values.")
-                if (imin < 0) or (imax >= Mat.shape[0]):
-                    msg  = "Column indices for user info must be within the range"
-                    msg += " of the data that was pased to 'fit'."
-                    raise ValueError(msg)
+                if self.reindex_:
+                    if len(dct):
+                        try:
+                            U_col = np.array([dct[u] for u in U_col])
+                        except:
+                            raise ValueError("Sparse inputs cannot contain missing values.")
+                    else:
+                        U_col = pd.Categorical(U_col, mapping).codes.astype(ctypes.c_int)
+                        if np.any(U_col < 0):
+                            raise ValueError("Sparse inputs cannot contain missing values.")
+                    U_col = U_col.astype(ctypes.c_int)
+                else:
+                    U_col = np.array(U_col).reshape(-1).astype(ctypes.c_int)
+                    imin, imax = U_col.min(), U_col.max()
+                    if np.isnan(imin) or np.isnan(imax):
+                        raise ValueError("Sparse inputs cannot contain missing values.")
+                    if (imin < 0) or (imax >= Mat.shape[0]):
+                        msg  = "Column indices for user info must be within the range"
+                        msg += " of the data that was pased to 'fit'."
+                        raise ValueError(msg)
             if U_val.shape[0] != U_col.shape[0]:
                 raise ValueError("'%s_col' and '%s_val' must have the same number of entries." % (letter, letter))
         else:
@@ -1179,22 +1185,51 @@ class _CMF:
             lambda_ = self.lambda_
         
         if not self._implicit:
-            a_vec = c_funs.call_factors_collective_cold(
-                U,
-                U_val,
-                U_col,
-                U_bin,
-                self.C_,
-                self.Cbin_,
-                self._CtCinvCt,
-                self._CtC,
-                self._CtCchol,
-                self._U_colmeans,
-                self.C_.shape[0], self.k,
-                self.k_user, self.k_main,
-                lambda_, self.w_user,
-                self.NA_as_zero_user
-            )
+            if not self.NA_as_zero:
+                a_vec = c_funs.call_factors_collective_cold(
+                    U,
+                    U_val,
+                    U_col,
+                    U_bin,
+                    self.C_,
+                    self.Cbin_,
+                    self._CtCinvCt,
+                    self._CtC,
+                    self._CtCchol,
+                    self._U_colmeans,
+                    self.C_.shape[0], self.k,
+                    self.k_user, self.k_main,
+                    lambda_, self.w_user,
+                    self.NA_as_zero_user
+                )
+            else:
+                _, a_vec = c_funs.call_factors_collective_warm_explicit(
+                    np.empty(0, dtype=self.dtype_),
+                    np.empty(0, dtype=self.dtype_),
+                    np.empty(0, dtype=self.dtype_),
+                    np.empty(0, dtype=ctypes.c_int),
+                    np.empty(0, dtype=self.dtype_),
+                    U,
+                    U_val,
+                    U_col,
+                    U_bin,
+                    self._U_colmeans,
+                    self.item_bias_,
+                    self.B_,
+                    self._B_plus_bias,
+                    self.C_,
+                    self.Cbin_,
+                    self._BtBinvBt,
+                    self._BtB,
+                    self._BtBchol,
+                    self._CtC,
+                    self.glob_mean_,
+                    self.k, self.k_user, self.k_item, self.k_main,
+                    lambda_, lambda_bias,
+                    self.w_user, self.w_main,
+                    self.user_bias,
+                    self.NA_as_zero_user, self.NA_as_zero
+                )
         else:
             a_vec = c_funs.call_factors_collective_cold_implicit(
                 U,
@@ -1260,18 +1295,23 @@ class _CMF:
             W_dense = np.empty(0, dtype=self.dtype_)
             X_val = np.array(X_val).reshape(-1).astype(self.dtype_)
 
-            if self.reindex_:
-                X_col = np.array(X_col).reshape(-1)
-                X_col = pd.Categorical(X_col, self.item_mapping_).codes.astype(ctypes.c_int)
-                if np.any(X_col < 0):
-                    raise ValueError("'X_col' must have the same item/column entries as passed to 'fit'.")
-            else:
+            if X_val.shape[0] == 0:
                 X_col = np.array(X_col).reshape(-1).astype(ctypes.c_int)
-                imin, imax = np.min(X_col), np.max(X_col)
-                if (imin < 0) or (imax >= self.B_.shape[0]) or np.isnan(imin) or np.isnan(imax):
-                    msg  = "Column indices ('X_col') must be within the range"
-                    msg += " of the data that was pased to 'fit'."
-                    raise ValueError(msg)
+                if X_col.shape[0] > 0:
+                    raise ValueError("'X_col' and 'X_val' must have the same number of entries.")
+            else:
+                if self.reindex_:
+                    X_col = np.array(X_col).reshape(-1)
+                    X_col = pd.Categorical(X_col, self.item_mapping_).codes.astype(ctypes.c_int)
+                    if np.any(X_col < 0):
+                        raise ValueError("'X_col' must have the same item/column entries as passed to 'fit'.")
+                else:
+                    X_col = np.array(X_col).reshape(-1).astype(ctypes.c_int)
+                    imin, imax = np.min(X_col), np.max(X_col)
+                    if (imin < 0) or (imax >= self.B_.shape[0]) or np.isnan(imin) or np.isnan(imax):
+                        msg  = "Column indices ('X_col') must be within the range"
+                        msg += " of the data that was pased to 'fit'."
+                        raise ValueError(msg)
 
             if X_val.shape[0] != X_col.shape[0]:
                 raise ValueError("'X_col' and 'X_val' must have the same number of entries.")
@@ -1428,25 +1468,94 @@ class _CMF:
 
         c_funs = wrapper_float if self.use_float else wrapper_double
 
-        A = c_funs.call_collective_factors_cold_multiple(
-            Uarr,
-            Urow,
-            Ucol,
-            Uval,
-            Ucsr_p, Ucsr_i, Ucsr,
-            Ub_arr,
-            Mat,
-            MatBin,
-            np.empty((0,0), dtype=self.dtype_),
-            np.empty((0,0), dtype=self.dtype_),
-            np.empty((0,0), dtype=self.dtype_),
-            self._U_colmeans if not is_I else self._I_colmeans,
-            m_u, m_ub,
-            self.k, self.k_user if not is_I else self.k_item, self.k_main,
-            lambda_, self.w_user if not is_I else self.w_item,
-            self.NA_as_zero_user if not is_I else self.NA_as_zero_item,
-            self.nthreads
-        )
+        if (not self.implicit) or (is_I):
+            if (not self.NA_as_zero) or (is_I):
+                A = c_funs.call_collective_factors_cold_multiple(
+                    Uarr,
+                    Urow,
+                    Ucol,
+                    Uval,
+                    Ucsr_p, Ucsr_i, Ucsr,
+                    Ub_arr,
+                    Mat,
+                    MatBin,
+                    np.empty((0,0), dtype=self.dtype_),
+                    np.empty((0,0), dtype=self.dtype_),
+                    np.empty((0,0), dtype=self.dtype_),
+                    self._U_colmeans if not is_I else self._I_colmeans,
+                    m_u, m_ub,
+                    self.k, self.k_user if not is_I else self.k_item, self.k_main,
+                    lambda_, self.w_user if not is_I else self.w_item,
+                    self.NA_as_zero_user if not is_I else self.NA_as_zero_item,
+                    self.nthreads
+                )
+            else:
+                A, _ = c_funs.call_collective_factors_warm_multiple(
+                    np.empty((0,0), dtype=ctypes.c_int),
+                    np.empty((0,0), dtype=ctypes.c_int),
+                    np.empty((0,0), dtype=self.dtype_),
+                    np.empty((0,0), dtype=ctypes.c_long),
+                    np.empty((0,0), dtype=ctypes.c_int),
+                    np.empty((0,0), dtype=self.dtype_),
+                    np.empty((0,0), dtype=self.dtype_),
+                    np.empty((0,0), dtype=self.dtype_),
+                    np.empty((0,0), dtype=self.dtype_),
+                    Uarr,
+                    Urow,
+                    Ucol,
+                    Uval,
+                    Ucsr_p, Ucsr_i, Ucsr,
+                    Ub_arr,
+                    self._U_colmeans,
+                    self.item_bias_,
+                    self._B_pred,
+                    self._B_plus_bias,
+                    self.C_,
+                    self.Cbin_,
+                    self._BtBinvBt,
+                    self._BtB,
+                    self._CtCinvCt,
+                    self._CtC,
+                    self._CtCchol,
+                    n, m_u, 0,
+                    self.glob_mean_,
+                    self._k_pred,
+                    self.k_user,
+                    self.k_item,
+                    self._k_main_col,
+                    lambda_, lambda_bias,
+                    self.w_user, self.w_main,
+                    self.user_bias,
+                    self.NA_as_zero_user, self.NA_as_zero,
+                    self.nthreads
+                )
+        else:
+            A = c_funs.call_collective_factors_warm_implicit_multiple(
+                np.empty((0,0), dtype=ctypes.c_int),
+                np.empty((0,0), dtype=ctypes.c_int),
+                np.empty((0,0), dtype=self.dtype_),
+                np.empty((0,0), dtype=ctypes.c_long),
+                np.empty((0,0), dtype=ctypes.c_int),
+                np.empty((0,0), dtype=self.dtype_),
+                Uarr,
+                Urow,
+                Ucol,
+                Uval,
+                Ucsr_p, Ucsr_i, Ucsr,
+                self._U_colmeans,
+                self._B_pred,
+                self.C_,
+                self._BeTBe,
+                self._BtB_padded,
+                self._BtB_shrunk,
+                n, m_u, 0,
+                self.k, self.k_user, self.k_item, self.k_main,
+                lambda_, self.alpha,
+                self._w_main_multiplier,
+                self.w_user, self.w_main,
+                self.NA_as_zero_user,
+                self.nthreads
+            )
         return A
 
 
@@ -1461,6 +1570,10 @@ class CMF_explicit(_CMF):
         U ~ A * t(C)
         I ~ B * t(D)
     Might apply sigmoid transformations to binary columns in U and I too.
+
+    This is the most flexible of the models available in this package, and
+    can also mimic the implicit-feedback version through the option 'NA_as_zero'
+    plus an array of weights.
 
     Note
     ----
@@ -1897,6 +2010,11 @@ class CMF_explicit(_CMF):
         """
         Predict rating given by a new user to existing items, given U
 
+        Note
+        ----
+        If using ``NA_as_zero``, this function will assume that all
+        the 'X' values are zeros rather than being missing.
+
         Parameters
         ----------
         items : array-like(n,)
@@ -1933,6 +2051,11 @@ class CMF_explicit(_CMF):
         """
         Predict rating given by new users to existing items, given U
 
+        Note
+        ----
+        If using ``NA_as_zero``, this function will assume that all
+        the 'X' values are zeros rather than being missing.
+
         Parameters
         ----------
         item : array-like(m,)
@@ -1963,6 +2086,11 @@ class CMF_explicit(_CMF):
                   include=None, exclude=None, output_score=False):
         """
         Compute top-N highest-predicted items for a new user, given 'U'
+
+        Note
+        ----
+        If using ``NA_as_zero``, this function will assume that all
+        the 'X' values are zeros rather than being missing.
 
         Parameters
         ----------
@@ -2021,6 +2149,11 @@ class CMF_explicit(_CMF):
     def factors_cold(self, U=None, U_bin=None, U_col=None, U_val=None):
         """
         Determine user-factors from new data, given U
+
+        Note
+        ----
+        If using ``NA_as_zero``, this function will assume that all
+        the 'X' values are zeros rather than being missing.
 
         Parameters
         ----------
@@ -3533,6 +3666,11 @@ class _OMF_Base(_CMF):
         attribute (model parameter) ``C_``, plus the intercept if
         present (``C_bias_``).
 
+        Note
+        ----
+        The argument 'NA_as_zero' (if available)
+        is ignored here - thus, it assumes all the 'X' values are missing.
+
         Parameters
         ----------
         U : array(p,), or None
@@ -3576,6 +3714,11 @@ class _OMF_Base(_CMF):
         """
         Predict rating/confidence given by a new user to existing items, given U
 
+        Note
+        ----
+        The argument 'NA_as_zero' (if available)
+        is ignored here - thus, it assumes all the 'X' values are missing.
+
         Parameters
         ----------
         items : array-like(n,)
@@ -3608,6 +3751,11 @@ class _OMF_Base(_CMF):
                   include=None, exclude=None, output_score=False):
         """
         Compute top-N highest-predicted items for a new user, given 'U'
+
+        Note
+        ----
+        The argument 'NA_as_zero' (if available)
+        is ignored here - thus, it assumes all the 'X' values are missing.
 
         Parameters
         ----------
@@ -3995,7 +4143,9 @@ class OMF_explicit(_OMF):
         when the 'X' matrix is passed as sparse COO matrix or DataFrame)
         instead of ignoring them. Note that this is a different model from the
         implicit-feedback version with weighted entries, and it's a much faster
-        model to fit.
+        model to fit. Be aware that this option will be ignored later when
+        predicting on new data - that is, non-present values will be treated
+        as missing.
     use_float : bool
         Whether to use C float type for the model parameters (typically this is
         ``np.float32``). If passing ``False``, will use C double (typically this
@@ -4324,6 +4474,10 @@ class OMF_explicit(_OMF):
         """
         Determine user latent factors based on new ratings data
 
+        Note
+        ----
+        The argument 'NA_as_zero' is ignored here.
+
         Parameters
         ----------
         X : array(n,) or None
@@ -4456,6 +4610,10 @@ class OMF_explicit(_OMF):
         """
         Predict ratings for existing items, for a new user, given 'X'
 
+        Note
+        ----
+        The argument 'NA_as_zero' is ignored here.
+
         Parameters
         ----------
         items : array-like(n,)
@@ -4511,6 +4669,10 @@ class OMF_explicit(_OMF):
     def predict_warm_multiple(self, X, item, U=None, W=None):
         """
         Predict ratings for existing items, for new users, given 'X'
+
+        Note
+        ----
+        The argument 'NA_as_zero' is ignored here.
 
         Parameters
         ----------
@@ -4595,6 +4757,10 @@ class OMF_explicit(_OMF):
         """
         Compute top-N highest-predicted items for a new user, given 'X'
 
+        Note
+        ----
+        The argument 'NA_as_zero' is ignored here.
+
         Parameters
         ----------
         n : int
@@ -4678,6 +4844,10 @@ class OMF_explicit(_OMF):
         Will reconstruct all the entries in the 'X' matrix as determined
         by the model. This method is intended to be used for imputing tabular
         data, and can be used as part of SciKit-Learn pipelines.
+
+        Note
+        ----
+        The argument 'NA_as_zero' is ignored here.
 
         Parameters
         ----------

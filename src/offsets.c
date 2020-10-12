@@ -459,7 +459,7 @@ void construct_Am
                     w_user, U, p, C, k_sec+k,
                     1., Am, k_totA);
     else if (U_csr != NULL)
-        sgemm_sp_dense(m, k+k_sec, w_user,
+        tgemm_sp_dense(m, k+k_sec, w_user,
                        U_csr_p, U_csr_i, U_csr,
                        C, k_sec+k,
                        Am, k_totA,
@@ -485,7 +485,7 @@ void assign_gradients
                     w_user, U, p, bufferA, k_sec+k+k_main,
                     0., g_C, k_sec+k);
     else if (U_csc != NULL && (k || k_sec))
-        sgemm_sp_dense(p, k_sec+k, w_user,
+        tgemm_sp_dense(p, k_sec+k, w_user,
                        U_csc_p, U_csc_i, U_csc,
                        bufferA, k_sec+k+k_main,
                        g_C, k_sec+k,
@@ -544,6 +544,7 @@ int offsets_factors_cold
     return 0;
 }
 
+/* TODO: do something about 'NA_as_zero_X' */
 int offsets_factors_warm
 (
     FPnum *restrict a_vec, FPnum *restrict a_bias,
@@ -592,7 +593,6 @@ int offsets_factors_warm
         if (a_plus_bias == NULL) { retval = 1; goto cleanup; }
     }
 
-    /* TODO: revisit this */
     if (implicit) lam /= w_main_multiplier;
 
     if ((!exact && k_sec == 0) || implicit)
@@ -601,11 +601,12 @@ int offsets_factors_warm
             cnt_NA > 0 || weight != NULL || implicit)
         {
             size_buffer = square(k_sec + k + k_main + append_bias);
-            if (Xa_dense != NULL) {
-                if (cnt_NA > 0 || weight != NULL)
-                    size_buffer += (size_t)n
-                                    * (size_t)(k_sec+k+k_main + append_bias);
-            }
+            /* TODO: revisit buffer size */
+            // if (Xa_dense != NULL) {
+            //     if (cnt_NA > 0 || weight != NULL)
+            //         size_buffer += (size_t)n
+            //                         * (size_t)(k_sec+k+k_main + append_bias);
+            // }
             buffer_FPnum = (FPnum*)malloc(size_buffer*sizeof(FPnum));
             if (buffer_FPnum == NULL) return 1;
         }
@@ -676,8 +677,9 @@ int offsets_factors_warm
     else
     {
         size_buffer = square(k_sec+k+k_main+append_bias) + n + k_sec+k;
-        if (weight != NULL)
-            size_buffer += (size_t)n * (size_t)(k_sec+k+k_main + append_bias);
+        /* TODO: revisit buffer size */
+        // if (weight != NULL)
+        //     size_buffer += (size_t)n * (size_t)(k_sec+k+k_main + append_bias);
         if (weight != NULL && Xa_dense == NULL)
             size_buffer += n;
         buffer_FPnum = (FPnum*)malloc(size_buffer*sizeof(FPnum));
@@ -1518,7 +1520,7 @@ int matrix_content_based
         }
 
         set_to_zero(Am_new, (size_t)n_new*(size_t)k_sec, nthreads);
-        sgemm_sp_dense(
+        tgemm_sp_dense(
             n_new, k_sec, 1.,
             U_csr_p_use, U_csr_i_use, U_csr_use,
             C, (size_t)k_sec,
@@ -1796,7 +1798,7 @@ int offsets_factors_cold_multiple
             U_csr_use = U_csr;
         }
 
-        sgemm_sp_dense(
+        tgemm_sp_dense(
             m, k_sec+k, w_user,
             U_csr_p_use, U_csr_i_use, U_csr_use,
             C, (size_t)(k_sec+k),

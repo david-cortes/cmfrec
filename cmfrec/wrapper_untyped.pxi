@@ -1844,7 +1844,7 @@ def call_factors_collective_warm_explicit(
         ptr_Xa_dense = &Xa_dense[0]
         if W_dense.shape[0]:
             ptr_weight = &W_dense[0]
-    else:
+    elif Xa.shape[0]:
         ptr_Xa = &Xa[0]
         ptr_Xa_i = &Xa_i[0]
         if W_sp.shape[0]:
@@ -2067,7 +2067,7 @@ def call_factors_offsets_warm_explicit(
         ptr_Xa_dense = &Xa_dense[0]
         if W_dense.shape[0]:
             ptr_weight = &W_dense[0]
-    else:
+    elif Xa.shape[0]:
         ptr_Xa = &Xa[0]
         ptr_Xa_i = &Xa_i[0]
         if W_sp.shape[0]:
@@ -2789,7 +2789,7 @@ def call_collective_factors_warm_multiple(
         nnz = Xcsr.shape[0]
         if W.shape[0]:
             ptr_weight = &W[0]
-    else:
+    elif X.shape[0]:
         ptr_ixA = &ixA[0]
         ptr_ixB = &ixB[0]
         ptr_X = &X[0]
@@ -3119,7 +3119,7 @@ def call_offsets_factors_warm_multiple(
         nnz = Xcsr.shape[0]
         if W.shape[0]:
             ptr_weight = &W[0]
-    else:
+    elif X.shape[0]:
         ptr_ixA = &ixA[0]
         ptr_ixB = &ixB[0]
         ptr_X = &X[0]

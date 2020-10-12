@@ -71,7 +71,7 @@ void set_to_zero(FPnum *arr, size_t n, int nthreads)
     size_t chunk_size = n / (size_t)nthreads;
     size_t remainder = n % (size_t)nthreads;
     int i = 0;
-    if (nthreads > 1)
+    if (nthreads > 1 && n > (size_t)1e7)
     {
         #pragma omp parallel for schedule(static, 1) \
                 firstprivate(arr, chunk_size, nthreads) num_threads(nthreads)
@@ -97,7 +97,7 @@ void copy_arr(FPnum *restrict src, FPnum *restrict dest, size_t n, int nthreads)
     size_t chunk_size = n / (size_t)nthreads;
     size_t remainder = n % (size_t)nthreads;
     int i = 0;
-    if (nthreads > 1)
+    if (nthreads > 1 && n > (size_t)5e6)
     {
         #pragma omp parallel for schedule(static, 1) \
                 firstprivate(src, dest, chunk_size, nthreads) num_threads(nthreads)
