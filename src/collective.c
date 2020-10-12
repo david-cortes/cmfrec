@@ -1863,7 +1863,7 @@ void collective_block_cg
                 }
     }
 
-    else if (u_vec_sp != NULL && NA_as_zero_U)
+    else if (NA_as_zero_U)
     {
         tgemv_dense_sp(
                 p, k_user+k,
@@ -2051,7 +2051,7 @@ void collective_block_cg
 
         /* t(C)*C*p */
         if ((u_vec != NULL && cnt_NA_u == 0) ||
-            (NA_as_zero_U && u_vec_sp != NULL))
+            (u_vec == NULL && NA_as_zero_U))
         {
             if (precomputedCtCw != NULL && prefer_CtC)
                 cblas_tsymv(CblasRowMajor, CblasUpper, k_user+k,
@@ -2253,7 +2253,7 @@ void collective_block_cg_implicit
                 }
     }
 
-    else if (u_vec_sp != NULL && NA_as_zero_U)
+    else if (u_vec == NULL && NA_as_zero_U)
     {
         tgemv_dense_sp(
                 p, k_user+k,
@@ -2329,7 +2329,7 @@ void collective_block_cg_implicit
         if (w_main != 1.) cblas_tscal(k+k_main, w_main, Ap + k_user, 1);
 
         if ((u_vec != NULL && cnt_NA_u == 0) ||
-            (NA_as_zero_U && u_vec_sp != NULL))
+            (u_vec == NULL && NA_as_zero_U))
         {
             if (precomputedCtCw != NULL && prefer_CtC)
                 cblas_tsymv(CblasRowMajor, CblasUpper, k_user+k,
