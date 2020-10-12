@@ -2663,17 +2663,19 @@ int collective_factors_warm
 
     /* If there's no side info, just need to apply the closed-form
        on the X data */
-    /* TODO: revise the buffer size in here */
     if (u_vec == NULL && (nnz_u_vec == 0 && !NA_as_zero_U) && u_bin_vec == NULL)
     {
-        if (BtBinvBt == NULL || Xa_dense == NULL ||
-            cnt_NA_x > 0 || weight != NULL || NA_as_zero_X)
+        size_buffer = square(k + k_main + (int)append_bias);
+        if (  (BtBinvBt != NULL && weight == NULL &&
+               ((cnt_NA_x == 0 && Xa_dense != NULL) ||
+                (Xa_dense == NULL && NA_as_zero_X)) )
+                    ||
+              (NA_as_zero_X && weight == NULL &&
+               Xa_dense == NULL && BtBchol != NULL)  )
         {
-            size_buffer = square(k + k_main + append_bias);
-            // if (Xa_dense != NULL || (NA_as_zero_X && weight != NULL)) {
-            //     if (cnt_NA_x > 0 || k_item != 0 || weight != NULL)
-            //         size_buffer += (size_t)n * (size_t)(k + k_main+append_bias);
-            // }
+            size_buffer = 0;
+        }
+        if (buffer_size) {
             buffer_FPnum = (FPnum*)malloc(size_buffer*sizeof(FPnum));
             if (buffer_FPnum == NULL) return 1;
         }
@@ -2682,6 +2684,9 @@ int collective_factors_warm
            only the regulatization is controlled. If scaling everything
            so that the main weight is 1, then the closed form will match
            with the desired hyperparameters. */
+        /* TODO: revisit whether the precomputed matrices will be scaled
+           by 'w_main' or not, might need to turn this on otherwise
+           and change the comment above. */
         // lam /= w_main;
         if (k_user > 0) {
             if (a_plus_bias == NULL)
@@ -2763,14 +2768,6 @@ int collective_factors_warm
     else
     {
         size_buffer = square(k_user+k+k_main+(int)append_bias);
-        /* TODO: revisit buffer size */
-        // bool alloc_B = false;
-        // bool alloc_C = false;
-        // if (Xa_dense != NULL && weight == NULL) alloc_B = true;
-        // if (u_vec != NULL && (FPnum)cnt_NA_u_vec >= (FPnum)p*0.1) alloc_C=true;
-        // size_buffer += (k+k_main)
-        //                 * ((alloc_B && alloc_C)?
-        //                     max2(p, n) : (alloc_B? n : (alloc_C? p : 0)));
         buffer_FPnum = (FPnum*)malloc(size_buffer*sizeof(FPnum));
         if (buffer_FPnum == NULL) return 1;
 

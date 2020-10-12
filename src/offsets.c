@@ -601,12 +601,6 @@ int offsets_factors_warm
             cnt_NA > 0 || weight != NULL || implicit)
         {
             size_buffer = square(k_sec + k + k_main + append_bias);
-            /* TODO: revisit buffer size */
-            // if (Xa_dense != NULL) {
-            //     if (cnt_NA > 0 || weight != NULL)
-            //         size_buffer += (size_t)n
-            //                         * (size_t)(k_sec+k+k_main + append_bias);
-            // }
             buffer_FPnum = (FPnum*)malloc(size_buffer*sizeof(FPnum));
             if (buffer_FPnum == NULL) return 1;
         }
@@ -677,9 +671,6 @@ int offsets_factors_warm
     else
     {
         size_buffer = square(k_sec+k+k_main+append_bias) + n + k_sec+k;
-        /* TODO: revisit buffer size */
-        // if (weight != NULL)
-        //     size_buffer += (size_t)n * (size_t)(k_sec+k+k_main + append_bias);
         if (weight != NULL && Xa_dense == NULL)
             size_buffer += n;
         buffer_FPnum = (FPnum*)malloc(size_buffer*sizeof(FPnum));

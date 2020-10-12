@@ -280,6 +280,13 @@ void tgemv_dense_sp_weighted2
     int ixB[], FPnum vec_sp[], size_t nnz,
     FPnum OutputVec[]
 );
+void tgemv_dense_sp_notrans
+(
+    int m, int n,
+    FPnum DenseMat[], int lda,
+    int ixB[], FPnum vec_sp[], size_t nnz,
+    FPnum OutputVec[]
+);
 void copy_mat
 (
     int m, int n,

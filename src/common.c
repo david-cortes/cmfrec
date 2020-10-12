@@ -691,29 +691,41 @@ void factors_closed_form
     FPnum *restrict bufferBtB = buffer_FPnum;
     if (ldb == 0) ldb = k;
     bool add_diag = true;
-    char uplo = 'L';
+    char lo = 'L';
     int one = 1;
     int ignore;
+    bool prefer_BtB = max2((size_t)cnt_NA, nnz) < k;
 
     /* If inv(t(B)*B + diag(lam))*B is already given, use it as a shortcut.
        The intended use-case for this is for cold-start recommendations
        for the collective model with no missing values, given that the
        C matrix is already fixed and is the same for all users. */
-    if (precomputedBtBinvBt != NULL &&
-        full_dense && Xa_dense != NULL && weight == NULL)
+    if (precomputedBtBinvBt != NULL && weight == NULL &&
+        ((full_dense && Xa_dense != NULL) || (Xa_dense == NULL && NA_as_zero)))
     {
-        cblas_tgemv(CblasRowMajor, CblasNoTrans,
-                    k, n,
-                    1., precomputedBtBinvBt, n,
-                    Xa_dense, 1,
-                    0., a_vec, 1);
+        if (Xa_dense != NULL)
+            cblas_tgemv(CblasRowMajor, CblasNoTrans,
+                        k, n,
+                        1., precomputedBtBinvBt, n,
+                        Xa_dense, 1,
+                        0., a_vec, 1);
+        else
+        {
+            set_to_zero(a_vec, k, 1);
+            tgemv_dense_sp_notrans(
+                k, n,
+                precomputedBtBinvBt, n,
+                ixB, Xa, nnz,
+                a_vec
+            );
+        }
         return;
     }
 
     /* If t(B*w)*B + diag(lam) is given, and there are very few mising
        values, can still be used as a shortcut by substracting from it */
     else if (Xa_dense != NULL && precomputedBtBw != NULL && weight == NULL &&
-             (FPnum)cnt_NA < .2*(FPnum)n)
+             prefer_BtB)
     {
         add_diag = false;
         copy_mat(k, k,
@@ -744,7 +756,7 @@ void factors_closed_form
                        w, B, (size_t)ldb,
                        ixB, Xa, nnz,
                        a_vec);
-        tpotrs_(&uplo, &k, &one,
+        tpotrs_(&lo, &k, &one,
                 precomputedBtBchol, &k,
                 a_vec, &k,
                 &ignore);

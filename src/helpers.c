@@ -544,7 +544,7 @@ FPnum sum_sq_div_w(FPnum *restrict arr, FPnum *restrict w, size_t n, bool compen
 }
 
 /* X <- alpha*A*B + X | A(m,k) is sparse CSR, B(k,n) is dense */
-void sgemm_sp_dense
+void tgemm_sp_dense
 (
     int m, int n, FPnum alpha,
     long indptr[], int indices[], FPnum values[],
@@ -608,6 +608,20 @@ void tgemv_dense_sp_weighted2
 {
     for (size_t ix = 0; ix < nnz; ix++)
         cblas_taxpy(n, alpha2*alpha[ix]*vec_sp[ix], DenseMat + (size_t)ixB[ix]*lda, 1, OutputVec, 1);
+}
+
+void tgemv_dense_sp_notrans
+(
+    int m, int n,
+    FPnum DenseMat[], int lda,
+    int ixB[], FPnum vec_sp[], size_t nnz,
+    FPnum OutputVec[]
+)
+{
+    for (size_t ix = 0; ix < nnz; ix++)
+        cblas_taxpy(m, vec_sp[ix],
+                    DenseMat + ixB[ix], lda,
+                    OutputVec, 1);
 }
 
 /* B[:m,:n] := A[:m,:n] */
