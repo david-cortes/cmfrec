@@ -264,6 +264,7 @@ class _CMF:
 
             ### There can be cases in which the sets are disjoint,
             ### and will need to add NAs to one of the inputs.
+            ### TODO: is this correct when using NA as zero?
             if (u_not_x.shape[0] == 0 and
                 x_not_u.shape[0] == 0 and
                 b_not_x.shape[0] == 0 and
@@ -1601,18 +1602,20 @@ class CMF_explicit(_CMF):
         some variations of the problem which ALS doesn't, such as applying sigmoid
         transformations for binary side information.
     use_cg : bool
-        In the ALS method, whether to use a conjugate gradient method to solve the closed-form
-        least squares problems. This is a faster alternative than the default
-        Cholesky solver, but less exact, less numerically stable, and will require
-        more ALS iterations (``niter``) to reach good a good optimum. Will only be
-        used for the matrices or parts of the matrices that are not shared between
-        factorizations.
-        Note that, if using this method, calculating factors through ``factors_warm``
-        will produce different results from the factors obtained after calling
-        ``fit`` with the same data. A workaround for this issue is to use
+        In the ALS method, whether to use a conjugate gradient method to solve
+        the closed-form least squares problems. This is a faster and more
+        memory-efficient alternative than the default Cholesky solver, but less
+        exact, less numerically stable, and will require slightly more ALS
+        iterations (``niter``) to reach a good optimum.
+        Note that, if using this method, calculations after fitting which involve
+        new data such as ``factors_warm``,  might produce slightly different
+        results from the factors obtained from calling ``fit`` with the same data,
+        due to differences in numerical precision. A workaround for this issue
+        (factors on new data that might differ slightly) is to use
         ``finalize_chol=True``.
         Even if passing "True" here, will use the Cholesky method in cases in which
-        it is faster (e.g. dense matrices with few or no missing values).
+        it is faster (e.g. dense matrices with no missing values),
+        and will not use the conjugate gradient method on new data.
         Ignored when passing ``method="lbfgs"``.
     user_bias : bool
         Whether to add user biases (intercepts) to the model.
@@ -1685,16 +1688,22 @@ class CMF_explicit(_CMF):
         When passing ``use_cg=True`` and ``method="lbfgs"``, whether to perform the last iteration with
         the Cholesky solver. This will make it slower, but will avoid the issue
         of potential mismatches between the result from ``fit`` and calls to
-        ``factors_warm`` with the same data.
+        ``factors_warm`` or similar with the same data.
     NA_as_zero : bool
         Whether to take missing entries in the 'X' matrix as zeros (only
         when the 'X' matrix is passed as sparse COO matrix or DataFrame)
         instead of ignoring them. Note that this is a different model from the
         implicit-feedback version with weighted entries, and it's a much faster
         model to fit.
+        Note that passing "True" will affect the results of the functions named
+        "cold" (as it will assume zeros instead of missing).
+        Can be changed after the model has already been fit to data.
     NA_as_zero_user : bool
         Whether to take missing entries in the 'U' matrix as zeros (only
         when the 'U' matrix is passed as sparse COO matrix) instead of ignoring them.
+        Note that passing "True" will affect the results of the functions named
+        "warm" if no data is passed there (as it will assume zeros instead of
+        missing). Can be changed after the model has already been fit to data.
     NA_as_zero_item : bool
         Whether to take missing entries in the 'I' matrix as zeros (only
         when the 'I' matrix is passed as sparse COO matrix) instead of ignoring them.
@@ -2850,18 +2859,20 @@ class CMF_implicit(_CMF):
         and values higher than 10 are unlikely to improve results. Recommended to
         use ``downweight=True`` when using higher "alpha".
     use_cg : bool
-        Whether to use a conjugate gradient method to solve the closed-form
-        least squares problems. This is a faster alternative than the default
-        Cholesky solver, but less exact, less numerically stable, and will require
-        more ALS iterations (``niter``) to reach good a good optimum. Will only be
-        used for the matrices or parts of the matrices that are not shared between
-        factorizations.
-        Note that, if using this method, calculating factors through ``factors_warm``
-        will produce different results from the factors obtained after calling
-        ``fit`` with the same data. A workaround for this issue is to use
+        In the ALS method, whether to use a conjugate gradient method to solve
+        the closed-form least squares problems. This is a faster and more
+        memory-efficient alternative than the default Cholesky solver, but less
+        exact, less numerically stable, and will require slightly more ALS
+        iterations (``niter``) to reach a good optimum.
+        Note that, if using this method, calculations after fitting which involve
+        new data such as ``factors_warm``,  might produce slightly different
+        results from the factors obtained from calling ``fit`` with the same data,
+        due to differences in numerical precision. A workaround for this issue
+        (factors on new data that might differ slightly) is to use
         ``finalize_chol=True``.
         Even if passing "True" here, will use the Cholesky method in cases in which
-        it is faster (e.g. dense matrices with few or no missing values).
+        it is faster (e.g. dense matrices with no missing values),
+        and will not use the conjugate gradient method on new data.
     k_user : int
         Number of factors in the factorizing A and C matrices which will be used
         only for the 'U' matrix, while being ignored for the 'X' matrix.
@@ -2899,6 +2910,9 @@ class CMF_implicit(_CMF):
     NA_as_zero_user : bool
         Whether to take missing entries in the 'U' matrix as zeros (only
         when the 'U' matrix is passed as sparse COO matrix) instead of ignoring them.
+        Note that passing "True" will affect the results of the functions named
+        "warm" if no data is passed there (as it will assume zeros instead of
+        missing). Can be changed after the model has already been fit to data.
     NA_as_zero_item : bool
         Whether to take missing entries in the 'I' matrix as zeros (only
         when the 'I' matrix is passed as sparse COO matrix) instead of ignoring them.
@@ -2920,7 +2934,7 @@ class CMF_implicit(_CMF):
         When passing ``use_cg=True``, whether to perform the last iteration with
         the Cholesky solver. This will make it slower, but will avoid the issue
         of potential mismatches between the result from ``fit`` and calls to
-        ``factors_warm`` with the same data.
+        ``factors_warm`` or similar with the same data.
     random_state : int, RandomState, or Generator
         Seed used to initialize parameters at random. If passing a NumPy
         RandomState or Generator, will use it to draw a random integer.
@@ -4045,18 +4059,20 @@ class OMF_explicit(_OMF):
         by a least-squares approximation. The ALS approach was implemented for
         experimentation purposes only and is not recommended.
     use_cg : bool
-        In the ALS method, whether to use a conjugate gradient method to solve the closed-form
-        least squares problems. This is a faster alternative than the default
-        Cholesky solver, but less exact, less numerically stable, and will require
-        more ALS iterations (``niter``) to reach good a good optimum. Will only be
-        used for the matrices or parts of the matrices that are not shared between
-        factorizations.
-        Note that, if using this method, calculating factors through ``factors_warm``
-        will produce different results from the factors obtained after calling
-        ``fit`` with the same data. A workaround for this issue is to use
+        In the ALS method, whether to use a conjugate gradient method to solve
+        the closed-form least squares problems. This is a faster and more
+        memory-efficient alternative than the default Cholesky solver, but less
+        exact, less numerically stable, and will require slightly more ALS
+        iterations (``niter``) to reach a good optimum.
+        Note that, if using this method, calculations after fitting which involve
+        new data such as ``factors_warm``,  might produce slightly different
+        results from the factors obtained from calling ``fit`` with the same data,
+        due to differences in numerical precision. A workaround for this issue
+        (factors on new data that might differ slightly) is to use
         ``finalize_chol=True``.
         Even if passing "True" here, will use the Cholesky method in cases in which
-        it is faster (e.g. dense matrices with few or no missing values).
+        it is faster (e.g. dense matrices with no missing values),
+        and will not use the conjugate gradient method on new data.
         Ignored when passing ``method="lbfgs"``.
     user_bias : bool
         Whether to add user biases (intercepts) to the model.
@@ -4137,7 +4153,7 @@ class OMF_explicit(_OMF):
         When passing ``use_cg=True`` and ``method="lbfgs"``, whether to perform the last iteration with
         the Cholesky solver. This will make it slower, but will avoid the issue
         of potential mismatches between the result from ``fit`` and calls to
-        ``factors_warm`` with the same data.
+        ``factors_warm`` or similar with the same data.
     NA_as_zero : bool
         Whether to take missing entries in the 'X' matrix as zeros (only
         when the 'X' matrix is passed as sparse COO matrix or DataFrame)
@@ -4962,16 +4978,20 @@ class OMF_implicit(_OMF):
         model. See [2] for details. Note that, while the author's suggestion for
         this value is 40, other software such as ``implicit`` use a value of 1.
     use_cg : bool
-        Whether to use a conjugate gradient method to solve the closed-form
-        least squares problems. This is a faster alternative than the default
-        Cholesky solver, but less exact, less numerically stable, and will require
-        more ALS iterations (``niter``) to reach good a good optimum. Will only be
-        used for the matrices or parts of the matrices that are not shared between
-        factorizations.
-        Note that, if using this method, calculating factors through ``factors_warm``
-        will produce different results from the factors obtained after calling
-        ``fit`` with the same data. A workaround for this issue is to use
+        In the ALS method, whether to use a conjugate gradient method to solve
+        the closed-form least squares problems. This is a faster and more
+        memory-efficient alternative than the default Cholesky solver, but less
+        exact, less numerically stable, and will require slightly more ALS
+        iterations (``niter``) to reach a good optimum.
+        Note that, if using this method, calculations after fitting which involve
+        new data such as ``factors_warm``,  might produce slightly different
+        results from the factors obtained from calling ``fit`` with the same data,
+        due to differences in numerical precision. A workaround for this issue
+        (factors on new data that might differ slightly) is to use
         ``finalize_chol=True``.
+        Even if passing "True" here, will use the Cholesky method in cases in which
+        it is faster (e.g. dense matrices with no missing values),
+        and will not use the conjugate gradient method on new data.
     downweight : bool
         Whether to decrease the weight of the 'X' matrix being factorized
         according to the number of present entries. This has the same effect
@@ -4995,7 +5015,7 @@ class OMF_implicit(_OMF):
         When passing ``use_cg=True``, whether to perform the last iteration with
         the Cholesky solver. This will make it slower, but will avoid the issue
         of potential mismatches between the result from ``fit`` and calls to
-        ``factors_warm`` with the same data.
+        ``factors_warm`` or similar with the same data.
     random_state : int, RandomState, or Generator
         Seed used to initialize parameters at random. If passing a NumPy
         RandomState or Generator, will use it to draw a random integer.

@@ -538,6 +538,7 @@ void buffer_size_optimizeA_implicit
 (
     size_t *buffer_size,
     int k, int nthreads,
+    bool use_precomputed,
     bool use_cg, bool finalize_chol
 );
 void optimizeA

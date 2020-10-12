@@ -208,11 +208,6 @@ FPnum fun_grad_cannonical_form
     int nthreads
 )
 {
-    /* TODO: this function should do away with the 'overwrite_grad' option.
-       Intead, the calling function should always pass a zeroed-out matrix,
-       get the gradients on them, and sum them to the earlier matrix.
-       Otherwise it causes numerical precision issues and the L-BFGS line
-       search tends to fail. */
     #if defined(_OPENMP) && \
                 ( (_OPENMP < 200801)  /* OpenMP < 3.0 */ \
                   || defined(_WIN32) || defined(_WIN64) \
@@ -227,6 +222,28 @@ FPnum fun_grad_cannonical_form
     double tempf = 0;
     double fsum = 0;
 
+    /* these will be de-referenced, but not updated */
+    if (!user_bias)
+    {
+        if (!item_bias)
+            g_biasA = g_A;
+        else if (g_A == g_biasB + n)
+            g_biasA = g_biasB;
+        else
+            g_biasA = g_A;
+    }
+
+    if (!item_bias)
+    {
+        if (user_bias && (g_A == g_biasA + m || g_biasA == g_A))
+            g_biasB = g_biasA;
+        else if (!user_bias &&
+                 g_B == g_A + (size_t)m*(size_t)lda - (size_t)(lda-k))
+            g_biasB = g_A;
+        else
+            g_biasB = g_B;
+    }
+
     FPnum err;
     size_t m_by_n = (size_t)m * (size_t)n;
 
@@ -234,8 +251,8 @@ FPnum fun_grad_cannonical_form
                              Xcsr == NULL  && buffer_mt != NULL);
     if (parallel_onepass)
         set_to_zero(buffer_mt, (size_t)nthreads
-                                * ((size_t)(k + user_bias) * (size_t)m
-                                    +(size_t)(k + item_bias) * (size_t)n),
+                                * (  (size_t)(k + (int)user_bias) * (size_t)m
+                                    +(size_t)(k + (int)item_bias) * (size_t)n),
                     nthreads);
 
     if (Xfull == NULL)  /* sparse input with NAs - this is the expected case */
@@ -250,11 +267,6 @@ FPnum fun_grad_cannonical_form
            gradients already have some information from a previous factorization
            to which these should add instead of overwrite them, it's necessary
            to apply the scaling observation-by-observation instead */
-    	/* TODO: applying the scaling like this can result in a too large
-    	   precision loss and make the L-BFGS line search fail. Should do
-    	   without this condition from the functions that call this, and
-    	   instead pass a zeroed-out matrix which should be latter summed to
-    	   the earlier matrix. */
         if (!overwrite_grad)
         {
             #ifdef _OPENMP
@@ -371,7 +383,7 @@ FPnum fun_grad_cannonical_form
             #endif
         }
 
-        else
+        else /* overwrite_grad */
         {
             #ifdef _OPENMP
             if (nthreads == 1 || (Xcsr == NULL && !parallel_onepass))
@@ -519,11 +531,51 @@ FPnum fun_grad_cannonical_form
 
             #pragma omp barrier
             if (scaling != 1.)
-                tscal_large(g_biasA, scaling,
-                            (user_bias? m : 0)
-                            + (item_bias? n : 0)
-                            + m*lda + n*ldb,
-                            nthreads);
+            {
+                /* Note: the gradients should be contiguous in memory in the
+                   following order: biasA, biasB, A, B - hence these conditions.
+                   If passing discontiguous arrays (e.g. when the gradient is
+                   a zeroed-out array and later summed to the previous
+                   gradient), there should be no biases, and the biases
+                   should already be assigned to the same memory locations as
+                   the gradient arrays. Otherwise should pass
+                   'overwrite_grad=false', which should not used within this
+                   module */
+                if (g_B == g_biasA
+                                + (size_t)(user_bias? m : 0)
+                                + (size_t)(item_bias? n : 0)
+                                + ((size_t)m*(size_t)lda  - (size_t)(lda-k)))
+                {
+                    tscal_large(g_biasA, scaling,
+                                ((size_t)m*(size_t)lda + (size_t)n*(size_t)ldb)
+                                + (size_t)(user_bias? m : 0)
+                                + (size_t)(item_bias? n : 0)
+                                - (size_t)(lda-k),
+                                nthreads);
+                }
+
+                else if (!user_bias && !item_bias &&
+                         g_B == g_A + (size_t)m*(size_t)lda- (size_t)(lda-k))
+                {
+                    tscal_large(g_A, scaling,
+                                ((size_t)m*(size_t)lda + (size_t)n*(size_t)ldb),
+                                nthreads);
+                }
+
+                else
+                {
+                    if (user_bias)
+                        cblas_tscal(m, scaling, g_biasA, 1);
+                    if (item_bias)
+                        cblas_tscal(n, scaling, g_biasB, 1);
+                    tscal_large(g_A, scaling,
+                                ((size_t)m*(size_t)lda) - (size_t)(lda-k),
+                                nthreads);
+                    tscal_large(g_B, scaling,
+                                ((size_t)n*(size_t)ldb) - (size_t)(ldb-k),
+                                nthreads);
+                }
+            }
         }
     }
 
@@ -694,7 +746,7 @@ void factors_closed_form
     char lo = 'L';
     int one = 1;
     int ignore;
-    bool prefer_BtB = max2((size_t)cnt_NA, nnz) < k;
+    bool prefer_BtB = max2((size_t)cnt_NA, nnz) < (size_t)k;
 
     /* If inv(t(B)*B + diag(lam))*B is already given, use it as a shortcut.
        The intended use-case for this is for cold-start recommendations
@@ -959,7 +1011,7 @@ void factors_closed_form
         if (lam_last != lam) bufferBtB[square(k)-1] += (lam_last - lam);
     }
 
-    tposv_(&uplo, &k, &one,
+    tposv_(&lo, &k, &one,
            bufferBtB, &k,
            a_vec, &k,
            &ignore);
@@ -1683,6 +1735,7 @@ void buffer_size_optimizeA_implicit
 (
     size_t *buffer_size,
     int k, int nthreads,
+    bool use_precomputed,
     bool use_cg, bool finalize_chol
 )
 {
@@ -1693,11 +1746,13 @@ void buffer_size_optimizeA_implicit
         buffer_size_optimizeA_implicit(
             &buffer_size_chol,
             k, nthreads,
+            use_precomputed,
             false, false
         );
         buffer_size_optimizeA_implicit(
             &buffer_size_cg,
             k, nthreads,
+            use_precomputed,
             true, false
         );
         *buffer_size = max2(buffer_size_chol, buffer_size_cg);
@@ -1705,7 +1760,8 @@ void buffer_size_optimizeA_implicit
     }
 
     size_t size_thread_buffer = use_cg? (3 * k) : (square(k));
-    *buffer_size = (size_t)square(k) + (size_t)nthreads * size_thread_buffer;
+    *buffer_size = (size_t)(use_precomputed? square(k) : 0)
+                    + (size_t)nthreads * size_thread_buffer;
 }
 
 void optimizeA

@@ -416,9 +416,14 @@ void taxpy_large(FPnum *restrict A, FPnum x, FPnum *restrict Y, size_t n, int nt
                     )
         long long ix;
         #endif
-        #pragma omp parallel for schedule(static) num_threads(nthreads) shared(A, x, Y, n)
-        for (size_t_for ix = 0; ix < n; ix++)
-            Y[ix] += x*A[ix];
+        if (x == 1.)
+            #pragma omp parallel for schedule(static) num_threads(nthreads) shared(A, Y, n)
+            for (size_t_for ix = 0; ix < n; ix++)
+                Y[ix] += A[ix];
+        else
+            #pragma omp parallel for schedule(static) num_threads(nthreads) shared(A, x, Y, n)
+            for (size_t_for ix = 0; ix < n; ix++)
+                Y[ix] += x*A[ix];
     }
 }
 
@@ -496,7 +501,7 @@ void reduce_mat_sum(FPnum *restrict outp, size_t lda, FPnum *restrict inp,
     long long row;
     #endif
     size_t m_by_n = m * n;
-    if (n > 1 || lda > 1)
+    if (n > 1 || lda > 0)
         #pragma omp parallel for schedule(static) num_threads(nthreads) \
                 shared(outp, inp, m, n, nthreads)
         for (size_t_for row = 0; row < (size_t)m; row++)

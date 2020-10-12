@@ -415,6 +415,8 @@ void nvars_collective_fun_grad
 {
     size_t m_max = max2(max2(m, m_u), m_ubin);
     size_t n_max = max2(max2(n, n_i), n_ibin);
+    size_t sizeA = m_max * (k_user + k + k_main);
+    size_t sizeB = n_max * (k_item + k + k_main);
     *nvars =   m_max * (k_user + k + k_main)
              + n_max * (k_item + k + k_main)
              + (p + pbin) * (k + k_user)
@@ -424,19 +426,24 @@ void nvars_collective_fun_grad
 
     *nbuffer = 0;
     if (Xfull != NULL) *nbuffer = m * n;
-    if (U != NULL)  *nbuffer = max2(*nbuffer, m_u * p);
-    if (II != NULL) *nbuffer = max2(*nbuffer, n_i * q);
-    if (Ub != NULL) *nbuffer = max2(*nbuffer, m_ubin * pbin);
-    if (Ib != NULL) *nbuffer = max2(*nbuffer, n_ibin * qbin);
+    if (U != NULL)  *nbuffer = max2(*nbuffer, m_u * p + sizeA);
+    if (II != NULL) *nbuffer = max2(*nbuffer, n_i * q + sizeB);
+    if (Ub != NULL) *nbuffer = max2(*nbuffer, m_ubin * pbin + sizeA);
+    if (Ib != NULL) *nbuffer = max2(*nbuffer, n_ibin * qbin + sizeB);
+    if (U_csr != NULL || U_sp != NULL) *nbuffer = max2(*nbuffer, sizeA);
+    if (I_csr != NULL || U_sp != NULL) *nbuffer = max2(*nbuffer, sizeB);
 
     *nbuffer_mt = 0;
-    if (nthreads > 1) {
+    if (nthreads > 1)
+    {
         if (Xfull == NULL && X != NULL)
-            *nbuffer_mt = (k_user + k + k_main + 1) * (m + n);
+            *nbuffer_mt = (k + k_main) * (m + n)
+                            + (user_bias? m : 0)
+                            + (item_bias? n : 0);
         if (U == NULL && U_sp != NULL)
-            *nbuffer_mt = max2(*nbuffer_mt, (k_user + k + k_main) * m_u);
+            *nbuffer_mt = max2(*nbuffer_mt, (k_user + k) * (m_u + p));
         if (II == NULL && I_sp != NULL)
-            *nbuffer_mt = max2(*nbuffer_mt, (k_user + k + k_main) * n_i);
+            *nbuffer_mt = max2(*nbuffer_mt, (k_item + k) * (n_i + q));
         *nbuffer_mt *= nthreads;
     }
 }
@@ -512,6 +519,9 @@ FPnum collective_fun_grad
     FPnum *restrict g_D  = g_Cb + (size_t)(k + k_user) * (size_t)pbin;
     FPnum *restrict g_Db = g_D + (size_t)(k + k_item) * (size_t)q;
 
+    size_t sizeA = m_max * (size_t)k_totA;
+    size_t sizeB = n_max * (size_t)k_totB;
+
     /* first the main factorization */
     f = fun_grad_cannonical_form(
         A + k_user, k_totA, B + k_item, k_totB,
@@ -533,10 +543,12 @@ FPnum collective_fun_grad
     );
 
     /* then user non-binary factorization */
-    if (U != NULL || U_sp != NULL)
+    if (U != NULL || U_sp != NULL || U_csr != NULL)
+    {
+        set_to_zero(buffer_FPnum, sizeA, nthreads);
         f += fun_grad_cannonical_form(
             A, k_totA, C, k_user + k,
-            g_A, g_C,
+            buffer_FPnum,  g_C,
             (U != NULL)? m_u : m, p, k_user + k,
             U_row, U_col, U_sp, nnz_U,
             U, !U_has_NA,
@@ -547,17 +559,21 @@ FPnum collective_fun_grad
             (FPnum*)NULL, (FPnum*)NULL,
             (FPnum*)NULL, (FPnum*)NULL, (FPnum*)NULL,
             w_user,
-            buffer_FPnum,
+            buffer_FPnum + sizeA, 
             buffer_mt,
             false,
             nthreads
         );
+        taxpy_large(buffer_FPnum, 1., g_A, sizeA, nthreads);
+    }
 
     /* then item non-binary factorization */
-    if (II != NULL || I_sp != NULL)
+    if (II != NULL || I_sp != NULL || I_csr != NULL)
+    {
+        set_to_zero(buffer_FPnum, sizeB, nthreads);
         f += fun_grad_cannonical_form(
             B, k_totB, D, k_item + k,
-            g_B, g_D,
+            buffer_FPnum, g_D,
             (II != NULL)? n_i : n, q, k_item + k,
             I_row, I_col, I_sp, nnz_I,
             II, !I_has_NA,
@@ -568,36 +584,46 @@ FPnum collective_fun_grad
             (FPnum*)NULL, (FPnum*)NULL,
             (FPnum*)NULL, (FPnum*)NULL, (FPnum*)NULL,
             w_item,
-            buffer_FPnum,
+            buffer_FPnum + sizeB,
             buffer_mt,
             false,
             nthreads
         );
+        taxpy_large(buffer_FPnum, 1., g_B, sizeB, nthreads);
+    }
 
     /* if there are binary matrices with sigmoid transformation, need a
        different formula for the gradients */
 
     if (Ub != NULL)
+    {
+        set_to_zero(buffer_FPnum, sizeA, nthreads);
         f += collective_fun_grad_bin(
             A, k_totA, Cb, k_user + k,
-            g_A, g_Cb,
+            buffer_FPnum, g_Cb,
             Ub,
             m_ubin, pbin, k_user + k,
             !Ub_has_NA, w_user,
-            buffer_FPnum,
+            buffer_FPnum + sizeA,
             nthreads
         );
+        taxpy_large(buffer_FPnum, 1., g_A, sizeA, nthreads);
+    }
 
     if (Ib != NULL)
+    {
+        set_to_zero(buffer_FPnum, sizeB, nthreads);
         f += collective_fun_grad_bin(
             B, k_totB, Db, k_item + k,
-            g_B, g_Db,
+            buffer_FPnum, g_Db,
             Ib,
             n_ibin, qbin, k_item + k,
             !Ib_has_NA, w_item,
-            buffer_FPnum,
+            buffer_FPnum + sizeB,
             nthreads
         );
+        taxpy_large(buffer_FPnum, 1., g_B, sizeB, nthreads);
+    }
 
     /* Now account for the regulatization parameter
         grad = grad + lambda * var
@@ -674,8 +700,8 @@ FPnum collective_fun_grad_bin
     /* Buffer = exp(-A * t(Cb)) */
     cblas_tgemm(CblasRowMajor, CblasNoTrans, CblasTrans,
                 m, pbin, k,
-                1, A, lda, Cb, ldc,
-                0, buffer_FPnum, pbin);
+                1., A, lda, Cb, ldc,
+                0., buffer_FPnum, pbin);
     exp_neg_x(buffer_FPnum, (size_t)m * (size_t)pbin, nthreads);
 
     /* f = sum_sq(Ub - 1/(1+Buffer))
@@ -718,7 +744,7 @@ FPnum collective_fun_grad_bin
     cblas_tgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,
                 m, k, pbin,
                 w_user, buffer_FPnum, pbin, Cb, ldc,
-                1., g_A, lda);
+                0., g_A, lda);
     cblas_tgemm(CblasRowMajor, CblasTrans, CblasNoTrans,
                 pbin, k, m,
                 w_user, buffer_FPnum, pbin, A, lda,
@@ -2675,7 +2701,7 @@ int collective_factors_warm
         {
             size_buffer = 0;
         }
-        if (buffer_size) {
+        if (size_buffer) {
             buffer_FPnum = (FPnum*)malloc(size_buffer*sizeof(FPnum));
             if (buffer_FPnum == NULL) return 1;
         }
@@ -4699,6 +4725,9 @@ int fit_collective_explicit_als
     FPnum *restrict B_plus_bias
 )
 {
+    /* TODO: this function should have the option to output the
+       matrices t(B)*B, t(C)*C, Cholesky, etc. from the last iteration,
+       so as to avoid recalculating it again afterwards. */
     if ((NA_as_zero_X && Xfull == NULL) && (user_bias || item_bias))
         return 2;
 
@@ -5427,6 +5456,9 @@ int fit_collective_implicit_als
     bool use_cg, int max_cg_steps, bool finalize_chol
 )
 {
+    /* TODO: this function should have the option to output the
+       matrices t(B)*B, t(C)*C, Cholesky, etc. from the last iteration,
+       so as to avoid recalculating it again afterwards. */
     int k_totA = k_user + k + k_main;
     int k_totB = k_item + k + k_main;
     int m_max = max2(m, m_u);

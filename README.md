@@ -18,10 +18,6 @@ The package has been rewritten in C with Python wrappers. If you've used earlier
 
 The new version is faster, multi-threaded, and has some new functionality, but if for some reason you still need the old one, it can be found under the git branch "tensorflow".
 
-## Update 2020-08-30
-
-The conjugate gradient solver has been improved, and is now similar in speed to that of other non-collective matrix factorization libraries when used with the same hyperparameters as them.
-
 ## Highlights
 
 * Can fit factorization models with or without user and/or item side information.
