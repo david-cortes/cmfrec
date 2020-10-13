@@ -65,7 +65,7 @@ cdef extern from "cmfrec.h":
         FPnum w_main, FPnum w_user, FPnum w_item,
         int n_corr_pairs, size_t maxiter, int seed,
         int nthreads, bint prefer_onepass,
-        bint verbose, int print_every,
+        bint verbose, int print_every, bint handle_interrupt,
         int *niter, int *nfev,
         FPnum *B_plus_bias
     )
@@ -88,7 +88,7 @@ cdef extern from "cmfrec.h":
         FPnum w_user, FPnum w_item,
         int n_corr_pairs, size_t maxiter, int seed,
         int nthreads, bint prefer_onepass,
-        bint verbose, int print_every,
+        bint verbose, int print_every, bint handle_interrupt,
         int *niter, int *nfev,
         FPnum *Am, FPnum *Bm,
         FPnum *B_plus_bias
@@ -111,7 +111,7 @@ cdef extern from "cmfrec.h":
         bint NA_as_zero_X, bint NA_as_zero_U, bint NA_as_zero_I,
         int k_main, int k_user, int k_item,
         FPnum w_main, FPnum w_user, FPnum w_item,
-        int niter, int nthreads, int seed, bint verbose,
+        int niter, int nthreads, int seed, bint verbose, bint handle_interrupt,
         bint use_cg, int max_cg_steps, bint finalize_chol,
         FPnum *B_plus_bias
     )
@@ -131,7 +131,7 @@ cdef extern from "cmfrec.h":
         FPnum w_main, FPnum w_user, FPnum w_item,
         FPnum *w_main_multiplier,
         FPnum alpha, bint adjust_weight,
-        int niter, int nthreads, int seed, bint verbose,
+        int niter, int nthreads, int seed, bint verbose, bint handle_interrupt,
         bint use_cg, int max_cg_steps, bint finalize_chol
     )
 
@@ -152,7 +152,7 @@ cdef extern from "cmfrec.h":
         int niter, int seed,
         int nthreads, bint use_cg,
         int max_cg_steps, bint finalize_chol,
-        bint verbose,
+        bint verbose, bint handle_interrupt,
         FPnum *B_plus_bias
     )
 
@@ -504,7 +504,7 @@ def call_fit_collective_explicit_lbfgs(
         bint verbose=1, int print_every=10,
         int n_corr_pairs=5, int maxiter=400,
         int nthreads=1, bint prefer_onepass=0,
-        int seed=1
+        int seed=1, bint handle_interrupt=1
     ):
 
     cdef FPnum *ptr_Xfull = NULL
@@ -624,7 +624,7 @@ def call_fit_collective_explicit_lbfgs(
         w_main, w_user, w_item,
         n_corr_pairs, maxiter, 1,
         nthreads, prefer_onepass,
-        verbose, print_every,
+        verbose, print_every, handle_interrupt,
         &niter, &nfev,
         ptr_B_plus_bias
     )
@@ -711,7 +711,7 @@ def call_fit_offsets_explicit_lbfgs(
         bint verbose=1, int print_every=10,
         int n_corr_pairs=5, int maxiter=400,
         int nthreads=1, bint prefer_onepass=0,
-        int seed=1
+        int seed=1, bint handle_interrupt=1
     ):
     
     cdef FPnum *ptr_Xfull = NULL
@@ -811,7 +811,7 @@ def call_fit_offsets_explicit_lbfgs(
         w_user, w_item,
         n_corr_pairs, maxiter, 1,
         nthreads, prefer_onepass,
-        verbose, print_every,
+        verbose, print_every, handle_interrupt,
         &niter, &nfev,
         &Am[0,0], &Bm[0,0],
         ptr_Bm_plus_bias
@@ -904,7 +904,7 @@ def call_fit_collective_explicit_als(
         bint verbose=1, int nthreads=1,
         bint use_cg = 0, int max_cg_steps=3,
         bint finalize_chol=0,
-        int seed=1, int niter=5
+        int seed=1, int niter=5, bint handle_interrupt=1
     ):
 
     cdef FPnum *ptr_Xfull = NULL
@@ -1003,7 +1003,7 @@ def call_fit_collective_explicit_als(
         NA_as_zero_X, NA_as_zero_U, NA_as_zero_I,
         k_main, k_user, k_item,
         w_main, w_user, w_item,
-        niter, nthreads, seed, verbose,
+        niter, nthreads, seed, verbose, handle_interrupt,
         use_cg, max_cg_steps, finalize_chol,
         ptr_B_plus_bias
     )
@@ -1051,7 +1051,7 @@ def call_fit_collective_implicit_als(
         bint verbose=1, int niter=5,
         int nthreads=1, bint use_cg=0,
         int max_cg_steps=3, bint finalize_chol=0,
-        int seed=1, init="normal"
+        int seed=1, init="normal", bint handle_interrupt=1
     ):
     
     cdef FPnum *ptr_U = NULL
@@ -1129,7 +1129,7 @@ def call_fit_collective_implicit_als(
         w_main, w_user, w_item,
         &w_main_multiplier,
         alpha, adjust_weight,
-        niter, nthreads, 1, verbose,
+        niter, nthreads, 1, verbose, handle_interrupt,
         use_cg, max_cg_steps, finalize_chol
     )
 
@@ -1172,7 +1172,7 @@ def call_fit_offsets_explicit_als(
         bint verbose=1, int nthreads=1,
         bint use_cg=0, int max_cg_steps=3,
         bint finalize_chol=0,
-        int seed=1, int niter=5
+        int seed=1, int niter=5, bint handle_interrupt=1
     ):
     cdef FPnum *ptr_Xfull = NULL
     cdef FPnum *ptr_weight = NULL
@@ -1244,7 +1244,7 @@ def call_fit_offsets_explicit_als(
         niter, seed,
         nthreads,
         use_cg, max_cg_steps, finalize_chol,
-        verbose,
+        verbose, handle_interrupt,
         ptr_Bm_plus_bias
     )
 
@@ -1284,7 +1284,7 @@ def call_fit_offsets_implicit_als(
         bint use_cg=0, int max_cg_steps=3,
         bint finalize_chol=0,
         bint adjust_weight = 1,
-        int seed=1, int niter=5
+        int seed=1, int niter=5, bint handle_interrupt=1
     ):
     cdef int *ptr_ixA = NULL
     cdef int *ptr_ixB = NULL
@@ -1338,7 +1338,7 @@ def call_fit_offsets_implicit_als(
         niter, seed,
         nthreads, use_cg,
         max_cg_steps, finalize_chol,
-        verbose,
+        verbose, handle_interrupt,
         <FPnum*>NULL
     )
 

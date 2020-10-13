@@ -1760,7 +1760,7 @@ void buffer_size_optimizeA_implicit
     }
 
     size_t size_thread_buffer = use_cg? (3 * k) : (square(k));
-    *buffer_size = (size_t)(use_precomputed? square(k) : 0)
+    *buffer_size = (size_t)(use_precomputed? 0 : square(k))
                     + (size_t)nthreads * size_thread_buffer;
 }
 

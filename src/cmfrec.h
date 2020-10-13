@@ -1060,6 +1060,7 @@ typedef struct data_collective_fun_grad {
     FPnum w_main; FPnum w_user; FPnum w_item;
     int nthreads;
     int print_every; int nfev; int niter;
+    bool handle_interrupt;
 } data_collective_fun_grad;
 int fit_collective_explicit_lbfgs
 (
@@ -1082,7 +1083,7 @@ int fit_collective_explicit_lbfgs
     FPnum w_main, FPnum w_user, FPnum w_item,
     int n_corr_pairs, size_t maxiter, int seed,
     int nthreads, bool prefer_onepass,
-    bool verbose, int print_every,
+    bool verbose, int print_every, bool handle_interrupt,
     int *restrict niter, int *restrict nfev,
     FPnum *restrict B_plus_bias
 );
@@ -1104,7 +1105,7 @@ int fit_collective_explicit_als
     bool NA_as_zero_X, bool NA_as_zero_U, bool NA_as_zero_I,
     int k_main, int k_user, int k_item,
     FPnum w_main, FPnum w_user, FPnum w_item,
-    int niter, int nthreads, int seed, bool verbose,
+    int niter, int nthreads, int seed, bool verbose, bool handle_interrupt,
     bool use_cg, int max_cg_steps, bool finalize_chol,
     FPnum *restrict B_plus_bias
 );
@@ -1124,7 +1125,7 @@ int fit_collective_implicit_als
     FPnum w_main, FPnum w_user, FPnum w_item,
     FPnum *restrict w_main_multiplier,
     FPnum alpha, bool adjust_weight,
-    int niter, int nthreads, int seed, bool verbose,
+    int niter, int nthreads, int seed, bool verbose, bool handle_interrupt,
     bool use_cg, int max_cg_steps, bool finalize_chol
 );
 int collective_factors_cold_multiple
@@ -1312,6 +1313,7 @@ typedef struct data_offsets_fun_grad {
     FPnum *buffer_FPnum;
     FPnum *buffer_mt;
     int print_every; int nfev; int niter;
+    bool handle_interrupt;
 } data_offsets_fun_grad;
 lbfgsFPnumval_t wrapper_offsets_fun_grad
 (
@@ -1340,7 +1342,7 @@ int fit_offsets_explicit_lbfgs
     FPnum w_user, FPnum w_item,
     int n_corr_pairs, size_t maxiter, int seed,
     int nthreads, bool prefer_onepass,
-    bool verbose, int print_every,
+    bool verbose, int print_every, bool handle_interrupt,
     int *restrict niter, int *restrict nfev,
     FPnum *restrict Am, FPnum *restrict Bm,
     FPnum *restrict Bm_plus_bias
@@ -1363,7 +1365,7 @@ int fit_offsets_als
     int niter, int seed,
     int nthreads, bool use_cg,
     int max_cg_steps, bool finalize_chol,
-    bool verbose,
+    bool verbose, bool handle_interrupt,
     FPnum *restrict Bm_plus_bias
 );
 void factors_content_based

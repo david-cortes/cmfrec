@@ -131,6 +131,7 @@ class _CMF:
         self.corr_pairs = corr_pairs
         self.random_state = int(random_state)
         self.produce_dicts = bool(produce_dicts)
+        self.handle_interrupt = bool(handle_interrupt)
         self.copy_data = bool(copy_data)
         self.nthreads = nthreads
 
@@ -1778,6 +1779,14 @@ class CMF_explicit(_CMF):
         but it will add some extra overhead at the time of fitting the model
         and extra memory usage. Ignored when passing the data as matrices
         and arrays instead of data frames.
+    handle_interrupt : bool
+        Whether to respond to interrupt signals in the optimization procedure.
+        If passing 'True', whenever it receives an interrupt signal during the
+        optimzation procedure, it will termnate earlier, taking the current values
+        of the variables without finishing, instead of raising an error.
+        If passing 'False', will raise an error when it is interrupted, which
+        will only be catched after the procedure is finished, and the obtained
+        object will not be usable.
     copy_data : bool
         Whether to make copies of the input data that is passed to this
         object's methods (``fit``, ``predict``, etc.), in order to avoid
@@ -1850,7 +1859,8 @@ class CMF_explicit(_CMF):
                  NA_as_zero=False, NA_as_zero_user=False, NA_as_zero_item=False,
                  precompute_for_predictions=True, use_float=False,
                  random_state=1, verbose=True, print_every=10,
-                 produce_dicts=False, copy_data=True, nthreads=-1):
+                 handle_interrupt=True, produce_dicts=False,
+                 copy_data=True, nthreads=-1):
         self._take_params(implicit=False, alpha=0., downweight=False,
                           k=k, lambda_=lambda_, method=method,
                           use_cg=use_cg, max_cg_steps=max_cg_steps,
@@ -1990,7 +2000,8 @@ class CMF_explicit(_CMF):
                     self.verbose, self.print_every,
                     self.corr_pairs, self.maxiter,
                     self.nthreads, self.parallelize != "separate",
-                    self.random_state
+                    self.random_state,
+                    self.handle_interrupt
                 )
             self.user_bias_, self.item_bias_, self.A_, self.B_, self.C_, self.Cbin_, self.D_, self.Dbin_ = \
                 c_funs.unpack_values_lbfgs_collective(
@@ -2028,7 +2039,8 @@ class CMF_explicit(_CMF):
                     self.verbose, self.nthreads,
                     self.use_cg, self.max_cg_steps,
                     self.finalize_chol,
-                    self.random_state, self.niter
+                    self.random_state, self.niter,
+                    self.handle_interrupt
                 )
             self.user_bias_, self.item_bias_, self.A_, self.B_, self.C_, self.D_ = \
                 c_funs.unpack_values_collective_als(
@@ -2985,6 +2997,14 @@ class CMF_implicit(_CMF):
         but it will add some extra overhead at the time of fitting the model
         and extra memory usage. Ignored when passing the data as matrices
         and arrays instead of data frames.
+    handle_interrupt : bool
+        Whether to respond to interrupt signals in the optimization procedure.
+        If passing 'True', whenever it receives an interrupt signal during the
+        optimzation procedure, it will termnate earlier, taking the current values
+        of the variables without finishing, instead of raising an error.
+        If passing 'False', will raise an error when it is interrupted, which
+        will only be catched after the procedure is finished, and the obtained
+        object will not be usable.
     copy_data : bool
         Whether to make copies of the input data that is passed to this
         object's methods (``fit``, ``predict``, etc.), in order to avoid
@@ -3047,7 +3067,8 @@ class CMF_implicit(_CMF):
                  precompute_for_predictions=True, use_float=False,
                  max_cg_steps=3, finalize_chol=False,
                  random_state=1, init="normal", verbose=False,
-                 produce_dicts=False, copy_data=True, nthreads=-1):
+                 produce_dicts=False, handle_interrupt=True,
+                 copy_data=True, nthreads=-1):
         self._take_params(implicit=True, alpha=alpha, downweight=downweight,
                           k=k, lambda_=lambda_, method="als",
                           use_cg=use_cg, max_cg_steps=max_cg_steps,
@@ -3158,7 +3179,8 @@ class CMF_implicit(_CMF):
                 self.verbose, self.niter,
                 self.nthreads, self.use_cg,
                 self.max_cg_steps, self.finalize_chol,
-                self.random_state, init=self.init
+                self.random_state, init=self.init,
+                handle_interrupt=self.handle_interrupt
             )
 
         self.A_, self.B_, self.C_, self.D_ = \
@@ -4208,6 +4230,14 @@ class OMF_explicit(_OMF):
     print_every : int
         Print L-BFGS convergence messages every n-iterations. Ignored
         when passing ``verbose=False`` or ``method='als'``.
+    handle_interrupt : bool
+        Whether to respond to interrupt signals in the optimization procedure.
+        If passing 'True', whenever it receives an interrupt signal during the
+        optimzation procedure, it will termnate earlier, taking the current values
+        of the variables without finishing, instead of raising an error.
+        If passing 'False', will raise an error when it is interrupted, which
+        will only be catched after the procedure is finished, and the obtained
+        object will not be usable.
     produce_dicts : bool
         Whether to produce Python dicts from the mappings between user/item
         IDs passed to 'fit' and the internal IDs used by the class. Having
@@ -4290,7 +4320,8 @@ class OMF_explicit(_OMF):
                  max_cg_steps=3, finalize_chol=False,
                  NA_as_zero=False, use_float=False,
                  random_state=1, verbose=True, print_every=100,
-                 produce_dicts=False, copy_data=True, nthreads=-1):
+                 produce_dicts=False, handle_interrupt=True,
+                 copy_data=True, nthreads=-1):
         assert k>0 or k_sec>0 or k_main>0
         self._take_params(implicit=False, alpha=0., downweight=False,
                           k=1, lambda_=lambda_, method=method,
@@ -4426,7 +4457,8 @@ class OMF_explicit(_OMF):
                     self.verbose, self.print_every,
                     self.corr_pairs, self.maxiter,
                     self.nthreads, self.parallelize != "separate",
-                    self.random_state
+                    self.random_state,
+                    self.handle_interrupt
             )
             self.user_bias_, self.item_bias_, self.A_, self.B_, self.C_, self.D_, \
             self.C_bias_, self.D_bias_ = \
@@ -4461,7 +4493,8 @@ class OMF_explicit(_OMF):
                     self.verbose, self.nthreads,
                     self.use_cg, self.max_cg_steps,
                     self.finalize_chol,
-                    self.random_state, self.niter
+                    self.random_state, self.niter,
+                    self.handle_interrupt
                 )
             self.user_bias_, self.item_bias_, self.A_, self.B_, self.C_, self.D_, \
             self.C_bias_, self.D_bias_ = \
@@ -5047,6 +5080,14 @@ class OMF_implicit(_OMF):
         routine used to fit the model. Note that, if running this from a
         Jupyter notebook, these messages will be printed in the console,
         not in the notebook itself.
+    handle_interrupt : bool
+        Whether to respond to interrupt signals in the optimization procedure.
+        If passing 'True', whenever it receives an interrupt signal during the
+        optimzation procedure, it will termnate earlier, taking the current values
+        of the variables without finishing, instead of raising an error.
+        If passing 'False', will raise an error when it is interrupted, which
+        will only be catched after the procedure is finished, and the obtained
+        object will not be usable.
     produce_dicts : bool
         Whether to produce Python dicts from the mappings between user/item
         IDs passed to 'fit' and the internal IDs used by the class. Having
@@ -5115,7 +5156,8 @@ class OMF_implicit(_OMF):
                  add_intercepts=True, niter=10, use_float=False,
                  max_cg_steps=3, finalize_chol=False,
                  random_state=1, verbose=False,
-                 produce_dicts=False, copy_data=True, nthreads=-1):
+                 produce_dicts=False, handle_interrupt=True,
+                 copy_data=True, nthreads=-1):
         self._take_params(implicit=True, alpha=alpha, downweight=downweight,
                           k=k, lambda_=lambda_, method="als",
                           use_cg=use_cg, max_cg_steps=max_cg_steps,
@@ -5218,7 +5260,8 @@ class OMF_implicit(_OMF):
                 self.verbose, self.nthreads, self.use_cg,
                 self.max_cg_steps, self.finalize_chol,
                 self.downweight,
-                self.random_state, self.niter
+                self.random_state, self.niter,
+                self.handle_interrupt
             )
         self.A_, self.B_, self.C_, self.D_, self.C_bias_, self.D_bias_ = \
             c_funs.unpack_values_offsets_implicit_als(
@@ -5540,6 +5583,14 @@ class ContentBased(_OMF_Base):
         ``np.float32``). If passing ``False``, will use C double (typically this
         is ``np.float64``). Using float types will speed up computations and
         use less memory, at the expense of reduced numerical precision.
+    handle_interrupt : bool
+        Whether to respond to interrupt signals in the optimization procedure.
+        If passing 'True', whenever it receives an interrupt signal during the
+        optimzation procedure, it will termnate earlier, taking the current values
+        of the variables without finishing, instead of raising an error.
+        If passing 'False', will raise an error when it is interrupted, which
+        will only be catched after the procedure is finished, and the obtained
+        object will not be usable.
     produce_dicts : bool
         Whether to produce Python dicts from the mappings between user/item
         IDs passed to 'fit' and the internal IDs used by the class. Having
@@ -5611,7 +5662,8 @@ class ContentBased(_OMF_Base):
                  add_intercepts=True, maxiter=15000, corr_pairs=3,
                  parallelize="separate", verbose=True, print_every=100,
                  random_state=1, use_float=False,
-                 produce_dicts=False, copy_data=True, nthreads=-1):
+                 produce_dicts=False, handle_interrupt=True,
+                 copy_data=True, nthreads=-1):
         self._take_params(implicit=False, alpha=40., downweight=False,
                           k=1, lambda_=lambda_, method="lbfgs", use_cg=False,
                           user_bias=user_bias, item_bias=item_bias,
@@ -5729,7 +5781,8 @@ class ContentBased(_OMF_Base):
                 self.verbose, self.print_every,
                 self.corr_pairs, self.maxiter,
                 self.nthreads, self.parallelize != "separate",
-                self.random_state
+                self.random_state,
+                self.handle_interrupt
         )
 
         self.user_bias_, self.item_bias_, _1, _2, self.C_, self.D_, \

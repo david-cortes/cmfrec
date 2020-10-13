@@ -4412,7 +4412,7 @@ int fit_collective_explicit_lbfgs
     FPnum w_main, FPnum w_user, FPnum w_item,
     int n_corr_pairs, size_t maxiter, int seed,
     int nthreads, bool prefer_onepass,
-    bool verbose, int print_every,
+    bool verbose, int print_every, bool handle_interrupt,
     int *restrict niter, int *restrict nfev,
     FPnum *restrict B_plus_bias
 )
@@ -4623,10 +4623,12 @@ int fit_collective_explicit_lbfgs
         buffer_FPnum, buffer_mt,
         k_main, k_user, k_item,
         w_main, w_user, w_item,
-        nthreads, print_every, 0, 0
+        nthreads, print_every, 0, 0,
+        handle_interrupt
     };
 
-    signal(SIGINT, set_interrup_global_variable);
+    if (handle_interrupt)
+        signal(SIGINT, set_interrup_global_variable);
     if (should_stop_procedure)
     {
         should_stop_procedure = false;
@@ -4720,7 +4722,7 @@ int fit_collective_explicit_als
     bool NA_as_zero_X, bool NA_as_zero_U, bool NA_as_zero_I,
     int k_main, int k_user, int k_item,
     FPnum w_main, FPnum w_user, FPnum w_item,
-    int niter, int nthreads, int seed, bool verbose,
+    int niter, int nthreads, int seed, bool verbose, bool handle_interrupt,
     bool use_cg, int max_cg_steps, bool finalize_chol,
     FPnum *restrict B_plus_bias
 )
@@ -5090,7 +5092,8 @@ int fit_collective_explicit_als
             use_cg = false;
 
         /* Optimize C and D (they are independent of each other) */
-        signal(SIGINT, set_interrup_global_variable);
+        if (handle_interrupt)
+            signal(SIGINT, set_interrup_global_variable);
         if (should_stop_procedure) goto check_interrupt;
         if (U != NULL || U_sp != NULL) {
             if (verbose) {
@@ -5125,7 +5128,8 @@ int fit_collective_explicit_als
             }
         }
 
-        signal(SIGINT, set_interrup_global_variable);
+        if (handle_interrupt)
+            signal(SIGINT, set_interrup_global_variable);
         if (should_stop_procedure) goto check_interrupt;
         if (II != NULL || I_sp != NULL) {
             if (verbose) {
@@ -5201,7 +5205,8 @@ int fit_collective_explicit_als
         }
 
         /* Optimize B */
-        signal(SIGINT, set_interrup_global_variable);
+        if (handle_interrupt)
+            signal(SIGINT, set_interrup_global_variable);
         if (should_stop_procedure) goto check_interrupt;
         if (verbose) {
             printf("Updating B...");
@@ -5292,7 +5297,8 @@ int fit_collective_explicit_als
         }
 
         /* Optimize A */
-        signal(SIGINT, set_interrup_global_variable);
+        if (handle_interrupt)
+            signal(SIGINT, set_interrup_global_variable);
         if (should_stop_procedure) goto check_interrupt;
         if (verbose) {
             printf("Updating A...");
@@ -5452,7 +5458,7 @@ int fit_collective_implicit_als
     FPnum w_main, FPnum w_user, FPnum w_item,
     FPnum *restrict w_main_multiplier,
     FPnum alpha, bool adjust_weight,
-    int niter, int nthreads, int seed, bool verbose,
+    int niter, int nthreads, int seed, bool verbose, bool handle_interrupt,
     bool use_cg, int max_cg_steps, bool finalize_chol
 )
 {
@@ -5644,7 +5650,8 @@ int fit_collective_implicit_als
             use_cg = false;
 
         /* Optimize C and D (they are independent of each other) */
-        signal(SIGINT, set_interrup_global_variable);
+        if (handle_interrupt)
+            signal(SIGINT, set_interrup_global_variable);
         if (should_stop_procedure) goto check_interrupt;
         if (U != NULL || U_sp != NULL) {
             if (verbose) {
@@ -5679,7 +5686,8 @@ int fit_collective_implicit_als
             }
         }
 
-        signal(SIGINT, set_interrup_global_variable);
+        if (handle_interrupt)
+            signal(SIGINT, set_interrup_global_variable);
         if (should_stop_procedure) goto check_interrupt;
         if (II != NULL || I_sp != NULL) {
             if (verbose) {
@@ -5715,7 +5723,8 @@ int fit_collective_implicit_als
         }
 
         /* Optimize B */
-        signal(SIGINT, set_interrup_global_variable);
+        if (handle_interrupt)
+            signal(SIGINT, set_interrup_global_variable);
         if (should_stop_procedure) goto check_interrupt;
         if (verbose) {
             printf("Updating B...");
@@ -5757,7 +5766,8 @@ int fit_collective_implicit_als
         }
 
         /* Optimize A */
-        signal(SIGINT, set_interrup_global_variable);
+        if (handle_interrupt)
+            signal(SIGINT, set_interrup_global_variable);
         if (should_stop_procedure) goto check_interrupt;
         if (verbose) {
             printf("Updating A...");

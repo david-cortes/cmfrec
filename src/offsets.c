@@ -917,7 +917,7 @@ int fit_offsets_explicit_lbfgs
     FPnum w_user, FPnum w_item,
     int n_corr_pairs, size_t maxiter, int seed,
     int nthreads, bool prefer_onepass,
-    bool verbose, int print_every,
+    bool verbose, int print_every, bool handle_interrupt,
     int *restrict niter, int *restrict nfev,
     FPnum *restrict Am, FPnum *restrict Bm,
     FPnum *restrict Bm_plus_bias
@@ -1125,9 +1125,11 @@ int fit_offsets_explicit_lbfgs
         buffer_FPnum,
         buffer_mt,
         print_every, 0, 0,
+        handle_interrupt
     };
 
-    signal(SIGINT, set_interrup_global_variable);
+    if (handle_interrupt)
+        signal(SIGINT, set_interrup_global_variable);
     if (should_stop_procedure)
     {
         should_stop_procedure = false;
@@ -1243,7 +1245,7 @@ int fit_offsets_als
     int niter, int seed,
     int nthreads, bool use_cg,
     int max_cg_steps, bool finalize_chol,
-    bool verbose,
+    bool verbose, bool handle_interrupt,
     FPnum *restrict Bm_plus_bias
 )
 {
@@ -1271,7 +1273,7 @@ int fit_offsets_als
                     NA_as_zero_X, false, false,
                     0, 0, 0,
                     1., 1., 1.,
-                    niter, nthreads, seed, verbose,
+                    niter, nthreads, seed, verbose, handle_interrupt,
                     use_cg, max_cg_steps, finalize_chol,
                     Bm_plus_bias
                 );
@@ -1291,7 +1293,7 @@ int fit_offsets_als
                     1., 1., 1.,
                     w_main_multiplier,
                     alpha, adjust_weight,
-                    niter, nthreads, seed, verbose,
+                    niter, nthreads, seed, verbose, handle_interrupt,
                     use_cg, max_cg_steps,
                     finalize_chol
                 );
