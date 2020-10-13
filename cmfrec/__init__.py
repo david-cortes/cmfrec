@@ -884,14 +884,31 @@ class _CMF:
         else:
             m = int(Xrow.max() + 1)
             n = int(Xcol.max() + 1)
+            if enforce_same_shape:
+                m = max(m, m_u, m_ub)
+                n = max(n, n_i, n_ib)
 
         if enforce_same_shape:
+            msg_err_rows = "'X' and 'U%s' must have the same rows."
+            msg_err_cols = "Columns of 'X' must match with rows of 'I%s'."
             if Uarr.shape[0]:
                 if Uarr.shape[0] != m:
-                    raise ValueError("'X' and 'U' must have the same rows.")
+                    raise ValueError(msg_err_rows % "")
             if Iarr.shape[0]:
                 if Iarr.shape[0] != n:
-                    raise ValueError("Columns of 'X' must match with rows of 'I'.")
+                    raise ValueError(msg_err_cols % "")
+            if Uval.shape[0]:
+                if m_u != m:
+                    raise ValueError(msg_err_rows % "")
+            if Ival.shape[0]:
+                if n_i != n:
+                    raise ValueError(msg_err_cols % "")
+            if Ub_arr.shape[0]:
+                if m_ub != m:
+                    raise ValueError(msg_err_rows % "_bin")
+            if Ib_arr.shape[0]:
+                if n_ib != n:
+                    raise ValueError(msg_err_rows % "_bin")
 
         return self._fit(Xrow, Xcol, Xval, W_sp, Xarr, W_dense,
                          Uarr, Urow, Ucol, Uval, Ub_arr,
@@ -1358,9 +1375,29 @@ class _CMF:
         msg += "Non present values should be passed as np.nan for dense, "
         msg += "or missing with matching shapes for sparse."
         if (m_x > 0) and (m_u > 0) and (m_x != m_u):
-            raise ValueError(msg % "U")
+            if (min(m_x, m_u) == m_x) and (Xcsr_p.shape[0] or Xval.shape[0]):
+                if Xcsr_p.shape[0]:
+                    diff = m_u - m_x
+                    fill = Xcsr_p[-1]
+                    Xcsr_p = np.r_[Xcsr_p, np.repeat(fill, diff)]
+                else:
+                    m_x = m_u
+            elif (min(m_x, m_u) == m_u) and (Uval.shape[0] or Ucsr_p.shape[0]):
+                if Ucsr_p.shape[0]:
+                    diff = m_x - m_u
+                    fill = Ucsr_p[-1]
+                    Ucsr_p = np.r_[Ucsr_p, np.repeat(fill, diff)]
+                else:
+                    m_u = m_x
+            else:
+                raise ValueError(msg % "U")
         if (m_x > 0) and (m_ub > 0) and (m_x != m_ub):
-            raise ValueError(msg % "U_bin")
+            if (min(m_x, m_ub) == m_x) and (Xcsr_p.shape[0]):
+                diff = m_ub - m_x
+                fill = Xcsr_p[-1]
+                Xcsr_p = np.r_[Xcsr_p, np.repeat(fill, diff)]
+            else:
+                raise ValueError(msg % "U_bin")
 
         if isinstance(self.lambda_, np.ndarray):
             lambda_ = self.lambda_[2]
@@ -1864,14 +1901,7 @@ class CMF_explicit(_CMF):
         It's possible to pass partially disjoints sets of users/items between
         the different matrices (e.g. it's possible for both the 'X' and 'U'
         matrices to have rows that the other doesn't have).
-        In this case, the overlapping entries should come first in both
-        matrices. If there are entries in e.g. 'U' or 'I' which 'X' doesn't have,
-        and at the same time, entries in 'X' which 'U' or 'I' don't have,
-        one of the matrices should be appended missing entries (``np.nan`` for
-        dense arrays, shapes for COO matrices) - **if the data is passed as COO or
-        ``np.array`` and doesn't follow this order, the optimization procedure will
-        fail and might crash the Python process along with it**. This reordering is
-        done internally when passing data frames with 'UserId' and 'ItemId'.
+        The procedure supports missing values for all inputs (except W).
 
         Parameters
         ----------
@@ -1917,6 +1947,7 @@ class CMF_explicit(_CMF):
             if 'X' is a sparse COO matrix, must be a 1-d array with the same
             number of non-zero entries as 'X.data', if 'X' is a 2-d array,
             'W' must also be a 2-d array.
+            Cannot have missing values.
 
         Returns
         -------
@@ -2717,7 +2748,7 @@ class CMF_explicit(_CMF):
             self._process_transform_inputs(X=X, U=U, U_bin=U_bin, W=W,
                                            replace_existing=replace_existing)
 
-        if (Xarr.shape[0] == 0) and (Xval.shape[0] == 0):
+        if (max(Xarr.shape[0], Xval.shape[0], Xcsr_p.shape[0]) == 0) and (not self.NA_as_zero):
             A = c_funs.call_collective_factors_cold_multiple(
                 Uarr,
                 Urow,
@@ -3063,15 +3094,9 @@ class CMF_implicit(_CMF):
         ----
         It's possible to pass partially disjoints sets of users/items between
         the different matrices (e.g. it's possible for both the 'X' and 'U'
-        matrices to have rows that the other doesn't have).
-        In this case, the overlapping entries should come first in both
-        matrices. If there are entries in 'U' or 'I' which 'X' doesn't have,
-        and at the same time, entries in 'X' which 'U' or 'I' don't have,
-        one of the matrices should be appended missing entries (``np.nan`` for
-        dense arrays, shapes for COO matrices) - **if the data
-        doesn't follow this order, the optimization procedure will
-        fail and might crash the Python process along with it**. This reordering is
-        done internally when passing data frames with 'UserId' and 'ItemId'.
+        matrices to have rows that the other doesn't have), but note that
+        missing values in 'X' are treated as zeros.
+        The procedure supports missing values for all inputs (except W).
 
         Parameters
         ----------
@@ -4319,11 +4344,9 @@ class OMF_explicit(_OMF):
 
         Note
         ----
-        None of the inputs should have missing values. If passing side
+        None of the side info inputs should have missing values. If passing side
         information 'U' and/or 'I', all entries (users/items) must be present
         in both the main matrix and the side info matrix.
-        **Passing a COO matrix as X with unmatched entries in 'U' or 'I' might
-        crash the Python process.**
         
         Parameters
         ----------
@@ -5138,11 +5161,9 @@ class OMF_implicit(_OMF):
 
         Note
         ----
-        None of the inputs should have missing values. If passing side
+        None of the side info inputs should have missing values. If passing side
         information 'U' and/or 'I', all entries (users/items) must be present
         in both the main matrix and the side info matrix.
-        **Passing a COO matrix as X with unmatched entries in 'U' or 'I' might
-        crash the Python process.**
 
         Parameters
         ----------
@@ -5636,10 +5657,8 @@ class ContentBased(_OMF_Base):
 
         Note
         ----
-        None of the inputs should have missing values. All entries (users/items)
+        None of the side info inputs should have missing values. All entries (users/items)
         must be present in both the main matrix and the side info matrix.
-        **Passing a COO matrix as X with unmatched entries in 'U' or 'I' might
-        crash the Python process.**
 
         Parameters
         ----------
