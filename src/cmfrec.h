@@ -432,8 +432,9 @@ void factors_explicit_cg_dense
 (
     FPnum *restrict a_vec, int k,
     FPnum *restrict B, int n, int ldb,
-    FPnum *restrict Xa_dense, bool full_dense,
+    FPnum *restrict Xa_dense, int cnt_NA,
     FPnum *restrict weight,
+    FPnum *restrict precomputedBtBw,
     FPnum *restrict buffer_FPnum,
     FPnum lam, FPnum w, FPnum lam_last,
     int max_cg_steps

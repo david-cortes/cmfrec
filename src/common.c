@@ -881,8 +881,9 @@ void factors_closed_form
             factors_explicit_cg_dense(
                 a_vec, k,
                 B, n, ldb,
-                Xa_dense, full_dense,
+                Xa_dense, cnt_NA,
                 weight,
+                precomputedBtBw,
                 buffer_FPnum,
                 lam, w, lam_last,
                 max_cg_steps
@@ -1250,8 +1251,9 @@ void factors_explicit_cg_dense
 (
     FPnum *restrict a_vec, int k,
     FPnum *restrict B, int n, int ldb,
-    FPnum *restrict Xa_dense, bool full_dense,
+    FPnum *restrict Xa_dense, int cnt_NA,
     FPnum *restrict weight,
+    FPnum *restrict precomputedBtBw, /* should NOT be multiplied by 'w' */
     FPnum *restrict buffer_FPnum,
     FPnum lam, FPnum w, FPnum lam_last,
     int max_cg_steps
@@ -1260,25 +1262,50 @@ void factors_explicit_cg_dense
     FPnum *restrict Ap = buffer_FPnum;
     FPnum *restrict p  = Ap + k;
     FPnum *restrict r  = p  + k;
-    set_to_zero(r, k, 1);
     FPnum r_new, r_old;
     FPnum a, coef, w_this;
+
+    bool prefer_BtB = cnt_NA < k && precomputedBtBw != NULL && weight == NULL;
+    if (!prefer_BtB)
+        set_to_zero(r, k, 1);
 
     if (w != 1.) {
         lam /= w;
         lam_last /= w;
     }
 
-    for (size_t ix = 0; ix < (size_t)n; ix++)
+    if (prefer_BtB)
     {
-        if (!isnan(Xa_dense[ix]))
+        cblas_tsymv(CblasRowMajor, CblasUpper, k,
+                    -1., precomputedBtBw, k,
+                    a_vec, 1,
+                    0., r, 1);
+        for (size_t ix = 0; ix < (size_t)n; ix++)
         {
-            w_this = (weight == NULL)? 1. : weight[ix];
-            cblas_taxpy(k,
-                        w_this * Xa_dense[ix], B + ix*(size_t)ldb, 1,
-                        r, 1);
-            coef = cblas_tdot(k, B + ix*(size_t)ldb, 1, a_vec, 1);
-            cblas_taxpy(k, -w_this * coef, B + ix*(size_t)ldb, 1, r, 1);
+            if (isnan(Xa_dense[ix])) {
+                coef = cblas_tdot(k, B + ix*(size_t)ldb, 1, a_vec, 1);
+                cblas_taxpy(k, coef, B + ix*(size_t)ldb, 1, r, 1);
+            }
+            
+            else {
+                cblas_taxpy(k, Xa_dense[ix], B + ix*(size_t)ldb, 1, r, 1);
+            }
+        }
+    }
+
+    else
+    {
+        for (size_t ix = 0; ix < (size_t)n; ix++)
+        {
+            if (!isnan(Xa_dense[ix]))
+            {
+                w_this = (weight == NULL)? 1. : weight[ix];
+                cblas_taxpy(k,
+                            w_this * Xa_dense[ix], B + ix*(size_t)ldb, 1,
+                            r, 1);
+                coef = cblas_tdot(k, B + ix*(size_t)ldb, 1, a_vec, 1);
+                cblas_taxpy(k, -w_this * coef, B + ix*(size_t)ldb, 1, r, 1);
+            }
         }
     }
     
@@ -1299,14 +1326,30 @@ void factors_explicit_cg_dense
 
     for (int cg_step = 0; cg_step < max_cg_steps; cg_step++)
     {
-        set_to_zero(Ap, k, 1);
-        for (size_t ix = 0; ix < (size_t)n; ix++)
+        if (prefer_BtB)
         {
-            if (!isnan(Xa_dense[ix]))
+            cblas_tsymv(CblasRowMajor, CblasUpper, k,
+                        1., precomputedBtBw, k,
+                        p, 1,
+                        0., Ap, 1);
+            for (size_t ix = 0; ix < (size_t)n; ix++)
+                if (isnan(Xa_dense[ix])) {
+                    coef = cblas_tdot(k,  B + ix*(size_t)ldb, 1, p,  1);
+                    cblas_taxpy(k, -coef, B + ix*(size_t)ldb, 1, Ap, 1);
+                }
+        }
+
+        else
+        {
+            set_to_zero(Ap, k, 1);
+            for (size_t ix = 0; ix < (size_t)n; ix++)
             {
-                w_this = (weight == NULL)? 1. : weight[ix];
-                coef = cblas_tdot(k, B + ix*(size_t)ldb, 1, p, 1);
-                cblas_taxpy(k, w_this * coef, B + ix*(size_t)ldb, 1, Ap, 1);
+                if (!isnan(Xa_dense[ix]))
+                {
+                    w_this = (weight == NULL)? 1. : weight[ix];
+                    coef = cblas_tdot(k, B + ix*(size_t)ldb, 1, p, 1);
+                    cblas_taxpy(k, w_this * coef, B + ix*(size_t)ldb, 1, Ap, 1);
+                }
             }
         }
 
@@ -1882,7 +1925,8 @@ void optimizeA
                         (FPnum*)NULL,
                         bufferBtBcopy, cnt_NA[ix], 0,
                         (FPnum*)NULL, false,
-                        use_cg, max_cg_steps,
+                        // use_cg, max_cg_steps,
+                        use_cg, k, /* <- A was reset to zero, need more steps */
                         false
                     );
                 }
