@@ -16,6 +16,13 @@ import os, sys
 ## -uncomment the next line
 # from Cython.Distutils import build_ext as build_ext_with_blas
 
+## Or alternatively, pass your own BLAS/LAPACK linkage parameters here:
+custom_blas_link_args = []
+custom_blas_compile_args = []
+if len(custom_blas_link_args) or len(custom_blas_compile_args):
+    from Cython.Distutils import build_ext
+    build_ext_with_blas = build_ext
+
 class build_ext_subclass( build_ext_with_blas ):
     def build_extensions(self):
         compiler = self.compiler.compiler_type
@@ -40,6 +47,11 @@ class build_ext_subclass( build_ext_with_blas ):
             for e in self.extensions:
                 e.extra_compile_args = [arg for arg in e.extra_compile_args if arg != '-fopenmp']
                 e.extra_link_args    = [arg for arg in e.extra_link_args    if arg != '-fopenmp']
+
+        ## If a custom BLAS/LAPACK is provided:
+        if len(custom_blas_link_args) or len(custom_blas_compile_args):
+            e.extra_compile_args += custom_blas_compile_args
+            e.extra_link_args += custom_blas_link_args
 
         build_ext_with_blas.build_extensions(self)
 
