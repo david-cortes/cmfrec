@@ -342,7 +342,7 @@ FPnum fun_grad_cannonical_form
                 {
                     tempf = 0;
                     for (size_t ix = (size_t)Xcsr_p[ia];
-                         ix < (size_t)Xcsr_p[ia+1]; ix++)
+                         ix < (size_t)Xcsr_p[ia+(size_t)1]; ix++)
                     {
                         ib = (size_t)Xcsr_i[ix];
                         err = cblas_tdot(k, A + ia*(size_t)lda, 1,
@@ -366,7 +366,7 @@ FPnum fun_grad_cannonical_form
                 for (size_t_for ib = 0; ib < (size_t)n; ib++)
                 {
                     for (size_t ix = (size_t)Xcsc_p[ib];
-                         ix < (size_t)Xcsc_p[ib+1]; ix++)
+                         ix < (size_t)Xcsc_p[ib+(size_t)1]; ix++)
                     {
                         ia = (size_t)Xcsc_i[ix];
                         err = cblas_tdot(k, A + ia*(size_t)lda, 1,
@@ -482,7 +482,7 @@ FPnum fun_grad_cannonical_form
                 {
                     tempf = 0;
                     for (size_t ix = (size_t)Xcsr_p[ia];
-                                ix < (size_t)Xcsr_p[ia+1]; ix++)
+                                ix < (size_t)Xcsr_p[ia+(size_t)1]; ix++)
                     {
                         ib = (size_t)Xcsr_i[ix];
                         err = cblas_tdot(k, A + ia*(size_t)lda, 1,
@@ -511,7 +511,7 @@ FPnum fun_grad_cannonical_form
                 for (ib = 0; ib < (size_t)n; ib++)
                 {
                     for (size_t ix = (size_t)Xcsc_p[ib];
-                                ix < (size_t)Xcsc_p[ib+1]; ix++)
+                                ix < (size_t)Xcsc_p[ib+(size_t)1]; ix++)
                     {
                         ia = (size_t)Xcsc_i[ix];
                         err = cblas_tdot(k, A + ia*(size_t)lda, 1,
@@ -1433,7 +1433,7 @@ void factors_implicit_chol
     int ignore;
     FPnum *restrict BtBw = buffer_FPnum;
     if (strideBtB == 0)
-        memcpy(BtBw, precomputedBtBw, square(k)*sizeof(FPnum));
+        memcpy(BtBw, precomputedBtBw, (size_t)square(k)*sizeof(FPnum));
     else
         copy_mat(k, k,
                  precomputedBtBw + strideBtB + strideBtB*k, k + strideBtB,
@@ -1814,7 +1814,7 @@ void optimizeA
         add_to_diag(bufferBtB, lam, k);
         if (lam_last != lam) bufferBtB[square(k)-1] += (lam_last - lam);
         if (near_dense) /* Here will also need t(B)*B alone */
-            memcpy(bufferBtBcopy, bufferBtB, square(k)*sizeof(FPnum));
+            memcpy(bufferBtBcopy, bufferBtB, (size_t)square(k)*sizeof(FPnum));
         /* t(B)*t(X)
            Note: this will be passed to LAPACK function which assumes
            column-major order, thus must pass the transpose.
@@ -2030,7 +2030,7 @@ void optimizeA
             set_to_zero(A, (size_t)m*(size_t)k, 1);
         else
             for (size_t row = 0; row < (size_t)m; row++)
-                memset(A + row*(size_t)lda, 0, k*sizeof(FPnum));
+                memset(A + row*(size_t)lda, 0, (size_t)k*sizeof(FPnum));
         tgemm_sp_dense(
             m, k, 1.,
             Xcsr_p, Xcsr_i, Xcsr,
@@ -2076,13 +2076,13 @@ void optimizeA
                        Xcsr_p, Xcsr_i, Xcsr, buffer_FPnum, NA_as_zero, \
                        bufferBtB, size_buffer, use_cg)
         for (size_t_for ix = 0; ix < (size_t)m; ix++)
-            if (Xcsr_p[ix+1] > Xcsr_p[ix])
+            if (Xcsr_p[ix+(size_t)1] > Xcsr_p[ix])
                 factors_closed_form(
                     A + ix*(size_t)lda, k,
                     B, n, ldb,
                     (FPnum*)NULL, false,
                     Xcsr +  Xcsr_p[ix], Xcsr_i +  Xcsr_p[ix],
-                    (size_t)(Xcsr_p[ix+1] - Xcsr_p[ix]),
+                    Xcsr_p[ix+(size_t)1] - Xcsr_p[ix],
                     (weight == NULL)? ((FPnum*)NULL) : (weight + Xcsr_p[ix]),
                     buffer_FPnum + ((size_t)omp_get_thread_num() * size_buffer),
                     lam, 1., lam_last,
@@ -2132,7 +2132,8 @@ void optimizeA_implicit
         factors_implicit(
             A + (size_t)ix*lda, k,
             B, ldb,
-            Xcsr + Xcsr_p[ix], Xcsr_i + Xcsr_p[ix], Xcsr_p[ix+1] - Xcsr_p[ix],
+            Xcsr + Xcsr_p[ix], Xcsr_i + Xcsr_p[ix],
+            Xcsr_p[ix+(size_t)1] - Xcsr_p[ix],
             lam,
             precomputedBtBw, 0,
             false, use_cg, max_cg_steps,
@@ -2275,9 +2276,10 @@ int initialize_biases
             #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
                     shared(n, Xcsc_p, Xcsc, biasB)
             for (size_t_for col = 0; col < (size_t)n; col++)
-                for (size_t ix = Xcsc_p[col]; ix < (size_t)Xcsc_p[col+1]; ix++)
+                for (size_t ix = Xcsc_p[col]; ix < Xcsc_p[col+(size_t)1]; ix++)
                     biasB[col] += (Xcsc[ix] - biasB[col])
-                                   / ((double)(ix - Xcsc_p[col] +1) + lam_item);
+                                   / ((double)(ix - Xcsc_p[col] +(size_t)1)
+                                      + lam_item);
         }
 
         else
@@ -2321,11 +2323,12 @@ int initialize_biases
             #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
                     shared(m, Xcsr_p, Xcsr_i, Xcsr, biasA, biasB, item_bias)
             for (size_t_for row = 0; row < (size_t)m; row++)
-                for (size_t ix = Xcsr_p[row]; ix < (size_t)Xcsr_p[row+1]; ix++)
+                for (size_t ix = Xcsr_p[row]; ix < Xcsr_p[row+(size_t)1]; ix++)
                     biasA[row] += (Xcsr[ix]
                                     - (item_bias? (biasB[Xcsr_i[ix]]) : (0.))
                                     - biasA[row])
-                                   / ((double)(ix - Xcsr_p[row] +1) + lam_user);
+                                   / ((double)(ix - Xcsr_p[row] +(size_t)1)
+                                      + lam_user);
         }
 
         else
@@ -2386,7 +2389,7 @@ int center_by_cols
         #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
                 shared(n, Xcsc, Xcsc_p, col_means)
         for (size_t_for ib = 0; ib < (size_t)n; ib++)
-            for (size_t ix = Xcsc_p[ib]; ix < (size_t)Xcsc_p[ib+1]; ix++)
+            for (size_t ix = Xcsc_p[ib]; ix < Xcsc_p[ib+(size_t)1]; ix++)
                 col_means[ib] += Xcsc[ix];
     }
 
@@ -2394,7 +2397,7 @@ int center_by_cols
     {
 
         for (size_t ia = 0; ia < (size_t)m; ia++)
-            for (size_t ix = Xcsr_p[ia]; ix < (size_t)Xcsr_p[ia+1]; ix++)
+            for (size_t ix = Xcsr_p[ia]; ix < Xcsr_p[ia+(size_t)1]; ix++)
                 col_means[Xcsr_i[ix]] += Xcsr[ix];
     }
 
@@ -2412,7 +2415,7 @@ int center_by_cols
             col_means[ix] /= (double)cnt_by_col[ix];
     else
         for (size_t ix = 0; ix < (size_t)n; ix++)
-            col_means[ix] /= (double)(Xcsc_p[ix+1] - Xcsc_p[ix]);
+            col_means[ix] /= (double)(Xcsc_p[ix+(size_t)1] - Xcsc_p[ix]);
     /* -------- */
 
     if (Xfull != NULL)
@@ -2429,7 +2432,7 @@ int center_by_cols
             #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
                     shared(Xcsc, Xcsc_p, n, col_means)
             for (size_t_for ib = 0; ib < (size_t)n; ib++)
-                for (size_t ix = Xcsc_p[ib]; ix < (size_t)Xcsc_p[ib+1]; ix++)
+                for (size_t ix = Xcsc_p[ib]; ix < Xcsc_p[ib+(size_t)1]; ix++)
                     Xcsc[ix] -= col_means[ib];
         }
 
@@ -2440,7 +2443,7 @@ int center_by_cols
                     Xcsr[ix] -= col_means[Xcsr_i[ix]];
             else
                 for (size_t ia = 0; ia < (size_t)m; ia++)
-                    for (size_t ix = Xcsr_p[ia]; ix < (size_t)Xcsr_p[ia+1];ix++)
+                    for (size_t ix = Xcsr_p[ia]; ix < Xcsr_p[ia+(size_t)1];ix++)
                         Xcsr[ix] -= col_means[Xcsr_i[ix]];
         }
     }

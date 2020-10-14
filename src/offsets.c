@@ -589,7 +589,7 @@ int offsets_factors_warm
 
     FPnum *restrict a_plus_bias = NULL;
     if (append_bias) {
-        a_plus_bias = (FPnum*)malloc((k_sec+k+k_main+1)*sizeof(FPnum));
+        a_plus_bias = (FPnum*)malloc((size_t)(k_sec+k+k_main+1)*sizeof(FPnum));
         if (a_plus_bias == NULL) { retval = 1; goto cleanup; }
     }
 
@@ -637,7 +637,8 @@ int offsets_factors_warm
                                     precomputedBtBw, cnt_NA, 0,
                                     (FPnum*)NULL, false,
                                     false, 0, false);
-                memcpy(a_vec, a_plus_bias, (k_sec+k+k_main)*sizeof(FPnum));
+                memcpy(a_vec, a_plus_bias,
+                       (size_t)(k_sec+k+k_main)*sizeof(FPnum));
                 *a_bias = a_plus_bias[k_sec+k+k_main];
             }
         }
@@ -703,7 +704,7 @@ int offsets_factors_warm
             set_to_zero(a_vec, k_sec+k+k_main, 1);
 
         /* buffer_uc = w*U*C (save for later) */
-        memcpy(buffer_uc, a_vec, (k_sec+k)*sizeof(FPnum));
+        memcpy(buffer_uc, a_vec, (size_t)(k_sec+k)*sizeof(FPnum));
         /* BufferX = -w*U*C*t(Bm) */
         if (u_vec != NULL || u_vec_sp != NULL)
             cblas_tgemv(CblasRowMajor, CblasNoTrans,
@@ -759,13 +760,13 @@ int offsets_factors_warm
                                     (FPnum*)NULL, false,
                                     false, 0, false);
                 memcpy(a_vec + k_sec, a_plus_bias + k_sec,
-                       (k+k_main)*sizeof(FPnum));
+                       (size_t)(k+k_main)*sizeof(FPnum));
                 *a_bias = a_plus_bias[k_sec+k+k_main];
             }
         }
         /* Save A (as opposed to Am) */
         if (output_a != NULL && (k || k_main))
-            memcpy(output_a, a_vec + k_sec, (k+k_main)*sizeof(FPnum));
+            memcpy(output_a, a_vec + k_sec, (size_t)(k+k_main)*sizeof(FPnum));
 
         /* Am = A + w*U*C */
         for (int ix = 0; ix < k_sec+k; ix++)
@@ -1327,7 +1328,9 @@ int fit_offsets_als
     if (U == NULL || !add_intercepts)
         U_plus_bias = U;
     else {
-        U_plus_bias = (FPnum*)malloc((size_t)m*(size_t)(p+1)*sizeof(FPnum));
+        U_plus_bias = (FPnum*)malloc((size_t)m *
+                                     ((size_t)p+(size_t)1) *
+                                     sizeof(FPnum));
         if (U_plus_bias == NULL) { retval = 1; goto cleanup; }
         append_ones_last_col(
             U, m, p,
@@ -1338,7 +1341,9 @@ int fit_offsets_als
     if (II == NULL || !add_intercepts)
         I_plus_bias = II;
     else {
-        I_plus_bias = (FPnum*)malloc((size_t)n*(size_t)(q+1)*sizeof(FPnum));
+        I_plus_bias = (FPnum*)malloc((size_t)n *
+                                     ((size_t)q+(size_t)1) *
+                                     sizeof(FPnum));
         if (I_plus_bias == NULL) { retval = 1; goto cleanup; }
         append_ones_last_col(
             II, n, q,
@@ -1560,8 +1565,12 @@ int predict_content_based_new
     long long ix;
     #endif
 
-    FPnum *restrict Am = (FPnum*)malloc(n_new*(size_t)k_sec*sizeof(FPnum));
-    FPnum *restrict Bm = (FPnum*)malloc(n_new*(size_t)k_sec*sizeof(FPnum));
+    FPnum *restrict Am = (FPnum*)malloc((size_t)n_new *
+                                        (size_t)k_sec *
+                                        sizeof(FPnum));
+    FPnum *restrict Bm = (FPnum*)malloc((size_t)n_new *
+                                        (size_t)k_sec *
+                                        sizeof(FPnum));
     int retval = 0;
     if (Am == NULL || Bm == NULL)
     {
@@ -1617,7 +1626,9 @@ int predict_content_based_old
 )
 {
     int ix = 0;
-    FPnum *restrict Am = (FPnum*)malloc(n_new*(size_t)k_sec*sizeof(FPnum));
+    FPnum *restrict Am = (FPnum*)malloc((size_t)n_new *
+                                        (size_t)k_sec *
+                                        sizeof(FPnum));
     int retval = 0;
     if (Am == NULL)
     {
@@ -1857,7 +1868,7 @@ int offsets_factors_warm_multiple
     FPnum *restrict U_csr_use = NULL;
 
     int retval = 0;
-    int *ret = (int*)malloc(m*sizeof(int));
+    int *ret = (int*)malloc((size_t)m*sizeof(int));
     if (ret == NULL) { retval = 1; goto cleanup; }
 
     if (X != NULL && Xfull == NULL) {
@@ -1918,7 +1929,7 @@ int offsets_factors_warm_multiple
                       ((FPnum*)NULL)
                       : (U_csr_use + U_csr_p_use[ix]),
                     (U_csr_p_use == NULL)?
-                      (0) : (U_csr_p_use[ix+1] - U_csr_p_use[ix]),
+                      ((size_t)0):(U_csr_p_use[ix+(size_t)1] - U_csr_p_use[ix]),
                     (Xcsr_i_use == NULL)?
                       ((int*)NULL)
                       : (Xcsr_i_use + Xcsr_p_use[ix]),
@@ -1926,7 +1937,7 @@ int offsets_factors_warm_multiple
                       ((FPnum*)NULL)
                       : (Xcsr_use + Xcsr_p_use[ix]),
                     (Xcsr_p_use == NULL)?
-                      (0) : (Xcsr_p_use[ix+1] - Xcsr_p_use[ix]),
+                      ((size_t)0) : (Xcsr_p_use[ix+(size_t)1] - Xcsr_p_use[ix]),
                     (Xfull == NULL)? ((FPnum*)NULL) : (Xfull + ix*(size_t)n),
                     n,
                     (weight == NULL)?

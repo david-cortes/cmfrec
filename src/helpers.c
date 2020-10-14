@@ -677,12 +677,12 @@ void AtAinvAt_plus_chol(FPnum *restrict A, int lda, int offset,
                 w, A + offset, lda,
                 0., AtAchol_out, n);
     if (AtAw_out != NULL && no_reg_to_AtA)
-        memcpy(AtAw_out, AtAchol_out, square(n)*sizeof(FPnum));
+        memcpy(AtAw_out, AtAchol_out, (size_t)square(n)*sizeof(FPnum));
     if (lam != 0.)
         add_to_diag(AtAchol_out, lam, n);
-    if (lam_last != lam) AtAchol_out[square(n)-1] += (lam_last-lam);
+    if (lam_last != lam) AtAchol_out[(size_t)square(n)-(size_t)1] += (lam_last-lam);
     if (AtAw_out != NULL && !no_reg_to_AtA)
-        memcpy(AtAw_out, AtAchol_out, square(n)*sizeof(FPnum));
+        memcpy(AtAw_out, AtAchol_out, (size_t)square(n)*sizeof(FPnum));
 
     char uplo = 'L';
     int ignore;
@@ -728,7 +728,7 @@ int coo_to_csr_plus_alloc
     FPnum *restrict *csr_w
 )
 {
-    *csr_p = (size_t*)malloc((size_t)(m+1)*sizeof(size_t));
+    *csr_p = (size_t*)malloc(((size_t)m+(size_t)1)*sizeof(size_t));
     *csr_i = (int*)malloc(nnz*sizeof(int));
     *csr_v = (FPnum*)malloc(nnz*sizeof(FPnum));
     if (csr_p == NULL || csr_i == NULL || csr_v == NULL)
@@ -763,11 +763,11 @@ void coo_to_csr
 
     produce_p:
     {
-        memset(csr_p, 0, (m+1)*sizeof(size_t));
+        memset(csr_p, 0, ((size_t)m+(size_t)1)*sizeof(size_t));
         for (size_t ix = 0; ix < nnz; ix++)
-            csr_p[Xrow[ix]+1]++;
+            csr_p[Xrow[ix]+(size_t)1]++;
         for (int row = 0; row < m; row++)
-            csr_p[row+1] += csr_p[row];
+            csr_p[row+(size_t)1] += csr_p[row];
     }
 
     if (!has_mem) goto cleanup;
@@ -794,14 +794,14 @@ void coo_to_csr
     {
         if (W == NULL)
             for (size_t ix = 0; ix < nnz; ix++) {
-                csr_i[--csr_p[Xrow[ix]+1]] = Xcol[ix];
-                csr_v[csr_p[Xrow[ix]+1]] = Xval[ix];
+                csr_i[--csr_p[Xrow[ix]+(size_t)1]] = Xcol[ix];
+                csr_v[csr_p[Xrow[ix]+(size_t)1]] = Xval[ix];
             }
         else
             for (size_t ix = 0; ix < nnz; ix++) {
-                csr_i[--csr_p[Xrow[ix]+1]] = Xcol[ix];
-                csr_v[csr_p[Xrow[ix]+1]] = Xval[ix];
-                csr_w[csr_p[Xrow[ix]+1]] = W[ix];
+                csr_i[--csr_p[Xrow[ix]+(size_t)1]] = Xcol[ix];
+                csr_v[csr_p[Xrow[ix]+(size_t)1]] = Xval[ix];
+                csr_w[csr_p[Xrow[ix]+(size_t)1]] = W[ix];
             }
         has_mem = false;
         goto produce_p;
@@ -828,16 +828,16 @@ void coo_to_csr_and_csc
 
     produce_p:
     {
-        memset(csr_p, 0, (m+1)*sizeof(size_t));
-        memset(csc_p, 0, (n+1)*sizeof(size_t));
+        memset(csr_p, 0, ((size_t)m+(size_t)1)*sizeof(size_t));
+        memset(csc_p, 0, ((size_t)n+(size_t)1)*sizeof(size_t));
         for (size_t ix = 0; ix < nnz; ix++) {
-            csr_p[Xrow[ix]+1]++;
-            csc_p[Xcol[ix]+1]++;
+            csr_p[Xrow[ix]+(size_t)1]++;
+            csc_p[Xcol[ix]+(size_t)1]++;
         }
         for (int row = 0; row < m; row++)
-            csr_p[row+1] += csr_p[row];
+            csr_p[row+(size_t)1] += csr_p[row];
         for (int col = 0; col < n; col++)
-            csc_p[col+1] += csc_p[col];
+            csc_p[col+(size_t)1] += csc_p[col];
     }
 
 
@@ -894,14 +894,14 @@ void coo_to_csr_and_csc
             {
                 if (W == NULL)
                     for (size_t ix = 0; ix < nnz; ix++) {
-                        csr_i[--csr_p[Xrow[ix]+1]] = Xcol[ix];
-                        csr_v[csr_p[Xrow[ix]+1]] = Xval[ix];
+                        csr_i[--csr_p[Xrow[ix]+(size_t)1]] = Xcol[ix];
+                        csr_v[csr_p[Xrow[ix]+(size_t)1]] = Xval[ix];
                     }
                 else
                     for (size_t ix = 0; ix < nnz; ix++) {
-                        csr_i[--csr_p[Xrow[ix]+1]] = Xcol[ix];
-                        csr_v[csr_p[Xrow[ix]+1]] = Xval[ix];
-                        csr_w[csr_p[Xrow[ix]+1]] = W[ix];
+                        csr_i[--csr_p[Xrow[ix]+(size_t)1]] = Xcol[ix];
+                        csr_v[csr_p[Xrow[ix]+(size_t)1]] = Xval[ix];
+                        csr_w[csr_p[Xrow[ix]+(size_t)1]] = W[ix];
                     }
             }
 
@@ -909,14 +909,14 @@ void coo_to_csr_and_csc
             {
                 if (W == NULL)
                     for (size_t ix = 0; ix < nnz; ix++) {
-                        csc_i[--csc_p[Xcol[ix]+1]] = Xrow[ix];
-                        csc_v[csc_p[Xcol[ix]+1]] = Xval[ix];
+                        csc_i[--csc_p[Xcol[ix]+(size_t)1]] = Xrow[ix];
+                        csc_v[csc_p[Xcol[ix]+(size_t)1]] = Xval[ix];
                     }
                 else
                     for (size_t ix = 0; ix < nnz; ix++) {
-                        csc_i[--csc_p[Xcol[ix]+1]] = Xrow[ix];
-                        csc_v[csc_p[Xcol[ix]+1]] = Xval[ix];
-                        csc_w[csc_p[Xcol[ix]+1]] = W[ix];
+                        csc_i[--csc_p[Xcol[ix]+(size_t)1]] = Xrow[ix];
+                        csc_v[csc_p[Xcol[ix]+(size_t)1]] = Xval[ix];
+                        csc_w[csc_p[Xcol[ix]+(size_t)1]] = W[ix];
                     }
             }
         }
@@ -937,13 +937,13 @@ void row_means_csr(size_t indptr[], FPnum *restrict values,
     #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
             shared(indptr, values, output, m)
     for (row = 0; row < m; row++)
-        for (size_t ix = indptr[row]; ix < indptr[row+1]; ix++)
+        for (size_t ix = indptr[row]; ix < indptr[row+(size_t)1]; ix++)
             output[row] += values[ix];
     nthreads = cap_to_4(nthreads);
     #pragma omp parallel for schedule(static) num_threads(nthreads) \
             shared(indptr, output, m)
     for (row = 0; row < m; row++)
-        output[row] /= (FPnum)(indptr[row+1] - indptr[row]);
+        output[row] /= (FPnum)(indptr[row+(size_t)1] - indptr[row]);
 }
 
 bool should_stop_procedure = false;

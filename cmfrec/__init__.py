@@ -45,6 +45,9 @@ class _CMF:
         assert isinstance(k_item, int) and k_item >= 0
         assert isinstance(k_main, int) and k_main >= 0
 
+        if ((max(k_user, k_item) + k + k_main)**2 + 1) > np.iinfo(ctypes.c_int).max:
+            raise ValueError("Number of factors is too large.")
+
         lambda_ = float(lambda_) if isinstance(lambda_, int) else lambda_
         lambda_ = np.array(lambda_) if lambda_.__class__.__name__ in ["list", "Series", "tuple"] else lambda_
         if lambda_.__class__.__name__ == "ndarray":
@@ -191,6 +194,9 @@ class _CMF:
         k_main = int(k_main) if isinstance(k_main, float) else k_main
         assert isinstance(k_sec, int) and k_sec >= 0
         assert isinstance(k_main, int) and k_main >= 0
+
+        if ((max(k_sec, k_main) + k)**2 + 1) > np.iinfo(ctypes.c_int).max:
+            raise ValueError("Number of factors is too large.")
 
         if self.method == "als":
             if self._implicit:
