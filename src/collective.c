@@ -1103,10 +1103,10 @@ void collective_closed_form_block
 {
     /* Potential bad inputs - should not reach this point */
     if ( (  (Xa_dense != NULL && cnt_NA_x == n) ||
-            (Xa_dense == NULL && nnz == 0 && !NA_as_zero_X)  )
+            (Xa_dense == NULL && nnz == 0)  )
                 &&
           (  (u_vec != NULL && cnt_NA_u == p) ||
-             (u_vec == NULL && nnz_u_vec == 0 && !NA_as_zero_U)  )
+             (u_vec == NULL && nnz_u_vec == 0)  )
         )
     {
         set_to_zero(a_vec, k_user + k + k_main, 1);
@@ -1422,8 +1422,7 @@ void collective_closed_form_block_implicit
     if ( (nnz == 0)
             &&
           ((u_vec != NULL && cnt_NA_u == p) ||
-           (u_vec_sp != NULL && nnz_u_vec == 0 && !NA_as_zero_U) ||
-           (u_vec == NULL && u_vec_sp == NULL))
+           (u_vec == NULL && nnz_u_vec == 0))
         )
     {
         set_to_zero(a_vec, k_user + k + k_main, 1);
@@ -3413,6 +3412,17 @@ void optimizeA_collective
                 nthreads
             );
 
+        #ifdef FORCE_NO_NAN_PROPAGATION
+        if (!full_dense)
+            #pragma omp parallel for schedule(static) \
+                    num_threads(min2(4, nthreads)) \
+                    shared(A, m, k_totA)
+            for (size_t_for ix = 0;
+                 ix < (size_t)m*(size_t)k_totA;
+                 ix++)
+                A[ix] = isnan(A[ix])? 0 : A[ix];
+        #endif
+
         tposv_(&uplo, &k_pred, &m,
                bufferBeTBe, &k_pred,
                A, &k_totA,
@@ -3677,14 +3687,6 @@ void optimizeA_collective
 
         skip_chol_simplifications:
             {};
-        // size_t size_buffer = square(k_totA)
-        //                       + ((Xfull != NULL && weight == NULL)?
-        //                           ((size_t)n*(size_t)(k+k_main)) : (0))
-        //                       + ((U != NULL && !full_dense_u)?
-        //                             ((size_t)p*(size_t)(k_user+k)) : (0));
-        
-        // if (use_cg) size_buffer += (size_t)6*(size_t)k_totA;
-        // if (use_cg) size_buffer += (size_t)max2(n, p);
         size_t size_buffer = use_cg? (3*k_totA) : (square(k_totA));
         if (use_cg && Xfull == NULL && NA_as_zero_X && weight != NULL)
             size_buffer += n;

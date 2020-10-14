@@ -690,7 +690,7 @@ void AtAinvAt_plus_chol(FPnum *restrict A, int lda, int offset,
     {
         copy_mat(m, n, A + offset, lda, AtAinvAt_out, n);
         if (w != 1.)
-            cblas_tscal(m*n, w, AtAinvAt_out, 1);
+            tscal_large(AtAinvAt_out, w, (size_t)m*(size_t)n, 1);
         tposv_(&uplo, &n, &m,
                AtAchol_out, &n,
                AtAinvAt_out, &n,
@@ -704,18 +704,18 @@ void AtAinvAt_plus_chol(FPnum *restrict A, int lda, int offset,
     }
 }
 
-void transpose_mat(FPnum *restrict A, int m, int n, FPnum *restrict buffer_FPnum)
+void transpose_mat(FPnum *restrict A, size_t m, size_t n, FPnum *restrict buffer_FPnum)
 {
-    memcpy(buffer_FPnum, A, (size_t)m*(size_t)n*sizeof(FPnum));
-    for (int row = 0; row < m; row++)
-        for (int col = 0; col < n; col++)
+    memcpy(buffer_FPnum, A, m*n*sizeof(FPnum));
+    for (size_t row = 0; row < m; row++)
+        for (size_t col = 0; col < n; col++)
             A[row + col*m] = buffer_FPnum[col + row*n];
 }
 
-void transpose_mat2(FPnum *restrict A, int m, int n, FPnum *restrict outp)
+void transpose_mat2(FPnum *restrict A, size_t m, size_t n, FPnum *restrict outp)
 {
-    for (int row = 0; row < m; row++)
-        for (int col = 0; col < n; col++)
+    for (size_t row = 0; row < m; row++)
+        for (size_t col = 0; col < n; col++)
             outp[row + col*m] = A[col + row*n];
 }
 

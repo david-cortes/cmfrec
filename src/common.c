@@ -748,6 +748,15 @@ void factors_closed_form
     int ignore;
     bool prefer_BtB = max2((size_t)cnt_NA, nnz) < (size_t)k;
 
+
+    /* Potential bad inputs */
+    if ((Xa_dense != NULL && cnt_NA == n) ||
+        (Xa_dense == NULL && nnz == 0))
+    {
+        set_to_zero(a_vec, k, 1);
+        return;
+    }
+
     /* If inv(t(B)*B + diag(lam))*B is already given, use it as a shortcut.
        The intended use-case for this is for cold-start recommendations
        for the collective model with no missing values, given that the
@@ -861,14 +870,6 @@ void factors_closed_form
         }
 
         if (w != 1.) cblas_tscal(k, w, a_vec, 1);
-    }
-
-    /* Potential edge case */
-    else if ((Xa_dense != NULL && cnt_NA == n) ||
-             (Xa_dense == NULL && nnz == 0 && !NA_as_zero))
-    {
-        set_to_zero(a_vec, k, 1);
-        return;
     }
 
     /* If none of the above apply, it's faster to get an approximate
@@ -1876,8 +1877,9 @@ void optimizeA
                         1., Xfull, m, B, ldb,
                         0., A, lda);
 
-        /* TODO: is this still needed? */
-        if (near_dense)
+        
+        #ifdef FORCE_NO_NAN_PROPAGATION
+        if (!full_dense)
             #pragma omp parallel for schedule(static) \
                     num_threads(min2(4, nthreads)) \
                     shared(A, m, lda)
@@ -1885,6 +1887,7 @@ void optimizeA
                  ix < (size_t)m*(size_t)lda - (size_t)(lda-k);
                  ix++)
                 A[ix] = isnan(A[ix])? 0 : A[ix];
+        #endif
         /* A = t( inv(t(B)*B + diag(lam)) * t(B)*t(X) )
            Note: don't try to flip the equation as the 'posv'
            function assumes only the LHS is symmetric. */
@@ -1913,6 +1916,9 @@ void optimizeA
                         cblas_tcopy(n, Xfull + ix, m,
                                     bufferX + (n*omp_get_thread_num()), 1);
 
+                    if (use_cg)
+                        set_to_zero(A + ix*(size_t)lda, k, 1);
+
                     factors_closed_form(
                         A + ix*(size_t)lda, k,
                         B, n, ldb,
@@ -1925,7 +1931,6 @@ void optimizeA
                         (FPnum*)NULL,
                         bufferBtBcopy, cnt_NA[ix], 0,
                         (FPnum*)NULL, false,
-                        // use_cg, max_cg_steps,
                         use_cg, k, /* <- A was reset to zero, need more steps */
                         false
                     );

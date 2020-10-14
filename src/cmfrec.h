@@ -306,8 +306,8 @@ void AtAinvAt_plus_chol(FPnum *restrict A, int lda, int offset,
                         FPnum lam, FPnum lam_last, int m, int n, FPnum w,
                         FPnum *restrict buffer_FPnum,
                         bool no_reg_to_AtA);
-void transpose_mat(FPnum *restrict A, int m, int n, FPnum *restrict buffer_FPnum);
-void transpose_mat2(FPnum *restrict A, int m, int n, FPnum *restrict outp);
+void transpose_mat(FPnum *restrict A, size_t m, size_t n, FPnum *restrict buffer_FPnum);
+void transpose_mat2(FPnum *restrict A, size_t m, size_t n, FPnum *restrict outp);
 int coo_to_csr_plus_alloc
 (
     int *restrict Xrow, int *restrict Xcol, FPnum *restrict Xval,
