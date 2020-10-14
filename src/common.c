@@ -1914,7 +1914,8 @@ void optimizeA
                         bufferX = Xfull + ix*(size_t)n;
                     else
                         cblas_tcopy(n, Xfull + ix, m,
-                                    bufferX + (n*omp_get_thread_num()), 1);
+                                    bufferX
+                            + ((size_t)n*(size_t)omp_get_thread_num()), 1);
 
                     if (use_cg)
                         set_to_zero(A + ix*(size_t)lda, k, 1);
@@ -1922,7 +1923,10 @@ void optimizeA
                     factors_closed_form(
                         A + ix*(size_t)lda, k,
                         B, n, ldb,
-                        bufferX + (do_B? (n*omp_get_thread_num()) : (0)), false,
+                        bufferX + (do_B?
+                                    ((size_t)n*(size_t)omp_get_thread_num())
+                                        :
+                                    ((size_t)0)), false,
                         (FPnum*)NULL, (int*)NULL, (size_t)0,
                         (FPnum*)NULL,
                         buffer_remainder
@@ -1976,20 +1980,20 @@ void optimizeA
         //     }
         //     else {
         //         cblas_tcopy(n, Xfull + ix, m,
-        //                     bufferX + (n*omp_get_thread_num()), 1);
+        //                     bufferX + ((size_t)n*(size_t)omp_get_thread_num()), 1);
         //         if (weight != NULL)
         //             cblas_tcopy(n, weight + ix, m,
-        //                         bufferW + (n*omp_get_thread_num()), 1);
+        //                         bufferW + ((size_t)n*(size_t)omp_get_thread_num()), 1);
         //     }
 
         //     /* TODO: revise the size of the thread-local space */
         //     factors_closed_form(
         //         A + ix*(size_t)lda, k,
         //         B, n, ldb,
-        //         bufferX + (do_B? (n*omp_get_thread_num()) : (0)), cnt_NA[ix]==0,
+        //         bufferX + (do_B? ((size_t)n*(size_t)omp_get_thread_num()) : ((size_t)0)), cnt_NA[ix]==0,
         //         (FPnum*)NULL, (int*)NULL, (size_t)0,
         //         (weight != NULL)?
-        //             (bufferW + (do_B? (n*omp_get_thread_num()) : (0)))
+        //             (bufferW + (do_B? ((size_t)n*(size_t)omp_get_thread_num()) : ((size_t)0)))
         //               :
         //             ((FPnum*)NULL),
         //         buffer_remainder

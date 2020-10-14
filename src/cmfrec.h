@@ -71,7 +71,7 @@ extern "C" {
 #ifdef _OPENMP
     #include <omp.h>
 #else
-    #define omp_get_thread_num() 0
+    #define omp_get_thread_num() (0)
 #endif
 
 #ifdef _FOR_PYTHON
@@ -83,11 +83,9 @@ extern "C" {
     #include <R_ext/BLAS.h>
     #include <R_ext/Lapack.h>
     #define USE_DOUBLE
+    #define FORCE_NO_NAN_PROPAGATION
     #define printf Rprintf
     #define fprintf(f, message) REprintf(message)
-#else
-    #include "cblas.h"
-    #include "lapack.h"
 #endif
 
 /* Aliasing for compiler optimizations */
@@ -164,7 +162,7 @@ extern "C" {
     #define tpotrs_ spotrs_
     #define tgels_ sgels_
 #endif
-#if !defined(_FOR_R) && !defined(LAPACK_H)
+#if !defined(LAPACK_H) && !defined(_FOR_R)
 void tposv_(const char*, const int*, const int*, const FPnum*, const int*, const FPnum*, const int*, const int*);
 void tlacpy_(const char*, const int*, const int*, const FPnum*, const int*, const FPnum*, const int*);
 void tlarnv_(const int*, const int*, const int*, const FPnum*);
@@ -197,7 +195,6 @@ void cblas_tsymv(const CBLAS_ORDER order, const CBLAS_UPLO Uplo, const int N, co
                  const int lda, const FPnum *X, const int incX, const FPnum beta, FPnum *Y, const int incY);
 #endif
 
-/* TODO: maybe should add LAPACK function prototypes here */
 
 #include "lbfgs.h"
 

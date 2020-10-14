@@ -1,10 +1,10 @@
 # Collective Matrix Factorization
 
-Implementation of collective matrix factorization, based on _Relational learning via collective matrix factorization_, with some enhancements and alternative models for cold-start recommendations as described in _Cold-start recommendations in Collective Matrix Factorization_, and adding implicit-feedback variants as described in _Collaborative filtering for implicit feedback datasets_.
+Implementation of collective matrix factorization, based on _Relational learning via collective matrix factorization_ ([2]), with some enhancements and alternative models for cold-start recommendations as described in _Cold-start recommendations in Collective Matrix Factorization_ ([1]), and adding implicit-feedback variants as described in _Collaborative filtering for implicit feedback datasets_ ([3]).
 
 This is a hybrid collaborative filtering model for recommender systems that takes as input either explicit item ratings or implicit-feedback data, and side information about users and/or items (although it can also fit pure collaborative-filtering and pure content-based models). The overall idea was extended here to also be able to do cold-start recommendations (for users and items that were not in the training data but which have side information available).
 
-Although the package was developed with recommender systems in mind, it can also be used in other domains - just take any mention of users as rows in the main matrix and any mention of items as columns.
+Although the package was developed with recommender systems in mind, it can also be used in other domains (e.g. topic modeling, dimensionality reduction, missing value imputation) - just take any mention of users as rows in the main matrix, any mention of items as columns, and use the "explicit" models.
 
 For more information about the implementation here, or if you would like to cite this in your research, see ["Cold-start recommendations in Collective Matrix Factorization"](https://arxiv.org/abs/1809.00366)
 
@@ -43,7 +43,7 @@ X ~ A * t(B)
 ```
 Using side information about the items (such as movie tags) and/or users (such as their demographic info) by also factorizing the item side info matrix and/or the user side info matrix
 ```
-U ~ A * t(C), I ~ B * t(D)
+U ~ A * t(C),   I ~ B * t(D)
 ```
 Sharing the same item/user-factor matrix used to factorize the ratings, or sharing only some of the latent factors.
 

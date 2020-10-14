@@ -3298,6 +3298,7 @@ void optimizeA_collective
     /* TODO: the functions 'optimizeA' might calculate t(B)*B or t(C)*C,
        which will then later be re-calculated inside the rest of this function,
        should instead have the option of passing it pre-calculated */
+    /* TODO: is this correct when using NA_as_zero? */
     if (m > m_u) {
 
         int m_diff = m - m_u;
@@ -3479,7 +3480,9 @@ void optimizeA_collective
                             bufferX = Xfull + ix*(size_t)n;
                         else
                             cblas_tcopy(n, Xfull + ix, m_x,
-                                        bufferX + n*omp_get_thread_num(), 1);
+                                        bufferX
+                                        +(size_t)n*(size_t)omp_get_thread_num(),
+                                        1);
                     }
 
                     if (use_cg)
@@ -3491,7 +3494,10 @@ void optimizeA_collective
                         k, k_user, k_item, k_main, 0, padding,
                         (Xfull == NULL)? ((FPnum*)NULL)
                                  : (bufferX
-                                    + (do_B? (n*omp_get_thread_num()) : (0))),
+                                    + (do_B?
+                                        ((size_t)n*(size_t)omp_get_thread_num())
+                                            :
+                                        ((size_t)0))),
                         (Xfull != NULL)? ((FPnum*)NULL) : (Xcsr + Xcsr_p[ix]),
                         (Xfull != NULL)? ((int*)NULL) : (Xcsr_i + Xcsr_p[ix]),
                         (Xfull != NULL)?
@@ -3708,7 +3714,8 @@ void optimizeA_collective
                     bufferX = Xfull + ix*(size_t)n;
                 else if (add_X || cnt_NA_x[ix]) {
                     cblas_tcopy(n, Xfull + ix, m_x,
-                                bufferX_orig + n*omp_get_thread_num(), 1);
+                                bufferX_orig
+                                    + (size_t)n*(size_t)omp_get_thread_num(),1);
                     bufferX = bufferX_orig;
                 }
                 else
@@ -3719,7 +3726,8 @@ void optimizeA_collective
                         bufferW = weight + ix*(size_t)n;
                     else
                         cblas_tcopy(n, weight + ix, m_x,
-                                    bufferW + n*omp_get_thread_num(), 1);
+                                    bufferW
+                                    + (size_t)n*(size_t)omp_get_thread_num(),1);
                 }
             }
 
@@ -3729,7 +3737,10 @@ void optimizeA_collective
                 k, k_user, k_item, k_main, 0, padding,
                 (Xfull == NULL)? ((FPnum*)NULL)
                                  : (bufferX
-                                    + (do_B? (n*omp_get_thread_num()) : (0))),
+                                    + (do_B?
+                                        ((size_t)n*(size_t)omp_get_thread_num())
+                                            :
+                                        ((size_t)0))),
                 (Xfull != NULL)? ((FPnum*)NULL) : (Xcsr + Xcsr_p[ix]),
                 (Xfull != NULL)? ((int*)NULL) : (Xcsr_i + Xcsr_p[ix]),
                 (Xfull != NULL)? (size_t)0 : (Xcsr_p[ix+(size_t)1] -Xcsr_p[ix]),
@@ -3743,7 +3754,9 @@ void optimizeA_collective
                 (weight == NULL)? ((FPnum*)NULL)
                                 : ( (Xfull != NULL)?
                                       (bufferW
-                                       + (do_B? (n*omp_get_thread_num()) : (0)))
+                                       + (do_B?
+                                    ((size_t)n*(size_t)omp_get_thread_num())
+                                        : ((size_t)0)))
                                       : (weight + Xcsr_p[ix]) ),
                 lam, w_user, w_main, lam_last,
                 bufferBtB, (Xfull != NULL)? cnt_NA_x[ix] : 0,

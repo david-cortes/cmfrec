@@ -1630,9 +1630,11 @@ class CMF_explicit(_CMF):
 
     Note
     ----
-    The default hyperparameters are geared towards quality and numerical stability more
-    than speed. For faster fitting, use ``method="als"``, ``use_cg=True``,
-    ``use_float=True``, and pass COO matrices /NumPy arrays to ``fit``.
+    The default arguments are not geared towards speed.
+    For faster fitting, use ``method="als"``, ``use_cg=True``,
+    ``finalize_chol=False``, ``use_float=True``,
+    ``precompute_for_predictions=False``, ``produce_dicts=False``,
+    and pass COO matrices or NumPy arrays instead of DataFrames to ``fit``.
 
     Parameters
     ----------
@@ -1641,11 +1643,13 @@ class CMF_explicit(_CMF):
         factorization), which will be shared between the factorization of the
         'X' matrix and the side info matrices. Additional non-shared components
         can also be specified through ``k_user``, ``k_item``, and ``k_main``.
+        Typical values are 30 to 100.
     lambda_ : float or array(6,)
         Regularization parameter. Can also use different regularization for each
         matrix, in which case it should be an array with 6 entries, corresponding,
         in this order, to: user_bias, item_bias, A, B, C, D. Note that the default
         value for ``lambda_`` here is much higher than in other software.
+        Typical values are 10^-2 to 10^2.
     method : str, one of "lbfgs" or "als"
         Optimization method used to fit the model. If passing ``'lbfgs'``, will
         fit it through a gradient-based approach using an L-BFGS optimizer.
@@ -1717,6 +1721,7 @@ class CMF_explicit(_CMF):
         Number of alternating least-squares iterations to perform. Note that
         one iteration denotes an update round for all the matrices rather than
         an update of a single matrix. Ignored when passing ``method='lbfgs'``.
+        Typical values are 6 to 20.
     parallelize : str, "separate" or "single"
         How to parallelize gradient calculations when using more than one
         thread with ``method='lbfgs'``. Passing ``'separate'`` will iterate
@@ -1749,6 +1754,11 @@ class CMF_explicit(_CMF):
         model to fit.
         Note that passing "True" will affect the results of the functions named
         "cold" (as it will assume zeros instead of missing).
+        It is possible to obtain equivalent results to the implicit-feedback
+        model if passing "True" here, and then passing an "X" to fit with
+        all values set to one and weights corresponding to the actual values
+        of "X" multiplied by alpha, plus 1 (W := 1 + alpha*X to imitate the
+        implicit-feedback model).
         Can be changed after the model has already been fit to data.
     NA_as_zero_user : bool
         Whether to take missing entries in the 'U' matrix as zeros (only
@@ -2884,23 +2894,26 @@ class CMF_implicit(_CMF):
 
     Note
     ----
-    The default hyperparameters are geared towards quality and numerical stability more
-    than speed. For faster fitting, use ``use_cg=True``, ``use_float=True``, and
-    pass COO matrices / NumPy arrays to ``fit``.
+    The default hyperparameters in this software are very different from others.
+    For example, to match those of the package ``implicit``, the corresponding
+    hyperparameters here would be ``use_cg=True``, ``finalize_chol=False``,
+    ``k=100``, ``lambda_=0.01``, ``niter=15``, ``use_float=True``, `alpha=1.``,
+    ``downweight=False`` (see the individual documentation of each hyperarameter
+    for details).
+
+    Note
+    ----
+    The default arguments are not geared towards speed.
+    For faster fitting, use ``use_cg=True``,
+    ``finalize_chol=False``, ``use_float=True``,
+    ``precompute_for_predictions=False``, ``produce_dicts=False``,
+    and pass COO matrices or NumPy arrays instead of DataFrames to ``fit``.
 
     Note
     ----
     This model is fit through the alternating least-squares method only,
     it does not offer a gradient-based approach like the explicit-feedback
     version.
-
-    Note
-    ----
-    The default hyperparameters in this software are very different from others.
-    For example, to match those of the package ``implicit``, the corresponding
-    hyperparameters here would be ``use_cg=True``, ``k=100``, ``lambda_=0.01``,
-    ``niter=15``, ``use_float=True``, `alpha=1.``, ``downweight=False`` (see the
-    individual documentation of each hyperarameter for details).
 
     Parameters
     ----------
@@ -2909,11 +2922,13 @@ class CMF_implicit(_CMF):
         factorization), which will be shared between the factorization of the
         'X' matrix and the side info matrices. Additional non-shared components
         can also be specified through ``k_user``, ``k_item``, and ``k_main``.
+        Typical values are 30 to 100.
     lambda_ : float or array(6,)
         Regularization parameter. Can also use different regularization for each
         matrix, in which case it should be an array with 6 entries, corresponding,
         in this order, to: <ignored>, <ignored>, A, B, C, D. Note that the default
         value for ``lambda_`` here is much higher than in other software.
+        Typical values are 10^-2 to 10^2.
     alpha : float
         Weighting parameter for the non-zero entries in the implicit-feedback
         model. See [3] for details. Note that, while the author's suggestion for
@@ -2969,6 +2984,7 @@ class CMF_implicit(_CMF):
         Number of alternating least-squares iterations to perform. Note that
         one iteration denotes an update round for all the matrices rather than
         an update of a single matrix.
+        Typical values are 6 to 20.
     NA_as_zero_user : bool
         Whether to take missing entries in the 'U' matrix as zeros (only
         when the 'U' matrix is passed as sparse COO matrix) instead of ignoring them.
@@ -4106,6 +4122,7 @@ class OMF_explicit(_OMF):
         factorization), which will have a free component and an attribute-dependent
         component. Other additional separate factors can be specified through
         ``k_sec`` and ``k_main``.
+        Typical values are 30 to 100.
     lambda_ : float or array(6,)
         Regularization parameter. Can also use different regularization for each
         matrix, in which case it should be an array with 6 entries, corresponding,
@@ -4114,6 +4131,7 @@ class OMF_explicit(_OMF):
         to which they apply (C and D).
         Note that the default
         value for ``lambda_`` here is much higher than in other software.
+        Typical values are 10^-2 to 10^2.
         Passing different regularization for each matrix is not supported with
         ``method='als'``.
     method : str, one of "lbfgs" or "als"
@@ -4187,6 +4205,7 @@ class OMF_explicit(_OMF):
         Number of alternating least-squares iterations to perform. Note that
         one iteration denotes an update round for all the matrices rather than
         an update of a single matrix. Ignored when passing ``method='lbfgs'``.
+        Typical values are 6 to 20.
     parallelize : str, "separate" or "single"
         How to parallelize gradient calculations when using more than one
         thread with ``method='lbfgs'``. Passing ``'separate'`` will iterate
@@ -5045,9 +5064,11 @@ class OMF_implicit(_OMF):
     k : int
         Number of latent factors to use (dimensionality of the low-rank
         approximation).
+        Typical values are 30 to 100.
     lambda_ : float
         Regularization parameter. Note that the default
         value for ``lambda_`` here is much higher than in other software.
+        Typical values are 10^-2 to 10^2.
     alpha : float
         Weighting parameter for the non-zero entries in the implicit-feedback
         model. See [2] for details. Note that, while the author's suggestion for
@@ -5078,6 +5099,7 @@ class OMF_implicit(_OMF):
         Number of alternating least-squares iterations to perform. Note that
         one iteration denotes an update round for all the matrices rather than
         an update of a single matrix.
+        Typical values are 6 to 20.
     use_float : bool
         Whether to use C float type for the model parameters (typically this is
         ``np.float32``). If passing ``False``, will use C double (typically this
@@ -5545,12 +5567,14 @@ class ContentBased(_OMF_Base):
     k : int
         Number of latent factors to use (dimensionality of the low-rank
         approximation).
+        Recommended values are 30 to 100.
     lambda_ : float or array(6,)
         Regularization parameter. Can also use different regularization for each
         matrix, in which case it should be an array with 6 entries, corresponding,
         in this order, to: user_bias, item_bias, [ignored], [ignored], C, D.
         Note that the default
         value for ``lambda_`` here is much higher than in other software.
+        Recommended values are 10^-2 to 10^2.
     user_bias : bool
         Whether to add user biases (intercepts) to the model.
     item_bias : bool
