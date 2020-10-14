@@ -2499,7 +2499,13 @@ int collective_factors_cold
     bool NA_as_zero_U
 )
 {
-    if (NA_as_zero_U && u_bin_vec != NULL) return 2;
+    if (NA_as_zero_U && u_bin_vec != NULL) {
+        fprintf(stderr, "Cannot use 'NA_as_zero_U' when there is 'u_bin'\n");
+        #ifndef _FOR_R
+        fflush(stderr);
+        #endif
+        return 2;
+    }
     int cnt_NA_u_vec = 0;
     int cnt_NA_u_bin_vec = 0;
     if (u_vec != NULL || (u_vec_sp != NULL && !NA_as_zero_U))
@@ -2665,8 +2671,13 @@ int collective_factors_warm
     FPnum *restrict B_plus_bias
 )
 {
-    if (u_bin_vec != NULL && (NA_as_zero_X || NA_as_zero_U))
+    if (u_bin_vec != NULL && (NA_as_zero_X || NA_as_zero_U)) {
+        fprintf(stderr, "Cannot use 'NA_as_zero' when there is 'u_bin'\n");
+        #ifndef _FOR_R
+        fflush(stderr);
+        #endif
         return 2;
+    }
 
     int cnt_NA_u_vec = 0;
     int cnt_NA_u_bin_vec = 0;
@@ -4707,7 +4718,16 @@ int fit_collective_explicit_lbfgs
         free(I_csc_p);
         free(I_csc_i);
         free(I_csc);
-    if (retval == 1) return 1;
+    if (retval == 1)
+    {
+        if (verbose) {
+            fprintf(stderr, "Error: could not allocate enough memory.\n");
+            #ifndef _FOR_R
+            fflush(stderr);
+            #endif
+        }
+        return 1;
+    }
 
     return 0;
 }
@@ -4738,8 +4758,15 @@ int fit_collective_explicit_als
     /* TODO: this function should have the option to output the
        matrices t(B)*B, t(C)*C, Cholesky, etc. from the last iteration,
        so as to avoid recalculating it again afterwards. */
-    if ((NA_as_zero_X && Xfull == NULL) && (user_bias || item_bias))
+    if ((NA_as_zero_X && Xfull == NULL) && (user_bias || item_bias)) {
+        if (verbose) {
+            fprintf(stderr, "Cannot calculate biases with 'NA_as_zero_X'.\n");
+            #ifndef _FOR_R
+            fflush(stderr);
+            #endif
+        }
         return 2;
+    }
 
     #if defined(_OPENMP) && \
                 ( (_OPENMP < 200801)  /* OpenMP < 3.0 */ \
@@ -5445,7 +5472,16 @@ int fit_collective_explicit_als
             free(Xfull_orig);
         if (Xtrans_orig != NULL)
             free(Xtrans_orig);
-    if (retval == 1) return 1;
+    if (retval == 1)
+    {
+        if (verbose) {
+            fprintf(stderr, "Error: could not allocate enough memory.\n");
+            #ifndef _FOR_R
+            fflush(stderr);
+            #endif
+        }
+        return 1;
+    }
 
     return 0;
 }
@@ -5869,7 +5905,16 @@ int fit_collective_implicit_als
         free(cnt_NA_u_bycol);
         free(cnt_NA_i_byrow);
         free(cnt_NA_i_bycol);
-    if (retval == 1) return 1;
+    if (retval == 1)
+    {
+        if (verbose) {
+            fprintf(stderr, "Error: could not allocate enough memory.\n");
+            #ifndef _FOR_R
+            fflush(stderr);
+            #endif
+        }
+        return 1;
+    }
 
     return 0;
 }

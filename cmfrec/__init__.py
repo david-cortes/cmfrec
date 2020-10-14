@@ -891,6 +891,9 @@ class _CMF:
         else:
             m = int(Xrow.max() + 1)
             n = int(Xcol.max() + 1)
+            if X.__class__.__name__ == "coo_matrix":
+                m = max(m, X.shape[0])
+                n = max(n, X.shape[1])
             if enforce_same_shape:
                 m = max(m, m_u, m_ub)
                 n = max(n, n_i, n_ib)
@@ -916,6 +919,11 @@ class _CMF:
             if Ib_arr.shape[0]:
                 if n_ib != n:
                     raise ValueError(msg_err_rows % "_bin")
+
+        if max(m, n, m_u, n_i, p, q, m_ub, n_ib, pbin, qbin) > np.iinfo(ctypes.c_int).max:
+            msg  = "Error: dimensionality of the inputs is too high. "
+            msg += "Number of rows/columns cannot be more than INT_MAX."
+            raise ValueError(msg)
 
         return self._fit(Xrow, Xcol, Xval, W_sp, Xarr, W_dense,
                          Uarr, Urow, Ucol, Uval, Ub_arr,
@@ -1747,10 +1755,12 @@ class CMF_explicit(_CMF):
         when the 'U' matrix is passed as sparse COO matrix) instead of ignoring them.
         Note that passing "True" will affect the results of the functions named
         "warm" if no data is passed there (as it will assume zeros instead of
-        missing). Can be changed after the model has already been fit to data.
+        missing). Can be changed after the model has already been fit to data,
+        **as long as the model is not fit to binary user side info 'U_bin'**.
     NA_as_zero_item : bool
         Whether to take missing entries in the 'I' matrix as zeros (only
         when the 'I' matrix is passed as sparse COO matrix) instead of ignoring them.
+        Can be changed after the model has already been fit to data.
     precompute_for_predictions : bool
         Whether to precompute some of the matrices that are used when making
         predictions from the model. If 'False', it will take longer to generate
@@ -1856,6 +1866,9 @@ class CMF_explicit(_CMF):
            "Relational learning via collective matrix factorization."
            Proceedings of the 14th ACM SIGKDD international conference on
            Knowledge discovery and data mining. 2008.
+    .. [4] Takacs, Gabor, Istvan Pilaszy, and Domonkos Tikk.
+           "Applications of the conjugate gradient method for implicit feedback collaborative filtering."
+           Proceedings of the fifth ACM conference on Recommender systems. 2011.
     """
     def __init__(self, k=50, lambda_=1e1, method="als", use_cg=False,
                  user_bias=True, item_bias=True, k_user=0, k_item=0, k_main=0,

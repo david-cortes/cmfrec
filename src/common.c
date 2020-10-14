@@ -2522,11 +2522,34 @@ int topN
     int n_top, int n, int nthreads
 )
 {
-    if (include_ix != NULL && exclude_ix != NULL)
+    if (include_ix != NULL && exclude_ix != NULL) {
+        fprintf(stderr, "Cannot pass both 'include_ix' and 'exclude_ix'.\n");
+        #ifndef _FOR_R
+        fflush(stderr);
+        #endif
         return 2;
-    if (n_top == 0) return 2;
-    if (n_exclude > n-n_top) return 2;
-    if (n_include > n) return 2;
+    }
+    if (n_top == 0) {
+        fprintf(stderr, "'n_top' must be greater than zero.\n");
+        #ifndef _FOR_R
+        fflush(stderr);
+        #endif
+        return 2;
+    }
+    if (n_exclude > n-n_top) {
+        fprintf(stderr, "Number of rankeable entities is less than 'n_top'\n");
+        #ifndef _FOR_R
+        fflush(stderr);
+        #endif
+        return 2;
+    }
+    if (n_include > n) {
+        fprintf(stderr, "Number of entities to include is larger than 'n'.\n");
+        #ifndef _FOR_R
+        fflush(stderr);
+        #endif
+        return 2;
+    }
 
     int ix = 0;
 

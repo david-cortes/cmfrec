@@ -1224,7 +1224,16 @@ int fit_offsets_explicit_lbfgs
         free(I_csc_p);
         free(I_csc_i);
         free(I_csc);
-    if (retval == 1) return 1;
+    if (retval == 1)
+    {
+        if (verbose) {
+            fprintf(stderr, "Error: could not allocate enough memory.\n");
+            #ifndef _FOR_R
+            fflush(stderr);
+            #endif
+        }
+        return 1;
+    }
     return 0;
 }
 
@@ -1250,10 +1259,27 @@ int fit_offsets_als
     FPnum *restrict Bm_plus_bias
 )
 {
-    if (p > m || q > n || k > m || k > n)
+    if (p > m || q > n || k > m || k > n) {
+        if (verbose) {
+            if (k > m || k > n)
+                fprintf(stderr, "'k' cannot be greater than 'm' or 'n'.\n");
+            else
+                fprintf(stderr, "Side info has larger dimension than 'X'\n");
+            #ifndef _FOR_R
+            fflush(stderr);
+            #endif
+        }
         return 2;
-    if (implicit && (NA_as_zero_X || weight != NULL || Xfull != NULL))
+    }
+    if (implicit && (NA_as_zero_X || weight != NULL || Xfull != NULL)) {
+        if (verbose) {
+            fprintf(stderr,"Combination of inputs invalid for 'implicit'.\n");
+            #ifndef _FOR_R
+            fflush(stderr);
+            #endif
+        }
         return 2;
+    }
 
     int retval;
     if (!implicit)
@@ -1298,7 +1324,16 @@ int fit_offsets_als
                     use_cg, max_cg_steps,
                     finalize_chol
                 );
-    if (retval == 1) return 1;
+    if (retval == 1)
+    {
+        if (verbose) {
+            fprintf(stderr, "Error: could not allocate enough memory.\n");
+            #ifndef _FOR_R
+            fflush(stderr);
+            #endif
+        }
+        return 1;
+    }
 
     FPnum *restrict biasA = values;
     FPnum *restrict biasB = biasA + (user_bias? m : 0);
@@ -1442,7 +1477,16 @@ int fit_offsets_als
             free(U_plus_bias);
         if (I_plus_bias != II)
             free(I_plus_bias);
-    if (retval == 1) return 1;
+    if (retval == 1)
+    {
+        if (verbose) {
+            fprintf(stderr, "Error: could not allocate enough memory.\n");
+            #ifndef _FOR_R
+            fflush(stderr);
+            #endif
+        }
+        return 1;
+    }
     return 0;
 }
 
