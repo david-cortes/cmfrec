@@ -1675,11 +1675,13 @@ class CMF_explicit(_CMF):
         Ignored when passing ``method="lbfgs"``.
     user_bias : bool
         Whether to add user biases (intercepts) to the model.
+        Cannot be used together with ``NA_as_zero``.
     item_bias : bool
         Whether to add item biases (intercepts) to the model. Be aware that using
         item biases with low regularization for them will tend to favor items
         with high average ratings regardless of the number of ratings the item
         has received.
+        Cannot be used together with ``NA_as_zero``.
     k_user : int
         Number of factors in the factorizing A and C matrices which will be used
         only for the 'U' and 'U_bin' matrices, while being ignored for the 'X' matrix.
@@ -1759,6 +1761,7 @@ class CMF_explicit(_CMF):
         all values set to one and weights corresponding to the actual values
         of "X" multiplied by alpha, plus 1 (W := 1 + alpha*X to imitate the
         implicit-feedback model).
+        Cannot be used together with ``user_bias`` or ``item_bias``.
         Can be changed after the model has already been fit to data.
     NA_as_zero_user : bool
         Whether to take missing entries in the 'U' matrix as zeros (only
@@ -2968,12 +2971,27 @@ class CMF_implicit(_CMF):
     w_main : float
         Weight in the optimization objective for the errors in the factorization
         of the 'X' matrix.
+        Note that, since the "X" matrix is considered to be full with mostly zero
+        values, the overall sum of errors for "X" will be much larger than for the
+        side info matrices (especially if using large ``alpha``), thus it's
+        recommended to give higher weights to the side info matrices than to
+        the main matrix.
     w_user : float
         Weight in the optimization objective for the errors in the factorization
         of the 'U' matrix. Ignored when not passing 'U' to 'fit'.
+        Note that, since the "X" matrix is considered to be full with mostly zero
+        values, the overall sum of errors for "X" will be much larger than for the
+        side info matrices (especially if using large ``alpha``), thus it's
+        recommended to give higher weights to the side info matrices than to
+        the main matrix.
     w_item : float
         Weight in the optimization objective for the errors in the factorization
         of the 'I' matrix. Ignored when not passing 'I' to 'fit'.
+        Note that, since the "X" matrix is considered to be full with mostly zero
+        values, the overall sum of errors for "X" will be much larger than for the
+        side info matrices (especially if using large ``alpha``), thus it's
+        recommended to give higher weights to the side info matrices than to
+        the main matrix.
     downweight : bool
         Whether to decrease the weight of the 'X' matrix being factorized
         according to the number of present entries. This has the same effect
@@ -3097,7 +3115,7 @@ class CMF_implicit(_CMF):
     """
     def __init__(self, k=50, lambda_=1e0, alpha=1., use_cg=False,
                  k_user=0, k_item=0, k_main=0,
-                 w_main=1., w_user=1., w_item=1., downweight=False,
+                 w_main=1., w_user=10., w_item=10., downweight=False,
                  niter=10, NA_as_zero_user=False, NA_as_zero_item=False,
                  precompute_for_predictions=True, use_float=False,
                  max_cg_steps=3, finalize_chol=False,
@@ -4160,11 +4178,13 @@ class OMF_explicit(_OMF):
         Ignored when passing ``method="lbfgs"``.
     user_bias : bool
         Whether to add user biases (intercepts) to the model.
+        Cannot be used together with ``NA_as_zero``.
     item_bias : bool
         Whether to add item biases (intercepts) to the model. Be aware that using
         item biases with low regularization for them will tend to favor items
         with high average ratings regardless of the number of ratings the item
         has received.
+        Cannot be used together with ``NA_as_zero``.
     k_sec : int
         Number of factors in the factorizing matrices which are determined
         exclusively from user/item attributes. These will be at the beginning
@@ -4247,6 +4267,7 @@ class OMF_explicit(_OMF):
         model to fit. Be aware that this option will be ignored later when
         predicting on new data - that is, non-present values will be treated
         as missing.
+        Cannot be used together with ``user_bias`` or ``item_bias``.
     use_float : bool
         Whether to use C float type for the model parameters (typically this is
         ``np.float32``). If passing ``False``, will use C double (typically this

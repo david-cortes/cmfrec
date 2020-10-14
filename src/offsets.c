@@ -82,6 +82,7 @@
       from 'n' to 'q'.
     - t(X) denotes the transpose of 'X', inv(X) the inverse.
     - ||X|| denotes the L2 norm of X (sum of squared entries).
+    - '.' denotes element-wise multiplication
     - sigm(X) denotes a sigmoid elementwise transformation: 1 / (1 + exp(-X))
     - Matrices followed by a small 'b' denote binary (0/1) entries only.
     - Matrices followed by small 'u', 'i', 'm', 's', denote that only the
@@ -97,19 +98,25 @@
     of two lower dimensional matrices A[m,k] and B[n,k], in such a way that the
     squared error is minimized on the non-missing entries in X, given by binary
     matrix M[m,n], i.e.
-        min || M * (X - A*t(B)) ||^2
+        min || M . (X - A*t(B)) ||^2
 
     As some small improvements, the matrix 'X' is centered by substracting the
     mean from it, and additionally subtracting row and column biases, which
     are model parameters too, while imposing a regularization penalty on the
     magnitude of the parameters (given by L2 norm):
-        min ||M * (X - A*t(B) - mu[1] - b1[m,1] - b2[1,n])||^2
+        min ||M . (X - A*t(B) - mu[1] - b1[m,1] - b2[1,n])||^2
             + lambda*(||A||^2 + ||B||^2 + ||b1||^2 + ||b2||^2)
 
     The intended purpose is to use this as a recommender system model, in which
     'X' is a matrix comprising the ratings that users give to items, with each
     row corresponding to a user, each column to an item, and each non-missing
     entry to the observed rating or explicit evaluation from the user.
+
+    For the case of recommender systems, there is also the so-called
+    'implicit-feedback' model, in which the entries of 'X' are assumed to all
+    be zeros or ones (i.e. the matrix is full with no missing values), but with
+    a weight given by the actual values and a confidence score multiplier:
+        min ||(alpha*X + 1) . (M - A*t(B))||^2 + lambda*(||A||^2 + ||B||^2)
 
     =======================     END OF COMMON PART     =========================
 
@@ -122,7 +129,7 @@
     plus a free offset which is not dependent on the attributes, i.e.
         Am = A + U*C
         Bm = B + I*D
-        min ||M*(X - Am*t(Bm))||^2
+        min ||M . (X - Am*t(Bm))||^2
 
     Compared to the collective model (see file 'collective.c'), this model is
     aimed at making better recommendations for new users, which it tends to do
@@ -151,7 +158,7 @@
     And allows working with the inputs either as sparse or as dense matrices.
 
     For the gradient-based solution, the gradients can be calculated as:
-        E[m,n]  = M * W * (Am*t(Bm) - X - b1 - b2)
+        E[m,n]  = M . W . (Am*t(Bm) - X - b1 - b2)
         grad(A) =   E  * Bm(:,k_sec:) + lambda*A
         grad(B) = t(E) * Am(:,k_sec:) + lambda*B
         grad(C) = w_user * t(U) *   E  * Bm(:,:k_sec+k) + lambda*C

@@ -84,6 +84,7 @@
       from 'n' to 'q'.
     - t(X) denotes the transpose of 'X', inv(X) the inverse.
     - ||X|| denotes the L2 norm of X (sum of squared entries).
+    - '.' denotes element-wise multiplication
     - sigm(X) denotes a sigmoid elementwise transformation: 1 / (1 + exp(-X))
     - Matrices followed by a small 'b' denote binary (0/1) entries only.
     - Matrices followed by small 'u', 'i', 'm', 's', denote that only the
@@ -99,13 +100,13 @@
     of two lower dimensional matrices A[m,k] and B[n,k], in such a way that the
     squared error is minimized on the non-missing entries in X, given by binary
     matrix M[m,n], i.e.
-        min || M * (X - A*t(B)) ||^2
+        min || M . (X - A*t(B)) ||^2
 
     As some small improvements, the matrix 'X' is centered by substracting the
     mean from it, and additionally subtracting row and column biases, which
     are model parameters too, while imposing a regularization penalty on the
     magnitude of the parameters (given by L2 norm):
-        min ||M * (X - A*t(B) - mu[1] - b1[m,1] - b2[1,n])||^2
+        min ||M . (X - A*t(B) - mu[1] - b1[m,1] - b2[1,n])||^2
             + lambda*(||A||^2 + ||B||^2 + ||b1||^2 + ||b2||^2)
 
     The intended purpose is to use this as a recommender system model, in which
@@ -113,13 +114,19 @@
     row corresponding to a user, each column to an item, and each non-missing
     entry to the observed rating or explicit evaluation from the user.
 
+    For the case of recommender systems, there is also the so-called
+    'implicit-feedback' model, in which the entries of 'X' are assumed to all
+    be zeros or ones (i.e. the matrix is full with no missing values), but with
+    a weight given by the actual values and a confidence score multiplier:
+        min ||(alpha*X + 1) . (M - A*t(B))||^2 + lambda*(||A||^2 + ||B||^2)
+
     =======================     END OF COMMON PART     =========================
 
     The basic model is complemented with side information about the users and
     the items in the form of matrices U[m,p], I[n,q], which are also factorized
     using the same A and B matrices as before, which are multiplied by new
     matrices C[p,k] and D[q,k] - e.g.:
-        min ||M * (X - A*t(B))||^2 + ||U - A*t(C)||^2 + ||I - B*t(D)||^2
+        min ||M . (X - A*t(B))||^2 + ||U - A*t(C)||^2 + ||I - B*t(D)||^2
 
     This idea is further extended by:
     - Letting some of the 'k' components of each matrix be used only
@@ -148,10 +155,10 @@
     And allows working with the inputs either as sparse or as dense matrices.
 
     For the gradient-based solution, the gradients can be calculated as:
-        grad(A) = (W[m,n] * M[m,n] * (A*t(B) - X - b1 - b2 - mu)) * B
-                  + (Mu[m,p] * (A*t(C) - U))*C
-                  + (Mb*(Ub-sigm(A*t(Cb)))*exp(-A*t(Cb))/(exp(-A*t(Cb))+1)^2)*Cb
-                  + lamda * A
+        grad(A) = (W[m,n] . M[m,n] . (A*t(B) - X - b1 - b2 - mu)) * B
+                  + (Mu[m,p] . (A*t(C) - U))*C
+                  + (Mb.(Ub-sigm(A*t(Cb)))*exp(-A*t(Cb))/(exp(-A*t(Cb))+1)^2)*Cb
+                  + lambda * A
     (The function value needs to be divided by 2 to match with the gradient
      calculated like that)
 
@@ -170,15 +177,83 @@
     column in the corresponding row Xa of X is present, and zeros if it's
     missing, i.e.
         [Bs, Bm, Bi] = B * t(M[1,n])
-    Since the closed-form solution allows no 'w_user' and 'w_main', if these
-    are present, they have to be transformed into a concatenated W[1,n+p]
-        We[1,n+p] = [W[1,n] * w_main, 1[p] * w_user]
+
     The solution is then given by:
-        A* = inv(t(Be*W)*Be + diag(lambda)) * (t(Be*W)*t(Xa))
+        A* = inv(t(Be.W)*Be + diag(lambda)) * (t(Be.W)*t(Xa))
+    
     Note that since the left-hand side is, by definition, a symmetric
     positive-semi definite matrix, this this computation can be done with
     specialized procedures based on e.g. a Cholesky factorization, rather than
     a more general linear solver or matrix inversion.
+
+    Also note that 'w_main' and 'w_user' can be incorporated efficiently by
+    rescaling the rows once they sum into t(Be)*Be - that is, it can be updated
+    like this:
+        T := 0[k_user+k+k_main, k_user+k+k_main]
+        T(k_user:,k_user:)      += w_main*t(B)*B
+        T(:k_user+k, :k_user+k) += w_user*t(C)*C
+        <T is now equal to t(Be)*Be>
+
+    
+    As an alternative to the Cholesky method, can also use a Conjugate Gradient
+    method which follows an iterative procedure for each row a[n] of A,
+    taking the corresponding vectors u[p] from 'U', x[n] from 'X',
+    **assuming that all rows in 'B' and 'C' for which the corresponding value
+    in x[n] or u[p] is missing are set to zero**, iterating as follows:
+        r[k_user+k+k_main] := 0
+        r(k_user:)   += w_main * (t(B)*x - t(B)*B*a(k_user:))
+        r(:k_user+k) += w_user * (t(C)*u - t(C)*C*a(:k_user+k))
+        r(:) += lambda * a
+        pp[k_user+k+k_main] := r(:)
+        ap[k_user+k+k_main] := 0
+        r_old = ||r||^2
+        for i..s:
+            ap(:) := 0
+            ap(k_user:)   += w_main * t(B)*B*pp(k_user:)
+            ap(:k_user+k) += w_user * t(C)*C*pp(:k_user+k)
+            ap(:) += lambda * pp
+            a(:) += (r_old / <pp, ap>) * pp
+            r(:) -= (r_old / <pp, ap>) * ap
+            r_new := ||r||^2
+            <Terminate if r_new is small enough>
+            pp(:) := (r_new / r_old) * pp + r
+            r_old := r_new
+    The key for this approach is: if there are few non-missing values of 'X',
+    it's faster to compute t(B)*B*v as t(B) * ( B*v ) several times than to
+    compute t(B)*B as required for the Cholesky. The CG method is mathematically
+    guaranteed to reach the maximum solution in no more steps than the dimension
+    of 'Be' (here: k_user+k+k_main), assuming infinite numerical precision, but
+    in practice, since it is not required to reach the optimal solution at each
+    iteration, can run it for only a small number of steps (e.g. 2 or 3) during
+    each update of 'A' (since next time the other matrices will be updated too,
+    makes sense not to spend too much time on a perfect solution for a single
+    matrix vs. spending little time on worse solutions but doing more updates
+    to all matrices).
+
+    
+    Note that, for both the Cholesky and the CG method, there are some extra
+    potential shortcuts that can be taken - for example:
+        - If 'X' has no missing values, it's possible to precompute
+          t(B)*B to use it for all rows at once (same for 'U' and t(C)*C).
+          If there are few missing values, can compute it for all rows at once
+          and then subtract from it to obtain the required values for
+          a given row.
+        - In the Cholesky case, if there are no missing values, can use the same
+          Cholesky for all rows at once, and if there are few missing values,
+          can at first compute the solution for all rows (ignoring potential
+          missing values for the rows that have missing values), and then do
+          a post-hoc pass over the rows that have missing values computing their
+          actual solutions through either the Cholesky or the CG method.
+        - If t(B)*B or t(C)*C are computed from all rows in B/C, when iterating
+          over a given row which has missing values in only one of 'X' or 'U',
+          it's still possible to use the precomputed matrix for one side while
+          making the necessary computations for the other.
+        - If 'X' has weights and is sparse with missing-as-zero (e.g. the
+          implicit-feedback model), it's possible for both methods to use a
+          t(B)*B computed from all rows, and then add the non-zero entries as
+          necessary, taking into consideration that they were previously added
+          with a weight of one and thus their new weight needs to be decreased.
+
 
     The row and column biases (b1/b2) for the factorization of 'X' are obtained
     as follows: first, all the X[m,n] data are centered by subtracting their
@@ -193,8 +268,8 @@
         X_iter[m,n] = X[m,n] - b1[m,1] - mu[1])
     and adds an extra column of all-ones at the end of the other factorizing
     matrix:
-        B_iter[n+p, k_user+k+k_main+1] := [[Be[:n, :],  1[n,1] ],
-                                           [Be[n:, :],  0      ]]
+        B_iter[n+p, k_user+k+k_main+1] := [[Be(:n, :),  1[n,1] ],
+                                           [Be(n:, :),  0      ]]
     The A matrix being solved for is also extended by 1 column.
     The procedure is then run as usual with the altered X and Be matrices, and
     after solving for A, the new values for b1[m,1] will correspond to its last
@@ -2693,6 +2768,46 @@ int collective_factors_warm
                        (B_plus_bias == NULL)? a_bias : (FPnum*)NULL,
                        &cnt_NA_x);
 
+    /* If there is no data, can just set it to zero */
+    if (
+        ((Xa_dense != NULL && cnt_NA_x == n) || (Xa_dense == NULL && nnz == 0))
+            &&
+        (   (u_vec != NULL && cnt_NA_u_vec == p)
+                ||
+            (u_vec == NULL && nnz_u_vec == 0)
+        )
+            &&
+        (u_bin_vec == NULL || cnt_NA_u_bin_vec == 0)
+        )
+    {
+        if (append_bias) *a_bias = 0;
+        set_to_zero(a_vec, k_user + k + k_main, 1);
+        return 0;
+    }
+
+    /* If there is no 'X' data but there is 'U', should call the cold version */
+    else if (
+                (Xa_dense != NULL && cnt_NA_x == n) ||
+                (Xa_dense == NULL && nnz == 0 && !NA_as_zero_X)
+            )
+    {
+        if (append_bias) *a_bias = 0;
+        return collective_factors_cold(
+            a_vec,
+            u_vec, p,
+            u_vec_sp, u_vec_ixB, nnz_u_vec,
+            u_bin_vec, pbin,
+            C, Cb,
+            (FPnum*)NULL,
+            CtCw,
+            (FPnum*)NULL,
+            col_means,
+            k, k_user, k_main,
+            lam, w_user,
+            NA_as_zero_U
+        );
+    }
+
     FPnum *restrict buffer_FPnum = NULL;
     size_t size_buffer;
     int retval = 0;
@@ -3365,7 +3480,6 @@ void optimizeA_collective
                 (U == NULL && U_csr != NULL && NA_as_zero_U) )
         )
     {
-        // printf("case1\n"); fflush(stdout);
         FPnum *restrict bufferBeTBe = buffer_FPnum;
         build_BeTBe(
             bufferBeTBe,
@@ -3514,10 +3628,7 @@ void optimizeA_collective
                         lam, w_user, w_main, lam_last,
                         bufferBtB, (Xfull != NULL)? cnt_NA_x[ix] : 0,
                         bufferCtC, (U != NULL)? cnt_NA_u[ix] : 0,
-                        // (Xfull != NULL && cnt_NA_x[ix]) || use_cg,
-                        // (U != NULL && cnt_NA_u[ix]) || use_cg,
                         true, true,
-                        // use_cg, 3 * max_cg_steps,
                         use_cg, k_pred, /* <- more steps to reach optimum */
                         buffer_remainder
                           + (size_buffer*(size_t)omp_get_thread_num())
@@ -3539,7 +3650,6 @@ void optimizeA_collective
              (Xfull != NULL || !NA_as_zero_X) && (U != NULL || !NA_as_zero_U)
             )
     {
-        // printf("case2\n"); fflush(stdout);
         size_t nvars = (size_t)m * (size_t)(k_user + k + k_main + padding);
         size_t m_lbfgs = 4;
         size_t past = 0;
@@ -3591,7 +3701,6 @@ void optimizeA_collective
        when beneficial, determined on a case-by-case basis. */
     else
     {
-        // printf("case3\n"); fflush(stdout);
         bool prefer_BtB = true;
         bool prefer_CtC = true;
         if (use_cg)
@@ -4747,6 +4856,10 @@ int fit_collective_explicit_lbfgs
     return 0;
 }
 
+/* TODO: it's no longer necessary or beneficial to have separate functions
+   for 'optimizeA' - could instead make calls only to 'optimizeA_collective',
+   and can also replace the 'optimizeA_implicit' with calls to
+   'optimizeA' + 'NA_as_zero_X', so as to simplify the code. */
 int fit_collective_explicit_als
 (
     FPnum *restrict values, bool reset_values,
@@ -5501,6 +5614,9 @@ int fit_collective_explicit_als
     return 0;
 }
 
+/* TODO: the separation between implicit/explicit is no longer needed,
+   as the explicit one can now imitate the implicit. Should instead make
+   this function call the explicit one. */
 int fit_collective_implicit_als
 (
     FPnum *restrict values, bool reset_values,

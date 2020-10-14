@@ -67,13 +67,13 @@
     -----------------------------------------
 
     This function computes the gradients in the cannonical-form problem:
-        min  0.5 * scaling * ||M * W * (X - A*t(B) - bias1 - bias2 - mu)||^2
+        min  0.5 * scaling * ||M . W . (X - A*t(B) - bias1 - bias2 - mu)||^2
     (Note that it will not add regularization into the formula)
     See the files "collective.c" and "offsets.c" for details on what the
     formula represents.
 
     The gradients are given as:
-        E = scaling * (M * W * (A*t(B) - X))
+        E = scaling * (M . W . (A*t(B) - X))
         grad(bias1) = sum_cols(E)
         grad(bias2) = sum_rows(E)
         grad(A) =   E  * B
@@ -208,6 +208,7 @@ FPnum fun_grad_cannonical_form
     int nthreads
 )
 {
+    /* TODO: 'overwrite_grad' is no longer used, should remove that code */
     #if defined(_OPENMP) && \
                 ( (_OPENMP < 200801)  /* OpenMP < 3.0 */ \
                   || defined(_WIN32) || defined(_WIN64) \
@@ -647,7 +648,7 @@ FPnum fun_grad_cannonical_form
 
     This function uses the closed form to obtain the least-squares minimizer
     for a single row of the A matrix:
-        min ||M * W * (X - A*t(B)) ||^2
+        min ||M . W . (X - A*t(B)) ||^2
 
     The formula is given as follows:
         Aopt[1,k] = inv(t(B'*W) * B' + diag(lambda)) * (t(B' * W) * Xa[1,n])
@@ -747,6 +748,8 @@ void factors_closed_form
     int one = 1;
     int ignore;
     bool prefer_BtB = max2((size_t)cnt_NA, nnz) < (size_t)k;
+
+    if (w != 1.) use_cg = false; /* should not happen, but just in case */
 
 
     /* Potential bad inputs */
@@ -886,7 +889,7 @@ void factors_closed_form
                 weight,
                 precomputedBtBw,
                 buffer_FPnum,
-                lam, w, lam_last,
+                lam, lam_last,
                 max_cg_steps
             );
         else if (NA_as_zero && weight != NULL)
@@ -897,7 +900,7 @@ void factors_closed_form
                 weight,
                 precomputedBtBw,
                 buffer_FPnum,
-                lam, w, lam_last,
+                lam, lam_last,
                 max_cg_steps
             );
         else
@@ -907,7 +910,7 @@ void factors_closed_form
                 Xa, ixB, nnz,
                 weight,
                 buffer_FPnum,
-                lam, w, lam_last,
+                lam, lam_last,
                 max_cg_steps
             );
 
@@ -1031,7 +1034,7 @@ void factors_explicit_cg
     FPnum *restrict Xa, int ixB[], size_t nnz,
     FPnum *restrict weight,
     FPnum *restrict buffer_FPnum,
-    FPnum lam, FPnum w, FPnum lam_last,
+    FPnum lam, FPnum lam_last,
     int max_cg_steps
 )
 {
@@ -1042,11 +1045,6 @@ void factors_explicit_cg
     FPnum coef;
     FPnum a;
     FPnum r_old, r_new;
-
-    if (w != 1.) {
-        lam /= w;
-        lam_last /= w;
-    }
 
     if (weight == NULL)
         tgemv_dense_sp(n, k,
@@ -1118,7 +1116,7 @@ void factors_explicit_cg_NA_as_zero_weighted
     FPnum *restrict weight,
     FPnum *restrict precomputedBtBw, /* should NOT be multiplied by 'w' */
     FPnum *restrict buffer_FPnum,
-    FPnum lam, FPnum w, FPnum lam_last,
+    FPnum lam, FPnum lam_last,
     int max_cg_steps
 )
 {
@@ -1131,12 +1129,6 @@ void factors_explicit_cg_NA_as_zero_weighted
     FPnum r_old, r_new, coef;
 
     bool prefer_BtB = nnz < (size_t)(2*k);
-
-    if (w != 1.) {
-        lam /= w;
-        lam_last /= w;
-    }
-
 
     tgemv_dense_sp_weighted(n, k,
                             weight, B, (size_t)ldb,
@@ -1256,7 +1248,7 @@ void factors_explicit_cg_dense
     FPnum *restrict weight,
     FPnum *restrict precomputedBtBw, /* should NOT be multiplied by 'w' */
     FPnum *restrict buffer_FPnum,
-    FPnum lam, FPnum w, FPnum lam_last,
+    FPnum lam, FPnum lam_last,
     int max_cg_steps
 )
 {
@@ -1269,11 +1261,6 @@ void factors_explicit_cg_dense
     bool prefer_BtB = cnt_NA < k && precomputedBtBw != NULL && weight == NULL;
     if (!prefer_BtB)
         set_to_zero(r, k, 1);
-
-    if (w != 1.) {
-        lam /= w;
-        lam_last /= w;
-    }
 
     if (prefer_BtB)
     {

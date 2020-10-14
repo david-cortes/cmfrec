@@ -411,7 +411,7 @@ void factors_explicit_cg
     FPnum *restrict Xa, int ixB[], size_t nnz,
     FPnum *restrict weight,
     FPnum *restrict buffer_FPnum,
-    FPnum lam, FPnum w, FPnum lam_last,
+    FPnum lam, FPnum lam_last,
     int max_cg_steps
 );
 void factors_explicit_cg_NA_as_zero_weighted
@@ -422,7 +422,7 @@ void factors_explicit_cg_NA_as_zero_weighted
     FPnum *restrict weight,
     FPnum *restrict precomputedBtBw,
     FPnum *restrict buffer_FPnum,
-    FPnum lam, FPnum w, FPnum lam_last,
+    FPnum lam, FPnum lam_last,
     int max_cg_steps
 );
 void factors_explicit_cg_dense
@@ -433,7 +433,7 @@ void factors_explicit_cg_dense
     FPnum *restrict weight,
     FPnum *restrict precomputedBtBw,
     FPnum *restrict buffer_FPnum,
-    FPnum lam, FPnum w, FPnum lam_last,
+    FPnum lam, FPnum lam_last,
     int max_cg_steps
 );
 void factors_implicit_cg
