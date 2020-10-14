@@ -43,7 +43,7 @@ res_module = test_math.py_optimizeA_implicit(
     empty_A,
     B.copy(),
     m, n, k,
-    Xcsr.indptr.astype(ctypes.c_long).copy(),
+    Xcsr.indptr.astype(ctypes.c_size_t).copy(),
     Xcsr.indices.astype(ctypes.c_int).copy(),
     Xcsr.data.astype(ctypes.c_double).copy(),
     lam, alpha, w,

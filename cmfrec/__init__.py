@@ -478,7 +478,7 @@ class _CMF:
         Urow = np.empty(0, dtype=ctypes.c_int)
         Ucol = np.empty(0, dtype=ctypes.c_int)
         Uval = np.empty(0, dtype=self.dtype_)
-        Ucsr_p = np.empty(0, dtype=ctypes.c_long)
+        Ucsr_p = np.empty(0, dtype=ctypes.c_size_t)
         Ucsr_i = np.empty(0, dtype=ctypes.c_int)
         Ucsr = np.empty(0, dtype=self.dtype_)
         m, p = U.shape if U is not None else (0,0)
@@ -502,7 +502,7 @@ class _CMF:
         elif U.__class__.__name__ == "csr_matrix":
             if not allow_csr:
                 raise ValueError("Sparse matrices only supported in COO format.")
-            Ucsr_p = U.indptr.astype(ctypes.c_long)
+            Ucsr_p = U.indptr.astype(ctypes.c_size_t)
             Ucsr_i = U.indices.astype(ctypes.c_int)
             Ucsr = U.data.astype(self.dtype_)
         elif U.__class__.__name__ == "ndarray":
@@ -561,7 +561,7 @@ class _CMF:
         Xrow = np.empty(0, dtype=ctypes.c_int)
         Xcol = np.empty(0, dtype=ctypes.c_int)
         Xval = np.empty(0, dtype=self.dtype_)
-        Xcsr_p = np.empty(0, dtype=ctypes.c_long)
+        Xcsr_p = np.empty(0, dtype=ctypes.c_size_t)
         Xcsr_i = np.empty(0, dtype=ctypes.c_int)
         Xcsr = np.empty(0, dtype=self.dtype_)
         W_dense = np.empty((0,0), dtype=self.dtype_)
@@ -583,7 +583,7 @@ class _CMF:
                     msg += "as 'X'."
                     raise ValueError(msg)
         elif X.__class__.__name__ == "csr_matrix":
-            Xcsr_p = X.indptr.astype(ctypes.c_long)
+            Xcsr_p = X.indptr.astype(ctypes.c_size_t)
             Xcsr_i = X.indices.astype(ctypes.c_int)
             Xcsr = X.data.astype(self.dtype_)
             if W is not None:
@@ -1533,7 +1533,7 @@ class _CMF:
                     np.empty((0,0), dtype=ctypes.c_int),
                     np.empty((0,0), dtype=ctypes.c_int),
                     np.empty((0,0), dtype=self.dtype_),
-                    np.empty((0,0), dtype=ctypes.c_long),
+                    np.empty((0,0), dtype=ctypes.c_size_t),
                     np.empty((0,0), dtype=ctypes.c_int),
                     np.empty((0,0), dtype=self.dtype_),
                     np.empty((0,0), dtype=self.dtype_),
@@ -1573,7 +1573,7 @@ class _CMF:
                 np.empty((0,0), dtype=ctypes.c_int),
                 np.empty((0,0), dtype=ctypes.c_int),
                 np.empty((0,0), dtype=self.dtype_),
-                np.empty((0,0), dtype=ctypes.c_long),
+                np.empty((0,0), dtype=ctypes.c_size_t),
                 np.empty((0,0), dtype=ctypes.c_int),
                 np.empty((0,0), dtype=self.dtype_),
                 Uarr,
@@ -4526,10 +4526,10 @@ class OMF_explicit(_OMF):
                 self._B_plus_bias,
                 Uarr,
                 Iarr,
-                np.empty(0, dtype=ctypes.c_long),
+                np.empty(0, dtype=ctypes.c_size_t),
                 np.empty(0, dtype=ctypes.c_int),
                 np.empty(0, dtype=self.dtype_),
-                np.empty(0, dtype=ctypes.c_long),
+                np.empty(0, dtype=ctypes.c_size_t),
                 np.empty(0, dtype=ctypes.c_int),
                 np.empty(0, dtype=self.dtype_),
                 self.k, self.k_main, self.k_sec,
@@ -5286,10 +5286,10 @@ class OMF_implicit(_OMF):
                 self._B_pred,
                 Uarr,
                 Iarr,
-                np.empty(0, dtype=ctypes.c_long),
+                np.empty(0, dtype=ctypes.c_size_t),
                 np.empty(0, dtype=ctypes.c_int),
                 np.empty(0, dtype=self.dtype_),
-                np.empty(0, dtype=ctypes.c_long),
+                np.empty(0, dtype=ctypes.c_size_t),
                 np.empty(0, dtype=ctypes.c_int),
                 np.empty(0, dtype=self.dtype_),
                 self.k,

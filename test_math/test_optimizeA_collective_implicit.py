@@ -45,7 +45,7 @@ def gen_data():
 empty_1d = np.empty(0, dtype=ctypes.c_double)
 empty_2d = np.empty((0,0), dtype=ctypes.c_double)
 empty_int = np.empty(0, dtype=ctypes.c_int)
-empty_long = np.empty(0, dtype=ctypes.c_long)
+empty_size_t = np.empty(0, dtype=ctypes.c_size_t)
 buffer1 = np.empty(int(1e6), dtype=ctypes.c_double)
 buffer2 = np.empty(int(1e6), dtype=ctypes.c_double)
 def get_sol():
@@ -58,10 +58,10 @@ def get_sol():
         m, n,
         k, k_user, k_item, k_main,
         m_u, p,
-        Xcsr.indptr.astype(ctypes.c_long).copy(),
+        Xcsr.indptr.astype(ctypes.c_size_t).copy(),
         Xcsr.indices.astype(ctypes.c_int).copy(),
         Xcsr.data.astype(ctypes.c_double).copy(),
-        Ucsr.indptr.astype(ctypes.c_long).copy() if utype=="sparse" else empty_long,
+        Ucsr.indptr.astype(ctypes.c_size_t).copy() if utype=="sparse" else empty_size_t,
         Ucsr.indices.astype(ctypes.c_int).copy() if utype=="sparse" else empty_int,
         Ucsr.data.astype(ctypes.c_double).copy() if utype=="sparse" else empty_1d,
         U.copy() if utype=="dense" else empty_2d,

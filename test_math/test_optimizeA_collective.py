@@ -65,11 +65,11 @@ def dense_to_sp(X, W):
     Wcsr = csr_matrix(Wcoo)
     Wcsc = csc_matrix(Wcoo)
     return (
-        Xcsr.indptr.astype(ctypes.c_long),
+        Xcsr.indptr.astype(ctypes.c_size_t),
         Xcsr.indices.astype(ctypes.c_int),
         Xcsr.data.astype(ctypes.c_double),
         Wcsr.data.astype(ctypes.c_double),
-        Xcsc.indptr.astype(ctypes.c_long),
+        Xcsc.indptr.astype(ctypes.c_size_t),
         Xcsc.indices.astype(ctypes.c_int),
         Xcsc.data.astype(ctypes.c_double),
         Wcsc.data.astype(ctypes.c_double)
@@ -83,7 +83,7 @@ def dense_to_sp_simple(X):
     Xcoo = coo_matrix((X_sp, (X_sp_row, X_sp_col)))
     Xcsr = csr_matrix(Xcoo)
     return (
-        Xcsr.indptr.astype(ctypes.c_long),
+        Xcsr.indptr.astype(ctypes.c_size_t),
         Xcsr.indices.astype(ctypes.c_int),
         Xcsr.data.astype(ctypes.c_double)
     )
@@ -91,7 +91,7 @@ def dense_to_sp_simple(X):
 empty_1d = np.empty(0, dtype=ctypes.c_double)
 empty_2d = np.empty((0,0), dtype=ctypes.c_double)
 empty_int = np.empty(0, dtype=ctypes.c_int)
-empty_long = np.empty(0, dtype=ctypes.c_long)
+empty_size_t = np.empty(0, dtype=ctypes.c_size_t)
 buffer1 = np.empty(int(1e6), dtype=ctypes.c_double)
 buffer2 = np.empty(int(1e6), dtype=ctypes.c_double)
 def get_solA():
@@ -103,12 +103,12 @@ def get_solA():
         m, n,
         k, k_user, k_item, k_main,
         m_u, p,
-        Xcsr_p.copy() if xtype=="sparse" else empty_long,
+        Xcsr_p.copy() if xtype=="sparse" else empty_size_t,
         Xcsr_i.copy() if xtype=="sparse" else empty_int,
         Xcsr.copy() if xtype=="sparse" else empty_1d,
         X.copy() if xtype=="dense" else empty_2d,
         Wpass.copy() if wtype else empty_1d,
-        U_csr_p.copy() if utype=="sparse" else empty_long,
+        U_csr_p.copy() if utype=="sparse" else empty_size_t,
         U_csr_i.copy() if utype=="sparse" else empty_int,
         U_csr.copy() if utype=="sparse" else empty_1d,
         U.copy() if utype=="dense" else empty_2d,
@@ -141,12 +141,12 @@ def get_solB():
         n, m,
         k, k_item, k_user, k_main,
         n_i, q,
-        Xcsc_p.copy() if xtype=="sparse" else empty_long,
+        Xcsc_p.copy() if xtype=="sparse" else empty_size_t,
         Xcsc_i.copy() if xtype=="sparse" else empty_int,
         Xcsc.copy() if xtype=="sparse" else empty_1d,
         pass_X.copy() if xtype=="dense" else empty_2d,
         pass_W.copy() if wtype else empty_1d,
-        I_csr_p.copy() if utype=="sparse" else empty_long,
+        I_csr_p.copy() if utype=="sparse" else empty_size_t,
         I_csr_i.copy() if utype=="sparse" else empty_int,
         I_csr.copy() if utype=="sparse" else empty_1d,
         I.copy() if utype=="dense" else empty_2d,

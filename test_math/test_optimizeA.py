@@ -23,7 +23,7 @@ def get_sol():
             B0.copy(),
             int(m), int(n), int(k),
             int(lda), int(ldb),
-            Xcsr_p.astype(ctypes.c_long) if xtype=="sparse" else empty_long,
+            Xcsr_p.astype(ctypes.c_size_t) if xtype=="sparse" else empty_size_t,
             Xcsr_i.astype(ctypes.c_int) if xtype=="sparse" else empty_int,
             Xcsr.copy() if xtype=="sparse" else empty_1d,
             Xpass.copy() if xtype=="dense" else empty_2d,
@@ -42,7 +42,7 @@ def get_sol():
             A0.copy(),
             int(n), int(m), int(k),
             int(ldb), int(lda),
-            Xcsc_p.astype(ctypes.c_long) if xtype=="sparse" else empty_long,
+            Xcsc_p.astype(ctypes.c_size_t) if xtype=="sparse" else empty_size_t,
             Xcsc_i.astype(ctypes.c_int) if xtype=="sparse" else empty_int,
             Xcsc.copy() if xtype=="sparse" else empty_1d,
             Xpass.copy() if xtype=="dense" else empty_2d,
@@ -99,7 +99,7 @@ def py_evalB(B, A, X, W):
 empty_1d = np.empty(0, dtype=ctypes.c_double)
 empty_2d = np.empty((0,0), dtype=ctypes.c_double)
 empty_int = np.empty(0, dtype=ctypes.c_int)
-empty_long = np.empty(0, dtype=ctypes.c_long)
+empty_size_t = np.empty(0, dtype=ctypes.c_size_t)
 buffer1 = np.empty(int(1e6), dtype=ctypes.c_double)
 buffer2 = np.empty(int(1e6), dtype=ctypes.c_double)
 
@@ -115,11 +115,11 @@ def dense_to_sp(X, W, m, n):
     Wcsr = csr_matrix(Wcoo)
     Wcsc = csc_matrix(Wcoo)
     return (
-        Xcsr.indptr.astype(ctypes.c_long),
+        Xcsr.indptr.astype(ctypes.c_size_t),
         Xcsr.indices.astype(ctypes.c_int),
         Xcsr.data.astype(ctypes.c_double),
         Wcsr.data.astype(ctypes.c_double),
-        Xcsc.indptr.astype(ctypes.c_long),
+        Xcsc.indptr.astype(ctypes.c_size_t),
         Xcsc.indices.astype(ctypes.c_int),
         Xcsc.data.astype(ctypes.c_double),
         Wcsc.data.astype(ctypes.c_double)

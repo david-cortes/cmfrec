@@ -454,8 +454,8 @@ FPnum collective_fun_grad
     int m, int n, int k,
     int ixA[], int ixB[], FPnum *restrict X, size_t nnz,
     FPnum *restrict Xfull,
-    long Xcsr_p[], int Xcsr_i[], FPnum *restrict Xcsr,
-    long Xcsc_p[], int Xcsc_i[], FPnum *restrict Xcsc,
+    size_t Xcsr_p[], int Xcsr_i[], FPnum *restrict Xcsr,
+    size_t Xcsc_p[], int Xcsc_i[], FPnum *restrict Xcsc,
     FPnum *restrict weight, FPnum *restrict weightR, FPnum *restrict weightC,
     bool user_bias, bool item_bias,
     FPnum lam, FPnum *restrict lam_unique,
@@ -465,10 +465,10 @@ FPnum collective_fun_grad
     FPnum *restrict Ib, int n_ibin, int qbin, bool Ib_has_NA,
     int U_row[], int U_col[], FPnum *restrict U_sp, size_t nnz_U,
     int I_row[], int I_col[], FPnum *restrict I_sp, size_t nnz_I,
-    long U_csr_p[], int U_csr_i[], FPnum *restrict U_csr,
-    long U_csc_p[], int U_csc_i[], FPnum *restrict U_csc,
-    long I_csr_p[], int I_csr_i[], FPnum *restrict I_csr,
-    long I_csc_p[], int I_csc_i[], FPnum *restrict I_csc,
+    size_t U_csr_p[], int U_csr_i[], FPnum *restrict U_csr,
+    size_t U_csc_p[], int U_csc_i[], FPnum *restrict U_csc,
+    size_t I_csr_p[], int I_csr_i[], FPnum *restrict I_csr,
+    size_t I_csc_p[], int I_csc_i[], FPnum *restrict I_csc,
     FPnum *restrict buffer_FPnum, FPnum *restrict buffer_mt,
     int k_main, int k_user, int k_item,
     FPnum w_main, FPnum w_user, FPnum w_item,
@@ -2922,9 +2922,9 @@ FPnum fun_grad_A_collective
     int m, int m_u, int n, int p,
     int k, int k_main, int k_user, int k_item, int padding,
     FPnum *restrict Xfull, bool full_dense,
-    long Xcsr_p[], int Xcsr_i[], FPnum *restrict Xcsr,
+    size_t Xcsr_p[], int Xcsr_i[], FPnum *restrict Xcsr,
     FPnum *restrict weight,
-    long U_csr_p[], int U_csr_i[], FPnum *restrict U_csr,
+    size_t U_csr_p[], int U_csr_i[], FPnum *restrict U_csr,
     FPnum *restrict U, bool full_dense_u,
     FPnum lam, FPnum w_main, FPnum w_user, FPnum lam_last,
     bool do_B,
@@ -3234,10 +3234,10 @@ void optimizeA_collective
     FPnum *restrict A, FPnum *restrict B, FPnum *restrict C,
     int m, int m_u, int n, int p,
     int k, int k_main, int k_user, int k_item, int padding,
-    long Xcsr_p[], int Xcsr_i[], FPnum *restrict Xcsr,
+    size_t Xcsr_p[], int Xcsr_i[], FPnum *restrict Xcsr,
     FPnum *restrict Xfull, bool full_dense, bool near_dense,
     int cnt_NA_x[], FPnum *restrict weight, bool NA_as_zero_X,
-    long U_csr_p[], int U_csr_i[], FPnum *restrict U_csr,
+    size_t U_csr_p[], int U_csr_i[], FPnum *restrict U_csr,
     FPnum *restrict U, int cnt_NA_u[],
     bool full_dense_u, bool near_dense_u, bool NA_as_zero_U,
     FPnum lam, FPnum w_main, FPnum w_user, FPnum lam_last,
@@ -3287,7 +3287,7 @@ void optimizeA_collective
             A + (size_t)k_user + (size_t)m_u*(size_t)k_totA, k_totA,
             B + k_item, k_totB,
             m_diff, n, k + k_main,
-            (Xfull != NULL)? ((long*)NULL) : (Xcsr_p + m_u),
+            (Xfull != NULL)? ((size_t*)NULL) : (Xcsr_p + m_u),
             (Xfull != NULL)? ((int*)NULL) : Xcsr_i,
             (Xfull != NULL)? ((FPnum*)NULL) : Xcsr,
             (Xfull == NULL)? ((FPnum*)NULL) : (Xfull + (size_t)m_u*(size_t)n),
@@ -3313,7 +3313,7 @@ void optimizeA_collective
             A + (size_t)m*(size_t)k_totA, k_totA,
             C, k_totC,
             m_diff, p, k_user + k,
-            (U != NULL)? ((long*)NULL) : (U_csr_p + m),
+            (U != NULL)? ((size_t*)NULL) : (U_csr_p + m),
             (U != NULL)? ((int*)NULL) : U_csr_i,
             (U != NULL)? ((FPnum*)NULL) : U_csr,
             (U == NULL)? ((FPnum*)NULL) : (U + (size_t)m*(size_t)p),
@@ -3742,8 +3742,8 @@ void optimizeA_collective_implicit
     FPnum *restrict A, FPnum *restrict B, FPnum *restrict C,
     int m, int m_u, int n, int p,
     int k, int k_main, int k_user, int k_item,
-    long Xcsr_p[], int Xcsr_i[], FPnum *restrict Xcsr,
-    long U_csr_p[], int U_csr_i[], FPnum *restrict U_csr,
+    size_t Xcsr_p[], int Xcsr_i[], FPnum *restrict Xcsr,
+    size_t U_csr_p[], int U_csr_i[], FPnum *restrict U_csr,
     FPnum *restrict U, int cnt_NA_u[],
     bool full_dense_u, bool near_dense_u, bool NA_as_zero_U,
     FPnum lam, FPnum w_main, FPnum w_user,
@@ -4161,18 +4161,18 @@ void preprocess_vec
 int convert_sparse_X
 (
     int ixA[], int ixB[], FPnum *restrict X, size_t nnz,
-    long **Xcsr_p, int **Xcsr_i, FPnum *restrict *Xcsr,
-    long **Xcsc_p, int **Xcsc_i, FPnum *restrict *Xcsc,
+    size_t **Xcsr_p, int **Xcsr_i, FPnum *restrict *Xcsr,
+    size_t **Xcsc_p, int **Xcsc_i, FPnum *restrict *Xcsc,
     FPnum *restrict weight, FPnum *restrict *weightR, FPnum *restrict *weightC,
     int m, int n, int nthreads
 )
 {
-    *Xcsr_p = (long*)malloc((size_t)(m+1)*sizeof(long));
+    *Xcsr_p = (size_t*)malloc((size_t)(m+1)*sizeof(size_t));
     *Xcsr_i = (int*)malloc(nnz*sizeof(int));
     *Xcsr = (FPnum*)malloc(nnz*sizeof(FPnum));
     if (weight != NULL)
         *weightR = (FPnum*)malloc(nnz*sizeof(FPnum));
-    *Xcsc_p = (long*)malloc((size_t)(n+1)*sizeof(long));
+    *Xcsc_p = (size_t*)malloc((size_t)(n+1)*sizeof(size_t));
     *Xcsc_i = (int*)malloc(nnz*sizeof(int));
     *Xcsc = (FPnum*)malloc(nnz*sizeof(FPnum));
     if (weight != NULL)
@@ -4197,8 +4197,8 @@ int preprocess_sideinfo_matrix
     FPnum *U, int m_u, int p,
     int U_row[], int U_col[], FPnum *U_sp, size_t nnz_U,
     FPnum *U_colmeans, FPnum *restrict *Utrans,
-    long **U_csr_p, int **U_csr_i, FPnum *restrict *U_csr,
-    long **U_csc_p, int **U_csc_i, FPnum *restrict *U_csc,
+    size_t **U_csr_p, int **U_csr_i, FPnum *restrict *U_csr,
+    size_t **U_csc_p, int **U_csc_i, FPnum *restrict *U_csc,
     int *restrict *cnt_NA_u_byrow, int *restrict *cnt_NA_u_bycol,
     bool *full_dense_u, bool *near_dense_u_row, bool *near_dense_u_col,
     bool NA_as_zero_U, int nthreads
@@ -4219,10 +4219,10 @@ int preprocess_sideinfo_matrix
 
     else
     {
-        *U_csr_p = (long*)malloc((size_t)(m_u+1)*sizeof(long));
+        *U_csr_p = (size_t*)malloc((size_t)(m_u+1)*sizeof(size_t));
         *U_csr_i = (int*)malloc(nnz_U*sizeof(int));
         *U_csr = (FPnum*)malloc(nnz_U*sizeof(FPnum));
-        *U_csc_p = (long*)malloc((size_t)(p+1)*sizeof(long));
+        *U_csc_p = (size_t*)malloc((size_t)(p+1)*sizeof(size_t));
         *U_csc_i = (int*)malloc(nnz_U*sizeof(int));
         *U_csc = (FPnum*)malloc(nnz_U*sizeof(FPnum));
         if (*U_csr_p == NULL || *U_csr_i == NULL || *U_csr == NULL ||
@@ -4451,24 +4451,24 @@ int fit_collective_explicit_lbfgs
     lbfgs_parameter_t lbfgs_params;
     data_collective_fun_grad data;
 
-    long *Xcsr_p = NULL;
+    size_t *Xcsr_p = NULL;
     int *Xcsr_i = NULL;
     FPnum *restrict Xcsr = NULL;
     FPnum *restrict weightR = NULL;
-    long *Xcsc_p = NULL;
+    size_t *Xcsc_p = NULL;
     int *Xcsc_i = NULL;
     FPnum *restrict Xcsc = NULL;
     FPnum *restrict weightC = NULL;
-    long *U_csr_p = NULL;
+    size_t *U_csr_p = NULL;
     int *U_csr_i = NULL;
     FPnum *restrict U_csr = NULL;
-    long *U_csc_p = NULL;
+    size_t *U_csc_p = NULL;
     int *U_csc_i = NULL;
     FPnum *restrict U_csc = NULL;
-    long *I_csr_p = NULL;
+    size_t *I_csr_p = NULL;
     int *I_csr_i = NULL;
     FPnum *restrict I_csr = NULL;
-    long *I_csc_p = NULL;
+    size_t *I_csc_p = NULL;
     int *I_csc_i = NULL;
     FPnum *restrict I_csc = NULL;
 
@@ -4774,26 +4774,26 @@ int fit_collective_explicit_als
 
     FPnum *restrict Xtrans = NULL;
     FPnum *restrict Wtrans = NULL;
-    long *Xcsr_p = NULL;
+    size_t *Xcsr_p = NULL;
     int *Xcsr_i = NULL;
     FPnum *restrict Xcsr = NULL;
     FPnum *restrict weightR = NULL;
-    long *Xcsc_p = NULL;
+    size_t *Xcsc_p = NULL;
     int *Xcsc_i = NULL;
     FPnum *restrict Xcsc = NULL;
     FPnum *restrict weightC = NULL;
     FPnum *restrict Utrans = NULL;
-    long *U_csr_p = NULL;
+    size_t *U_csr_p = NULL;
     int *U_csr_i = NULL;
     FPnum *restrict U_csr = NULL;
-    long *U_csc_p = NULL;
+    size_t *U_csc_p = NULL;
     int *U_csc_i = NULL;
     FPnum *restrict U_csc = NULL;
     FPnum *restrict Itrans = NULL;
-    long *I_csr_p = NULL;
+    size_t *I_csr_p = NULL;
     int *I_csr_i = NULL;
     FPnum *restrict I_csr = NULL;
-    long *I_csc_p = NULL;
+    size_t *I_csc_p = NULL;
     int *I_csc_i = NULL;
     FPnum *restrict I_csc = NULL;
     int *restrict cnt_NA_byrow = NULL;
@@ -4823,8 +4823,8 @@ int fit_collective_explicit_als
             m_max, n_max,
             ixA, ixB, X, nnz,
             Xfull, (FPnum*)NULL,
-            (long*)NULL, (int*)NULL, (FPnum*)NULL,
-            (long*)NULL, (int*)NULL, (FPnum*)NULL,
+            (size_t*)NULL, (int*)NULL, (FPnum*)NULL,
+            (size_t*)NULL, (int*)NULL, (FPnum*)NULL,
             nthreads
         );
         if (retval != 0) goto cleanup;
@@ -5488,24 +5488,24 @@ int fit_collective_implicit_als
     size_t alt_size = 0;
     size_t alt_lbfgs = 0;
 
-    long *Xcsr_p = (long*)malloc((size_t)(m+1)*sizeof(long));
+    size_t *Xcsr_p = (size_t*)malloc((size_t)(m+1)*sizeof(size_t));
     int *Xcsr_i = (int*)malloc(nnz*sizeof(int));
     FPnum *restrict Xcsr = (FPnum*)malloc(nnz*sizeof(FPnum));
-    long *Xcsc_p = (long*)malloc((size_t)(n+1)*sizeof(long));
+    size_t *Xcsc_p = (size_t*)malloc((size_t)(n+1)*sizeof(size_t));
     int *Xcsc_i = (int*)malloc(nnz*sizeof(int));
     FPnum *restrict Xcsc = (FPnum*)malloc(nnz*sizeof(FPnum));
     FPnum *restrict Utrans = NULL;
-    long *U_csr_p = NULL;
+    size_t *U_csr_p = NULL;
     int *U_csr_i = NULL;
     FPnum *restrict U_csr = NULL;
-    long *U_csc_p = NULL;
+    size_t *U_csc_p = NULL;
     int *U_csc_i = NULL;
     FPnum *restrict U_csc = NULL;
     FPnum *restrict Itrans = NULL;
-    long *I_csr_p = NULL;
+    size_t *I_csr_p = NULL;
     int *I_csr_i = NULL;
     FPnum *restrict I_csr = NULL;
-    long *I_csc_p = NULL;
+    size_t *I_csc_p = NULL;
     int *I_csc_i = NULL;
     FPnum *restrict I_csc = NULL;
     int *restrict cnt_NA_u_byrow = NULL;
@@ -5871,7 +5871,7 @@ int collective_factors_cold_multiple
     FPnum *restrict A, int m,
     FPnum *restrict U, int m_u, int p,
     int U_row[], int U_col[], FPnum *restrict U_sp, size_t nnz_U,
-    long U_csr_p[], int U_csr_i[], FPnum *restrict U_csr,
+    size_t U_csr_p[], int U_csr_i[], FPnum *restrict U_csr,
     FPnum *restrict Ub, int m_ubin, int pbin,
     FPnum *restrict C, FPnum *restrict Cb,
     FPnum *restrict CtCinvCt,
@@ -5892,7 +5892,7 @@ int collective_factors_cold_multiple
     #endif
 
     size_t k_totA = k_user + k + k_main;
-    long *restrict U_csr_p_use = NULL;
+    size_t *restrict U_csr_p_use = NULL;
     int *restrict U_csr_i_use = NULL;
     FPnum *restrict U_csr_use = NULL;
 
@@ -5967,13 +5967,13 @@ int collective_factors_warm_multiple
     FPnum *restrict A, FPnum *restrict biasA, int m, int m_x,
     FPnum *restrict U, int m_u, int p,
     int U_row[], int U_col[], FPnum *restrict U_sp, size_t nnz_U,
-    long U_csr_p[], int U_csr_i[], FPnum *restrict U_csr,
+    size_t U_csr_p[], int U_csr_i[], FPnum *restrict U_csr,
     FPnum *restrict Ub, int m_ubin, int pbin,
     FPnum *restrict C, FPnum *restrict Cb,
     FPnum glob_mean, FPnum *restrict biasB,
     FPnum *restrict col_means,
     FPnum *restrict X, int ixA[], int ixB[], size_t nnz,
-    long *restrict Xcsr_p, int *restrict Xcsr_i, FPnum *restrict Xcsr,
+    size_t *restrict Xcsr_p, int *restrict Xcsr_i, FPnum *restrict Xcsr,
     FPnum *restrict Xfull, int n,
     FPnum *restrict weight,
     FPnum *restrict B,
@@ -5999,12 +5999,12 @@ int collective_factors_warm_multiple
     #endif
 
     size_t k_totA = k_user + k + k_main;
-    long *restrict Xcsr_p_use = NULL;
+    size_t *restrict Xcsr_p_use = NULL;
     int *restrict Xcsr_i_use = NULL;
     FPnum *restrict Xcsr_use = NULL;
     FPnum *restrict weightR = NULL;
 
-    long *restrict U_csr_p_use = NULL;
+    size_t *restrict U_csr_p_use = NULL;
     int *restrict U_csr_i_use = NULL;
     FPnum *restrict U_csr_use = NULL;
 
@@ -6154,12 +6154,12 @@ int collective_factors_warm_implicit_multiple
     FPnum *restrict A, int m, int m_x,
     FPnum *restrict U, int m_u, int p,
     int U_row[], int U_col[], FPnum *restrict U_sp, size_t nnz_U,
-    long U_csr_p[], int U_csr_i[], FPnum *restrict U_csr,
+    size_t U_csr_p[], int U_csr_i[], FPnum *restrict U_csr,
     bool NA_as_zero_U,
     FPnum *restrict col_means,
     FPnum *restrict B, int n, FPnum *restrict C,
     FPnum *restrict X, int ixA[], int ixB[], size_t nnz,
-    long *restrict Xcsr_p, int *restrict Xcsr_i, FPnum *restrict Xcsr,
+    size_t *restrict Xcsr_p, int *restrict Xcsr_i, FPnum *restrict Xcsr,
     int k, int k_user, int k_item, int k_main,
     FPnum lam, FPnum alpha, FPnum w_user, FPnum w_main,
     FPnum w_main_multiplier,
@@ -6178,11 +6178,11 @@ int collective_factors_warm_implicit_multiple
     #endif
 
     size_t k_totA = k_user + k + k_main;
-    long *restrict Xcsr_p_use = NULL;
+    size_t *restrict Xcsr_p_use = NULL;
     int *restrict Xcsr_i_use = NULL;
     FPnum *restrict Xcsr_use = NULL;
 
-    long *restrict U_csr_p_use = NULL;
+    size_t *restrict U_csr_p_use = NULL;
     int *restrict U_csr_i_use = NULL;
     FPnum *restrict U_csr_use = NULL;
 

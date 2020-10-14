@@ -34,7 +34,7 @@ setup(
                    "../src/offsets.c", "../src/helpers.c", "../src/lbfgs.c"],
           include_dirs=[np.get_include(), "../src"],
           define_macros = [("_FOR_PYTHON", None), ("USE_DOUBLE", None),
-                           ("FORCE_CG", None)
+                           # ("FORCE_CG", None)
                           ]
           ),
         ]

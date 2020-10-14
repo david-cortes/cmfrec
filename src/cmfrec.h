@@ -254,7 +254,7 @@ FPnum sum_sq_div_w(FPnum *restrict arr, FPnum *restrict w, size_t n, bool compen
 void tgemm_sp_dense
 (
     int m, int n, FPnum alpha,
-    long indptr[], int indices[], FPnum values[],
+    size_t indptr[], int indices[], FPnum values[],
     FPnum DenseMat[], size_t ldb,
     FPnum OutputMat[], size_t ldc,
     int nthreads
@@ -313,7 +313,7 @@ int coo_to_csr_plus_alloc
     int *restrict Xrow, int *restrict Xcol, FPnum *restrict Xval,
     FPnum *restrict W,
     int m, int n, size_t nnz,
-    long *restrict *csr_p, int *restrict *csr_i, FPnum *restrict *csr_v,
+    size_t *restrict *csr_p, int *restrict *csr_i, FPnum *restrict *csr_v,
     FPnum *restrict *csr_w
 );
 void coo_to_csr
@@ -321,19 +321,19 @@ void coo_to_csr
     int *restrict Xrow, int *restrict Xcol, FPnum *restrict Xval,
     FPnum *restrict W,
     int m, int n, size_t nnz,
-    long *restrict csr_p, int *restrict csr_i, FPnum *restrict csr_v,
+    size_t *restrict csr_p, int *restrict csr_i, FPnum *restrict csr_v,
     FPnum *restrict csr_w
 );
 void coo_to_csr_and_csc
 (
     int *restrict Xrow, int *restrict Xcol, FPnum *restrict Xval,
     FPnum *restrict W, int m, int n, size_t nnz,
-    long *restrict csr_p, int *restrict csr_i, FPnum *restrict csr_v,
-    long *restrict csc_p, int *restrict csc_i, FPnum *restrict csc_v,
+    size_t *restrict csr_p, int *restrict csr_i, FPnum *restrict csr_v,
+    size_t *restrict csc_p, int *restrict csc_i, FPnum *restrict csc_v,
     FPnum *restrict csr_w, FPnum *restrict csc_w,
     int nthreads
 );
-void row_means_csr(long indptr[], FPnum *restrict values,
+void row_means_csr(size_t indptr[], FPnum *restrict values,
                    FPnum *restrict output, int m, int nthreads);
 extern bool should_stop_procedure;
 void set_interrup_global_variable(int s);
@@ -380,8 +380,8 @@ FPnum fun_grad_cannonical_form
     int m, int n, int k,
     int ixA[], int ixB[], FPnum *restrict X, size_t nnz,
     FPnum *restrict Xfull, bool full_dense,
-    long Xcsr_p[], int Xcsr_i[], FPnum *restrict Xcsr,
-    long Xcsc_p[], int Xcsc_i[], FPnum *restrict Xcsc,
+    size_t Xcsr_p[], int Xcsr_i[], FPnum *restrict Xcsr,
+    size_t Xcsc_p[], int Xcsc_i[], FPnum *restrict Xcsc,
     bool user_bias, bool item_bias,
     FPnum *restrict biasA, FPnum *restrict biasB,
     FPnum *restrict g_biasA, FPnum *restrict g_biasB,
@@ -546,7 +546,7 @@ void optimizeA
     FPnum *restrict A, int lda,
     FPnum *restrict B, int ldb,
     int m, int n, int k,
-    long Xcsr_p[], int Xcsr_i[], FPnum *restrict Xcsr,
+    size_t Xcsr_p[], int Xcsr_i[], FPnum *restrict Xcsr,
     FPnum *restrict Xfull, bool full_dense, bool near_dense,
     int cnt_NA[], FPnum *restrict weight, bool NA_as_zero,
     FPnum lam, FPnum w, FPnum lam_last,
@@ -561,7 +561,7 @@ void optimizeA_implicit
     FPnum *restrict A, size_t lda,
     FPnum *restrict B, size_t ldb,
     int m, int n, int k,
-    long Xcsr_p[], int Xcsr_i[], FPnum *restrict Xcsr,
+    size_t Xcsr_p[], int Xcsr_i[], FPnum *restrict Xcsr,
     FPnum lam,
     int nthreads,
     bool use_cg, int max_cg_steps, bool force_set_to_zero,
@@ -577,8 +577,8 @@ int initialize_biases
     int m_bias, int n_bias,
     int ixA[], int ixB[], FPnum *restrict X, size_t nnz,
     FPnum *restrict Xfull, FPnum *restrict Xtrans,
-    long Xcsr_p[], int Xcsr_i[], FPnum *restrict Xcsr,
-    long Xcsc_p[], int Xcsc_i[], FPnum *restrict Xcsc,
+    size_t Xcsr_p[], int Xcsr_i[], FPnum *restrict Xcsr,
+    size_t Xcsc_p[], int Xcsc_i[], FPnum *restrict Xcsc,
     int nthreads
 );
 int center_by_cols
@@ -586,8 +586,8 @@ int center_by_cols
     FPnum *restrict col_means,
     FPnum *restrict Xfull, int m, int n,
     int ixA[], int ixB[], FPnum *restrict X, size_t nnz,
-    long Xcsr_p[], int Xcsr_i[], FPnum *restrict Xcsr,
-    long Xcsc_p[], int Xcsc_i[], FPnum *restrict Xcsc,
+    size_t Xcsr_p[], int Xcsr_i[], FPnum *restrict Xcsr,
+    size_t Xcsc_p[], int Xcsc_i[], FPnum *restrict Xcsc,
     int nthreads
 );
 void predict_multiple
@@ -654,8 +654,8 @@ FPnum collective_fun_grad
     int m, int n, int k,
     int ixA[], int ixB[], FPnum *restrict X, size_t nnz,
     FPnum *restrict Xfull,
-    long Xcsr_p[], int Xcsr_i[], FPnum *restrict Xcsr,
-    long Xcsc_p[], int Xcsc_i[], FPnum *restrict Xcsc,
+    size_t Xcsr_p[], int Xcsr_i[], FPnum *restrict Xcsr,
+    size_t Xcsc_p[], int Xcsc_i[], FPnum *restrict Xcsc,
     FPnum *restrict weight, FPnum *restrict weightR, FPnum *restrict weightC,
     bool user_bias, bool item_bias,
     FPnum lam, FPnum *restrict lam_unique,
@@ -665,10 +665,10 @@ FPnum collective_fun_grad
     FPnum *restrict Ib, int n_ibin, int qbin, bool Ib_has_NA,
     int U_row[], int U_col[], FPnum *restrict U_sp, size_t nnz_U,
     int I_row[], int I_col[], FPnum *restrict I_sp, size_t nnz_I,
-    long U_csr_p[], int U_csr_i[], FPnum *restrict U_csr,
-    long U_csc_p[], int U_csc_i[], FPnum *restrict U_csc,
-    long I_csr_p[], int I_csr_i[], FPnum *restrict I_csr,
-    long I_csc_p[], int I_csc_i[], FPnum *restrict I_csc,
+    size_t U_csr_p[], int U_csr_i[], FPnum *restrict U_csr,
+    size_t U_csc_p[], int U_csc_i[], FPnum *restrict U_csc,
+    size_t I_csr_p[], int I_csr_i[], FPnum *restrict I_csr,
+    size_t I_csc_p[], int I_csc_i[], FPnum *restrict I_csc,
     FPnum *restrict buffer_FPnum, FPnum *restrict buffer_mt,
     int k_main, int k_user, int k_item,
     FPnum w_main, FPnum w_user, FPnum w_item,
@@ -813,8 +813,8 @@ void optimizeA_collective_implicit
     FPnum *restrict A, FPnum *restrict B, FPnum *restrict C,
     int m, int m_u, int n, int p,
     int k, int k_main, int k_user, int k_item,
-    long Xcsr_p[], int Xcsr_i[], FPnum *restrict Xcsr,
-    long U_csr_p[], int U_csr_i[], FPnum *restrict U_csr,
+    size_t Xcsr_p[], int Xcsr_i[], FPnum *restrict Xcsr,
+    size_t U_csr_p[], int U_csr_i[], FPnum *restrict U_csr,
     FPnum *restrict U, int cnt_NA_u[],
     bool full_dense_u, bool near_dense_u, bool NA_as_zero_U,
     FPnum lam, FPnum w_main, FPnum w_user,
@@ -897,9 +897,9 @@ FPnum fun_grad_A_collective
     int m, int m_u, int n, int p,
     int k, int k_main, int k_user, int k_item, int padding,
     FPnum *restrict Xfull, bool full_dense,
-    long Xcsr_p[], int Xcsr_i[], FPnum *restrict Xcsr,
+    size_t Xcsr_p[], int Xcsr_i[], FPnum *restrict Xcsr,
     FPnum *restrict weight,
-    long U_csr_p[], int U_csr_i[], FPnum *restrict U_csr,
+    size_t U_csr_p[], int U_csr_i[], FPnum *restrict U_csr,
     FPnum *restrict U, bool full_dense_u,
     FPnum lam, FPnum w_main, FPnum w_user, FPnum lam_last,
     bool do_B,
@@ -911,9 +911,9 @@ typedef struct data_fun_grad_Adense_col {
     int m; int m_u; int n; int p;
     int k; int k_main; int k_user; int k_item; int padding;
     FPnum *Xfull; bool full_dense;
-    long *Xcsr_p; int *Xcsr_i; FPnum *Xcsr;
+    size_t *Xcsr_p; int *Xcsr_i; FPnum *Xcsr;
     FPnum *weight;
-    long *U_csr_p; int *U_csr_i; FPnum *U_csr;
+    size_t *U_csr_p; int *U_csr_i; FPnum *U_csr;
     FPnum *U; bool full_dense_u;
     FPnum lam; FPnum w_main; FPnum w_user; FPnum lam_last;
     bool do_B;
@@ -944,10 +944,10 @@ void optimizeA_collective
     FPnum *restrict A, FPnum *restrict B, FPnum *restrict C,
     int m, int m_u, int n, int p,
     int k, int k_main, int k_user, int k_item, int padding,
-    long Xcsr_p[], int Xcsr_i[], FPnum *restrict Xcsr,
+    size_t Xcsr_p[], int Xcsr_i[], FPnum *restrict Xcsr,
     FPnum *restrict Xfull, bool full_dense, bool near_dense,
     int cnt_NA_x[], FPnum *restrict weight, bool NA_as_zero_X,
-    long U_csr_p[], int U_csr_i[], FPnum *restrict U_csr,
+    size_t U_csr_p[], int U_csr_i[], FPnum *restrict U_csr,
     FPnum *restrict U, int cnt_NA_u[],
     bool full_dense_u, bool near_dense_u, bool NA_as_zero_U,
     FPnum lam, FPnum w_main, FPnum w_user, FPnum lam_last,
@@ -994,8 +994,8 @@ void preprocess_vec
 int convert_sparse_X
 (
     int ixA[], int ixB[], FPnum *restrict X, size_t nnz,
-    long **Xcsr_p, int **Xcsr_i, FPnum *restrict *Xcsr,
-    long **Xcsc_p, int **Xcsc_i, FPnum *restrict *Xcsc,
+    size_t **Xcsr_p, int **Xcsr_i, FPnum *restrict *Xcsr,
+    size_t **Xcsc_p, int **Xcsc_i, FPnum *restrict *Xcsc,
     FPnum *restrict weight, FPnum *restrict *weightR, FPnum *restrict *weightC,
     int m, int n, int nthreads
 );
@@ -1004,8 +1004,8 @@ int preprocess_sideinfo_matrix
     FPnum *U, int m_u, int p,
     int U_row[], int U_col[], FPnum *U_sp, size_t nnz_U,
     FPnum *U_colmeans, FPnum *restrict *Utrans,
-    long **U_csr_p, int **U_csr_i, FPnum *restrict *U_csr,
-    long **U_csc_p, int **U_csc_i, FPnum *restrict *U_csc,
+    size_t **U_csr_p, int **U_csr_i, FPnum *restrict *U_csr,
+    size_t **U_csc_p, int **U_csc_i, FPnum *restrict *U_csc,
     int *restrict *cnt_NA_u_byrow, int *restrict *cnt_NA_u_bycol,
     bool *full_dense_u, bool *near_dense_u_row, bool *near_dense_u_col,
     bool NA_as_zero_U, int nthreads
@@ -1040,8 +1040,8 @@ typedef struct data_collective_fun_grad {
     int m; int n; int k;
     int *ixA; int *ixB; FPnum *X; size_t nnz;
     FPnum *Xfull;
-    long *Xcsr_p; int *Xcsr_i; FPnum *Xcsr;
-    long *Xcsc_p; int *Xcsc_i; FPnum *Xcsc;
+    size_t *Xcsr_p; int *Xcsr_i; FPnum *Xcsr;
+    size_t *Xcsc_p; int *Xcsc_i; FPnum *Xcsc;
     FPnum *weight; FPnum *weightR; FPnum *weightC;
     bool user_bias; bool item_bias;
     FPnum lam; FPnum *lam_unique;
@@ -1051,10 +1051,10 @@ typedef struct data_collective_fun_grad {
     FPnum *Ib; int n_ibin; int qbin; bool Ib_has_NA;
     int *U_row; int *U_col; FPnum *U_sp; size_t nnz_U;
     int *I_row; int *I_col; FPnum *I_sp; size_t nnz_I;
-    long *U_csr_p; int *U_csr_i; FPnum *U_csr;
-    long *U_csc_p; int *U_csc_i; FPnum *U_csc;
-    long *I_csr_p; int *I_csr_i; FPnum *I_csr;
-    long *I_csc_p; int *I_csc_i; FPnum *I_csc;
+    size_t *U_csr_p; int *U_csr_i; FPnum *U_csr;
+    size_t *U_csc_p; int *U_csc_i; FPnum *U_csc;
+    size_t *I_csr_p; int *I_csr_i; FPnum *I_csr;
+    size_t *I_csc_p; int *I_csc_i; FPnum *I_csc;
     FPnum *buffer_FPnum; FPnum *buffer_mt;
     int k_main; int k_user; int k_item;
     FPnum w_main; FPnum w_user; FPnum w_item;
@@ -1133,7 +1133,7 @@ int collective_factors_cold_multiple
     FPnum *restrict A, int m,
     FPnum *restrict U, int m_u, int p,
     int U_row[], int U_col[], FPnum *restrict U_sp, size_t nnz_U,
-    long U_csr_p[], int U_csr_i[], FPnum *restrict U_csr,
+    size_t U_csr_p[], int U_csr_i[], FPnum *restrict U_csr,
     FPnum *restrict Ub, int m_ubin, int pbin,
     FPnum *restrict C, FPnum *restrict Cb,
     FPnum *restrict CtCinvCt,
@@ -1150,13 +1150,13 @@ int collective_factors_warm_multiple
     FPnum *restrict A, FPnum *restrict biasA, int m, int m_x,
     FPnum *restrict U, int m_u, int p,
     int U_row[], int U_col[], FPnum *restrict U_sp, size_t nnz_U,
-    long U_csr_p[], int U_csr_i[], FPnum *restrict U_csr,
+    size_t U_csr_p[], int U_csr_i[], FPnum *restrict U_csr,
     FPnum *restrict Ub, int m_ubin, int pbin,
     FPnum *restrict C, FPnum *restrict Cb,
     FPnum glob_mean, FPnum *restrict biasB,
     FPnum *restrict col_means,
     FPnum *restrict X, int ixA[], int ixB[], size_t nnz,
-    long *restrict Xcsr_p, int *restrict Xcsr_i, FPnum *restrict Xcsr,
+    size_t *restrict Xcsr_p, int *restrict Xcsr_i, FPnum *restrict Xcsr,
     FPnum *restrict Xfull, int n,
     FPnum *restrict weight,
     FPnum *restrict B,
@@ -1178,12 +1178,12 @@ int collective_factors_warm_implicit_multiple
     FPnum *restrict A, int m, int m_x,
     FPnum *restrict U, int m_u, int p,
     int U_row[], int U_col[], FPnum *restrict U_sp, size_t nnz_U,
-    long U_csr_p[], int U_csr_i[], FPnum *restrict U_csr,
+    size_t U_csr_p[], int U_csr_i[], FPnum *restrict U_csr,
     bool NA_as_zero_U,
     FPnum *restrict col_means,
     FPnum *restrict B, int n, FPnum *restrict C,
     FPnum *restrict X, int ixA[], int ixB[], size_t nnz,
-    long *restrict Xcsr_p, int *restrict Xcsr_i, FPnum *restrict Xcsr,
+    size_t *restrict Xcsr_p, int *restrict Xcsr_i, FPnum *restrict Xcsr,
     int k, int k_user, int k_item, int k_main,
     FPnum lam, FPnum alpha, FPnum w_user, FPnum w_main,
     FPnum w_main_multiplier,
@@ -1201,18 +1201,18 @@ FPnum offsets_fun_grad
     int ixA[], int ixB[], FPnum *restrict X,
     size_t nnz, int m, int n, int k,
     FPnum *restrict Xfull, bool full_dense,
-    long Xcsr_p[], int Xcsr_i[], FPnum *restrict Xcsr,
-    long Xcsc_p[], int Xcsc_i[], FPnum *restrict Xcsc,
+    size_t Xcsr_p[], int Xcsr_i[], FPnum *restrict Xcsr,
+    size_t Xcsc_p[], int Xcsc_i[], FPnum *restrict Xcsc,
     FPnum *restrict weight, FPnum *restrict weightR, FPnum *restrict weightC,
     bool user_bias, bool item_bias,
     bool add_intercepts,
     FPnum lam, FPnum *restrict lam_unique,
     FPnum *restrict U, int p,
     FPnum *restrict II, int q,
-    long U_csr_p[], int U_csr_i[], FPnum *restrict U_csr,
-    long U_csc_p[], int U_csc_i[], FPnum *restrict U_csc,
-    long I_csr_p[], int I_csr_i[], FPnum *restrict I_csr,
-    long I_csc_p[], int I_csc_i[], FPnum *restrict I_csc,
+    size_t U_csr_p[], int U_csr_i[], FPnum *restrict U_csr,
+    size_t U_csc_p[], int U_csc_i[], FPnum *restrict U_csc,
+    size_t I_csr_p[], int I_csr_i[], FPnum *restrict I_csr,
+    size_t I_csc_p[], int I_csc_i[], FPnum *restrict I_csc,
     int k_main, int k_sec,
     FPnum w_user, FPnum w_item,
     int nthreads,
@@ -1225,7 +1225,7 @@ void construct_Am
     FPnum *restrict C, FPnum *restrict C_bias,
     bool add_intercepts,
     FPnum *restrict U, int m, int p,
-    long U_csr_p[], int U_csr_i[], FPnum *restrict U_csr,
+    size_t U_csr_p[], int U_csr_i[], FPnum *restrict U_csr,
     int k, int k_sec, int k_main,
     FPnum w_user, int nthreads
 );
@@ -1234,7 +1234,7 @@ void assign_gradients
     FPnum *restrict bufferA, FPnum *restrict g_A, FPnum *restrict g_C,
     bool add_intercepts, FPnum *restrict g_C_bias,
     FPnum *restrict U,
-    long U_csc_p[], int U_csc_i[], FPnum *restrict U_csc,
+    size_t U_csc_p[], int U_csc_i[], FPnum *restrict U_csc,
     int m, int p, int k, int k_sec, int k_main,
     FPnum w_user, int nthreads
 );
@@ -1278,9 +1278,9 @@ int precompute_matrices_offsets
     FPnum *restrict C_bias, FPnum *restrict D_bias,
     bool add_intercepts,
     FPnum *restrict U,
-    long U_csr_p[], int U_csc_i[], FPnum *restrict U_csr,
+    size_t U_csr_p[], int U_csc_i[], FPnum *restrict U_csr,
     FPnum *restrict II,
-    long I_csr_p[], int I_csc_i[], FPnum *restrict I_csr,
+    size_t I_csr_p[], int I_csc_i[], FPnum *restrict I_csr,
     FPnum *restrict Am,       /* used for existing cases */
     FPnum *restrict Bm,       /* warm-start, with item info */
     FPnum *restrict BtBinvBt, /* explicit, no side info, no NAs */
@@ -1295,18 +1295,18 @@ typedef struct data_offsets_fun_grad {
     int *ixA; int *ixB; FPnum *X;
     size_t nnz; int m; int n; int k;
     FPnum *Xfull; bool full_dense;
-    long *Xcsr_p; int *Xcsr_i; FPnum *Xcsr;
-    long *Xcsc_p; int *Xcsc_i; FPnum *Xcsc;
+    size_t *Xcsr_p; int *Xcsr_i; FPnum *Xcsr;
+    size_t *Xcsc_p; int *Xcsc_i; FPnum *Xcsc;
     FPnum *weight; FPnum *weightR; FPnum *weightC;
     bool user_bias; bool item_bias;
     bool add_intercepts;
     FPnum lam; FPnum *lam_unique;
     FPnum *U; int p;
     FPnum *II; int q;
-    long *U_csr_p; int *U_csr_i; FPnum *U_csr;
-    long *U_csc_p; int *U_csc_i; FPnum *U_csc;
-    long *I_csr_p; int *I_csr_i; FPnum *I_csr;
-    long *I_csc_p; int *I_csc_i; FPnum *I_csc;
+    size_t *U_csr_p; int *U_csr_i; FPnum *U_csr;
+    size_t *U_csc_p; int *U_csc_i; FPnum *U_csc;
+    size_t *I_csr_p; int *I_csr_i; FPnum *I_csr;
+    size_t *I_csc_p; int *I_csc_i; FPnum *I_csc;
     int k_main; int k_sec;
     FPnum w_user; FPnum w_item;
     int nthreads;
@@ -1381,7 +1381,7 @@ int matrix_content_based
     int n_new, int k_sec,
     FPnum *restrict U, int p,
     int U_row[], int U_col[], FPnum *restrict U_sp, size_t nnz_U,
-    long U_csr_p[], int U_csr_i[], FPnum *restrict U_csr,
+    size_t U_csr_p[], int U_csr_i[], FPnum *restrict U_csr,
     FPnum *restrict C, FPnum *restrict C_bias,
     int nthreads
 );
@@ -1390,10 +1390,10 @@ int predict_content_based_new
     FPnum *restrict scores_new, int n_new, int k_sec,
     FPnum *restrict U, int p,
     int U_row[], int U_col[], FPnum *restrict U_sp, size_t nnz_U,
-    long U_csr_p[], int U_csr_i[], FPnum *restrict U_csr,
+    size_t U_csr_p[], int U_csr_i[], FPnum *restrict U_csr,
     FPnum *restrict II, int q,
     int I_row[], int I_col[], FPnum *restrict I_sp, size_t nnz_I,
-    long I_csr_p[], int I_csr_i[], FPnum *restrict I_csr,
+    size_t I_csr_p[], int I_csr_i[], FPnum *restrict I_csr,
     FPnum *restrict C, FPnum *restrict C_bias,
     FPnum *restrict D, FPnum *restrict D_bias,
     FPnum glob_mean,
@@ -1404,7 +1404,7 @@ int predict_content_based_old
     FPnum *restrict scores_new, int n_new, int k_sec,
     FPnum *restrict U, int p,
     int U_row[], int U_col[], FPnum *restrict U_sp, size_t nnz_U,
-    long U_csr_p[], int U_csr_i[], FPnum *restrict U_csr,
+    size_t U_csr_p[], int U_csr_i[], FPnum *restrict U_csr,
     FPnum *restrict C, FPnum *restrict C_bias,
     FPnum *restrict Bm, FPnum *restrict biasB, int ixB[],
     FPnum glob_mean,
@@ -1418,7 +1418,7 @@ int rank_content_based_new
     FPnum *restrict u_vec_sp, int u_vec_ixB[], size_t nnz_u_vec,
     FPnum *restrict II, int q,
     int I_row[], int I_col[], FPnum *restrict I_sp, size_t nnz_I,
-    long I_csr_p[], int I_csr_i[], FPnum *restrict I_csr,
+    size_t I_csr_p[], int I_csr_i[], FPnum *restrict I_csr,
     FPnum *restrict C, FPnum *restrict C_bias,
     FPnum *restrict D, FPnum *restrict D_bias,
     FPnum glob_mean,
@@ -1429,7 +1429,7 @@ int offsets_factors_cold_multiple
     FPnum *restrict A, int m,
     FPnum *restrict U, int p,
     int U_row[], int U_col[], FPnum *restrict U_sp, size_t nnz_U,
-    long U_csr_p[], int U_csr_i[], FPnum *restrict U_csr,
+    size_t U_csr_p[], int U_csr_i[], FPnum *restrict U_csr,
     FPnum *restrict C, FPnum *restrict C_bias,
     int k, int k_sec, int k_main,
     FPnum w_user,
@@ -1440,9 +1440,9 @@ int offsets_factors_warm_multiple
     FPnum *restrict A, FPnum *restrict biasA, int m,
     FPnum *restrict U, int p,
     int U_row[], int U_col[], FPnum *restrict U_sp, size_t nnz_U,
-    long U_csr_p[], int U_csr_i[], FPnum *restrict U_csr,
+    size_t U_csr_p[], int U_csr_i[], FPnum *restrict U_csr,
     FPnum *restrict X, int ixA[], int ixB[], size_t nnz,
-    long *restrict Xcsr_p, int *restrict Xcsr_i, FPnum *restrict Xcsr,
+    size_t *restrict Xcsr_p, int *restrict Xcsr_i, FPnum *restrict Xcsr,
     FPnum *restrict Xfull, int n,
     FPnum *restrict weight,
     FPnum *restrict Bm, FPnum *restrict C,

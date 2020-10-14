@@ -195,8 +195,8 @@ FPnum fun_grad_cannonical_form
     int m, int n, int k,
     int ixA[], int ixB[], FPnum *restrict X, size_t nnz,
     FPnum *restrict Xfull, bool full_dense,
-    long Xcsr_p[], int Xcsr_i[], FPnum *restrict Xcsr,
-    long Xcsc_p[], int Xcsc_i[], FPnum *restrict Xcsc,
+    size_t Xcsr_p[], int Xcsr_i[], FPnum *restrict Xcsr,
+    size_t Xcsc_p[], int Xcsc_i[], FPnum *restrict Xcsc,
     bool user_bias, bool item_bias,
     FPnum *restrict biasA, FPnum *restrict biasB,
     FPnum *restrict g_biasA, FPnum *restrict g_biasB,
@@ -1769,7 +1769,7 @@ void optimizeA
     FPnum *restrict A, int lda,
     FPnum *restrict B, int ldb,
     int m, int n, int k,
-    long Xcsr_p[], int Xcsr_i[], FPnum *restrict Xcsr,
+    size_t Xcsr_p[], int Xcsr_i[], FPnum *restrict Xcsr,
     FPnum *restrict Xfull, bool full_dense, bool near_dense,
     int cnt_NA[], FPnum *restrict weight, bool NA_as_zero,
     FPnum lam, FPnum w, FPnum lam_last,
@@ -2100,7 +2100,7 @@ void optimizeA_implicit
     FPnum *restrict A, size_t lda,
     FPnum *restrict B, size_t ldb,
     int m, int n, int k,
-    long Xcsr_p[], int Xcsr_i[], FPnum *restrict Xcsr,
+    size_t Xcsr_p[], int Xcsr_i[], FPnum *restrict Xcsr,
     FPnum lam,
     int nthreads,
     bool use_cg, int max_cg_steps, bool force_set_to_zero,
@@ -2150,8 +2150,8 @@ int initialize_biases
     int m_bias, int n_bias,
     int ixA[], int ixB[], FPnum *restrict X, size_t nnz,
     FPnum *restrict Xfull, FPnum *restrict Xtrans,
-    long Xcsr_p[], int Xcsr_i[], FPnum *restrict Xcsr,
-    long Xcsc_p[], int Xcsc_i[], FPnum *restrict Xcsc,
+    size_t Xcsr_p[], int Xcsr_i[], FPnum *restrict Xcsr,
+    size_t Xcsc_p[], int Xcsc_i[], FPnum *restrict Xcsc,
     int nthreads
 )
 {
@@ -2353,8 +2353,8 @@ int center_by_cols
     FPnum *restrict col_means,
     FPnum *restrict Xfull, int m, int n,
     int ixA[], int ixB[], FPnum *restrict X, size_t nnz,
-    long Xcsr_p[], int Xcsr_i[], FPnum *restrict Xcsr,
-    long Xcsc_p[], int Xcsc_i[], FPnum *restrict Xcsc,
+    size_t Xcsr_p[], int Xcsr_i[], FPnum *restrict Xcsr,
+    size_t Xcsc_p[], int Xcsc_i[], FPnum *restrict Xcsc,
     int nthreads
 )
 {
@@ -2783,8 +2783,8 @@ int fit_most_popular
         m, n,
         ixA, ixB, X, nnz,
         Xfull, (FPnum*)NULL,
-        (long*)NULL, (int*)NULL, (FPnum*)NULL,
-        (long*)NULL, (int*)NULL, (FPnum*)NULL,
+        (size_t*)NULL, (int*)NULL, (FPnum*)NULL,
+        (size_t*)NULL, (int*)NULL, (FPnum*)NULL,
         nthreads
     );
     if (retval == 1) return retval;

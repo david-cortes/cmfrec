@@ -182,9 +182,9 @@ cdef extern from "cmfrec.h":
         FPnum *C_bias, FPnum *D_bias,
         bint add_intercepts,
         FPnum *U,
-        long U_csr_p[], int U_csc_i[], FPnum *U_csr,
+        size_t U_csr_p[], int U_csc_i[], FPnum *U_csr,
         FPnum *II,
-        long I_csr_p[], int I_csc_i[], FPnum *I_csr,
+        size_t I_csr_p[], int I_csc_i[], FPnum *I_csr,
         FPnum *Am,
         FPnum *Bm,
         FPnum *BtBinvBt,
@@ -328,10 +328,10 @@ cdef extern from "cmfrec.h":
         FPnum *scores_new, int n_new, int k_sec,
         FPnum *U, int p,
         int U_row[], int U_col[], FPnum *U_sp, size_t nnz_U,
-        long U_csr_p[], int U_csr_i[], FPnum *U_csr,
+        size_t U_csr_p[], int U_csr_i[], FPnum *U_csr,
         FPnum *II, int q,
         int I_row[], int I_col[], FPnum *I_sp, size_t nnz_I,
-        long I_csr_p[], int I_csr_i[], FPnum *I_csr,
+        size_t I_csr_p[], int I_csr_i[], FPnum *I_csr,
         FPnum *C, FPnum *C_bias,
         FPnum *D, FPnum *D_bias,
         FPnum glob_mean,
@@ -342,7 +342,7 @@ cdef extern from "cmfrec.h":
         FPnum *scores_new, int n_new, int k_sec,
         FPnum *U, int p,
         int U_row[], int U_col[], FPnum *U_sp, size_t nnz_U,
-        long U_csr_p[], int U_csr_i[], FPnum *U_csr,
+        size_t U_csr_p[], int U_csr_i[], FPnum *U_csr,
         FPnum *C, FPnum *C_bias,
         FPnum *Bm, FPnum *biasB, int ixB[],
         FPnum glob_mean,
@@ -356,7 +356,7 @@ cdef extern from "cmfrec.h":
         FPnum *u_vec_sp, int u_vec_ixB[], size_t nnz_u_vec,
         FPnum *II, int q,
         int I_row[], int I_col[], FPnum *I_sp, size_t nnz_I,
-        long I_csr_p[], int I_csr_i[], FPnum *I_csr,
+        size_t I_csr_p[], int I_csr_i[], FPnum *I_csr,
         FPnum *C, FPnum *C_bias,
         FPnum *D, FPnum *D_bias,
         FPnum glob_mean,
@@ -381,7 +381,7 @@ cdef extern from "cmfrec.h":
         FPnum *A, int m,
         FPnum *U, int m_u, int p,
         int U_row[], int U_col[], FPnum *U_sp, size_t nnz_U,
-        long U_csr_p[], int U_csr_i[], FPnum *U_csr,
+        size_t U_csr_p[], int U_csr_i[], FPnum *U_csr,
         FPnum *Ub, int m_ubin, int pbin,
         FPnum *C, FPnum *Cb,
         FPnum *CtCinvCt,
@@ -398,13 +398,13 @@ cdef extern from "cmfrec.h":
         FPnum *A, FPnum *biasA, int m, int m_x,
         FPnum *U, int m_u, int p,
         int U_row[], int U_col[], FPnum *U_sp, size_t nnz_U,
-        long U_csr_p[], int U_csr_i[], FPnum *U_csr,
+        size_t U_csr_p[], int U_csr_i[], FPnum *U_csr,
         FPnum *Ub, int m_ubin, int pbin,
         FPnum *C, FPnum *Cb,
         FPnum glob_mean, FPnum *biasB,
         FPnum *col_means,
         FPnum *X, int ixA[], int ixB[], size_t nnz,
-        long *Xcsr_p, int *Xcsr_i, FPnum *Xcsr,
+        size_t *Xcsr_p, int *Xcsr_i, FPnum *Xcsr,
         FPnum *Xfull, int n,
         FPnum *weight,
         FPnum *B,
@@ -426,12 +426,12 @@ cdef extern from "cmfrec.h":
         FPnum *A, int m, int m_x,
         FPnum *U, int m_u, int p,
         int U_row[], int U_col[], FPnum *U_sp, size_t nnz_U,
-        long U_csr_p[], int U_csr_i[], FPnum *U_csr,
+        size_t U_csr_p[], int U_csr_i[], FPnum *U_csr,
         bint NA_as_zero_U,
         FPnum *col_means,
         FPnum *B, int n, FPnum *C,
         FPnum *X, int ixA[], int ixB[], size_t nnz,
-        long *Xcsr_p, int *Xcsr_i, FPnum *Xcsr,
+        size_t *Xcsr_p, int *Xcsr_i, FPnum *Xcsr,
         int k, int k_user, int k_item, int k_main,
         FPnum lam, FPnum alpha, FPnum w_user, FPnum w_main,
         FPnum w_main_multiplier,
@@ -446,7 +446,7 @@ cdef extern from "cmfrec.h":
         FPnum *A, int m,
         FPnum *U, int p,
         int U_row[], int U_col[], FPnum *U_sp, size_t nnz_U,
-        long U_csr_p[], int U_csr_i[], FPnum *U_csr,
+        size_t U_csr_p[], int U_csr_i[], FPnum *U_csr,
         FPnum *C, FPnum *C_bias,
         int k, int k_sec, int k_main,
         FPnum w_user,
@@ -457,9 +457,9 @@ cdef extern from "cmfrec.h":
         FPnum *A, FPnum *biasA, int m,
         FPnum *U, int p,
         int U_row[], int U_col[], FPnum *U_sp, size_t nnz_U,
-        long U_csr_p[], int U_csr_i[], FPnum *U_csr,
+        size_t U_csr_p[], int U_csr_i[], FPnum *U_csr,
         FPnum *X, int ixA[], int ixB[], size_t nnz,
-        long *Xcsr_p, int *Xcsr_i, FPnum *Xcsr,
+        size_t *Xcsr_p, int *Xcsr_i, FPnum *Xcsr,
         FPnum *Xfull, int n,
         FPnum *weight,
         FPnum *Bm, FPnum *C,
@@ -1486,10 +1486,10 @@ def precompute_matrices_offsets_explicit(
         np.ndarray[FPnum, ndim=2] Bm_plus_bias,
         np.ndarray[FPnum, ndim=2] U,
         np.ndarray[FPnum, ndim=2] I,
-        np.ndarray[long, ndim=1] U_csr_p,
+        np.ndarray[size_t, ndim=1] U_csr_p,
         np.ndarray[int, ndim=1] U_csr_i,
         np.ndarray[FPnum, ndim=1] U_csr,
-        np.ndarray[long, ndim=1] I_csr_p,
+        np.ndarray[size_t, ndim=1] I_csr_p,
         np.ndarray[int, ndim=1] I_csr_i,
         np.ndarray[FPnum, ndim=1] I_csr,
         int k, int k_main, int k_sec,
@@ -1544,7 +1544,7 @@ def precompute_matrices_offsets_explicit(
     cdef np.ndarray[FPnum, ndim=2] BtBchol = np.empty((k_sec+k+k_main+b, k_sec+k+k_main+b), dtype=c_FPnum)
 
     cdef FPnum *ptr_U = NULL
-    cdef long *ptr_U_csr_p = NULL
+    cdef size_t *ptr_U_csr_p = NULL
     cdef int *ptr_U_csr_i = NULL
     cdef FPnum *ptr_U_csr = NULL
     if U.shape[0]:
@@ -1555,7 +1555,7 @@ def precompute_matrices_offsets_explicit(
         ptr_U_csr = &U_csr[0]
 
     cdef FPnum *ptr_I = NULL
-    cdef long *ptr_I_csr_p = NULL
+    cdef size_t *ptr_I_csr_p = NULL
     cdef int *ptr_I_csr_i = NULL
     cdef FPnum *ptr_I_csr = NULL
     if I.shape[0]:
@@ -1602,10 +1602,10 @@ def precompute_matrices_offsets_implicit(
         np.ndarray[FPnum, ndim=2] Bm,
         np.ndarray[FPnum, ndim=2] U,
         np.ndarray[FPnum, ndim=2] I,
-        np.ndarray[long, ndim=1] U_csr_p,
+        np.ndarray[size_t, ndim=1] U_csr_p,
         np.ndarray[int, ndim=1] U_csr_i,
         np.ndarray[FPnum, ndim=1] U_csr,
-        np.ndarray[long, ndim=1] I_csr_p,
+        np.ndarray[size_t, ndim=1] I_csr_p,
         np.ndarray[int, ndim=1] I_csr_i,
         np.ndarray[FPnum, ndim=1] I_csr,
         int k,
@@ -1639,7 +1639,7 @@ def precompute_matrices_offsets_implicit(
     cdef np.ndarray[FPnum, ndim=2] BtBw = np.empty((k_sec+k+k_main, k_sec+k+k_main), dtype=c_FPnum)
 
     cdef FPnum *ptr_U = NULL
-    cdef long *ptr_U_csr_p = NULL
+    cdef size_t *ptr_U_csr_p = NULL
     cdef int *ptr_U_csr_i = NULL
     cdef FPnum *ptr_U_csr = NULL
     if U.shape[0]:
@@ -1650,7 +1650,7 @@ def precompute_matrices_offsets_implicit(
         ptr_U_csr = &U_csr[0]
 
     cdef FPnum *ptr_I = NULL
-    cdef long *ptr_I_csr_p = NULL
+    cdef size_t *ptr_I_csr_p = NULL
     cdef int *ptr_I_csr_i = NULL
     cdef FPnum *ptr_I_csr = NULL
     if I.shape[0]:
@@ -2330,14 +2330,14 @@ def call_predict_content_based_new(
         np.ndarray[int, ndim=1] U_row,
         np.ndarray[int, ndim=1] U_col,
         np.ndarray[FPnum, ndim=1] U_sp,
-        np.ndarray[long, ndim=1] U_csr_p,
+        np.ndarray[size_t, ndim=1] U_csr_p,
         np.ndarray[int, ndim=1] U_csr_i,
         np.ndarray[FPnum, ndim=1] U_csr,
         np.ndarray[FPnum, ndim=2] I,
         np.ndarray[int, ndim=1] I_row,
         np.ndarray[int, ndim=1] I_col,
         np.ndarray[FPnum, ndim=1] I_sp,
-        np.ndarray[long, ndim=1] I_csr_p,
+        np.ndarray[size_t, ndim=1] I_csr_p,
         np.ndarray[int, ndim=1] I_csr_i,
         np.ndarray[FPnum, ndim=1] I_csr,
         np.ndarray[FPnum, ndim=2] C,
@@ -2362,7 +2362,7 @@ def call_predict_content_based_new(
         ptr_U_sp = &U_sp[0]
         nnz_U = U_sp.shape[0]
 
-    cdef long *ptr_U_csr_p = NULL
+    cdef size_t *ptr_U_csr_p = NULL
     cdef int *ptr_U_csr_i = NULL
     cdef FPnum *ptr_U_csr = NULL
     if U_csr.shape[0]:
@@ -2383,7 +2383,7 @@ def call_predict_content_based_new(
         ptr_I_sp = &I_sp[0]
         nnz_I = I_sp.shape[0]
 
-    cdef long *ptr_I_csr_p = NULL
+    cdef size_t *ptr_I_csr_p = NULL
     cdef int *ptr_I_csr_i = NULL
     cdef FPnum *ptr_I_csr = NULL
     if I_csr.shape[0]:
@@ -2423,7 +2423,7 @@ def call_predict_content_based_old(
         np.ndarray[int, ndim=1] U_row,
         np.ndarray[int, ndim=1] U_col,
         np.ndarray[FPnum, ndim=1] U_sp,
-        np.ndarray[long, ndim=1] U_csr_p,
+        np.ndarray[size_t, ndim=1] U_csr_p,
         np.ndarray[int, ndim=1] U_csr_i,
         np.ndarray[FPnum, ndim=1] U_csr,
         np.ndarray[int, ndim=1] ixB,
@@ -2449,7 +2449,7 @@ def call_predict_content_based_old(
         ptr_U_sp = &U_sp[0]
         nnz_U = U_sp.shape[0]
 
-    cdef long *ptr_U_csr_p = NULL
+    cdef size_t *ptr_U_csr_p = NULL
     cdef int *ptr_U_csr_i = NULL
     cdef FPnum *ptr_U_csr = NULL
     if U_csr.shape[0]:
@@ -2490,7 +2490,7 @@ def call_rank_content_based_new(
         np.ndarray[int, ndim=1] I_row,
         np.ndarray[int, ndim=1] I_col,
         np.ndarray[FPnum, ndim=1] I_sp,
-        np.ndarray[long, ndim=1] I_csr_p,
+        np.ndarray[size_t, ndim=1] I_csr_p,
         np.ndarray[int, ndim=1] I_csr_i,
         np.ndarray[FPnum, ndim=1] I_csr,
         np.ndarray[FPnum, ndim=2] C,
@@ -2525,7 +2525,7 @@ def call_rank_content_based_new(
         ptr_I_sp = &I_sp[0]
         nnz_I = I_sp.shape[0]
 
-    cdef long *ptr_I_csr_p = NULL
+    cdef size_t *ptr_I_csr_p = NULL
     cdef int *ptr_I_csr_i = NULL
     cdef FPnum *ptr_I_csr = NULL
     if I_csr.shape[0]:
@@ -2639,7 +2639,7 @@ def call_collective_factors_cold_multiple(
         np.ndarray[int, ndim=1] U_row,
         np.ndarray[int, ndim=1] U_col,
         np.ndarray[FPnum, ndim=1] U_sp,
-        np.ndarray[long, ndim=1] U_csr_p,
+        np.ndarray[size_t, ndim=1] U_csr_p,
         np.ndarray[int, ndim=1] U_csr_i,
         np.ndarray[FPnum, ndim=1] U_csr,
         np.ndarray[FPnum, ndim=2] Ub,
@@ -2695,7 +2695,7 @@ def call_collective_factors_cold_multiple(
     if CtCchol.shape[0]:
         ptr_CtCchol = &CtCchol[0,0]
 
-    cdef long *ptr_U_csr_p = NULL
+    cdef size_t *ptr_U_csr_p = NULL
     cdef int *ptr_U_csr_i = NULL
     cdef FPnum *ptr_U_csr = NULL
     if U_csr.shape[0]:
@@ -2731,7 +2731,7 @@ def call_collective_factors_warm_multiple(
         np.ndarray[int, ndim=1] ixA,
         np.ndarray[int, ndim=1] ixB,
         np.ndarray[FPnum, ndim=1] X,
-        np.ndarray[long, ndim=1] Xcsr_p,
+        np.ndarray[size_t, ndim=1] Xcsr_p,
         np.ndarray[int, ndim=1] Xcsr_i,
         np.ndarray[FPnum, ndim=1] Xcsr,
         np.ndarray[FPnum, ndim=1] W,
@@ -2741,7 +2741,7 @@ def call_collective_factors_warm_multiple(
         np.ndarray[int, ndim=1] U_row,
         np.ndarray[int, ndim=1] U_col,
         np.ndarray[FPnum, ndim=1] U_sp,
-        np.ndarray[long, ndim=1] U_csr_p,
+        np.ndarray[size_t, ndim=1] U_csr_p,
         np.ndarray[int, ndim=1] U_csr_i,
         np.ndarray[FPnum, ndim=1] U_csr,
         np.ndarray[FPnum, ndim=2] Ub,
@@ -2775,7 +2775,7 @@ def call_collective_factors_warm_multiple(
     cdef int *ptr_ixB = NULL
     cdef FPnum *ptr_X = NULL
     cdef size_t nnz = 0
-    cdef long *ptr_Xcsr_p = NULL
+    cdef size_t *ptr_Xcsr_p = NULL
     cdef int *ptr_Xcsr_i = NULL
     cdef FPnum *ptr_Xcsr = NULL
     if Xfull.shape[0]:
@@ -2813,7 +2813,7 @@ def call_collective_factors_warm_multiple(
     if U_colmeans.shape[0]:
         ptr_U_colmeans = &U_colmeans[0]
 
-    cdef long *ptr_U_csr_p = NULL
+    cdef size_t *ptr_U_csr_p = NULL
     cdef int *ptr_U_csr_i = NULL
     cdef FPnum *ptr_U_csr = NULL
     if U_csr.shape[0]:
@@ -2899,14 +2899,14 @@ def call_collective_factors_warm_implicit_multiple(
         np.ndarray[int, ndim=1] ixA,
         np.ndarray[int, ndim=1] ixB,
         np.ndarray[FPnum, ndim=1] X,
-        np.ndarray[long, ndim=1] Xcsr_p,
+        np.ndarray[size_t, ndim=1] Xcsr_p,
         np.ndarray[int, ndim=1] Xcsr_i,
         np.ndarray[FPnum, ndim=1] Xcsr,
         np.ndarray[FPnum, ndim=2] U,
         np.ndarray[int, ndim=1] U_row,
         np.ndarray[int, ndim=1] U_col,
         np.ndarray[FPnum, ndim=1] U_sp,
-        np.ndarray[long, ndim=1] U_csr_p,
+        np.ndarray[size_t, ndim=1] U_csr_p,
         np.ndarray[int, ndim=1] U_csr_i,
         np.ndarray[FPnum, ndim=1] U_csr,
         np.ndarray[FPnum, ndim=1] U_colmeans,
@@ -2929,7 +2929,7 @@ def call_collective_factors_warm_implicit_multiple(
     cdef int *ptr_ixB = NULL
     cdef FPnum *ptr_X = NULL
     cdef size_t nnz = 0
-    cdef long *ptr_Xcsr_p = NULL
+    cdef size_t *ptr_Xcsr_p = NULL
     cdef int *ptr_Xcsr_i = NULL
     cdef FPnum *ptr_Xcsr = NULL
     if Xcsr.shape[0]:
@@ -2959,7 +2959,7 @@ def call_collective_factors_warm_implicit_multiple(
     if U_colmeans.shape[0]:
         ptr_U_colmeans = &U_colmeans[0]
 
-    cdef long *ptr_U_csr_p = NULL
+    cdef size_t *ptr_U_csr_p = NULL
     cdef int *ptr_U_csr_i = NULL
     cdef FPnum *ptr_U_csr = NULL
     if U_csr.shape[0]:
@@ -3012,7 +3012,7 @@ def call_offsets_factors_cold_multiple(
         np.ndarray[int, ndim=1] U_row,
         np.ndarray[int, ndim=1] U_col,
         np.ndarray[FPnum, ndim=1] U_sp,
-        np.ndarray[long, ndim=1] U_csr_p,
+        np.ndarray[size_t, ndim=1] U_csr_p,
         np.ndarray[int, ndim=1] U_csr_i,
         np.ndarray[FPnum, ndim=1] U_csr,
         np.ndarray[FPnum, ndim=2] C,
@@ -3036,7 +3036,7 @@ def call_offsets_factors_cold_multiple(
         ptr_U_sp = &U_sp[0]
         nnz_U = U_sp.shape[0]
 
-    cdef long *ptr_U_csr_p = NULL
+    cdef size_t *ptr_U_csr_p = NULL
     cdef int *ptr_U_csr_i = NULL
     cdef FPnum *ptr_U_csr = NULL
     if U_csr.shape[0]:
@@ -3069,7 +3069,7 @@ def call_offsets_factors_warm_multiple(
         np.ndarray[int, ndim=1] ixA,
         np.ndarray[int, ndim=1] ixB,
         np.ndarray[FPnum, ndim=1] X,
-        np.ndarray[long, ndim=1] Xcsr_p,
+        np.ndarray[size_t, ndim=1] Xcsr_p,
         np.ndarray[int, ndim=1] Xcsr_i,
         np.ndarray[FPnum, ndim=1] Xcsr,
         np.ndarray[FPnum, ndim=1] W,
@@ -3079,7 +3079,7 @@ def call_offsets_factors_warm_multiple(
         np.ndarray[int, ndim=1] U_row,
         np.ndarray[int, ndim=1] U_col,
         np.ndarray[FPnum, ndim=1] U_sp,
-        np.ndarray[long, ndim=1] U_csr_p,
+        np.ndarray[size_t, ndim=1] U_csr_p,
         np.ndarray[int, ndim=1] U_csr_i,
         np.ndarray[FPnum, ndim=1] U_csr,
         np.ndarray[FPnum, ndim=1] biasB,
@@ -3105,7 +3105,7 @@ def call_offsets_factors_warm_multiple(
     cdef int *ptr_ixB = NULL
     cdef FPnum *ptr_X = NULL
     cdef size_t nnz = 0
-    cdef long *ptr_Xcsr_p = NULL
+    cdef size_t *ptr_Xcsr_p = NULL
     cdef int *ptr_Xcsr_i = NULL
     cdef FPnum *ptr_Xcsr = NULL
     if Xfull.shape[0]:
@@ -3140,7 +3140,7 @@ def call_offsets_factors_warm_multiple(
         ptr_U_sp = &U_sp[0]
         nnz_U = U_sp.shape[0]
 
-    cdef long *ptr_U_csr_p = NULL
+    cdef size_t *ptr_U_csr_p = NULL
     cdef int *ptr_U_csr_i = NULL
     cdef FPnum *ptr_U_csr = NULL
     if U_csr.shape[0]:
@@ -3215,7 +3215,7 @@ def call_offsets_factors_warm_implicit_multiple(
         np.ndarray[int, ndim=1] ixA,
         np.ndarray[int, ndim=1] ixB,
         np.ndarray[FPnum, ndim=1] X,
-        np.ndarray[long, ndim=1] Xcsr_p,
+        np.ndarray[size_t, ndim=1] Xcsr_p,
         np.ndarray[int, ndim=1] Xcsr_i,
         np.ndarray[FPnum, ndim=1] Xcsr,
         np.ndarray[FPnum, ndim=2] Bm,
@@ -3234,7 +3234,7 @@ def call_offsets_factors_warm_implicit_multiple(
     cdef int *ptr_ixB = NULL
     cdef FPnum *ptr_X = NULL
     cdef size_t nnz = 0
-    cdef long *ptr_Xcsr_p = NULL
+    cdef size_t *ptr_Xcsr_p = NULL
     cdef int *ptr_Xcsr_i = NULL
     cdef FPnum *ptr_Xcsr = NULL
     if Xcsr.shape[0]:
@@ -3271,7 +3271,7 @@ def call_offsets_factors_warm_implicit_multiple(
         &Am[0,0], <FPnum*> NULL, m,
         <FPnum*> NULL, C.shape[0],
         <int*>NULL, <int*>NULL, <FPnum*> NULL, 0,
-        <long*>NULL, <int*>NULL, <FPnum*> NULL,
+        <size_t*>NULL, <int*>NULL, <FPnum*> NULL,
         ptr_X, ptr_ixA, ptr_ixB, nnz,
         ptr_Xcsr_p, ptr_Xcsr_i, ptr_Xcsr,
         <FPnum*> NULL, n,

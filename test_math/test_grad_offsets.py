@@ -54,7 +54,7 @@ def py_eval(values):
 empty_1d = np.empty(0, dtype=ctypes.c_double)
 empty_2d = np.empty((0,0), dtype=ctypes.c_double)
 empty_int = np.empty(0, dtype=ctypes.c_int)
-empty_long = np.empty(0, dtype=ctypes.c_long)
+empty_size_t = np.empty(0, dtype=ctypes.c_size_t)
 buffer_double = np.empty(int(1e6), dtype=ctypes.c_double)
 def offsets_fun_grad(values):
     grad = np.empty(values.shape[0], dtype=ctypes.c_double)
@@ -66,17 +66,17 @@ def offsets_fun_grad(values):
         Xcoo.col.astype(ctypes.c_int).copy() if xtype=="sparse" else empty_int,
         Xcoo.data.astype(ctypes.c_double).copy() if xtype=="sparse" else empty_1d,
         U.copy() if utype=="dense" else empty_2d,
-        Ucsr.indptr.astype(ctypes.c_long).copy() if utype=="sparse" else empty_long,
+        Ucsr.indptr.astype(ctypes.c_size_t).copy() if utype=="sparse" else empty_size_t,
         Ucsr.indices.astype(ctypes.c_int).copy() if utype=="sparse" else empty_int,
         Ucsr.data.astype(ctypes.c_double).copy() if utype=="sparse" else empty_1d,
-        Ucsc.indptr.astype(ctypes.c_long).copy() if utype=="sparse" else empty_long,
+        Ucsc.indptr.astype(ctypes.c_size_t).copy() if utype=="sparse" else empty_size_t,
         Ucsc.indices.astype(ctypes.c_int).copy() if utype=="sparse" else empty_int,
         Ucsc.data.astype(ctypes.c_double).copy() if utype=="sparse" else empty_1d,
         I.copy() if itype=="dense" else empty_2d,
-        Icsr.indptr.astype(ctypes.c_long).copy() if itype=="sparse" else empty_long,
+        Icsr.indptr.astype(ctypes.c_size_t).copy() if itype=="sparse" else empty_size_t,
         Icsr.indices.astype(ctypes.c_int).copy() if itype=="sparse" else empty_int,
         Icsr.data.astype(ctypes.c_double).copy() if itype=="sparse" else empty_1d,
-        Icsc.indptr.astype(ctypes.c_long).copy() if itype=="sparse" else empty_long,
+        Icsc.indptr.astype(ctypes.c_size_t).copy() if itype=="sparse" else empty_size_t,
         Icsc.indices.astype(ctypes.c_int).copy() if itype=="sparse" else empty_int,
         Icsc.data.astype(ctypes.c_double).copy() if itype=="sparse" else empty_1d,
         empty_1d if not wtype else (W.reshape(-1).copy() if xtype=="dense" else Wcoo.data.astype(ctypes.c_double).copy()),

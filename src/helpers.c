@@ -552,7 +552,7 @@ FPnum sum_sq_div_w(FPnum *restrict arr, FPnum *restrict w, size_t n, bool compen
 void tgemm_sp_dense
 (
     int m, int n, FPnum alpha,
-    long indptr[], int indices[], FPnum values[],
+    size_t indptr[], int indices[], FPnum values[],
     FPnum DenseMat[], size_t ldb,
     FPnum OutputMat[], size_t ldc,
     int nthreads
@@ -570,7 +570,7 @@ void tgemm_sp_dense
             private(ptr_col)
     for (size_t_for row = 0; row < (size_t)m; row++) {
         ptr_col = OutputMat + row*ldc;
-        for (int col = indptr[row]; col < indptr[row+1]; col++) {
+        for (size_t col = indptr[row]; col < indptr[row+1]; col++) {
             cblas_taxpy(n, alpha*values[col], DenseMat + (size_t)indices[col]*ldb, 1, ptr_col, 1);
         }
     }
@@ -724,11 +724,11 @@ int coo_to_csr_plus_alloc
     int *restrict Xrow, int *restrict Xcol, FPnum *restrict Xval,
     FPnum *restrict W,
     int m, int n, size_t nnz,
-    long *restrict *csr_p, int *restrict *csr_i, FPnum *restrict *csr_v,
+    size_t *restrict *csr_p, int *restrict *csr_i, FPnum *restrict *csr_v,
     FPnum *restrict *csr_w
 )
 {
-    *csr_p = (long*)malloc((size_t)(m+1)*sizeof(long));
+    *csr_p = (size_t*)malloc((size_t)(m+1)*sizeof(size_t));
     *csr_i = (int*)malloc(nnz*sizeof(int));
     *csr_v = (FPnum*)malloc(nnz*sizeof(FPnum));
     if (csr_p == NULL || csr_i == NULL || csr_v == NULL)
@@ -754,7 +754,7 @@ void coo_to_csr
     int *restrict Xrow, int *restrict Xcol, FPnum *restrict Xval,
     FPnum *restrict W,
     int m, int n, size_t nnz,
-    long *restrict csr_p, int *restrict csr_i, FPnum *restrict csr_v,
+    size_t *restrict csr_p, int *restrict csr_i, FPnum *restrict csr_v,
     FPnum *restrict csr_w
 )
 {
@@ -763,7 +763,7 @@ void coo_to_csr
 
     produce_p:
     {
-        memset(csr_p, 0, (m+1)*sizeof(long));
+        memset(csr_p, 0, (m+1)*sizeof(size_t));
         for (size_t ix = 0; ix < nnz; ix++)
             csr_p[Xrow[ix]+1]++;
         for (int row = 0; row < m; row++)
@@ -815,8 +815,8 @@ void coo_to_csr_and_csc
 (
     int *restrict Xrow, int *restrict Xcol, FPnum *restrict Xval,
     FPnum *restrict W, int m, int n, size_t nnz,
-    long *restrict csr_p, int *restrict csr_i, FPnum *restrict csr_v,
-    long *restrict csc_p, int *restrict csc_i, FPnum *restrict csc_v,
+    size_t *restrict csr_p, int *restrict csr_i, FPnum *restrict csr_v,
+    size_t *restrict csc_p, int *restrict csc_i, FPnum *restrict csc_v,
     FPnum *restrict csr_w, FPnum *restrict csc_w,
     int nthreads
 )
@@ -828,8 +828,8 @@ void coo_to_csr_and_csc
 
     produce_p:
     {
-        memset(csr_p, 0, (m+1)*sizeof(long));
-        memset(csc_p, 0, (n+1)*sizeof(long));
+        memset(csr_p, 0, (m+1)*sizeof(size_t));
+        memset(csc_p, 0, (n+1)*sizeof(size_t));
         for (size_t ix = 0; ix < nnz; ix++) {
             csr_p[Xrow[ix]+1]++;
             csc_p[Xcol[ix]+1]++;
@@ -929,7 +929,7 @@ void coo_to_csr_and_csc
         free(cnt_bycol);
 }
 
-void row_means_csr(long indptr[], FPnum *restrict values,
+void row_means_csr(size_t indptr[], FPnum *restrict values,
                    FPnum *restrict output, int m, int nthreads)
 {
     int row = 0;
@@ -937,7 +937,7 @@ void row_means_csr(long indptr[], FPnum *restrict values,
     #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
             shared(indptr, values, output, m)
     for (row = 0; row < m; row++)
-        for (int ix = indptr[row]; ix < indptr[row+1]; ix++)
+        for (size_t ix = indptr[row]; ix < indptr[row+1]; ix++)
             output[row] += values[ix];
     nthreads = cap_to_4(nthreads);
     #pragma omp parallel for schedule(static) num_threads(nthreads) \

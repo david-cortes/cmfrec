@@ -37,8 +37,8 @@ cdef extern from "cmfrec.h":
         int m, int n, int k,
         int ixA[], int ixB[], double *X, size_t nnz,
         double *Xfull,
-        long Xcsr_p[], int Xcsr_i[], double *Xcsr,
-        long Xcsc_p[], int Xcsc_i[], double *Xcsc,
+        size_t Xcsr_p[], int Xcsr_i[], double *Xcsr,
+        size_t Xcsc_p[], int Xcsc_i[], double *Xcsc,
         double *weight, double *weightR, double *weightC,
         bint user_bias, bint item_bias,
         double lam, double *lam_unique,
@@ -48,10 +48,10 @@ cdef extern from "cmfrec.h":
         double *Ib, int n_ibin, int qbin, bint Ib_has_NA,
         int U_row[], int U_col[], double *U_sp, size_t nnz_U,
         int I_row[], int I_col[], double *I_sp, size_t nnz_I,
-        long U_csr_p[], int U_csr_i[], double *U_csr,
-        long U_csc_p[], int U_csc_i[], double *U_csc,
-        long I_csr_p[], int I_csr_i[], double *I_csr,
-        long I_csc_p[], int I_csc_i[], double *I_csc,
+        size_t U_csr_p[], int U_csr_i[], double *U_csr,
+        size_t U_csc_p[], int U_csc_i[], double *U_csc,
+        size_t I_csr_p[], int I_csr_i[], double *I_csr,
+        size_t I_csc_p[], int I_csc_i[], double *I_csc,
         double *buffer_double, double *buffer_mt,
         int k_main, int k_user, int k_item,
         double w_main, double w_user, double w_item,
@@ -118,8 +118,8 @@ cdef extern from "cmfrec.h":
         int m, int n, int k,
         int ixA[], int ixB[], double *X, size_t nnz,
         double *Xfull, bint full_dense,
-        long Xcsr_p[], int Xcsr_i[], double *Xcsr,
-        long Xcsc_p[], int Xcsc_i[], double *Xcsc,
+        size_t Xcsr_p[], int Xcsr_i[], double *Xcsr,
+        size_t Xcsc_p[], int Xcsc_i[], double *Xcsc,
         bint user_bias, bint item_bias,
         double *biasA, double *biasB,
         double *g_biasA, double *g_biasB,
@@ -141,7 +141,7 @@ cdef extern from "cmfrec.h":
         double *A, int lda,
         double *B, int ldb,
         int m, int n, int k,
-        long Xcsr_p[], int Xcsr_i[], double *Xcsr,
+        size_t Xcsr_p[], int Xcsr_i[], double *Xcsr,
         double *Xfull, bint full_dense, bint near_dense,
         int cnt_NA[], double *weight, bint NA_as_zero,
         double lam, double w, double lam_last,
@@ -156,7 +156,7 @@ cdef extern from "cmfrec.h":
         double *A, size_t lda,
         double *B, size_t ldb,
         int m, int n, int k,
-        long Xcsr_p[], int Xcsr_i[], double *Xcsr,
+        size_t Xcsr_p[], int Xcsr_i[], double *Xcsr,
         double lam,
         int nthreads,
         bint use_cg, int max_cg_steps, bint force_set_to_zero,
@@ -168,10 +168,10 @@ cdef extern from "cmfrec.h":
         double* A, double* B, double* C,
         int m, int m_u, int n, int p,
         int k, int k_main, int k_user, int k_item, int padding,
-        long Xcsr_p[], int Xcsr_i[], double* Xcsr,
+        size_t Xcsr_p[], int Xcsr_i[], double* Xcsr,
         double* Xfull, bint full_dense, bint near_dense,
         int cnt_NA_x[], double* weight, bint NA_as_zero_X,
-        long U_csr_p[], int U_csr_i[], double* U_csr,
+        size_t U_csr_p[], int U_csr_i[], double* U_csr,
         double* U, int cnt_NA_u[],
         bint full_dense_u, bint near_dense_u, bint NA_as_zero_U,
         double lam, double w_main, double w_user, double lam_last,
@@ -186,8 +186,8 @@ cdef extern from "cmfrec.h":
         double *A, double *B, double *C,
         int m, int m_u, int n, int p,
         int k, int k_main, int k_user, int k_item,
-        long Xcsr_p[], int Xcsr_i[], double *Xcsr,
-        long U_csr_p[], int U_csr_i[], double *U_csr,
+        size_t Xcsr_p[], int Xcsr_i[], double *Xcsr,
+        size_t U_csr_p[], int U_csr_i[], double *U_csr,
         double *U, int cnt_NA_u[],
         double full_dense_u, double near_dense_u, double NA_as_zero_U,
         double lam, double w_main, double w_user,
@@ -202,18 +202,18 @@ cdef extern from "cmfrec.h":
         int ixA[], int ixB[], double *X,
         size_t nnz, int m, int n, int k,
         double *Xfull, bint full_dense,
-        long Xcsr_p[], int Xcsr_i[], double *Xcsr,
-        long Xcsc_p[], int Xcsc_i[], double *Xcsc,
+        size_t Xcsr_p[], int Xcsr_i[], double *Xcsr,
+        size_t Xcsc_p[], int Xcsc_i[], double *Xcsc,
         double *weight, double *weightR, double *weightC,
         bint user_bias, bint item_bias,
         bint add_intercepts,
         double lam, double *lam_unique,
         double *U, int p,
         double *II, int q,
-        long U_csr_p[], int U_csr_i[], double *U_csr,
-        long U_csc_p[], int U_csc_i[], double *U_csc,
-        long I_csr_p[], int I_csr_i[], double *I_csr,
-        long I_csc_p[], int I_csc_i[], double *I_csc,
+        size_t U_csr_p[], int U_csr_i[], double *U_csr,
+        size_t U_csc_p[], int U_csc_i[], double *U_csc,
+        size_t I_csr_p[], int I_csr_i[], double *I_csr,
+        size_t I_csc_p[], int I_csc_i[], double *I_csc,
         int k_main, int k_sec,
         double w_user, double w_item,
         int nthreads,
@@ -258,8 +258,8 @@ cdef extern from "cmfrec.h":
         int m_bias, int n_bias,
         int ixA[], int ixB[], double *X, size_t nnz,
         double *Xfull, double *Xtrans,
-        long Xcsr_p[], int Xcsr_i[], double *Xcsr,
-        long Xcsc_p[], int Xcsc_i[], double *Xcsc,
+        size_t Xcsr_p[], int Xcsr_i[], double *Xcsr,
+        size_t Xcsc_p[], int Xcsc_i[], double *Xcsc,
         int nthreads
     )
 
@@ -267,8 +267,8 @@ cdef extern from "cmfrec.h":
         double *col_means,
         double *Xfull, int m, int n,
         int ixA[], int ixB[], double *X, size_t nnz,
-        long Xcsr_p[], int Xcsr_i[], double *Xcsr,
-        long Xcsc_p[], int Xcsc_i[], double *Xcsc,
+        size_t Xcsr_p[], int Xcsr_i[], double *Xcsr,
+        size_t Xcsc_p[], int Xcsc_i[], double *Xcsc,
         int nthreads
     )
 
@@ -493,10 +493,10 @@ def py_fun_grad_classic(
         np.ndarray[int, ndim=1] ixB,
         np.ndarray[double, ndim=1] X,
         np.ndarray[double, ndim=2] Xfull,
-        np.ndarray[long, ndim=1] Xcsr_p,
+        np.ndarray[size_t, ndim=1] Xcsr_p,
         np.ndarray[int, ndim=1] Xcsr_i,
         np.ndarray[double, ndim=1] Xcsr,
-        np.ndarray[long, ndim=1] Xcsc_p,
+        np.ndarray[size_t, ndim=1] Xcsc_p,
         np.ndarray[int, ndim=1] Xcsc_i,
         np.ndarray[double, ndim=1] Xcsc,
         np.ndarray[double, ndim=1] weight,
@@ -536,10 +536,10 @@ def py_fun_grad_classic(
         ptr_X = &X[0]
         nnz = X.shape[0]
 
-    cdef long *ptr_Xcsr_p = NULL
+    cdef size_t *ptr_Xcsr_p = NULL
     cdef int *ptr_Xcsr_i = NULL
     cdef double *ptr_Xcsr = NULL
-    cdef long *ptr_Xcsc_p = NULL
+    cdef size_t *ptr_Xcsc_p = NULL
     cdef int *ptr_Xcsc_i = NULL
     cdef double *ptr_Xcsc = NULL
     if Xcsr.shape[0]:
@@ -868,7 +868,7 @@ def py_optimizeA(
     np.ndarray[double, ndim=2] B,
     int m, int n, int k,
     int lda, int ldb,
-    np.ndarray[long, ndim=1] Xcsr_p,
+    np.ndarray[size_t, ndim=1] Xcsr_p,
     np.ndarray[int, ndim=1] Xcsr_i,
     np.ndarray[double, ndim=1] Xcsr,
     np.ndarray[double, ndim=2] Xfull,
@@ -882,7 +882,7 @@ def py_optimizeA(
     np.ndarray[double, ndim=1] buffer_lbfgs_iter
     ):
 
-    cdef long *ptr_indptr = NULL
+    cdef size_t *ptr_indptr = NULL
     cdef int *ptr_indices = NULL
     cdef double *ptr_values = NULL
     cdef double *ptr_Xfull = NULL
@@ -930,12 +930,12 @@ def py_optimizeA_collective(
     int m, int n,
     int k, int k_user, int k_item, int k_main,
     int m_u, int p,
-    np.ndarray[long, ndim=1] Xcsr_p,
+    np.ndarray[size_t, ndim=1] Xcsr_p,
     np.ndarray[int, ndim=1] Xcsr_i,
     np.ndarray[double, ndim=1] Xcsr,
     np.ndarray[double, ndim=2] Xfull,
     np.ndarray[double, ndim=1] weight,
-    np.ndarray[long, ndim=1] U_csr_p,
+    np.ndarray[size_t, ndim=1] U_csr_p,
     np.ndarray[int, ndim=1] U_csr_i,
     np.ndarray[double, ndim=1] U_csr,
     np.ndarray[double, ndim=2] U,
@@ -951,7 +951,7 @@ def py_optimizeA_collective(
     cdef np.ndarray[int, ndim=1] cnt_NA_x
     cdef bint full_dense = 0
     cdef int *ptr_cnt_NA_x = NULL
-    cdef long *ptr_Xcsr_p = NULL
+    cdef size_t *ptr_Xcsr_p = NULL
     cdef int *ptr_Xcsr_i = NULL
     cdef double *ptr_Xcsr = NULL
     cdef double *ptr_Xfull = NULL
@@ -977,7 +977,7 @@ def py_optimizeA_collective(
     cdef np.ndarray[int, ndim=1] cnt_NA_u
     cdef bint full_dense_u = 0
     cdef int *ptr_cnt_NA_u = NULL
-    cdef long *ptr_Ucsr_p = NULL
+    cdef size_t *ptr_Ucsr_p = NULL
     cdef int *ptr_Ucsr_i = NULL
     cdef double *ptr_Ucsr = NULL
     cdef double *ptr_U = NULL
@@ -1016,7 +1016,7 @@ def py_optimizeA_implicit(
     np.ndarray[double, ndim=2] A,
     np.ndarray[double, ndim=2] B,
     int m, int n, int k,
-    np.ndarray[long, ndim=1] Xcsr_p,
+    np.ndarray[size_t, ndim=1] Xcsr_p,
     np.ndarray[int, ndim=1] Xcsr_i,
     np.ndarray[double, ndim=1] Xcsr,
     double lam, double alpha, double w,
@@ -1049,10 +1049,10 @@ def py_optimizeA_collective_implicit(
         int m, int n,
         int k, int k_user, int k_item, int k_main,
         int m_u, int p,
-        np.ndarray[long, ndim=1] Xcsr_p,
+        np.ndarray[size_t, ndim=1] Xcsr_p,
         np.ndarray[int, ndim=1] Xcsr_i,
         np.ndarray[double, ndim=1] Xcsr,
-        np.ndarray[long, ndim=1] U_csr_p,
+        np.ndarray[size_t, ndim=1] U_csr_p,
         np.ndarray[int, ndim=1] U_csr_i,
         np.ndarray[double, ndim=1] U_csr,
         np.ndarray[double, ndim=2] U,
@@ -1063,7 +1063,7 @@ def py_optimizeA_collective_implicit(
         np.ndarray[double, ndim=1] buffer_lbfgs_iter
     ):
 
-    cdef long *ptr_Xcsr_p = NULL
+    cdef size_t *ptr_Xcsr_p = NULL
     cdef int *ptr_Xcsr_i = NULL
     cdef double *ptr_Xcsr = NULL
     ptr_Xcsr_p = &Xcsr_p[0]
@@ -1076,7 +1076,7 @@ def py_optimizeA_collective_implicit(
     cdef np.ndarray[int, ndim=1] cnt_NA_u
     cdef bint full_dense_u = 0
     cdef int *ptr_cnt_NA_u = NULL
-    cdef long *ptr_Ucsr_p = NULL
+    cdef size_t *ptr_Ucsr_p = NULL
     cdef int *ptr_Ucsr_i = NULL
     cdef double *ptr_Ucsr = NULL
     cdef double *ptr_U = NULL
@@ -1118,17 +1118,17 @@ def py_fun_grad_offsets(
         np.ndarray[int, ndim=1] ixB,
         np.ndarray[double, ndim=1] X,
         np.ndarray[double, ndim=2] U,
-        np.ndarray[long, ndim=1] U_csr_p,
+        np.ndarray[size_t, ndim=1] U_csr_p,
         np.ndarray[int, ndim=1] U_csr_i,
         np.ndarray[double, ndim=1] U_csr,
-        np.ndarray[long, ndim=1] U_csc_p,
+        np.ndarray[size_t, ndim=1] U_csc_p,
         np.ndarray[int, ndim=1] U_csc_i,
         np.ndarray[double, ndim=1] U_csc,
         np.ndarray[double, ndim=2] II,
-        np.ndarray[long, ndim=1] I_csr_p,
+        np.ndarray[size_t, ndim=1] I_csr_p,
         np.ndarray[int, ndim=1] I_csr_i,
         np.ndarray[double, ndim=1] I_csr,
-        np.ndarray[long, ndim=1] I_csc_p,
+        np.ndarray[size_t, ndim=1] I_csc_p,
         np.ndarray[int, ndim=1] I_csc_i,
         np.ndarray[double, ndim=1] I_csc,
         np.ndarray[double, ndim=1] weight,
@@ -1162,10 +1162,10 @@ def py_fun_grad_offsets(
         nnz = X.shape[0]
 
     cdef double *ptr_U = NULL
-    cdef long *ptr_Ucsr_p = NULL
+    cdef size_t *ptr_Ucsr_p = NULL
     cdef int *ptr_Ucsr_i = NULL
     cdef double *ptr_Ucsr = NULL
-    cdef long *ptr_Ucsc_p = NULL
+    cdef size_t *ptr_Ucsc_p = NULL
     cdef int *ptr_Ucsc_i = NULL
     cdef double *ptr_Ucsc = NULL
     if U.shape[0]:
@@ -1179,10 +1179,10 @@ def py_fun_grad_offsets(
         ptr_Ucsc = &U_csc[0]
 
     cdef double *ptr_I = NULL
-    cdef long *ptr_Icsr_p = NULL
+    cdef size_t *ptr_Icsr_p = NULL
     cdef int *ptr_Icsr_i = NULL
     cdef double *ptr_Icsr = NULL
-    cdef long *ptr_Icsc_p = NULL
+    cdef size_t *ptr_Icsc_p = NULL
     cdef int *ptr_Icsc_i = NULL
     cdef double *ptr_Icsc = NULL
     if II.shape[0]:
@@ -1202,8 +1202,8 @@ def py_fun_grad_offsets(
         ptr_ixA, ptr_ixB, ptr_X,
         nnz, m, n, k,
         ptr_Xfull, full_dense,
-        <long*>NULL, <int*>NULL, <double*>NULL,
-        <long*>NULL, <int*>NULL, <double*>NULL,
+        <size_t*>NULL, <int*>NULL, <double*>NULL,
+        <size_t*>NULL, <int*>NULL, <double*>NULL,
         ptr_weight, <double*>NULL, <double*>NULL,
         user_bias, item_bias,
         add_intercepts,
@@ -1315,10 +1315,10 @@ def py_initialize_biases(
         np.ndarray[int, ndim=1] ixA,
         np.ndarray[int, ndim=1] ixB,
         np.ndarray[double, ndim=1] X,
-        np.ndarray[long, ndim=1] Xcsr_p,
+        np.ndarray[size_t, ndim=1] Xcsr_p,
         np.ndarray[int, ndim=1] Xcsr_i,
         np.ndarray[double, ndim=1] Xcsr,
-        np.ndarray[long, ndim=1] Xcsc_p,
+        np.ndarray[size_t, ndim=1] Xcsc_p,
         np.ndarray[int, ndim=1] Xcsc_i,
         np.ndarray[double, ndim=1] Xcsc,
         int m, int n, bint user_bias, bint item_bias,
@@ -1340,10 +1340,10 @@ def py_initialize_biases(
     cdef int *ptr_ixA = NULL
     cdef int *ptr_ixB = NULL
     cdef double *ptr_X = NULL
-    cdef long *ptr_Xcsr_p = NULL
+    cdef size_t *ptr_Xcsr_p = NULL
     cdef int *ptr_Xcsr_i = NULL
     cdef double *ptr_Xcsr = NULL
-    cdef long *ptr_Xcsc_p = NULL
+    cdef size_t *ptr_Xcsc_p = NULL
     cdef int *ptr_Xcsc_i = NULL
     cdef double *ptr_Xcsc = NULL
     if Xfull.shape[0]:
@@ -1386,10 +1386,10 @@ def py_center_by_cols(
         np.ndarray[int, ndim=1] ixA,
         np.ndarray[int, ndim=1] ixB,
         np.ndarray[double, ndim=1] X,
-        np.ndarray[long, ndim=1] Xcsr_p,
+        np.ndarray[size_t, ndim=1] Xcsr_p,
         np.ndarray[int, ndim=1] Xcsr_i,
         np.ndarray[double, ndim=1] Xcsr,
-        np.ndarray[long, ndim=1] Xcsc_p,
+        np.ndarray[size_t, ndim=1] Xcsc_p,
         np.ndarray[int, ndim=1] Xcsc_i,
         np.ndarray[double, ndim=1] Xcsc,
         int m, int n,
@@ -1401,10 +1401,10 @@ def py_center_by_cols(
     cdef int *ptr_ixA = NULL
     cdef int *ptr_ixB = NULL
     cdef double *ptr_X = NULL
-    cdef long *ptr_Xcsr_p = NULL
+    cdef size_t *ptr_Xcsr_p = NULL
     cdef int *ptr_Xcsr_i = NULL
     cdef double *ptr_Xcsr = NULL
-    cdef long *ptr_Xcsc_p = NULL
+    cdef size_t *ptr_Xcsc_p = NULL
     cdef int *ptr_Xcsc_i = NULL
     cdef double *ptr_Xcsc = NULL
     if Xfull.shape[0]:
