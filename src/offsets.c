@@ -1839,7 +1839,7 @@ int offsets_factors_cold_multiple
 
     else
     {
-        if (U_sp != NULL && U_csr == NULL) {
+        if (nnz_U && U_csr == NULL) {
             retval = coo_to_csr_plus_alloc(
                         U_row, U_col, U_sp, (FPnum*)NULL,
                         m, p, nnz_U,
@@ -1945,7 +1945,7 @@ int offsets_factors_warm_multiple
             cblas_tscal(n, alpha, X, 1);
     }
 
-    if (U_sp != NULL && U_csr == NULL) {
+    if (U == NULL && nnz_U && U_csr == NULL) {
         retval = coo_to_csr_plus_alloc(
                     U_row, U_col, U_sp, (FPnum*)NULL,
                     m, p, nnz_U,

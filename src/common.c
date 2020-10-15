@@ -1689,7 +1689,7 @@ FPnum wrapper_fun_grad_Bdense
 
 void buffer_size_optimizeA
 (
-    size_t *buffer_size, size_t *buffer_lbfgs_size,
+    size_t *buffer_size,
     int m, int n, int k, int lda, int nthreads,
     bool do_B, bool NA_as_zero,
     bool use_cg, bool finalize_chol,
@@ -1701,10 +1701,8 @@ void buffer_size_optimizeA
     {
         size_t buffer_size_cg = 0;
         size_t buffer_size_chol = 0;
-        size_t buffer_lbfgs_size_cg = 0;
-        size_t buffer_lbfgs_size_chol = 0;
         buffer_size_optimizeA(
-            &buffer_size_chol, &buffer_lbfgs_size_chol,
+            &buffer_size_chol,
             m, n, k, lda, nthreads,
             do_B, NA_as_zero,
             true, false,
@@ -1712,7 +1710,7 @@ void buffer_size_optimizeA
             has_dense, has_weight
         );
         buffer_size_optimizeA(
-            &buffer_size_cg, &buffer_lbfgs_size_cg,
+            &buffer_size_cg,
             m, n, k, lda, nthreads,
             do_B, NA_as_zero,
             false, false,
@@ -1721,7 +1719,6 @@ void buffer_size_optimizeA
         );
 
         *buffer_size = max2(buffer_size_cg, buffer_size_chol);
-        *buffer_lbfgs_size = max2(buffer_lbfgs_size_cg, buffer_lbfgs_size_chol);
         return;
     }
 
@@ -1741,7 +1738,6 @@ void buffer_size_optimizeA
 
     else if (has_dense)
     {
-        *buffer_lbfgs_size = 4;
         *buffer_size = (size_t)m * (size_t)n;
         *buffer_size += (size_t)13*((size_t)m * (size_t)lda - (size_t)(lda-k));
     }
@@ -1811,8 +1807,7 @@ void optimizeA
     bool do_B, bool is_first_iter,
     int nthreads,
     bool use_cg, int max_cg_steps,
-    FPnum *restrict buffer_FPnum,
-    iteration_data_t *buffer_lbfgs_iter
+    FPnum *restrict buffer_FPnum
 )
 {
     /* TODO: handle case of all-missing when the values are not reset to zero */
@@ -1933,7 +1928,6 @@ void optimizeA
         }
     }
 
-    /* TODO: avoid using L-BFGS when using 'use_cg' */
 
     /* Case 2: X is dense, but has many missing values or has weights.
        Here will do them all individually, pre-calculating only
@@ -1941,120 +1935,77 @@ void optimizeA
        in case some rows have few missing values. */
     else if (Xfull != NULL)
     {
-        // FPnum *restrict bufferBtB = buffer_FPnum;
-        // FPnum *restrict bufferX = bufferBtB + square(k);
-        // FPnum *restrict bufferW = bufferX + (do_B? (n*nthreads) : (0));
-        // FPnum *restrict buffer_remainder = bufferW + ((do_B && weight != NULL)?
-        //                                               (n*nthreads) : (0));
+        FPnum *restrict bufferBtB = NULL;
+        if (weight == NULL) {
+            bufferBtB = buffer_FPnum;
+            buffer_FPnum += square(k);
+        }
+        FPnum *restrict bufferX = NULL;
+        if (do_B) {
+            bufferX = buffer_FPnum;
+            buffer_FPnum += (size_t)n * (size_t)nthreads;
+        }
+        FPnum *restrict bufferW = NULL;
+        if (do_B && weight != NULL) {
+            bufferW = buffer_FPnum;
+            buffer_FPnum += (size_t)n * (size_t)nthreads;
+        }
+        FPnum *restrict buffer_remainder = buffer_FPnum;
 
-        // if (weight == NULL)
-        //     bufferW = NULL;
 
-        // cblas_tsyrk(CblasRowMajor, CblasUpper, CblasTrans,
-        //             k, n,
-        //             1., B, ldb,
-        //             0., bufferBtB, k);
-        // add_to_diag(bufferBtB, lam, k);
-        // if (lam_last != lam) bufferBtB[square(k)-1] += (lam_last - lam);
-
-        // #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
-        //         shared(Xfull, weight, do_B, m, n, k, A, lda, B, ldb, \
-        //                lam, lam_last, bufferBtB, cnt_NA, buffer_remainder, \
-        //                use_cg, max_cg_steps) \
-        //         firstprivate(bufferX, bufferW)
-        // for (size_t_for ix = 0; ix < (size_t)m; ix++)
-        // {
-        //     if (!do_B) {
-        //         bufferX = Xfull + ix*(size_t)n;
-        //         if (weight != NULL)
-        //             bufferW = weight + ix*(size_t)n;
-        //     }
-        //     else {
-        //         cblas_tcopy(n, Xfull + ix, m,
-        //                     bufferX + ((size_t)n*(size_t)omp_get_thread_num()), 1);
-        //         if (weight != NULL)
-        //             cblas_tcopy(n, weight + ix, m,
-        //                         bufferW + ((size_t)n*(size_t)omp_get_thread_num()), 1);
-        //     }
-
-        //     /* TODO: revise the size of the thread-local space */
-        //     factors_closed_form(
-        //         A + ix*(size_t)lda, k,
-        //         B, n, ldb,
-        //         bufferX + (do_B? ((size_t)n*(size_t)omp_get_thread_num()) : ((size_t)0)), cnt_NA[ix]==0,
-        //         (FPnum*)NULL, (int*)NULL, (size_t)0,
-        //         (weight != NULL)?
-        //             (bufferW + (do_B? ((size_t)n*(size_t)omp_get_thread_num()) : ((size_t)0)))
-        //               :
-        //             ((FPnum*)NULL),
-        //         buffer_remainder
-        //          + (((size_t)n*2 + 3*(size_t)square(k)
-        //               + (use_cg? (size_t)6*(size_t)k : (size_t)0))
-        //             * (size_t)omp_get_thread_num()),
-        //         lam, 1., lam_last,
-        //         (FPnum*)NULL,
-        //         bufferBtB, cnt_NA[ix], 0,
-        //         (FPnum*)NULL, false,
-        //         use_cg, max_cg_steps,
-        //         false
-        //     );
-        // }
-        size_t nvars = (size_t)m * (size_t)lda - (size_t)(lda-k);
-        size_t m_lbfgs = 4;
-        size_t past = 0;
-        FPnum *restrict buffer_lbfgs = buffer_FPnum + (size_t)m*(size_t)n;
-        lbfgs_parameter_t lbfgs_params = {
-            m_lbfgs, 1e-5, past, 1e-5,
-            75, LBFGS_LINESEARCH_MORETHUENTE, 20,
-            1e-20, 1e20, 1e-4, 0.9, 0.9, 1.0e-16,
-            0.0, 0, -1,
-        };
-        lbfgs_progress_t callback = (lbfgs_progress_t)NULL;
-        if (is_first_iter)
-            set_to_zero(A, nvars, nthreads);
-        if (!do_B) {
-            data_fun_grad_Adense data = {
-                lda,
-                B, ldb,
-                m, n, k,
-                Xfull, weight,
-                lam, 1., lam_last,
-                nthreads,
-                buffer_FPnum
-            };
-            lbfgs(
-                nvars,
-                A,
-                (FPnum*)NULL,
-                wrapper_fun_grad_Adense,
-                callback,
-                (void*) &data,
-                &lbfgs_params,
-                buffer_lbfgs,
-                buffer_lbfgs_iter
-            );
+        if (bufferBtB != NULL)
+        {
+            cblas_tsyrk(CblasRowMajor, CblasUpper, CblasTrans,
+                        k, n,
+                        1., B, ldb,
+                        0., bufferBtB, k);
+            add_to_diag(bufferBtB, lam, k);
+            if (lam_last != lam) bufferBtB[square(k)-1] += (lam_last - lam);
         }
 
-        else {
-            data_fun_grad_Bdense data = {
-                B, ldb,
-                lda,
-                n, m, k,
-                Xfull, weight,
+        size_t size_buffer = (size_t)square(k) + (use_cg? (3*k) : 0);
+
+        #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
+                shared(Xfull, weight, do_B, m, n, k, A, lda, B, ldb, \
+                       lam, lam_last, bufferBtB, cnt_NA, buffer_remainder, \
+                       use_cg, max_cg_steps) \
+                firstprivate(bufferX, bufferW)
+        for (size_t_for ix = 0; ix < (size_t)m; ix++)
+        {
+            if (!do_B) {
+                bufferX = Xfull + ix*(size_t)n;
+                if (weight != NULL)
+                    bufferW = weight + ix*(size_t)n;
+            }
+            else {
+                cblas_tcopy(n, Xfull + ix, m,
+                            bufferX
+                                + ((size_t)n*(size_t)omp_get_thread_num()), 1);
+                if (weight != NULL)
+                    cblas_tcopy(n, weight + ix, m,
+                                bufferW
+                            + ((size_t)n*(size_t)omp_get_thread_num()), 1);
+            }
+
+            factors_closed_form(
+                A + ix*(size_t)lda, k,
+                B, n, ldb,
+                bufferX + (do_B? ((size_t)n*(size_t)omp_get_thread_num())
+                                    : ((size_t)0)),
+                cnt_NA[ix] == 0,
+                (FPnum*)NULL, (int*)NULL, (size_t)0,
+                (weight != NULL)?
+                    (bufferW + (do_B? ((size_t)n*(size_t)omp_get_thread_num())
+                                        : ((size_t)0)))
+                      :
+                    ((FPnum*)NULL),
+                buffer_remainder + size_buffer*(size_t)omp_get_thread_num(),
                 lam, 1., lam_last,
-                nthreads,
-                buffer_FPnum
-            };
-            lbfgs(
-                nvars,
-                A,
                 (FPnum*)NULL,
-                wrapper_fun_grad_Bdense,
-                callback,
-                (void*) &data,
-                &lbfgs_params,
-                buffer_lbfgs,
-                buffer_lbfgs_iter
+                bufferBtB, cnt_NA[ix], 0,
+                (FPnum*)NULL, false,
+                use_cg, max_cg_steps,
+                false
             );
         }
     }

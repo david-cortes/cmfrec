@@ -3235,7 +3235,7 @@ FPnum wrapper_fun_grad_Adense_col
 
 void buffer_size_optimizeA_collective
 (
-    size_t *buffer_size, size_t *buffer_lbfgs_size,
+    size_t *buffer_size,
     int m, int n, int k, int k_user, int k_main, int padding,
     int m_u, int p, int nthreads,
     bool do_B, bool NA_as_zero_X, bool NA_as_zero_U,
@@ -3249,10 +3249,8 @@ void buffer_size_optimizeA_collective
     {
         size_t buffer_size_cg = 0;
         size_t buffer_size_chol = 0;
-        size_t buffer_lbfgs_size_cg = 0;
-        size_t buffer_lbfgs_size_chol = 0;
         buffer_size_optimizeA_collective(
-            &buffer_size_cg, &buffer_lbfgs_size_cg,
+            &buffer_size_cg,
             m, n, k, k_user, k_main, padding,
             m_u, p, nthreads,
             do_B, NA_as_zero_X, NA_as_zero_U,
@@ -3262,7 +3260,7 @@ void buffer_size_optimizeA_collective
             full_dense_u, near_dense_u, has_dense_u
         );
         buffer_size_optimizeA_collective(
-            &buffer_size_chol, &buffer_lbfgs_size_chol,
+            &buffer_size_chol,
             m, n, k, k_user, k_main, padding,
             m_u, p, nthreads,
             do_B, NA_as_zero_X, NA_as_zero_U,
@@ -3273,7 +3271,6 @@ void buffer_size_optimizeA_collective
         );
 
         *buffer_size = max2(buffer_size_cg, buffer_size_chol);
-        *buffer_lbfgs_size = max2(buffer_lbfgs_size_cg, buffer_lbfgs_size_chol);
         return;
     }
 
@@ -3300,7 +3297,6 @@ void buffer_size_optimizeA_collective
                 &&
              (has_dense || !NA_as_zero_X) && (has_dense_u || !NA_as_zero_U))
     {
-        *buffer_lbfgs_size = 4;
         *buffer_size = (size_t)min2(m, m_u) * (size_t)(k_user+k+k_main+padding);
         *buffer_size *= (size_t)13;
         *buffer_size += max2((has_dense?
@@ -3345,31 +3341,27 @@ void buffer_size_optimizeA_collective
     if (m > m_u)
     {
         size_t alt_size = 0;
-        size_t alt_lbfgs = 0;
         buffer_size_optimizeA(
-            &alt_size, &alt_lbfgs,
+            &alt_size,
             m-m_u, n, k+k_main, k_user+k+k_main+padding, nthreads,
             do_B, NA_as_zero_X, use_cg, finalize_chol,
             full_dense, near_dense,
             has_dense, has_weight
         );
         *buffer_size = max2(*buffer_size, alt_size);
-        *buffer_lbfgs_size = max2(*buffer_lbfgs_size, alt_lbfgs);
     }
 
     else if (m_u > m)
     {
         size_t alt_size = 0;
-        size_t alt_lbfgs = 0;
         buffer_size_optimizeA(
-            &alt_size, &alt_lbfgs,
+            &alt_size,
             m_u-m, p, k_user+k, k_user+k+k_main+padding, nthreads,
             false, NA_as_zero_U, use_cg, finalize_chol,
             full_dense_u, near_dense_u,
             has_dense_u, false
         );
         *buffer_size = max2(*buffer_size, alt_size);
-        *buffer_lbfgs_size = max2(*buffer_lbfgs_size, alt_lbfgs);
     }
 }
 
@@ -3389,8 +3381,7 @@ void optimizeA_collective
     bool do_B,
     int nthreads,
     bool use_cg, int max_cg_steps, bool is_first_iter,
-    FPnum *restrict buffer_FPnum,
-    iteration_data_t *buffer_lbfgs_iter
+    FPnum *restrict buffer_FPnum
 )
 {
     #if defined(_OPENMP) && \
@@ -3447,8 +3438,7 @@ void optimizeA_collective
             false, false,
             nthreads,
             use_cg, max_cg_steps,
-            buffer_FPnum,
-            buffer_lbfgs_iter
+            buffer_FPnum
         );
     }
 
@@ -3471,8 +3461,7 @@ void optimizeA_collective
             false, false,
             nthreads,
             use_cg, max_cg_steps,
-            buffer_FPnum,
-            buffer_lbfgs_iter
+            buffer_FPnum
         );
     }
 
@@ -3650,64 +3639,6 @@ void optimizeA_collective
         }
     }
 
-    /* Case 2: both matrices are dense, but with many missing values,
-       or at least one of them has many missing values, or there are weights.
-       In this case, it's faster to use a gradient-based approach. */
-    else if (
-             ((Xfull != NULL && ((!full_dense && !near_dense) || weight!=NULL))
-                ||
-             (U != NULL && !full_dense_u && !near_dense_u &&
-              p > n && (double)m_u >= .5 * (double)m_x))
-                &&
-             (Xfull != NULL || !NA_as_zero_X) && (U != NULL || !NA_as_zero_U)
-            )
-    {
-        size_t nvars = (size_t)m * (size_t)(k_user + k + k_main + padding);
-        size_t m_lbfgs = 4;
-        size_t past = 0;
-        FPnum *restrict buffer_lbfgs = buffer_FPnum + (
-                                        max2(
-                                            ((Xfull != NULL)?
-                                                ((size_t)m*(size_t)n) : 0),
-                                            ((U != NULL)?
-                                                ((size_t)m*(size_t)p) : 0)
-                                            )
-                                        );
-        lbfgs_parameter_t lbfgs_params = {
-            m_lbfgs, 1e-5, past, 1e-5,
-            100, LBFGS_LINESEARCH_MORETHUENTE, 30,
-            1e-20, 1e20, 1e-4, 0.9, 0.9, 1.0e-16,
-            0.0, 0, -1,
-        };
-        lbfgs_progress_t callback = (lbfgs_progress_t)NULL;
-        data_fun_grad_Adense_col data = {
-            B, C,
-            m, m, n, p,
-            k, k_main, k_user, k_item, padding,
-            Xfull, full_dense,
-            Xcsr_p, Xcsr_i, Xcsr,
-            weight,
-            U_csr_p, U_csr_i, U_csr,
-            U, full_dense_u,
-            lam, w_main, w_user, lam_last,
-            do_B,
-            nthreads,
-            buffer_FPnum
-        };
-        lbfgs(
-            nvars,
-            A,
-            (FPnum*)NULL,
-            wrapper_fun_grad_Adense_col,
-            callback,
-            (void*) &data,
-            &lbfgs_params,
-            buffer_lbfgs,
-            buffer_lbfgs_iter
-        );
-
-    }
-
 
     /* General case - construct one-by-one, use precomputed matrices
        when beneficial, determined on a case-by-case basis. */
@@ -3715,20 +3646,12 @@ void optimizeA_collective
     {
         bool prefer_BtB = true;
         bool prefer_CtC = true;
-        if (use_cg)
-        {
-            if (Xfull == NULL && Xcsr != NULL && !NA_as_zero_X)
-                prefer_BtB = false;
-            if (Xfull != NULL && weight != NULL)
-                prefer_BtB = false;
-            if (U == NULL && U_csr != NULL && !NA_as_zero_U)
-                prefer_CtC = false;
-        }
-
-        else {
-            if (weight != NULL)
-                prefer_BtB = false;
-        }
+        if (Xfull == NULL && Xcsr != NULL && !NA_as_zero_X)
+            prefer_BtB = false;
+        if (Xfull != NULL && weight != NULL)
+            prefer_BtB = false;
+        if (U == NULL && U_csr != NULL && !NA_as_zero_U)
+            prefer_CtC = false;
 
         FPnum *restrict bufferBtB = NULL;
         FPnum *restrict bufferCtC = NULL;
@@ -3744,14 +3667,14 @@ void optimizeA_collective
         FPnum *restrict bufferX = buffer_FPnum;
         FPnum *restrict bufferX_zeros = bufferX + (do_B?
                                                    ((size_t)n*(size_t)nthreads)
-                                                   : (0));
+                                                   : ((size_t)0));
         FPnum *restrict bufferX_orig = bufferX;
         FPnum *restrict bufferW = bufferX_zeros + ((do_B && weight != NULL)?
                                                     (n) : (0));
         FPnum *restrict buffer_remainder = bufferW + (
                                                 (do_B && weight != NULL)?
                                                 ((size_t)n*(size_t)nthreads)
-                                                : (0));
+                                                : ((size_t)0));
         if (weight == NULL) bufferW = NULL;
         bool add_X = true;
         bool add_U = true;
@@ -3904,8 +3827,7 @@ void optimizeA_collective_implicit
     FPnum lam, FPnum w_main, FPnum w_user,
     int nthreads,
     bool use_cg, int max_cg_steps, bool is_first_iter,
-    FPnum *restrict buffer_FPnum,
-    iteration_data_t *buffer_lbfgs_iter
+    FPnum *restrict buffer_FPnum
 )
 {
     int k_totA = k_user + k + k_main;
@@ -4939,13 +4861,11 @@ int fit_collective_explicit_als
 
     int retval = 0;
     FPnum *restrict buffer_FPnum = NULL;
-    iteration_data_t *buffer_lbfgs_iter = NULL;
     size_t size_bufferA = 0;
     size_t size_bufferB = 0;
     size_t size_bufferC = 0;
     size_t size_bufferD = 0;
     size_t size_buffer = 0;
-    size_t size_buffer_lbfgs = 0;
 
     FPnum *restrict Xtrans = NULL;
     FPnum *restrict Wtrans = NULL;
@@ -5159,7 +5079,7 @@ int fit_collective_explicit_als
     /* Sizes of the temporary arrays */
     if (U != NULL || nnz_U)
         buffer_size_optimizeA(
-            &size_bufferC, &size_buffer_lbfgs,
+            &size_bufferC,
             p, m_u, k_user+k, k_user+k, nthreads,
             false, NA_as_zero_U, use_cg, finalize_chol,
             full_dense_u, near_dense_u_col,
@@ -5167,7 +5087,7 @@ int fit_collective_explicit_als
         );
     if (II != NULL || nnz_I)
         buffer_size_optimizeA(
-            &size_bufferD, &size_buffer_lbfgs,
+            &size_bufferD,
             q, n_i, k_item+k, k_item+k, nthreads,
             false, NA_as_zero_I, use_cg, finalize_chol,
             full_dense_i, near_dense_i_col,
@@ -5176,7 +5096,7 @@ int fit_collective_explicit_als
 
     if (U != NULL || nnz_U)
         buffer_size_optimizeA_collective(
-            &size_bufferA, &size_buffer_lbfgs,
+            &size_bufferA,
             m, n, k, k_user, k_main+(int)user_bias, paddingA,
             m_u, p, nthreads,
             false, NA_as_zero_X, NA_as_zero_U, use_cg, finalize_chol,
@@ -5186,7 +5106,7 @@ int fit_collective_explicit_als
         );
     else
         buffer_size_optimizeA(
-            &size_bufferA, &size_buffer_lbfgs,
+            &size_bufferA,
             m, n, k+k_main+(int)user_bias,
             k_user+k+k_main+(int)(user_bias||item_bias),
             nthreads,
@@ -5197,7 +5117,7 @@ int fit_collective_explicit_als
 
     if (II != NULL || nnz_I)
         buffer_size_optimizeA_collective(
-            &size_bufferB, &size_buffer_lbfgs,
+            &size_bufferB,
             n, m, k, k_item, k_main+(int)item_bias, paddingB,
             n_i, q, nthreads,
             (Xfull != NULL && Xtrans == NULL),
@@ -5208,7 +5128,7 @@ int fit_collective_explicit_als
         );
     else
         buffer_size_optimizeA(
-            &size_bufferB, &size_buffer_lbfgs,
+            &size_bufferB,
             n, m, k+k_main+(int)item_bias,
             k_item+k+k_main+(int)(user_bias||item_bias),
             nthreads,
@@ -5227,15 +5147,6 @@ int fit_collective_explicit_als
         goto cleanup;
     }
 
-    if (size_buffer_lbfgs) {
-        buffer_lbfgs_iter = (iteration_data_t*)
-                             malloc(size_buffer_lbfgs*sizeof(iteration_data_t));
-        if (buffer_lbfgs_iter == NULL)
-        {
-            retval = 1;
-            goto cleanup;
-        }
-    }
 
     if (reset_values)
         retval = rnorm(values, nvars, seed, nthreads);
@@ -5309,8 +5220,7 @@ int fit_collective_explicit_als
                 iter == 0,
                 nthreads,
                 use_cg, max_cg_steps,
-                buffer_FPnum,
-                buffer_lbfgs_iter
+                buffer_FPnum
             );
             if (verbose) {
                 printf(" done\n");
@@ -5345,8 +5255,7 @@ int fit_collective_explicit_als
                 iter == 0,
                 nthreads,
                 use_cg, max_cg_steps,
-                buffer_FPnum,
-                buffer_lbfgs_iter
+                buffer_FPnum
             );
             if (verbose) {
                 printf(" done\n");
@@ -5415,7 +5324,7 @@ int fit_collective_explicit_als
                 (Xtrans != NULL)? (Xtrans) : (Xfull),
                 full_dense, near_dense_col,
                 cnt_NA_bycol,
-                (Xfull == NULL)? (weightC) : (weight),
+                (Xtrans != NULL)? (Wtrans) : ((Xfull == NULL)? weight:weightC),
                 NA_as_zero_X,
                 I_csr_p, I_csr_i, I_csr,
                 II, cnt_NA_i_byrow,
@@ -5426,8 +5335,7 @@ int fit_collective_explicit_als
                 Xfull != NULL && Xtrans == NULL,
                 nthreads,
                 use_cg, max_cg_steps, iter == 0,
-                buffer_FPnum,
-                buffer_lbfgs_iter
+                buffer_FPnum
             );
         else
             optimizeA(
@@ -5437,14 +5345,15 @@ int fit_collective_explicit_als
                 Xcsc_p, Xcsc_i, Xcsc,
                 (Xtrans != NULL)? (Xtrans) : (Xfull),
                 full_dense, near_dense_col,
-                cnt_NA_bycol, (FPnum*)NULL, NA_as_zero_X,
+                cnt_NA_bycol,
+                (Xtrans != NULL)? (Wtrans) : ((Xfull == NULL)? weight:weightC),
+                NA_as_zero_X,
                 (lam_unique == NULL)? (lam) : (lam_unique[3]), w_main,
                 (lam_unique == NULL)? (lam) : (lam_unique[1]),
                 Xfull != NULL && Xtrans == NULL, iter == 0,
                 nthreads,
                 use_cg, max_cg_steps,
-                buffer_FPnum,
-                buffer_lbfgs_iter
+                buffer_FPnum
             );
         if (verbose) {
             printf(" done\n");
@@ -5517,8 +5426,7 @@ int fit_collective_explicit_als
                 false,
                 nthreads,
                 use_cg, max_cg_steps, iter == 0,
-                buffer_FPnum,
-                buffer_lbfgs_iter
+                buffer_FPnum
             );
         else
             optimizeA(
@@ -5528,14 +5436,15 @@ int fit_collective_explicit_als
                 Xcsr_p, Xcsr_i, Xcsr,
                 Xfull,
                 full_dense, near_dense_row,
-                cnt_NA_byrow, (FPnum*)NULL, NA_as_zero_X,
+                cnt_NA_byrow,
+                (Xfull == NULL)? (weightR) : (weight),
+                NA_as_zero_X,
                 (lam_unique == NULL)? (lam) : (lam_unique[2]), w_main,
                 (lam_unique == NULL)? (lam) : (lam_unique[0]),
                 false, iter == 0,
                 nthreads,
                 use_cg, max_cg_steps,
-                buffer_FPnum,
-                buffer_lbfgs_iter
+                buffer_FPnum
             );
         if (verbose) {
             printf(" done\n");
@@ -5587,7 +5496,6 @@ int fit_collective_explicit_als
 
     cleanup:
         free(buffer_FPnum);
-        free(buffer_lbfgs_iter);
         free(Xtrans);
         free(Wtrans);
         free(Xcsr_p);
@@ -5682,15 +5590,12 @@ int fit_collective_implicit_als
 
     int retval = 0;
     FPnum *restrict buffer_FPnum = NULL;
-    iteration_data_t *buffer_lbfgs_iter = NULL;
     size_t size_bufferA = (size_t)(nthreads+2)*(size_t)square(k_user+k+k_main);
     size_t size_bufferB = (size_t)(nthreads+2)*(size_t)square(k_item+k+k_main);
     size_t size_bufferC = 0;
     size_t size_bufferD = 0;
     size_t size_buffer = 0;
-    size_t size_buffer_lbfgs = 0;
     size_t alt_size = 0;
-    size_t alt_lbfgs = 0;
 
     size_t *Xcsr_p = (size_t*)malloc(((size_t)m+(size_t)1)*sizeof(size_t));
     int *Xcsr_i = (int*)malloc(nnz*sizeof(int));
@@ -5755,7 +5660,7 @@ int fit_collective_implicit_als
     if (retval != 0) goto cleanup;
     if (U != NULL || nnz_U)
         buffer_size_optimizeA(
-            &size_bufferC, &size_buffer_lbfgs,
+            &size_bufferC,
             p, m_u, k_user+k, k_user+k, nthreads,
             false, NA_as_zero_U, use_cg, finalize_chol,
             full_dense_u, near_dense_u_col,
@@ -5778,7 +5683,7 @@ int fit_collective_implicit_als
     if (retval != 0) goto cleanup;
     if (II != NULL || nnz_I)
         buffer_size_optimizeA(
-            &size_bufferD, &size_buffer_lbfgs,
+            &size_bufferD,
             q, n_i, k_item+k, k_item+k, nthreads,
             false, NA_as_zero_I, use_cg, finalize_chol,
             full_dense_i, near_dense_i_col,
@@ -5792,26 +5697,24 @@ int fit_collective_implicit_als
 
     if (m_u > m) {
         buffer_size_optimizeA(
-            &alt_size, &alt_lbfgs,
+            &alt_size,
             m_u-m, p, k, k_user+k+k_main, nthreads,
             false, NA_as_zero_U, use_cg, finalize_chol,
             full_dense_u, near_dense_u_row,
             U != NULL, false
         );
         size_bufferA = max2(size_bufferA, alt_size);
-        size_buffer_lbfgs = max2(size_buffer_lbfgs, alt_lbfgs);
     }
 
     if (n_i > n) {
         buffer_size_optimizeA(
-            &alt_size, &alt_lbfgs,
+            &alt_size,
             n_i-n, q, k, k_item+k+k_main, nthreads,
             false, NA_as_zero_I, use_cg, finalize_chol,
             full_dense_i, near_dense_i_col,
             II != NULL, false
         );
         size_bufferA = max2(size_bufferA, alt_size);
-        size_buffer_lbfgs = max2(size_buffer_lbfgs, alt_lbfgs);
     }
 
     size_buffer = max2(max2(size_bufferA, size_bufferB),
@@ -5821,16 +5724,6 @@ int fit_collective_implicit_als
     {
         retval = 1;
         goto cleanup;
-    }
-
-    if (size_buffer_lbfgs) {
-        buffer_lbfgs_iter = (iteration_data_t*)
-                             malloc(size_buffer_lbfgs*sizeof(iteration_data_t));
-        if (buffer_lbfgs_iter == NULL)
-        {
-            retval = 1;
-            goto cleanup;
-        }
     }
 
     if (reset_values)
@@ -5883,8 +5776,7 @@ int fit_collective_implicit_als
                 iter == 0,
                 nthreads,
                 use_cg, max_cg_steps,
-                buffer_FPnum,
-                buffer_lbfgs_iter
+                buffer_FPnum
             );
             if (verbose) {
                 printf(" done\n");
@@ -5919,8 +5811,7 @@ int fit_collective_implicit_als
                 iter == 0,
                 nthreads,
                 use_cg, max_cg_steps,
-                buffer_FPnum,
-                buffer_lbfgs_iter
+                buffer_FPnum
             );
             if (verbose) {
                 printf(" done\n");
@@ -5952,8 +5843,7 @@ int fit_collective_implicit_als
                 (lam_unique == NULL)? (lam) : (lam_unique[3]),
                 w_main, w_item,
                 nthreads, use_cg, max_cg_steps, iter == 0,
-                buffer_FPnum,
-                buffer_lbfgs_iter
+                buffer_FPnum
             );
         else
             optimizeA_implicit(
@@ -5995,8 +5885,7 @@ int fit_collective_implicit_als
                 (lam_unique == NULL)? (lam) : (lam_unique[2]),
                 w_main, w_user,
                 nthreads, use_cg, max_cg_steps, iter == 0,
-                buffer_FPnum,
-                buffer_lbfgs_iter
+                buffer_FPnum
             );
         else
             optimizeA_implicit(
@@ -6044,7 +5933,6 @@ int fit_collective_implicit_als
 
     cleanup:
         free(buffer_FPnum);
-        free(buffer_lbfgs_iter);
         free(Xcsr_p);
         free(Xcsr_i);
         free(Xcsr);
@@ -6117,7 +6005,7 @@ int collective_factors_cold_multiple
     int *ret = (int*)malloc((size_t)m*sizeof(int));
     if (ret == NULL) { retval = 1; goto cleanup; }
 
-    if (U_sp != NULL && U_csr == NULL) {
+    if (U == NULL && nnz_U && U_csr == NULL) {
         retval = coo_to_csr_plus_alloc(
                     U_row, U_col, U_sp, (FPnum*)NULL,
                     m_u, p, nnz_U,
@@ -6245,7 +6133,7 @@ int collective_factors_warm_multiple
         weightR = weight;
     }
 
-    if (U_sp != NULL && U_csr == NULL) {
+    if (U == NULL && nnz_U && U_csr == NULL) {
         retval = coo_to_csr_plus_alloc(
                     U_row, U_col, U_sp, (FPnum*)NULL,
                     m_u, p, nnz_U,
@@ -6425,7 +6313,7 @@ int collective_factors_warm_implicit_multiple
     if (alpha != 1.)
         tscal_large(Xcsr_use, alpha, nnz, nthreads);
 
-    if (U_sp != NULL && U_csr == NULL) {
+    if (U == NULL && nnz_U && U_csr == NULL) {
         retval = coo_to_csr_plus_alloc(
                     U_row, U_col, U_sp, (FPnum*)NULL,
                     m_u, p, nnz_U,

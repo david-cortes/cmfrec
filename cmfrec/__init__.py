@@ -30,7 +30,8 @@ class _CMF:
                      maxiter=400, niter=10, parallelize="separate", corr_pairs=4,
                      NA_as_zero=False, NA_as_zero_user=False, NA_as_zero_item=False,
                      precompute_for_predictions=True, use_float=False,
-                     random_state=1, init="normal", verbose=True, print_every=10,
+                     random_state=1, init="normal", verbose=True,
+                     print_every=10, handle_interrupt=True,
                      produce_dicts=False, copy_data=True, nthreads=-1):
         assert method in ["als", "lbfgs"]
         assert parallelize in ["separate", "single"]
@@ -1743,7 +1744,7 @@ class CMF_explicit(_CMF):
         Maximum number of conjugate gradient iterations to perform in an ALS round.
         Ignored when passing ``use_cg=False`` or ``method="lbfgs"``.
     finalize_chol : bool
-        When passing ``use_cg=True`` and ``method="lbfgs"``, whether to perform the last iteration with
+        When passing ``use_cg=True`` and ``method="als"``, whether to perform the last iteration with
         the Cholesky solver. This will make it slower, but will avoid the issue
         of potential mismatches between the result from ``fit`` and calls to
         ``factors_warm`` or similar with the same data.
@@ -1907,6 +1908,7 @@ class CMF_explicit(_CMF):
                           use_float=use_float,
                           random_state=random_state, init="normal",
                           verbose=verbose, print_every=print_every,
+                          handle_interrupt=handle_interrupt,
                           produce_dicts=produce_dicts, copy_data=copy_data,
                           nthreads=nthreads)
 
@@ -3136,6 +3138,7 @@ class CMF_implicit(_CMF):
                           use_float=use_float,
                           random_state=random_state, init=init,
                           verbose=verbose, print_every=0,
+                          handle_interrupt=handle_interrupt,
                           produce_dicts=produce_dicts, copy_data=copy_data,
                           nthreads=nthreads)
 
@@ -4254,7 +4257,7 @@ class OMF_explicit(_OMF):
         Maximum number of conjugate gradient iterations to perform in an ALS round.
         Ignored when passing ``use_cg=False`` or ``method="lbfgs"``.
     finalize_chol : bool
-        When passing ``use_cg=True`` and ``method="lbfgs"``, whether to perform the last iteration with
+        When passing ``use_cg=True`` and ``method="als"``, whether to perform the last iteration with
         the Cholesky solver. This will make it slower, but will avoid the issue
         of potential mismatches between the result from ``fit`` and calls to
         ``factors_warm`` or similar with the same data.
@@ -4396,6 +4399,7 @@ class OMF_explicit(_OMF):
                           use_float=use_float,
                           random_state=random_state, init="normal",
                           verbose=verbose, print_every=print_every,
+                          handle_interrupt=handle_interrupt,
                           produce_dicts=produce_dicts, copy_data=copy_data,
                           nthreads=nthreads)
         self.k = int(k)
@@ -5234,6 +5238,7 @@ class OMF_implicit(_OMF):
                           use_float=use_float,
                           random_state=random_state, init="normal",
                           verbose=verbose, print_every=0,
+                          handle_interrupt=handle_interrupt,
                           produce_dicts=produce_dicts, copy_data=copy_data,
                           nthreads=nthreads)
         self._take_params_offsets(k_sec=0, k_main=0, add_intercepts=add_intercepts)
@@ -5740,6 +5745,7 @@ class ContentBased(_OMF_Base):
                           precompute_for_predictions=True, use_float=use_float,
                           random_state=random_state,
                           init="normal", verbose=verbose, print_every=print_every,
+                          handle_interrupt=handle_interrupt,
                           produce_dicts=produce_dicts, copy_data=copy_data,
                           nthreads=nthreads)
         self._take_params_offsets(k_sec=k, k_main=0,
@@ -6187,6 +6193,7 @@ class MostPopular(_CMF):
                           use_float=use_float,
                           random_state=1, init="normal",
                           verbose=0, print_every=0,
+                          handle_interrupt=False,
                           produce_dicts=produce_dicts, copy_data=copy_data,
                           nthreads=nthreads)
         self.k = 0

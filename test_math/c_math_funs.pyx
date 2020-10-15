@@ -148,8 +148,7 @@ cdef extern from "cmfrec.h":
         bint do_B, bint is_first_iter,
         int nthreads,
         bint use_cg, int max_cg_steps,
-        double *buffer_double,
-        iteration_data_t *buffer_lbfgs_iter
+        double *buffer_double
     )
 
     void optimizeA_implicit(
@@ -178,8 +177,7 @@ cdef extern from "cmfrec.h":
         bint do_B,
         int nthreads,
         bint use_cg, int max_cg_steps, bint is_first_iter,
-        double* buffer_double,
-        iteration_data_t *buffer_lbfgs_iter
+        double* buffer_double
     )
 
     void optimizeA_collective_implicit(
@@ -193,8 +191,7 @@ cdef extern from "cmfrec.h":
         double lam, double w_main, double w_user,
         int nthreads,
         bint use_cg, int max_cg_steps, bint is_first_iter,
-        double *buffer_double,
-        iteration_data_t *buffer_lbfgs_iter
+        double *buffer_double
     )
 
     double offsets_fun_grad(
@@ -878,8 +875,7 @@ def py_optimizeA(
     bint NA_as_zero,
     bint as_near_dense,
     int nthreads,
-    np.ndarray[double, ndim=1] buffer_double,
-    np.ndarray[double, ndim=1] buffer_lbfgs_iter
+    np.ndarray[double, ndim=1] buffer_double
     ):
 
     cdef size_t *ptr_indptr = NULL
@@ -918,8 +914,7 @@ def py_optimizeA(
         is_B, 1,
         nthreads,
         0, 0,
-        &buffer_double[0],
-        <iteration_data_t*> &buffer_lbfgs_iter[0]
+        &buffer_double[0]
     )
     return A
 
@@ -944,8 +939,7 @@ def py_optimizeA_collective(
     bint NA_as_zero_X, bint NA_as_zero_U,
     bint as_near_dense_x, bint as_near_dense_u,
     int nthreads,
-    np.ndarray[double, ndim=1] buffer_double,
-    np.ndarray[double, ndim=1] buffer_lbfgs_iter
+    np.ndarray[double, ndim=1] buffer_double
     ):
 
     cdef np.ndarray[int, ndim=1] cnt_NA_x
@@ -1007,8 +1001,7 @@ def py_optimizeA_collective(
         is_B,
         nthreads,
         0, 0, 1,
-        &buffer_double[0],
-        <iteration_data_t*> &buffer_lbfgs_iter[0]
+        &buffer_double[0]
     )
     return A
 
@@ -1059,8 +1052,7 @@ def py_optimizeA_collective_implicit(
         double lam, double alpha, double w_main, double w_user,
         bint NA_as_zero_U, bint as_near_dense_u,
         int nthreads,
-        np.ndarray[double, ndim=1] buffer_double,
-        np.ndarray[double, ndim=1] buffer_lbfgs_iter
+        np.ndarray[double, ndim=1] buffer_double
     ):
 
     cdef size_t *ptr_Xcsr_p = NULL
@@ -1104,8 +1096,7 @@ def py_optimizeA_collective_implicit(
         lam, w_main, w_user,
         nthreads,
         0, 0, 1,
-        &buffer_double[0],
-        <iteration_data_t*> &buffer_lbfgs_iter[0]
+        &buffer_double[0]
     )
 
     return A

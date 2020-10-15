@@ -525,7 +525,7 @@ FPnum wrapper_fun_grad_Bdense
 );
 void buffer_size_optimizeA
 (
-    size_t *buffer_size, size_t *buffer_lbfgs_size,
+    size_t *buffer_size,
     int m, int n, int k, int lda, int nthreads,
     bool do_B, bool NA_as_zero,
     bool use_cg, bool finalize_chol,
@@ -551,8 +551,7 @@ void optimizeA
     bool do_B, bool is_first_iter,
     int nthreads,
     bool use_cg, int max_cg_steps,
-    FPnum *restrict buffer_FPnum,
-    iteration_data_t *buffer_lbfgs_iter
+    FPnum *restrict buffer_FPnum
 );
 void optimizeA_implicit
 (
@@ -818,8 +817,7 @@ void optimizeA_collective_implicit
     FPnum lam, FPnum w_main, FPnum w_user,
     int nthreads,
     bool use_cg, int max_cg_steps, bool is_first_iter,
-    FPnum *restrict buffer_FPnum,
-    iteration_data_t *buffer_lbfgs_iter
+    FPnum *restrict buffer_FPnum
 );
 int collective_factors_cold
 (
@@ -928,7 +926,7 @@ FPnum wrapper_fun_grad_Adense_col
 );
 void buffer_size_optimizeA_collective
 (
-    size_t *buffer_size, size_t *buffer_lbfgs_size,
+    size_t *buffer_size,
     int m, int n, int k, int k_user, int k_main, int padding,
     int m_u, int p, int nthreads,
     bool do_B, bool NA_as_zero_X, bool NA_as_zero_U,
@@ -952,8 +950,7 @@ void optimizeA_collective
     bool do_B,
     int nthreads,
     bool use_cg, int max_cg_steps, bool is_first_iter,
-    FPnum *restrict buffer_FPnum,
-    iteration_data_t *buffer_lbfgs_iter
+    FPnum *restrict buffer_FPnum
 );
 void build_BeTBe
 (

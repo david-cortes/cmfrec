@@ -93,7 +93,6 @@ empty_2d = np.empty((0,0), dtype=ctypes.c_double)
 empty_int = np.empty(0, dtype=ctypes.c_int)
 empty_size_t = np.empty(0, dtype=ctypes.c_size_t)
 buffer1 = np.empty(int(1e6), dtype=ctypes.c_double)
-buffer2 = np.empty(int(1e6), dtype=ctypes.c_double)
 def get_solA():
     A = np.empty((max(m,m_u),k_user+k+k_main), dtype=ctypes.c_double)
     return test_math.py_optimizeA_collective(
@@ -117,8 +116,7 @@ def get_solA():
         NA_as_zero_X, NA_as_zero_U,
         as_near_dense_x, as_near_dense_u,
         nthreads,
-        buffer1,
-        buffer2
+        buffer1
         )
 def get_solB():
     B = np.empty((max(n,n_i),k_item+k+k_main), dtype=ctypes.c_double)
@@ -155,8 +153,7 @@ def get_solB():
         NA_as_zero_X, NA_as_zero_U,
         as_near_dense_x, as_near_dense_u,
         nthreads,
-        buffer1,
-        buffer2
+        buffer1
         )
 
 def py_evalA(x):

@@ -33,8 +33,7 @@ def get_sol():
             NA_as_zero,
             near_dense,
             int(nthreads),
-            buffer1,
-            buffer2
+            buffer1
             )
     else:
         return test_math.py_optimizeA(
@@ -52,8 +51,7 @@ def get_sol():
             NA_as_zero,
             near_dense,
             int(nthreads),
-            buffer1,
-            buffer2
+            buffer1
             )
 
 def py_evalA(A, B, X, W):
@@ -101,7 +99,6 @@ empty_2d = np.empty((0,0), dtype=ctypes.c_double)
 empty_int = np.empty(0, dtype=ctypes.c_int)
 empty_size_t = np.empty(0, dtype=ctypes.c_size_t)
 buffer1 = np.empty(int(1e6), dtype=ctypes.c_double)
-buffer2 = np.empty(int(1e6), dtype=ctypes.c_double)
 
 def dense_to_sp(X, W, m, n):
     X_sp = X[~np.isnan(X)].reshape(-1)
