@@ -271,7 +271,6 @@ class _CMF:
 
             ### There can be cases in which the sets are disjoint,
             ### and will need to add NAs to one of the inputs.
-            ### TODO: is this correct when using NA as zero?
             if (u_not_x.shape[0] == 0 and
                 x_not_u.shape[0] == 0 and
                 b_not_x.shape[0] == 0 and

@@ -1177,6 +1177,14 @@ void collective_closed_form_block
 )
 {
     /* Potential bad inputs - should not reach this point */
+    if (Xa_dense != NULL && cnt_NA_x == n) {
+        Xa_dense = NULL;
+        nnz = 0;
+    }
+    if (u_vec != NULL && cnt_NA_u == p) {
+        u_vec = NULL;
+        nnz_u_vec = 0;
+    }
     if ( (  (Xa_dense != NULL && cnt_NA_x == n) ||
             (Xa_dense == NULL && nnz == 0)  )
                 &&
@@ -1494,6 +1502,10 @@ void collective_closed_form_block_implicit
 )
 {
     /* Potential bad inputs - should not reach this point */
+    if (u_vec != NULL && cnt_NA_u == p) {
+        u_vec = NULL;
+        nnz_u_vec = 0;
+    }
     if ( (nnz == 0)
             &&
           ((u_vec != NULL && cnt_NA_u == p) ||
@@ -2284,7 +2296,7 @@ void collective_block_cg_implicit
                           B + (size_t)k_item + (size_t)ixB[ix]*ldb, 1,
                           a_vec + k_user, 1);
         cblas_taxpy(k+k_main,
-                    Xa[ix] - coef * (Xa[ix] - 1.),
+                    -(coef - 1.) * Xa[ix] - coef,
                     B + (size_t)k_item + (size_t)ixB[ix]*ldb, 1,
                     r + k_user, 1);
     }
@@ -2426,7 +2438,7 @@ void collective_block_cg_implicit
                               B + (size_t)k_item + (size_t)ixB[ix]*ldb, 1,
                               pp + k_user, 1);
             cblas_taxpy(k+k_main,
-                        coef * (Xa[ix] - 1.),
+                        coef * (Xa[ix] - 1.) + coef,
                         B + (size_t)k_item + (size_t)ixB[ix]*ldb, 1,
                         Ap + k_user, 1);
         }
@@ -5012,6 +5024,13 @@ int fit_collective_explicit_als
 
     else
     {
+        if (NA_as_zero_X)
+        {
+            if (U != NULL  || nnz_U)
+                m = max2(m, m_u);
+            if (II != NULL || nnz_I)
+                n = max2(n, n_i);
+        }
         retval = convert_sparse_X(
                     ixA, ixB, X, nnz,
                     &Xcsr_p, &Xcsr_i, &Xcsr,
@@ -5097,8 +5116,13 @@ int fit_collective_explicit_als
         B_bias = B;
     }
 
-    if (U != NULL || U_sp != NULL)
+    if (U != NULL || nnz_U)
     {
+        if (U == NULL  && NA_as_zero_U)
+        {
+            m_u = max2(m, m_u);
+        }
+
         retval = preprocess_sideinfo_matrix(
             U, m_u, p,
             U_row, U_col, U_sp, nnz_U,
@@ -5112,8 +5136,13 @@ int fit_collective_explicit_als
         if (retval != 0) goto cleanup;
     }
 
-    if (II != NULL || I_sp != NULL)
+    if (II != NULL || nnz_I)
     {
+        if (II == NULL && NA_as_zero_U)
+        {
+            n_i = max2(n, n_i);
+        }
+
         retval = preprocess_sideinfo_matrix(
             II, n_i, q,
             I_row, I_col, I_sp, nnz_I,
@@ -5128,7 +5157,7 @@ int fit_collective_explicit_als
     }
 
     /* Sizes of the temporary arrays */
-    if (U != NULL || U_sp != NULL)
+    if (U != NULL || nnz_U)
         buffer_size_optimizeA(
             &size_bufferC, &size_buffer_lbfgs,
             p, m_u, k_user+k, k_user+k, nthreads,
@@ -5136,7 +5165,7 @@ int fit_collective_explicit_als
             full_dense_u, near_dense_u_col,
             U != NULL, false
         );
-    if (II != NULL || I_sp != NULL)
+    if (II != NULL || nnz_I)
         buffer_size_optimizeA(
             &size_bufferD, &size_buffer_lbfgs,
             q, n_i, k_item+k, k_item+k, nthreads,
@@ -5145,7 +5174,7 @@ int fit_collective_explicit_als
             II != NULL, false
         );
 
-    if (U != NULL || U_sp != NULL)
+    if (U != NULL || nnz_U)
         buffer_size_optimizeA_collective(
             &size_bufferA, &size_buffer_lbfgs,
             m, n, k, k_user, k_main+(int)user_bias, paddingA,
@@ -5166,7 +5195,7 @@ int fit_collective_explicit_als
             Xfull != NULL, weight != NULL
         );
 
-    if (II != NULL || I_sp != NULL)
+    if (II != NULL || nnz_I)
         buffer_size_optimizeA_collective(
             &size_bufferB, &size_buffer_lbfgs,
             n, m, k, k_item, k_main+(int)item_bias, paddingB,
@@ -5258,7 +5287,7 @@ int fit_collective_explicit_als
         if (handle_interrupt)
             signal(SIGINT, set_interrup_global_variable);
         if (should_stop_procedure) goto check_interrupt;
-        if (U != NULL || U_sp != NULL) {
+        if (U != NULL || nnz_U) {
             if (verbose) {
                 printf("Updating C...");
                 #if !defined(_FOR_R)
@@ -5294,7 +5323,7 @@ int fit_collective_explicit_als
         if (handle_interrupt)
             signal(SIGINT, set_interrup_global_variable);
         if (should_stop_procedure) goto check_interrupt;
-        if (II != NULL || I_sp != NULL) {
+        if (II != NULL || nnz_I) {
             if (verbose) {
                 printf("Updating D...");
                 #if !defined(_FOR_R)
@@ -5377,7 +5406,7 @@ int fit_collective_explicit_als
             fflush(stdout);
             #endif
         }
-        if (II != NULL || I_sp != NULL)
+        if (II != NULL || nnz_I)
             optimizeA_collective(
                 B_bias, A_bias, D,
                 n, n_i, m, q,
@@ -5469,7 +5498,7 @@ int fit_collective_explicit_als
             fflush(stdout);
             #endif
         }
-        if (U != NULL || U_sp != NULL)
+        if (U != NULL || nnz_U)
             optimizeA_collective(
                 A_bias, B_bias, C,
                 m, m_u, n, p,
@@ -5711,6 +5740,8 @@ int fit_collective_implicit_als
         nthreads
     );
 
+    if (U == NULL && NA_as_zero_U)
+        m_u = m_max;
     retval = preprocess_sideinfo_matrix(
         U, m_u, p,
         U_row, U_col, U_sp, nnz_U,
@@ -5722,7 +5753,7 @@ int fit_collective_implicit_als
         NA_as_zero_U, nthreads
     );
     if (retval != 0) goto cleanup;
-    if (U != NULL || U_sp != NULL)
+    if (U != NULL || nnz_U)
         buffer_size_optimizeA(
             &size_bufferC, &size_buffer_lbfgs,
             p, m_u, k_user+k, k_user+k, nthreads,
@@ -5732,6 +5763,8 @@ int fit_collective_implicit_als
         );
 
     
+    if (II == NULL && NA_as_zero_I)
+        n_i = n_max;
     retval = preprocess_sideinfo_matrix(
         II, n_i, q,
         I_row, I_col, I_sp, nnz_I,
@@ -5743,7 +5776,7 @@ int fit_collective_implicit_als
         NA_as_zero_I, nthreads
     );
     if (retval != 0) goto cleanup;
-    if (II != NULL || I_sp != NULL)
+    if (II != NULL || nnz_I)
         buffer_size_optimizeA(
             &size_bufferD, &size_buffer_lbfgs,
             q, n_i, k_item+k, k_item+k, nthreads,
@@ -5828,7 +5861,7 @@ int fit_collective_implicit_als
         if (handle_interrupt)
             signal(SIGINT, set_interrup_global_variable);
         if (should_stop_procedure) goto check_interrupt;
-        if (U != NULL || U_sp != NULL) {
+        if (U != NULL || nnz_U) {
             if (verbose) {
                 printf("Updating C...");
                 #if !defined(_FOR_R)
@@ -5864,7 +5897,7 @@ int fit_collective_implicit_als
         if (handle_interrupt)
             signal(SIGINT, set_interrup_global_variable);
         if (should_stop_procedure) goto check_interrupt;
-        if (II != NULL || I_sp != NULL) {
+        if (II != NULL || nnz_I) {
             if (verbose) {
                 printf("Updating D...");
                 #if !defined(_FOR_R)
@@ -5907,7 +5940,7 @@ int fit_collective_implicit_als
             fflush(stdout);
             #endif
         }
-        if (II != NULL || I_sp != NULL)
+        if (II != NULL || nnz_I)
             optimizeA_collective_implicit(
                 B, A, D,
                 n, n_i, m, q,
@@ -5950,7 +5983,7 @@ int fit_collective_implicit_als
             fflush(stdout);
             #endif
         }
-        if (U != NULL || U_sp != NULL)
+        if (U != NULL || nnz_U)
             optimizeA_collective_implicit(
                 A, B, C,
                 m, m_u, n, p,

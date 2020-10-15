@@ -271,7 +271,9 @@ FPnum fun_grad_cannonical_form
         if (!overwrite_grad)
         {
             #ifdef _OPENMP
-            if (nthreads == 1 || (Xcsr == NULL && !parallel_onepass))
+            if (    nthreads <= 1 ||
+                    (Xcsr == NULL && !parallel_onepass) ||
+                    (Xcsr != NULL && nthreads <= 2) )
             #endif
             {
                 for (size_t ix = 0; ix < nnz; ix++)
@@ -387,7 +389,9 @@ FPnum fun_grad_cannonical_form
         else /* overwrite_grad */
         {
             #ifdef _OPENMP
-            if (nthreads == 1 || (Xcsr == NULL && !parallel_onepass))
+            if (    nthreads <= 1 ||
+                    (Xcsr == NULL && !parallel_onepass) ||
+                    (Xcsr != NULL && nthreads <= 2) )
             #endif
             {
                 for (size_t ix = 0; ix < nnz; ix++)
@@ -1399,7 +1403,7 @@ void factors_implicit_cg
     for (size_t ix = 0; ix < nnz; ix++) {
         coef = cblas_tdot(k, B + (size_t)ixB[ix]*ldb, 1, a_vec, 1);
         cblas_taxpy(k,
-                    Xa[ix] - coef * (Xa[ix] - 1.),
+                    -(coef - 1.) * Xa[ix] - coef,
                     B + (size_t)ixB[ix]*ldb, 1,
                     r, 1);
     }
@@ -1424,7 +1428,7 @@ void factors_implicit_cg
         for (size_t ix = 0; ix < nnz; ix++) {
             coef = cblas_tdot(k, B + (size_t)ixB[ix]*ldb, 1, p, 1);
             cblas_taxpy(k,
-                        coef * (Xa[ix] - 1.),
+                        (coef - 1.) * Xa[ix] + coef,
                         B + (size_t)ixB[ix]*ldb, 1,
                         Ap, 1);
         }
