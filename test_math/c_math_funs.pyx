@@ -106,6 +106,7 @@ cdef extern from "cmfrec.h":
         double *BtBinvBt,
         double *BtBw,
         double *BtBchol,
+        double *BeTBeChol,
         double *CtCw,
         bint NA_as_zero_U, bint NA_as_zero_X,
         double *B_plus_bias
@@ -478,7 +479,7 @@ def py_collective_factors(
         &B[0,0],
         k, k_user, k_item, k_main,
         lam, w_main, w_user, lam,
-        ptr_BtBinvBt, ptr_BtBw, ptr_BtBchol, ptr_CtCw,
+        ptr_BtBinvBt, ptr_BtBw, ptr_BtBchol, <double*>NULL, ptr_CtCw,
         NA_as_zero_U, NA_as_zero_X,
         <double*>NULL
     )

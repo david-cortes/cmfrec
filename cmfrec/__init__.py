@@ -924,10 +924,15 @@ class _CMF:
             msg += "Number of rows/columns cannot be more than INT_MAX."
             raise ValueError(msg)
 
-        if max(m_u, m_ub, p, pbin) == 0:
+        if (max(m_u, m_ub, p, pbin) == 0) and (self.k_user):
             self.k_user = 0
-        if max(n_i, n_ib, q, qbin) == 0:
+            warnings.warn("No user side info provided, will set 'k_user' to zero.")
+        if (max(n_i, n_ib, q, qbin) == 0) and (self.k_item):
             self.k_item = 0
+            warnings.warn("No item side info provided, will set 'k_item' to zero.")
+        if (m == 0) or (n == 0):
+            raise ValueError("'X' must have at least one row and column.")
+
 
         return self._fit(Xrow, Xcol, Xval, W_sp, Xarr, W_dense,
                          Uarr, Urow, Ucol, Uval, Ub_arr,
@@ -1259,6 +1264,7 @@ class _CMF:
                     self._BtBinvBt,
                     self._BtB,
                     self._BtBchol,
+                    self._BeTBeChol,
                     self._CtC,
                     self.glob_mean_,
                     self.k, self.k_user, self.k_item, self.k_main,
@@ -1272,13 +1278,14 @@ class _CMF:
                 U,
                 U_val,
                 U_col,
+                self.B_,
                 self.C_,
                 self._BeTBe,
                 self._BtB,
                 self._BeTBeChol,
                 self._U_colmeans,
                 self.C_.shape[0], self.k,
-                self.k_user, self.k_main,
+                self.k_user, self.k_item, self.k_main,
                 lambda_,
                 self.w_main, self.w_user,
                 self._w_main_multiplier,
@@ -1578,6 +1585,7 @@ class _CMF:
                     self._BtBinvBt,
                     self._BtB,
                     self._BtBchol,
+                    self._BeTBeChol,
                     self._CtCinvCt,
                     self._CtC,
                     self._CtCchol,
@@ -2493,6 +2501,7 @@ class CMF_explicit(_CMF):
             self._BtBinvBt,
             self._BtB,
             self._BtBchol,
+            self._BeTBeChol,
             self._CtC,
             self.glob_mean_,
             self.k, self.k_user, self.k_item, self.k_main,
@@ -2646,6 +2655,7 @@ class CMF_explicit(_CMF):
                 self._BtBinvBt,
                 self._BtB,
                 self._BtBchol,
+                self._BeTBeChol,
                 self._CtCinvCt,
                 self._CtC,
                 self._CtCchol,
@@ -2856,6 +2866,7 @@ class CMF_explicit(_CMF):
                 self._BtBinvBt,
                 self._BtB,
                 self._BtBchol,
+                self._BeTBeChol,
                 self._CtCinvCt,
                 self._CtC,
                 self._CtCchol,

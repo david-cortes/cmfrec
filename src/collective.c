@@ -1172,6 +1172,10 @@ int collective_factors_lbfgs
    sum the parts from X and U separately, then add them to the other arrays.
    That way could also take the 'w_user' scaling after having already summed.
    Maybe add it as an extra parameter 'extra_precision' or so. */
+/* TODO: for an even more efficient version with dense inputs, could have
+   an array that keeps track of which values are missing, set the missing ones
+   to zero in the original array, then use 'gemv' at once and subtract the
+   missing ones later. */
 void collective_closed_form_block
 (
     FPnum *restrict a_vec,
@@ -1187,6 +1191,7 @@ void collective_closed_form_block
     FPnum lam, FPnum w_user, FPnum lam_last,
     FPnum *restrict precomputedBtB, int cnt_NA_x,
     FPnum *restrict precomputedCtCw, int cnt_NA_u,
+    FPnum *restrict precomputedBeTBeChol,
     bool add_X, bool add_U, bool use_cg, int max_cg_steps,
     FPnum *restrict buffer_FPnum
 )
@@ -1195,7 +1200,6 @@ void collective_closed_form_block
        it should be. In neither case should it have lambda added. */
 
     /* TODO: can 'precomputedBtB' be passed with lambda already added? */
-    /* TODO: could this use BeTBeChol for new predictions? */
     
     /* Potential bad inputs - should not reach this point */
     if (Xa_dense != NULL && cnt_NA_x == n) {
@@ -1215,6 +1219,63 @@ void collective_closed_form_block
     {
         set_to_zero(a_vec, k_user + k + k_main, 1);
         return;
+    }
+
+    
+    int k_totA = k_user + k + k_main;
+    int k_totB = k_item + k + k_main;
+    size_t k_totC = k_user + k;
+    size_t offset_square = (size_t)k_user + (size_t)k_user*(size_t)k_totA;
+    int ld_BtB = k + k_main;
+
+    char lo = 'L';
+    int one = 1;
+    int ignore;
+
+    if (precomputedBeTBeChol != NULL && weight == NULL &&
+        (   (Xa_dense != NULL && cnt_NA_x == 0) ||
+            (Xa_dense == NULL && NA_as_zero_X)  ) &&
+        (   (u_vec != NULL && cnt_NA_u == 0) ||
+            (u_vec == NULL && NA_as_zero_U)  ))
+    {
+        if (u_vec != NULL) {
+            cblas_tgemv(CblasRowMajor, CblasTrans,
+                        p, k_user+k,
+                        1., C, k_user+k,
+                        u_vec, 1,
+                        0., a_vec, 1);
+            set_to_zero(a_vec + k_user+k, k_main, 1);
+        }
+        else {
+            set_to_zero(a_vec, k_user+k+k_main, 1);
+            tgemv_dense_sp(
+                p, k_user+k,
+                1., C, k_user+k,
+                u_vec_ixB, u_vec_sp, nnz_u_vec,
+                a_vec
+            );
+        }
+        if (w_user != 1.)
+            cblas_tscal(k_user+k, w_user, a_vec, 1);
+
+        if (Xa_dense != NULL)
+            cblas_tgemv(CblasRowMajor, CblasTrans,
+                        n, k+k_main,
+                        1., B + k_item, k_totB,
+                        Xa_dense, 1,
+                        1., a_vec + k_user, 1);
+        else
+            tgemv_dense_sp(
+                n, k+k_main,
+                1., B + k_item, k_totB,
+                ixB, Xa, nnz,
+                a_vec + k_user
+            );
+        
+        return tpotrs_(&lo, &k_totA, &one,
+                       precomputedBeTBeChol, &k_totA,
+                       a_vec, &k_totA,
+                       &ignore);
     }
 
     #ifdef FORCE_CG
@@ -1241,11 +1302,6 @@ void collective_closed_form_block
             buffer_FPnum
         );
 
-    int k_totA = k_user + k + k_main;
-    int k_totB = k_item + k + k_main;
-    size_t k_totC = k_user + k;
-    size_t offset_square = (size_t)k_user + (size_t)k_user*(size_t)k_totA;
-    int ld_BtB = k + k_main;
     FPnum *restrict bufferBeTBe = buffer_FPnum;
     set_to_zero(bufferBeTBe, square(k_totA), 1);
     
@@ -1341,10 +1397,6 @@ void collective_closed_form_block
             sum_mat(k+k_main, k+k_main,
                     precomputedBtB, ld_BtB,
                     bufferBeTBe + offset_square, k_totA);
-            // taxpy_large(precomputedBtBw + offset_square, 1.,
-            //             bufferBeTBe + offset_square,
-            //             square(k_totA) - offset_square,
-            //             1);
         } else {
             cblas_tsyrk(CblasRowMajor, CblasUpper, CblasTrans,
                         k+k_main, n,
@@ -1473,18 +1525,12 @@ void collective_closed_form_block
        Constructing Be*t(Xe), lower part (from U) */
     if (add_U)
     {
-        if (u_vec != NULL && prefer_CtC)
+        if (u_vec != NULL && cnt_NA_u == 0)
         {
             cblas_tgemv(CblasRowMajor, CblasTrans,
                         p, k_user+k,
                         w_user, C, k_user+k, u_vec, 1,
                         1., a_vec, 1);
-            if (cnt_NA_u)
-                for (size_t ix = 0; ix < (size_t)p; ix++)
-                    if (!isnan(u_vec[ix]))
-                        cblas_taxpy(k_user+k, -w_user * u_vec[ix],
-                                    C + ix*(size_t)(k_user+k), 1,
-                                    a_vec, 1);
         }
         
         else if (u_vec != NULL) 
@@ -1511,11 +1557,8 @@ void collective_closed_form_block
     /* TODO: should precomputedBtB or CtC come with the diagonal added? */
     add_to_diag(bufferBeTBe, lam, k_totA);
     if (lam_last != lam) bufferBeTBe[square(k_totA)-1] += (lam_last - lam);
-    char uplo = 'L';
-    int one = 1;
-    int ignore;
 
-    tposv_(&uplo, &k_totA, &one,
+    tposv_(&lo, &k_totA, &one,
            bufferBeTBe, &k_totA,
            a_vec, &k_totA,
            &ignore);
@@ -2720,12 +2763,13 @@ int collective_factors_cold_implicit
     FPnum *restrict a_vec,
     FPnum *restrict u_vec, int p,
     FPnum *restrict u_vec_sp, int u_vec_ixB[], size_t nnz_u_vec,
+    FPnum *restrict B, int n,
     FPnum *restrict C,
     FPnum *restrict precomputedBeTBe,
     FPnum *restrict precomputedBtB,
     FPnum *restrict precomputedBeTBeChol,
     FPnum *restrict col_means,
-    int k, int k_user, int k_main,
+    int k, int k_user, int k_item, int k_main,
     FPnum lam, FPnum w_main, FPnum w_user, FPnum w_main_multiplier,
     bool NA_as_zero_U
 )
@@ -2760,7 +2804,7 @@ int collective_factors_cold_implicit
     collective_closed_form_block_implicit(
         a_vec,
         k, k_user, 0, k_main,
-        (FPnum*)NULL, 0, C, p,
+        B, n, C, p,
         (FPnum*)NULL, (int*)NULL, (size_t)0,
         u_vec, cnt_NA_u_vec,
         u_vec_sp, u_vec_ixB, nnz_u_vec,
@@ -2820,6 +2864,7 @@ int collective_factors_warm
     FPnum *restrict BtBinvBt,
     FPnum *restrict BtBw,
     FPnum *restrict BtBchol,
+    FPnum *restrict BeTBeChol,
     FPnum *restrict CtCw,
     bool NA_as_zero_U, bool NA_as_zero_X,
     FPnum *restrict B_plus_bias
@@ -3025,6 +3070,7 @@ int collective_factors_warm
                 lam, w_user, lam,
                 BtBw, cnt_NA_x,
                 CtCw, cnt_NA_u_vec,
+                BeTBeChol,
                 true, true, false, 0,
                 buffer_FPnum
             );
@@ -3043,6 +3089,7 @@ int collective_factors_warm
                 lam, w_user, lam_bias,
                 BtBw, cnt_NA_x,
                 CtCw, cnt_NA_u_vec,
+                BeTBeChol,
                 true, true, false, 0,
                 buffer_FPnum
             );
@@ -3704,6 +3751,7 @@ void optimizeA_collective
                         lam, w_user, lam_last,
                         bufferBtB, (Xfull != NULL)? cnt_NA_x[ix] : 0,
                         bufferCtC, (U != NULL)? cnt_NA_u[ix] : 0,
+                        (FPnum*)NULL,
                         true, true,
                         use_cg, k_pred, /* <- more steps to reach optimum */
                         buffer_remainder
@@ -3880,6 +3928,7 @@ void optimizeA_collective
                 lam, w_user, lam_last,
                 bufferBtB, (Xfull != NULL)? cnt_NA_x[ix] : 0,
                 bufferCtC, (U != NULL)? cnt_NA_u[ix] : 0,
+                (FPnum*)NULL,
                 (Xfull == NULL)? (add_X) : (add_X || cnt_NA_x[ix] > 0),
                 (U == NULL)? (add_U) : (add_U || cnt_NA_u[ix] > 0),
                 use_cg, max_cg_steps,
@@ -6152,6 +6201,7 @@ int collective_factors_warm_multiple
     FPnum *restrict BtBinvBt,
     FPnum *restrict BtBw,
     FPnum *restrict BtBchol,
+    FPnum *restrict BeTBeChol,
     FPnum *restrict CtCinvCt,
     FPnum *restrict CtCw,
     FPnum *restrict CtCchol,
@@ -6261,6 +6311,7 @@ int collective_factors_warm_multiple
                     BtBinvBt,
                     BtBw,
                     BtBchol,
+                    BeTBeChol,
                     CtCw,
                     NA_as_zero_U, NA_as_zero_X,
                     B_plus_bias
@@ -6453,12 +6504,13 @@ int collective_factors_warm_implicit_multiple
                       : (U_csr_i_use + U_csr_p_use[ix]),
                     (U_csr_p_use == NULL)?
                       ((size_t)0) : (U_csr_p_use[ix+(size_t)1]-U_csr_p_use[ix]),
+                    B, n,
                     C,
                     precomputedBeTBe,
                     precomputedBtB,
                     precomputedBeTBeChol,
                     col_means,
-                    k, k_user, k_main,
+                    k, k_user, k_item, k_main,
                     lam, w_main, w_user, w_main_multiplier,
                     NA_as_zero_U
                 );
@@ -6482,12 +6534,13 @@ int collective_factors_cold_implicit_multiple
     FPnum *restrict U, int m_u, int p,
     int U_row[], int U_col[], FPnum *restrict U_sp, size_t nnz_U,
     size_t U_csr_p[], int U_csr_i[], FPnum *restrict U_csr,
-    FPnum *restrict B, FPnum *restrict C,
+    FPnum *restrict B, int n,
+    FPnum *restrict C,
     FPnum *restrict precomputedBeTBe,
     FPnum *restrict precomputedBtB,
     FPnum *restrict precomputedBeTBeChol,
     FPnum *restrict col_means,
-    int k, int k_user, int k_main,
+    int k, int k_user, int k_item, int k_main,
     FPnum lam, FPnum w_main, FPnum w_user, FPnum w_main_multiplier,
     bool NA_as_zero_U,
     int nthreads
@@ -6543,12 +6596,13 @@ int collective_factors_cold_implicit_multiple
                       : (U_csr_i_use + U_csr_p_use[ix]),
                     (U_csr_p_use == NULL)?
                       ((size_t)0) : (U_csr_p_use[ix+(size_t)1]-U_csr_p_use[ix]),
+                    B, n,
                     C,
                     precomputedBeTBe,
                     precomputedBtB,
                     precomputedBeTBeChol,
                     col_means,
-                    k, k_user, k_main,
+                    k, k_user, k_item, k_main,
                     lam, w_main, w_user, w_main_multiplier,
                     NA_as_zero_U
                 );

@@ -217,12 +217,13 @@ cdef extern from "cmfrec.h":
         FPnum *a_vec,
         FPnum *u_vec, int p,
         FPnum *u_vec_sp, int u_vec_ixB[], size_t nnz_u_vec,
+        FPnum* B, int n,
         FPnum *C,
         FPnum *precomputedBeTBe,
         FPnum *precomputedBtB,
         FPnum *precomputedBeTBeChol,
         FPnum *col_means,
-        int k, int k_user, int k_main,
+        int k, int k_user, int k_item, int k_main,
         FPnum lam, FPnum w_main, FPnum w_user, FPnum w_main_multiplier,
         bint NA_as_zero_U
     )
@@ -244,6 +245,7 @@ cdef extern from "cmfrec.h":
         FPnum *BtBinvBt,
         FPnum *BtBw,
         FPnum *BtBchol,
+        FPnum *BeTBeChol,
         FPnum *CtCw,
         bint NA_as_zero_U, bint NA_as_zero_X,
         FPnum *B_plus_bias
@@ -415,6 +417,7 @@ cdef extern from "cmfrec.h":
         FPnum *BtBinvBt,
         FPnum *BtBw,
         FPnum *BtBchol,
+        FPnum *BeTBeChol,
         FPnum *CtCinvCt,
         FPnum *CtCw,
         FPnum *CtCchol,
@@ -442,18 +445,18 @@ cdef extern from "cmfrec.h":
         int nthreads
     )
 
-    ### TODO: wrap this one too
     int collective_factors_cold_implicit_multiple(
         FPnum *A, int m,
         FPnum *U, int m_u, int p,
         int U_row[], int U_col[], FPnum *U_sp, size_t nnz_U,
         size_t U_csr_p[], int U_csr_i[], FPnum *U_csr,
-        FPnum *B, FPnum *C,
+        FPnum *B, int n,
+        FPnum *C,
         FPnum *precomputedBeTBe,
         FPnum *precomputedBtB,
         FPnum *precomputedBeTBeChol,
         FPnum *col_means,
-        int k, int k_user, int k_main,
+        int k, int k_user, int k_item, int k_main,
         FPnum lam, FPnum w_main, FPnum w_user, FPnum w_main_multiplier,
         bint NA_as_zero_U,
         int nthreads
@@ -1778,13 +1781,14 @@ def call_factors_collective_cold_implicit(
         np.ndarray[FPnum, ndim=1] U,
         np.ndarray[FPnum, ndim=1] U_sp,
         np.ndarray[int, ndim=1] U_sp_i,
+        np.ndarray[FPnum, ndim=2] B,
         np.ndarray[FPnum, ndim=2] C,
         np.ndarray[FPnum, ndim=2] BeTBe,
         np.ndarray[FPnum, ndim=2] BtB,
         np.ndarray[FPnum, ndim=2] BeTBeChol,
         np.ndarray[FPnum, ndim=1] U_colmeans,
         int p, int k,
-        int k_user = 0, int k_main = 0,
+        int k_user = 0, int k_item = 0, int k_main = 0,
         FPnum lam = 1e2,
         FPnum w_main = 1., FPnum w_user = 1.,
         FPnum w_main_multiplier = 1.,
@@ -1799,6 +1803,10 @@ def call_factors_collective_cold_implicit(
         ptr_U_sp = &U_sp[0]
         ptr_U_sp_i = &U_sp_i[0]
 
+    cdef FPnum *ptr_B = NULL
+    if B.shape[0]:
+        ptr_B = &B[0,0]
+    
     cdef FPnum *ptr_C = NULL
     if C.shape[0]:
         ptr_C = &C[0,0]
@@ -1823,12 +1831,13 @@ def call_factors_collective_cold_implicit(
         &A[0],
         ptr_U, p,
         ptr_U_sp, ptr_U_sp_i, <size_t> U_sp.shape[0],
+        ptr_B, B.shape[0],
+        ptr_C,
         ptr_BeTBe,
         ptr_BtB,
         ptr_BeTBeChol,
-        ptr_C,
         ptr_U_colmeans,
-        k, k_user, k_main,
+        k, k_user, k_item, k_main,
         lam, w_main, w_user, w_main_multiplier,
         NA_as_zero_U
     )
@@ -1857,6 +1866,7 @@ def call_factors_collective_warm_explicit(
         np.ndarray[FPnum, ndim=2] BtBinvBt,
         np.ndarray[FPnum, ndim=2] BtB,
         np.ndarray[FPnum, ndim=2] BtBchol,
+        np.ndarray[FPnum, ndim=2] BeTBeChol,
         np.ndarray[FPnum, ndim=2] CtC,
         FPnum glob_mean,
         int k, int k_user = 0, int k_item = 0, int k_main = 0,
@@ -1911,6 +1921,7 @@ def call_factors_collective_warm_explicit(
     cdef FPnum *ptr_BtBinvBt = NULL
     cdef FPnum *ptr_BtB = NULL
     cdef FPnum *ptr_BtBchol = NULL
+    cdef FPnum *ptr_BeTBeChol = NULL
     cdef FPnum *ptr_CtC = NULL
     if BtBinvBt.shape[0]:
         ptr_BtBinvBt = &BtBinvBt[0,0]
@@ -1918,6 +1929,8 @@ def call_factors_collective_warm_explicit(
         ptr_BtB = &BtB[0,0]
     if BtBchol.shape[0]:
         ptr_BtBchol = &BtBchol[0,0]
+    if BeTBeChol.shape[0]:
+        ptr_BeTBeChol = &BeTBeChol[0,0]
     if CtC.shape[0]:
         ptr_CtC = &CtC[0,0]
     
@@ -1948,6 +1961,7 @@ def call_factors_collective_warm_explicit(
         ptr_BtBinvBt,
         ptr_BtB,
         ptr_BtBchol,
+        ptr_BeTBeChol,
         ptr_CtC,
         NA_as_zero_U, NA_as_zero_X,
         ptr_B_plus_bias
@@ -2733,6 +2747,8 @@ def call_collective_factors_cold_multiple(
     
     cdef int m = max([m_u, m_ubin])
     cdef np.ndarray[FPnum, ndim=2] A = np.empty((m, k_user+k+k_main), dtype=c_FPnum)
+    if m == 0:
+        return A
 
     cdef int retval = collective_factors_cold_multiple(
         &A[0,0], m,
@@ -2747,6 +2763,98 @@ def call_collective_factors_cold_multiple(
         ptr_U_colmeans,
         k, k_user, k_main,
         lam, w_main, w_user,
+        NA_as_zero_U,
+        nthreads
+    )
+    if retval == 1:
+        raise MemoryError("Could not allocate sufficient memory.")
+
+    return A
+
+def call_collective_factors_cold_implicit_multiple(
+        np.ndarray[FPnum, ndim=2] U,
+        np.ndarray[int, ndim=1] U_row,
+        np.ndarray[int, ndim=1] U_col,
+        np.ndarray[FPnum, ndim=1] U_sp,
+        np.ndarray[size_t, ndim=1] U_csr_p,
+        np.ndarray[int, ndim=1] U_csr_i,
+        np.ndarray[FPnum, ndim=1] U_csr,
+        np.ndarray[FPnum, ndim=2] B,
+        np.ndarray[FPnum, ndim=2] C,
+        np.ndarray[FPnum, ndim=1] U_colmeans,
+        np.ndarray[FPnum, ndim=2] BeTBe,
+        np.ndarray[FPnum, ndim=2] BtB,
+        np.ndarray[FPnum, ndim=2] BeTBeChol,
+        int n, int m_u, int m_x,
+        int k, int k_user = 0, int k_item = 0, int k_main = 0,
+        FPnum lam = 1e2, FPnum w_main = 1., FPnum w_user = 1.,
+        FPnum w_main_multiplier = 1.,
+        bint NA_as_zero_U = 0,
+        int nthreads = 1
+    ):
+
+    cdef int p = C.shape[0]
+
+    cdef FPnum *ptr_U = NULL
+    cdef int *ptr_U_row = NULL
+    cdef int *ptr_U_col = NULL
+    cdef FPnum *ptr_U_sp = NULL
+    cdef size_t nnz_U = 0
+    cdef FPnum *ptr_U_colmeans = NULL
+    if U.shape[0]:
+        ptr_U = &U[0,0]
+    elif U_sp.shape[0]:
+        ptr_U_row = &U_row[0]
+        ptr_U_col = &U_col[0]
+        ptr_U_sp = &U_sp[0]
+        nnz_U = U_sp.shape[0]
+    if U_colmeans.shape[0]:
+        ptr_U_colmeans = &U_colmeans[0]
+
+    cdef size_t *ptr_U_csr_p = NULL
+    cdef int *ptr_U_csr_i = NULL
+    cdef FPnum *ptr_U_csr = NULL
+    if U_csr.shape[0]:
+        ptr_U_csr_p = &U_csr_p[0]
+        ptr_U_csr_i = &U_csr_i[0]
+        ptr_U_csr = &U_csr[0]
+
+    cdef FPnum *ptr_B = NULL
+    if B.shape[0]:
+        ptr_B = &B[0,0]
+
+    cdef FPnum *ptr_C = NULL
+    if C.shape[0]:
+        ptr_C = &C[0,0]
+
+    cdef FPnum *ptr_BeTBe = NULL
+    cdef FPnum *ptr_BtB = NULL
+    cdef FPnum *ptr_BeTBeChol = NULL
+    if BeTBe.shape[0]:
+        ptr_BeTBe = &BeTBe[0,0]
+    if BtB.shape[0]:
+        ptr_BtB = &BtB[0,0]
+    if BeTBeChol.shape[0]:
+        ptr_BeTBeChol = &BeTBeChol[0,0]
+
+    cdef int m = max([m_x, m_u])
+    cdef np.ndarray[FPnum, ndim=2] A = np.empty((m, k_user+k+k_main), dtype=c_FPnum)
+    if m == 0:
+        return A
+    
+    cdef int retval = collective_factors_cold_implicit_multiple(
+        &A[0,0], m,
+        ptr_U, m_u, p,
+        ptr_U_row, ptr_U_col, ptr_U_sp, nnz_U,
+        ptr_U_csr_p, ptr_U_csr_i, ptr_U_csr,
+        ptr_B, B.shape[0],
+        ptr_C,
+        ptr_BeTBe,
+        ptr_BtB,
+        ptr_BeTBeChol,
+        ptr_U_colmeans,
+        k, k_user, k_item, k_main,
+        lam, w_main, w_user, w_main_multiplier,
         NA_as_zero_U,
         nthreads
     )
@@ -2782,6 +2890,7 @@ def call_collective_factors_warm_multiple(
         np.ndarray[FPnum, ndim=2] BtBinvBt,
         np.ndarray[FPnum, ndim=2] BtB,
         np.ndarray[FPnum, ndim=2] BtBchol,
+        np.ndarray[FPnum, ndim=2] BeTBeChol,
         np.ndarray[FPnum, ndim=2] CtCinvCt,
         np.ndarray[FPnum, ndim=2] CtC,
         np.ndarray[FPnum, ndim=2] CtCchol,
@@ -2880,16 +2989,21 @@ def call_collective_factors_warm_multiple(
     cdef FPnum *ptr_BtBinvBt = NULL
     cdef FPnum *ptr_BtB = NULL
     cdef FPnum *ptr_BtBchol = NULL
+    cdef FPnum *ptr_BeTBeChol = NULL
     if BtBinvBt.shape[0]:
         ptr_BtBinvBt = &BtBinvBt[0,0]
     if BtB.shape[0]:
         ptr_BtB = &BtB[0,0]
     if BtBchol.shape[0]:
         ptr_BtBchol = &BtBchol[0,0]
+    if BeTBeChol.shape[0]:
+        ptr_BeTBeChol = &BeTBeChol[0,0]
 
     cdef int m = max([m_x, m_u, m_ubin])
     cdef np.ndarray[FPnum, ndim=2] A = np.empty((m, k_user+k+k_main), dtype=c_FPnum)
     cdef np.ndarray[FPnum, ndim=1] biasA = np.empty(0, dtype=c_FPnum)
+    if m == 0:
+        return A, biasA
     cdef FPnum *ptr_biasA = NULL
     if user_bias:
         biasA = np.empty(m, dtype=c_FPnum)
@@ -2914,6 +3028,7 @@ def call_collective_factors_warm_multiple(
         ptr_BtBinvBt,
         ptr_BtB,
         ptr_BtBchol,
+        ptr_BeTBeChol,
         ptr_CtCinvCt,
         ptr_CtC,
         ptr_CtCchol,
@@ -3013,6 +3128,8 @@ def call_collective_factors_warm_implicit_multiple(
         ptr_BeTBeChol = &BeTBeChol[0,0]
 
     cdef np.ndarray[FPnum, ndim=2] A = np.empty((m, k_user+k+k_main), dtype=c_FPnum)
+    if m == 0:
+        return A
 
     cdef int retval = collective_factors_warm_implicit_multiple(
         &A[0,0], m,
@@ -3079,6 +3196,8 @@ def call_offsets_factors_cold_multiple(
         ptr_C_bias = &C_bias[0]
 
     cdef np.ndarray[FPnum, ndim=2] A = np.empty((m, k_sec+k+k_main), dtype=c_FPnum)
+    if m == 0:
+        return A
 
     cdef int retval = offsets_factors_cold_multiple(
         &A[0,0], m,
@@ -3204,6 +3323,8 @@ def call_offsets_factors_warm_multiple(
     cdef np.ndarray[FPnum, ndim=2] Am = np.empty((m, k_sec+k+k_main), dtype=c_FPnum)
     cdef np.ndarray[FPnum, ndim=2] A = np.empty((0,0), dtype=c_FPnum)
     cdef np.ndarray[FPnum, ndim=1] biasA = np.empty(0, dtype=c_FPnum)
+    if m == 0:
+        return Am, biasA, A
     cdef FPnum *ptr_biasA = NULL
     cdef FPnum *ptr_A = NULL
     if user_bias:
@@ -3292,6 +3413,8 @@ def call_offsets_factors_warm_implicit_multiple(
 
     cdef np.ndarray[FPnum, ndim=2] Am = np.empty((m, k), dtype=c_FPnum)
     cdef np.ndarray[FPnum, ndim=2] A = np.empty((0,0), dtype=c_FPnum)
+    if m == 0:
+        return Am, A
     cdef FPnum *ptr_A = NULL
     if output_a:
         A = np.empty((m, k), dtype=c_FPnum)

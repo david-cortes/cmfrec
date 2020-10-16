@@ -748,6 +748,7 @@ void collective_closed_form_block
     FPnum lam, FPnum w_user, FPnum lam_last,
     FPnum *restrict precomputedBtB, int cnt_NA_x,
     FPnum *restrict precomputedCtCw, int cnt_NA_u,
+    FPnum *restrict precomputedBeTBeChol,
     bool add_X, bool add_U, bool use_cg, int max_cg_steps,
     FPnum *restrict buffer_FPnum
 );
@@ -841,12 +842,13 @@ int collective_factors_cold_implicit
     FPnum *restrict a_vec,
     FPnum *restrict u_vec, int p,
     FPnum *restrict u_vec_sp, int u_vec_ixB[], size_t nnz_u_vec,
+    FPnum *restrict B, int n,
     FPnum *restrict C,
     FPnum *restrict precomputedBeTBe,
     FPnum *restrict precomputedBtB,
     FPnum *restrict precomputedBeTBeChol,
     FPnum *restrict col_means,
-    int k, int k_user, int k_main,
+    int k, int k_user, int k_item, int k_main,
     FPnum lam, FPnum w_main, FPnum w_user, FPnum w_main_multiplier,
     bool NA_as_zero_U
 );
@@ -868,6 +870,7 @@ int collective_factors_warm
     FPnum *restrict BtBinvBt,
     FPnum *restrict BtBw,
     FPnum *restrict BtBchol,
+    FPnum *restrict BeTBeChol,
     FPnum *restrict CtCw,
     bool NA_as_zero_U, bool NA_as_zero_X,
     FPnum *restrict B_plus_bias
@@ -1164,6 +1167,7 @@ int collective_factors_warm_multiple
     FPnum *restrict BtBinvBt,
     FPnum *restrict BtBw,
     FPnum *restrict BtBchol,
+    FPnum *restrict BeTBeChol,
     FPnum *restrict CtCinvCt,
     FPnum *restrict CtCw,
     FPnum *restrict CtCchol,
@@ -1196,12 +1200,13 @@ int collective_factors_cold_implicit_multiple
     FPnum *restrict U, int m_u, int p,
     int U_row[], int U_col[], FPnum *restrict U_sp, size_t nnz_U,
     size_t U_csr_p[], int U_csr_i[], FPnum *restrict U_csr,
-    FPnum *restrict B, FPnum *restrict C,
+    FPnum *restrict B, int n,
+    FPnum *restrict C,
     FPnum *restrict precomputedBeTBe,
     FPnum *restrict precomputedBtB,
     FPnum *restrict precomputedBeTBeChol,
     FPnum *restrict col_means,
-    int k, int k_user, int k_main,
+    int k, int k_user, int k_item, int k_main,
     FPnum lam, FPnum w_main, FPnum w_user, FPnum w_main_multiplier,
     bool NA_as_zero_U,
     int nthreads
