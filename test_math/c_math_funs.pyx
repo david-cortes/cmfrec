@@ -9,9 +9,9 @@ cdef extern from "cmfrec.h":
         double *Xa, int ixB[], size_t nnz,
         double *weight,
         double *buffer_double,
-        double lam, double w, double lam_last,
+        double lam, double lam_last,
         double *precomputedBtBinvBt,
-        double *precomputedBtBw, int cnt_NA, int strideBtB,
+        double *precomputedBtBw, int cnt_NA, int ld_BtB,
         double *precomputedBtBchol, bint NA_as_zero,
         bint use_cg, int max_cg_steps,
         bint force_add_diag
@@ -85,7 +85,7 @@ cdef extern from "cmfrec.h":
         double *CtCchol,
         double *col_means,
         int k, int k_user, int k_main,
-        double lam, double w_user,
+        double lam, double w_main, double w_user,
         bint NA_as_zero_U
     )
 
@@ -102,12 +102,11 @@ cdef extern from "cmfrec.h":
         double *weight,
         double *B,
         int k, int k_user, int k_item, int k_main,
-        double lam, double w_user, double w_main, double lam_bias,
+        double lam, double w_main, double w_user, double lam_bias,
         double *BtBinvBt,
         double *BtBw,
         double *BtBchol,
         double *CtCw,
-        int k_item_BtB,
         bint NA_as_zero_U, bint NA_as_zero_X,
         double *B_plus_bias
     )
@@ -131,12 +130,6 @@ cdef extern from "cmfrec.h":
         int nthreads
     )
 
-    ctypedef struct iteration_data_t:
-        double alpha
-        double *s
-        double *y
-        double ys
-
     void optimizeA(
         double *A, int lda,
         double *B, int ldb,
@@ -144,7 +137,7 @@ cdef extern from "cmfrec.h":
         size_t Xcsr_p[], int Xcsr_i[], double *Xcsr,
         double *Xfull, bint full_dense, bint near_dense,
         int cnt_NA[], double *weight, bint NA_as_zero,
-        double lam, double w, double lam_last,
+        double lam, double lam_last,
         bint do_B, bint is_first_iter,
         int nthreads,
         bint use_cg, int max_cg_steps,
@@ -159,6 +152,7 @@ cdef extern from "cmfrec.h":
         double lam,
         int nthreads,
         bint use_cg, int max_cg_steps, bint force_set_to_zero,
+        bint keep_precomputedBtB,
         double *precomputedBtB,
         double *buffer_double
     )
@@ -173,7 +167,7 @@ cdef extern from "cmfrec.h":
         size_t U_csr_p[], int U_csr_i[], double* U_csr,
         double* U, int cnt_NA_u[],
         bint full_dense_u, bint near_dense_u, bint NA_as_zero_U,
-        double lam, double w_main, double w_user, double lam_last,
+        double lam, double w_user, double lam_last,
         bint do_B,
         int nthreads,
         bint use_cg, int max_cg_steps, bint is_first_iter,
@@ -187,11 +181,13 @@ cdef extern from "cmfrec.h":
         size_t Xcsr_p[], int Xcsr_i[], double *Xcsr,
         size_t U_csr_p[], int U_csr_i[], double *U_csr,
         double *U, int cnt_NA_u[],
-        double full_dense_u, double near_dense_u, double NA_as_zero_U,
-        double lam, double w_main, double w_user,
+        bint full_dense_u, bint near_dense_u, bint NA_as_zero_U,
+        double lam, double w_user,
         int nthreads,
         bint use_cg, int max_cg_steps, bint is_first_iter,
-        double *buffer_double
+        bint keep_precomputedBtB,
+        double *precomputedBtB,
+        double *buffer_FPnum
     )
 
     double offsets_fun_grad(
@@ -329,9 +325,9 @@ def py_factors_closed_form(
         ptr_Xa, ptr_ixB, nnz,
         ptr_weight,
         &buffer_double[0],
-        lam, 1., lam,
+        lam, lam,
         ptr_BtBinvBt,
-        ptr_BtBw, np.sum(np.isnan(Xa_dense)), 0,
+        ptr_BtBw, np.sum(np.isnan(Xa_dense)), k,
         ptr_BtBchol, 0,
         0, 0,
         0
@@ -449,14 +445,19 @@ def py_collective_factors(
     cdef np.ndarray[double, ndim=2] BtBw
     cdef np.ndarray[double, ndim=2] BtBchol
     cdef np.ndarray[double, ndim=2] CtCw
+    lam /= w_main
+    w_user /= w_main
+    w_main = 1.
     if precompute:
         if not weight.shape[0]:
-            BtBinvBt, BtBw, BtBchol = py_AtAinvAt(B, k_item, lam, w_main)
+            # BtBinvBt, BtBw, BtBchol = py_AtAinvAt(B, k_item, lam, w_main)
+            BtBinvBt, BtBw, BtBchol = py_AtAinvAt(B, k_item, lam, 1.)
             ptr_BtBinvBt = &BtBinvBt[0,0]
             ptr_BtBw = &BtBw[0,0]
             ptr_BtBchol = &BtBchol[0,0]
         if U.shape[0] or U_sp.shape[0]:
-            CtCinvCt, CtCw, CtCchol = py_AtAinvAt(C, 0, lam, w_user)
+            # CtCinvCt, CtCw, CtCchol = py_AtAinvAt(C, 0, lam, w_user)
+            CtCinvCt, CtCw, CtCchol = py_AtAinvAt(C, 0, lam/w_user, 1.)
             ptr_CtCw = &CtCw[0,0]
 
     cdef np.ndarray[double, ndim=1] col_means = np.zeros(p, dtype=ctypes.c_double)
@@ -476,8 +477,8 @@ def py_collective_factors(
         ptr_weight,
         &B[0,0],
         k, k_user, k_item, k_main,
-        lam, w_user, w_main, 0.,
-        ptr_BtBinvBt, ptr_BtBw, ptr_BtBchol, ptr_CtCw, 0,
+        lam, w_main, w_user, lam,
+        ptr_BtBinvBt, ptr_BtBw, ptr_BtBchol, ptr_CtCw,
         NA_as_zero_U, NA_as_zero_X,
         <double*>NULL
     )
@@ -816,7 +817,8 @@ def py_collective_cold_start(
     cdef np.ndarray[double, ndim=2] CtCw
     cdef np.ndarray[double, ndim=2] CtCchol
     if precompute and C.shape[0]:
-        CtCinvCt, CtCw, CtCchol = py_AtAinvAt(C, 0, lam, w_user)
+        # CtCinvCt, CtCw, CtCchol = py_AtAinvAt(C, 0, lam, w_user)
+        CtCinvCt, CtCw, CtCchol = py_AtAinvAt(C, 0, lam/w_user, 1.)
         ptr_CtCinvCt = &CtCinvCt[0,0]
         ptr_CtCw = &CtCw[0,0]
         ptr_CtCchol = &CtCchol[0,0]
@@ -855,7 +857,7 @@ def py_collective_cold_start(
         ptr_CtCinvCt, ptr_CtCw, ptr_CtCchol,
         <double*>NULL,
         k, k_user, k_main,
-        lam, w_user,
+        lam, 1., w_user,
         NA_as_zero_U
     )
     return outp
@@ -902,6 +904,9 @@ def py_optimizeA(
         ptr_values = &Xcsr[0]
     if weight.shape[0]:
         ptr_weight = &weight[0]
+
+    if w != 1.:
+        lam /= w
     
     optimizeA(
         &A[0,0], lda,
@@ -910,7 +915,7 @@ def py_optimizeA(
         ptr_indptr, ptr_indices, ptr_values,
         ptr_Xfull, full_dense, as_near_dense,
         ptr_cnt_NA, ptr_weight, NA_as_zero,
-        lam, w, lam,
+        lam, lam,
         is_B, 1,
         nthreads,
         0, 0,
@@ -987,6 +992,10 @@ def py_optimizeA_collective(
         ptr_Ucsr_i = &U_csr_i[0]
         ptr_Ucsr = &U_csr[0]
 
+    if w_main != 1.:
+        w_user /= w_main
+        lam /= w_main
+
     optimizeA_collective(
         &A[0,0], &B[0,0], &C[0,0],
         m, m_u, n, p,
@@ -997,7 +1006,7 @@ def py_optimizeA_collective(
         ptr_Ucsr_p, ptr_Ucsr_i, ptr_Ucsr,
         ptr_U, ptr_cnt_NA_u,
         full_dense_u, as_near_dense_u, NA_as_zero_U,
-        lam, w_main, w_user, lam,
+        lam, w_user, lam,
         is_B,
         nthreads,
         0, 0, 1,
@@ -1012,7 +1021,7 @@ def py_optimizeA_implicit(
     np.ndarray[size_t, ndim=1] Xcsr_p,
     np.ndarray[int, ndim=1] Xcsr_i,
     np.ndarray[double, ndim=1] Xcsr,
-    double lam, double alpha, double w,
+    double lam, double alpha,
     int nthreads,
     np.ndarray[double, ndim=1] buffer_double
     ):
@@ -1027,9 +1036,9 @@ def py_optimizeA_implicit(
         &B[0,0], ldb,
         m, n, k,
         &Xcsr_p[0], &Xcsr_i[0], &Xcsr_pass[0],
-        lam/w,
+        lam,
         nthreads,
-        0, 0, 1,
+        0, 0, 1, 0,
         <double*>NULL,
         &buffer_double[0]
     )
@@ -1093,9 +1102,10 @@ def py_optimizeA_collective_implicit(
         ptr_Ucsr_p, ptr_Ucsr_i, ptr_Ucsr,
         ptr_U, ptr_cnt_NA_u,
         full_dense_u, as_near_dense_u, NA_as_zero_U,
-        lam, w_main, w_user,
+        lam/w_main, w_user/w_main,
         nthreads,
         0, 0, 1,
+        0, <double*>NULL,
         &buffer_double[0]
     )
 

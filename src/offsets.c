@@ -116,7 +116,7 @@
     'implicit-feedback' model, in which the entries of 'X' are assumed to all
     be zeros or ones (i.e. the matrix is full with no missing values), but with
     a weight given by the actual values and a confidence score multiplier:
-        min ||(alpha*X + 1) . (M - A*t(B))||^2 + lambda*(||A||^2 + ||B||^2)
+        min ||sqrt(alpha*X + 1) . (M - A*t(B))||^2 + lambda*(||A||^2 + ||B||^2)
 
     =======================     END OF COMMON PART     =========================
 
@@ -627,9 +627,9 @@ int offsets_factors_warm
                                     Xa, ixB, nnz,
                                     weight,
                                     buffer_FPnum,
-                                    lam, 1., lam,
+                                    lam, lam,
                                     precomputedBtBinvBt,
-                                    precomputedBtBw, cnt_NA, 0,
+                                    precomputedBtBw, cnt_NA, k_sec+k+k_main,
                                     (FPnum*)NULL, false,
                                     false, 0, false);
             else {
@@ -639,9 +639,9 @@ int offsets_factors_warm
                                     Xa, ixB, nnz,
                                     weight,
                                     buffer_FPnum,
-                                    lam, 1., lam_bias,
+                                    lam, lam_bias,
                                     precomputedBtBinvBt,
-                                    precomputedBtBw, cnt_NA, 0,
+                                    precomputedBtBw, cnt_NA, k_sec+k+k_main+1,
                                     (FPnum*)NULL, false,
                                     false, 0, false);
                 memcpy(a_vec, a_plus_bias,
@@ -655,7 +655,7 @@ int offsets_factors_warm
                 Bm, k_sec+k+k_main,
                 Xa, ixB, nnz,
                 lam,
-                precomputedBtBw, 0,
+                precomputedBtBw, k_sec+k+k_main,
                 true,
                 buffer_FPnum,
                 false
@@ -749,7 +749,7 @@ int offsets_factors_warm
                                     (FPnum*)NULL, (int*)NULL, (size_t)0,
                                     weight,
                                     buffer_remainder,
-                                    lam, 1., lam,
+                                    lam, lam,
                                     (FPnum*)NULL,
                                     (FPnum*)NULL, 0, 0,
                                     (FPnum*)NULL, false,
@@ -761,7 +761,7 @@ int offsets_factors_warm
                                     (FPnum*)NULL, (int*)NULL, (size_t)0,
                                     weight,
                                     buffer_remainder,
-                                    lam, 1., lam_bias,
+                                    lam, lam_bias,
                                     (FPnum*)NULL,
                                     (FPnum*)NULL, 0, 0,
                                     (FPnum*)NULL, false,
@@ -1288,6 +1288,7 @@ int fit_offsets_als
         return 2;
     }
 
+    /* TODO: should this retain some of the precomputed matrices? */
     int retval;
     if (!implicit)
         retval = fit_collective_explicit_als(
@@ -1329,7 +1330,8 @@ int fit_offsets_als
                     alpha, adjust_weight,
                     niter, nthreads, seed, verbose, handle_interrupt,
                     use_cg, max_cg_steps,
-                    finalize_chol
+                    finalize_chol,
+                    false, (FPnum*)NULL
                 );
     if (retval == 1)
     {

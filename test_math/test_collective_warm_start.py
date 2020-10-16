@@ -109,7 +109,7 @@ for xtype in xtry:
                                                             continue
                                                         if (na_as_zero_u) and (utype!="sparse"):
                                                             continue
-                                                        if (na_as_zero_x) and (ubin_type=="missing"):
+                                                        if (na_as_zero_x or na_as_zero_u) and (ubin_type!="missing"):
                                                             continue
                                                         if (w_user != 1) and (utype=="missing" and ubin_type=="missing"):
                                                             continue
@@ -137,15 +137,16 @@ for xtype in xtry:
                                                         r_scipy = minimize(py_eval, x0)["x"]
                                                         r_module = py_warm_factors()
                                                         diff = np.linalg.norm(r_scipy - r_module)
+                                                        df = py_eval(r_module) - py_eval(r_scipy)
                                                         #is_wrong = (diff >= .25*np.linalg.norm(r_scipy - x0)) or np.any(np.isnan(r_module))
-                                                        is_wrong = (diff > 1e1) or (np.isnan(diff)) or (np.any(np.isnan(r_module)))
+                                                        is_wrong = (diff > 1e1) or (np.isnan(diff)) or (np.any(np.isnan(r_module))) or (df > 1e1) or (np.isnan(df))
                                                         if is_wrong:
                                                             print("\n\n\n\n****ERROR BELOW****", flush=True)
 
                                                         print(
-                                                        "[X %s] [w:%d] [U %s] [Ub %s] [m:%d] [u:%d] [i:%d] [wu:%.2f] [wm:%.2f] [pc:%d] [nax:%d] [nau:%d] [nz:%d,%d] -> diff: %.2f"
+                                                        "[X %s] [w:%d] [U %s] [Ub %s] [m:%d] [u:%d] [i:%d] [wu:%.2f] [wm:%.2f] [pc:%d] [nax:%d] [nau:%d] [nz:%d,%d] -> diff: %.2f, %.2f"
                                                         % (xtype[0], weighted, utype[0], ubin_type[0], k_main, k_user, k_item,
-                                                        w_user, w_main, precompute, na_as_zero_x, na_as_zero_u, nzX, nzU, diff)
+                                                        w_user, w_main, precompute, na_as_zero_x, na_as_zero_u, nzX, nzU, diff, df)
                                                         , flush=True
                                                         )
 

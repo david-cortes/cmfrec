@@ -565,15 +565,27 @@ void tgemm_sp_dense
                 )
     long long row;
     #endif
-    #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
-            shared(m, n, alpha, ldb, ldc, OutputMat, DenseMat, indptr, indices, values) \
-            private(ptr_col)
-    for (size_t_for row = 0; row < (size_t)m; row++) {
-        ptr_col = OutputMat + row*ldc;
-        for (size_t col = indptr[row]; col < indptr[row+1]; col++) {
-            cblas_taxpy(n, alpha*values[col], DenseMat + (size_t)indices[col]*ldb, 1, ptr_col, 1);
+
+    if (alpha != 1.)
+        #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
+                shared(m, n, alpha, ldb, ldc, OutputMat, DenseMat, indptr, indices, values) \
+                private(ptr_col)
+        for (size_t_for row = 0; row < (size_t)m; row++) {
+            ptr_col = OutputMat + row*ldc;
+            for (size_t col = indptr[row]; col < indptr[row+1]; col++) {
+                cblas_taxpy(n, alpha*values[col], DenseMat + (size_t)indices[col]*ldb, 1, ptr_col, 1);
+            }
         }
-    }
+    else
+        #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
+                shared(m, n, ldb, ldc, OutputMat, DenseMat, indptr, indices, values) \
+                private(ptr_col)
+        for (size_t_for row = 0; row < (size_t)m; row++) {
+            ptr_col = OutputMat + row*ldc;
+            for (size_t col = indptr[row]; col < indptr[row+1]; col++) {
+                cblas_taxpy(n, values[col], DenseMat + (size_t)indices[col]*ldb, 1, ptr_col, 1);
+            }
+        }
 }
 
 /* x <- alpha*t(A)*v + x | A[m,n] is dense, v[m] is sparse, x[n] is dense */
@@ -585,8 +597,12 @@ void tgemv_dense_sp
     FPnum OutputVec[]
 )
 {
-    for (size_t ix = 0; ix < nnz; ix++)
-        cblas_taxpy(n, alpha*vec_sp[ix], DenseMat + (size_t)ixB[ix]*lda, 1, OutputVec, 1);
+    if (alpha != 1.)
+        for (size_t ix = 0; ix < nnz; ix++)
+            cblas_taxpy(n, alpha*vec_sp[ix], DenseMat + (size_t)ixB[ix]*lda, 1, OutputVec, 1);
+    else
+        for (size_t ix = 0; ix < nnz; ix++)
+            cblas_taxpy(n, vec_sp[ix], DenseMat + (size_t)ixB[ix]*lda, 1, OutputVec, 1);
 }
 
 /* Same but with an array of weights */
@@ -649,18 +665,17 @@ void copy_mat
 /* B[:m,:n] = A[:m,:n] + B[:m,:n] */
 void sum_mat
 (
-    int m, int n,
-    FPnum *restrict A, int lda,
-    FPnum *restrict B, int ldb
+    size_t m, size_t n,
+    FPnum *restrict A, size_t lda,
+    FPnum *restrict B, size_t ldb
 )
 {
+    int n_int = (int)n;
     if (lda == n && ldb == n)
-        taxpy_large(A, 1., B, (size_t)m*(size_t)n, 1);
+        taxpy_large(A, 1., B, m*n, 1);
     else
-        for (int row = 0; row < m; row++)
-            for (int col = 0; col < n; col++)
-                B[col + row*ldb] += A[col + row*lda];
-
+        for (size_t row = 0; row < m; row++)
+            cblas_taxpy(n_int, 1., A + row*lda, 1, B + row*ldb, 1);
 }
 
 /* B <- inv(t(A)*A + diag(lam/w))*t(A) | AtAw <- w* (t(A)*A + diag(lam)) */

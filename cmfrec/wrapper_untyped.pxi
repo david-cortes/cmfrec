@@ -132,7 +132,9 @@ cdef extern from "cmfrec.h":
         FPnum *w_main_multiplier,
         FPnum alpha, bint adjust_weight,
         int niter, int nthreads, int seed, bint verbose, bint handle_interrupt,
-        bint use_cg, int max_cg_steps, bint finalize_chol
+        bint use_cg, int max_cg_steps, bint finalize_chol,
+        bint precompute_for_predictions,
+        FPnum *precomputedBtB
     )
 
     int fit_offsets_als(
@@ -207,7 +209,7 @@ cdef extern from "cmfrec.h":
         FPnum *CtCchol,
         FPnum *col_means,
         int k, int k_user, int k_main,
-        FPnum lam, FPnum w_user,
+        FPnum lam, FPnum w_main, FPnum w_user,
         bint NA_as_zero_U
     )
 
@@ -215,11 +217,13 @@ cdef extern from "cmfrec.h":
         FPnum *a_vec,
         FPnum *u_vec, int p,
         FPnum *u_vec_sp, int u_vec_ixB[], size_t nnz_u_vec,
-        FPnum *precomputedBtBw,
         FPnum *C,
+        FPnum *precomputedBeTBe,
+        FPnum *precomputedBtB,
+        FPnum *precomputedBeTBeChol,
         FPnum *col_means,
         int k, int k_user, int k_main,
-        FPnum lam, FPnum w_user,
+        FPnum lam, FPnum w_main, FPnum w_user, FPnum w_main_multiplier,
         bint NA_as_zero_U
     )
 
@@ -236,12 +240,11 @@ cdef extern from "cmfrec.h":
         FPnum *weight,
         FPnum *B,
         int k, int k_user, int k_item, int k_main,
-        FPnum lam, FPnum w_user, FPnum w_main, FPnum lam_bias,
+        FPnum lam, FPnum w_main, FPnum w_user, FPnum lam_bias,
         FPnum *BtBinvBt,
         FPnum *BtBw,
         FPnum *BtBchol,
         FPnum *CtCw,
-        int k_item_BtB,
         bint NA_as_zero_U, bint NA_as_zero_X,
         FPnum *B_plus_bias
     )
@@ -255,12 +258,11 @@ cdef extern from "cmfrec.h":
         FPnum *B, int n, FPnum *C,
         FPnum *Xa, int ixB[], size_t nnz,
         int k, int k_user, int k_item, int k_main,
-        FPnum lam, FPnum alpha, FPnum w_user, FPnum w_main,
+        FPnum lam, FPnum alpha, FPnum w_main, FPnum w_user,
         FPnum w_main_multiplier,
         FPnum *precomputedBeTBe,
         FPnum *precomputedBtB,
-        FPnum *precomputedBtB_shrunk,
-        int k_item_BtB
+        FPnum *precomputedBeTBeChol
     )
 
     int offsets_factors_cold(
@@ -389,7 +391,7 @@ cdef extern from "cmfrec.h":
         FPnum *CtCchol,
         FPnum *col_means,
         int k, int k_user, int k_main,
-        FPnum lam, FPnum w_user,
+        FPnum lam, FPnum w_main, FPnum w_user,
         bint NA_as_zero_U,
         int nthreads
     )
@@ -409,21 +411,20 @@ cdef extern from "cmfrec.h":
         FPnum *weight,
         FPnum *B,
         int k, int k_user, int k_item, int k_main,
-        FPnum lam, FPnum w_user, FPnum w_main, FPnum lam_bias,
+        FPnum lam, FPnum w_main, FPnum w_user, FPnum lam_bias,
         FPnum *BtBinvBt,
         FPnum *BtBw,
         FPnum *BtBchol,
         FPnum *CtCinvCt,
         FPnum *CtCw,
         FPnum *CtCchol,
-        int k_item_BtB,
         bint NA_as_zero_U, bint NA_as_zero_X,
         FPnum *B_plus_bias,
         int nthreads
     )
 
     int collective_factors_warm_implicit_multiple(
-        FPnum *A, int m, int m_x,
+        FPnum *A, int m,
         FPnum *U, int m_u, int p,
         int U_row[], int U_col[], FPnum *U_sp, size_t nnz_U,
         size_t U_csr_p[], int U_csr_i[], FPnum *U_csr,
@@ -433,12 +434,28 @@ cdef extern from "cmfrec.h":
         FPnum *X, int ixA[], int ixB[], size_t nnz,
         size_t *Xcsr_p, int *Xcsr_i, FPnum *Xcsr,
         int k, int k_user, int k_item, int k_main,
-        FPnum lam, FPnum alpha, FPnum w_user, FPnum w_main,
+        FPnum lam, FPnum alpha, FPnum w_main, FPnum w_user,
         FPnum w_main_multiplier,
         FPnum *precomputedBeTBe,
         FPnum *precomputedBtB,
-        FPnum *precomputedBtB_shrunk,
-        int k_item_BtB,
+        FPnum *precomputedBeTBeChol,
+        int nthreads
+    )
+
+    ### TODO: wrap this one too
+    int collective_factors_cold_implicit_multiple(
+        FPnum *A, int m,
+        FPnum *U, int m_u, int p,
+        int U_row[], int U_col[], FPnum *U_sp, size_t nnz_U,
+        size_t U_csr_p[], int U_csr_i[], FPnum *U_csr,
+        FPnum *B, FPnum *C,
+        FPnum *precomputedBeTBe,
+        FPnum *precomputedBtB,
+        FPnum *precomputedBeTBeChol,
+        FPnum *col_means,
+        int k, int k_user, int k_main,
+        FPnum lam, FPnum w_main, FPnum w_user, FPnum w_main_multiplier,
+        bint NA_as_zero_U,
         int nthreads
     )
 
@@ -1130,7 +1147,8 @@ def call_fit_collective_implicit_als(
         &w_main_multiplier,
         alpha, adjust_weight,
         niter, nthreads, 1, verbose, handle_interrupt,
-        use_cg, max_cg_steps, finalize_chol
+        use_cg, max_cg_steps, finalize_chol,
+        0, NULL
     )
 
     if retval == 1:
@@ -1699,7 +1717,7 @@ def call_factors_collective_cold(
         np.ndarray[FPnum, ndim=1] U_colmeans,
         int p, int k,
         int k_user = 0, int k_main = 0,
-        FPnum lam = 1e2, FPnum w_user = 1.,
+        FPnum lam = 1e2, FPnum w_main = 1., FPnum w_user = 1.,
         bint NA_as_zero_U = 0
     ):
     cdef FPnum *ptr_U = NULL
@@ -1748,7 +1766,7 @@ def call_factors_collective_cold(
         ptr_CtCchol,
         ptr_U_colmeans,
         k, k_user, k_main,
-        lam, w_user,
+        lam, w_main, w_user,
         NA_as_zero_U
     )
     if retval == 1:
@@ -1761,11 +1779,15 @@ def call_factors_collective_cold_implicit(
         np.ndarray[FPnum, ndim=1] U_sp,
         np.ndarray[int, ndim=1] U_sp_i,
         np.ndarray[FPnum, ndim=2] C,
+        np.ndarray[FPnum, ndim=2] BeTBe,
         np.ndarray[FPnum, ndim=2] BtB,
+        np.ndarray[FPnum, ndim=2] BeTBeChol,
         np.ndarray[FPnum, ndim=1] U_colmeans,
         int p, int k,
         int k_user = 0, int k_main = 0,
-        FPnum lam = 1e2, FPnum w_user = 1.,
+        FPnum lam = 1e2,
+        FPnum w_main = 1., FPnum w_user = 1.,
+        FPnum w_main_multiplier = 1.,
         bint NA_as_zero_U = 0
     ):
     cdef FPnum *ptr_U = NULL
@@ -1781,9 +1803,15 @@ def call_factors_collective_cold_implicit(
     if C.shape[0]:
         ptr_C = &C[0,0]
 
+    cdef FPnum *ptr_BeTBe = NULL
     cdef FPnum *ptr_BtB = NULL
+    cdef FPnum *ptr_BeTBeChol = NULL
+    if BeTBe.shape[0]:
+        ptr_BeTBe = &BeTBe[0,0]
     if BtB.shape[0]:
         ptr_BtB = &BtB[0,0]
+    if BeTBeChol.shape[0]:
+        ptr_BeTBeChol = &BeTBeChol[0,0]
 
     cdef FPnum *ptr_U_colmeans = NULL
     if U_colmeans.shape[0]:
@@ -1795,11 +1823,13 @@ def call_factors_collective_cold_implicit(
         &A[0],
         ptr_U, p,
         ptr_U_sp, ptr_U_sp_i, <size_t> U_sp.shape[0],
+        ptr_BeTBe,
         ptr_BtB,
+        ptr_BeTBeChol,
         ptr_C,
         ptr_U_colmeans,
         k, k_user, k_main,
-        lam, w_user,
+        lam, w_main, w_user, w_main_multiplier,
         NA_as_zero_U
     )
 
@@ -1914,12 +1944,11 @@ def call_factors_collective_warm_explicit(
         ptr_weight,
         &B[0,0],
         k, k_user, k_item, k_main,
-        lam, w_user, w_main, lam_bias,
+        lam, w_main, w_user, lam_bias,
         ptr_BtBinvBt,
         ptr_BtB,
         ptr_BtBchol,
         ptr_CtC,
-        0,
         NA_as_zero_U, NA_as_zero_X,
         ptr_B_plus_bias
     )
@@ -1939,7 +1968,7 @@ def call_factors_collective_warm_implicit(
         np.ndarray[FPnum, ndim=2] C,
         np.ndarray[FPnum, ndim=2] BeTBe,
         np.ndarray[FPnum, ndim=2] BtB,
-        np.ndarray[FPnum, ndim=2] BtB_shrunk,
+        np.ndarray[FPnum, ndim=2] BeTBeChol,
         int k, int k_user = 0, int k_item = 0, int k_main = 0,
         FPnum lam = 1e2, FPnum alpha = 40.,
         FPnum w_main_multiplier = 1.,
@@ -1966,13 +1995,13 @@ def call_factors_collective_warm_implicit(
 
     cdef FPnum *ptr_BeTBe = NULL
     cdef FPnum *ptr_BtB = NULL
-    cdef FPnum *ptr_BtB_shrunk = NULL
+    cdef FPnum *ptr_BeTBeChol = NULL
     if BeTBe.shape[0]:
         ptr_BeTBe = &BeTBe[0,0]
     if BtB.shape[0]:
         ptr_BtB = &BtB[0,0]
-    if BtB_shrunk.shape[0]:
-        ptr_BtB_shrunk = &BtB_shrunk[0,0]
+    if BeTBeChol.shape[0]:
+        ptr_BeTBeChol = &BeTBeChol[0,0]
     
     cdef np.ndarray[FPnum, ndim=1] A = np.empty(k_user+k+k_main, dtype=c_FPnum)
     cdef int retval = collective_factors_warm_implicit(
@@ -1984,12 +2013,11 @@ def call_factors_collective_warm_implicit(
         &B[0,0], B.shape[0], ptr_C,
         &Xa[0], &Xa_i[0], Xa.shape[0],
         k, k_user, k_item, k_main,
-        lam, alpha, w_user, w_main,
+        lam, alpha, w_main, w_user,
         w_main_multiplier,
         ptr_BeTBe,
         ptr_BtB,
-        ptr_BtB_shrunk,
-        0
+        ptr_BeTBeChol
     )
     if retval == 1:
         raise MemoryError("Could not allocate sufficient memory.")
@@ -2651,7 +2679,7 @@ def call_collective_factors_cold_multiple(
         np.ndarray[FPnum, ndim=1] U_colmeans,
         int m_u, int m_ubin,
         int k, int k_user, int k_main,
-        FPnum lam = 1e2, FPnum w_user = 1.,
+        FPnum lam = 1e2, FPnum w_main = 1., FPnum w_user = 1.,
         bint NA_as_zero_U = 0,
         int nthreads = 1
     ):
@@ -2718,7 +2746,7 @@ def call_collective_factors_cold_multiple(
         ptr_CtCchol,
         ptr_U_colmeans,
         k, k_user, k_main,
-        lam, w_user,
+        lam, w_main, w_user,
         NA_as_zero_U,
         nthreads
     )
@@ -2753,6 +2781,7 @@ def call_collective_factors_warm_multiple(
         np.ndarray[FPnum, ndim=2] C_bin,
         np.ndarray[FPnum, ndim=2] BtBinvBt,
         np.ndarray[FPnum, ndim=2] BtB,
+        np.ndarray[FPnum, ndim=2] BtBchol,
         np.ndarray[FPnum, ndim=2] CtCinvCt,
         np.ndarray[FPnum, ndim=2] CtC,
         np.ndarray[FPnum, ndim=2] CtCchol,
@@ -2850,10 +2879,13 @@ def call_collective_factors_warm_multiple(
 
     cdef FPnum *ptr_BtBinvBt = NULL
     cdef FPnum *ptr_BtB = NULL
+    cdef FPnum *ptr_BtBchol = NULL
     if BtBinvBt.shape[0]:
         ptr_BtBinvBt = &BtBinvBt[0,0]
     if BtB.shape[0]:
         ptr_BtB = &BtB[0,0]
+    if BtBchol.shape[0]:
+        ptr_BtBchol = &BtBchol[0,0]
 
     cdef int m = max([m_x, m_u, m_ubin])
     cdef np.ndarray[FPnum, ndim=2] A = np.empty((m, k_user+k+k_main), dtype=c_FPnum)
@@ -2878,14 +2910,13 @@ def call_collective_factors_warm_multiple(
         ptr_weight,
         &B[0,0],
         k, k_user, k_item, k_main,
-        lam, w_user, w_main, lam_bias,
+        lam, w_main, w_user, lam_bias,
         ptr_BtBinvBt,
         ptr_BtB,
-        <FPnum*> NULL,
+        ptr_BtBchol,
         ptr_CtCinvCt,
         ptr_CtC,
         ptr_CtCchol,
-        0,
         NA_as_zero_U, NA_as_zero_X,
         ptr_B_plus_bias,
         nthreads
@@ -2914,7 +2945,7 @@ def call_collective_factors_warm_implicit_multiple(
         np.ndarray[FPnum, ndim=2] C,
         np.ndarray[FPnum, ndim=2] BeTBe,
         np.ndarray[FPnum, ndim=2] BtB,
-        np.ndarray[FPnum, ndim=2] BtB_shrunk,
+        np.ndarray[FPnum, ndim=2] BeTBeChol,
         int n, int m_u, int m_x,
         int k, int k_user = 0, int k_item = 0, int k_main = 0,
         FPnum lam = 1e2, FPnum alpha = 40.,
@@ -2973,18 +3004,18 @@ def call_collective_factors_warm_implicit_multiple(
 
     cdef FPnum *ptr_BeTBe = NULL
     cdef FPnum *ptr_BtB = NULL
-    cdef FPnum *ptr_BtB_shrunk = NULL
+    cdef FPnum *ptr_BeTBeChol = NULL
     if BeTBe.shape[0]:
         ptr_BeTBe = &BeTBe[0,0]
     if BtB.shape[0]:
         ptr_BtB = &BtB[0,0]
-    if BtB_shrunk.shape[0]:
-        ptr_BtB_shrunk = &BtB_shrunk[0,0]
+    if BeTBeChol.shape[0]:
+        ptr_BeTBeChol = &BeTBeChol[0,0]
 
     cdef np.ndarray[FPnum, ndim=2] A = np.empty((m, k_user+k+k_main), dtype=c_FPnum)
 
     cdef int retval = collective_factors_warm_implicit_multiple(
-        &A[0,0], m, m_x,
+        &A[0,0], m,
         ptr_U, m_u, C.shape[0],
         ptr_U_row, ptr_U_col, ptr_U_sp, nnz_U,
         ptr_U_csr_p, ptr_U_csr_i, ptr_U_csr,
@@ -2994,12 +3025,11 @@ def call_collective_factors_warm_implicit_multiple(
         ptr_X, ptr_ixA, ptr_ixB, nnz,
         ptr_Xcsr_p, ptr_Xcsr_i, ptr_Xcsr,
         k, k_user, k_item, k_main,
-        lam, alpha, w_user, w_main,
+        lam, alpha, w_main, w_user,
         w_main_multiplier,
         ptr_BeTBe,
         ptr_BtB,
-        ptr_BtB_shrunk,
-        0,
+        ptr_BeTBeChol,
         nthreads
     )
     if retval == 1:

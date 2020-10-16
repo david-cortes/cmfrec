@@ -74,6 +74,9 @@ def py_eval(values):
     A = values.reshape((max(m,m_u),k_user+k+k_main))
     errX = X - A[:m,k_user:].dot(B[:,k_item:].T)
     res = w_main * (W*(errX**2)).sum() + lam*(A**2).sum()
+    if xlen == "smaller":
+        err_extra = A[m:,k_user:].dot(B[:,k_item:].T)
+        res += w_main * (err_extra**2).sum()
     predU = A[:m_u,:k_user+k].dot(C.T)
     if na_as_zero_u:
         U_use = U.copy()

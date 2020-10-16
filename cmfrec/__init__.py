@@ -167,8 +167,7 @@ class _CMF:
         self._CtC = np.empty((0,0), dtype=self.dtype_)
         self._CtCchol = np.empty((0,0), dtype=self.dtype_)
         self._BeTBe = np.empty((0,0), dtype=self.dtype_)
-        self._BtB_padded = np.empty((0,0), dtype=self.dtype_)
-        self._BtB_shrunk = np.empty((0,0), dtype=self.dtype_)
+        self._BeTBeChol = np.empty((0,0), dtype=self.dtype_)
 
         self._B_pred = np.empty((0,0), dtype=self.dtype_)
         self._B_plus_bias = np.empty((0,0), dtype=self.dtype_)
@@ -925,6 +924,11 @@ class _CMF:
             msg += "Number of rows/columns cannot be more than INT_MAX."
             raise ValueError(msg)
 
+        if max(m_u, m_ub, p, pbin) == 0:
+            self.k_user = 0
+        if max(n_i, n_ib, q, qbin) == 0:
+            self.k_item = 0
+
         return self._fit(Xrow, Xcol, Xval, W_sp, Xarr, W_dense,
                          Uarr, Urow, Ucol, Uval, Ub_arr,
                          Iarr, Irow, Icol, Ival, Ib_arr,
@@ -1232,7 +1236,7 @@ class _CMF:
                     self._U_colmeans,
                     self.C_.shape[0], self.k,
                     self.k_user, self.k_main,
-                    lambda_, self.w_user,
+                    lambda_, self.w_main, self.w_user,
                     self.NA_as_zero_user
                 )
             else:
@@ -1269,11 +1273,15 @@ class _CMF:
                 U_val,
                 U_col,
                 self.C_,
-                self._BtB_padded,
+                self._BeTBe,
+                self._BtB,
+                self._BeTBeChol,
                 self._U_colmeans,
                 self.C_.shape[0], self.k,
                 self.k_user, self.k_main,
-                lambda_, self.w_user,
+                lambda_,
+                self.w_main, self.w_user,
+                self._w_main_multiplier,
                 self.NA_as_zero_user
             )
         return a_vec
@@ -1462,7 +1470,9 @@ class _CMF:
         I, I_col, I_val, I_bin = self._process_new_U(U=I, U_col=I_col, U_val=I_val, U_bin=I_bin, is_I=True)
 
         c_funs = wrapper_float if self.use_float else wrapper_double
-
+        
+        ### TODO: this is wrong for the implicit one.
+        ### Also could pass precomputed ones when having NA_as_zero 
         b_vec = c_funs.call_factors_collective_cold(
             I,
             I_val,
@@ -1476,7 +1486,7 @@ class _CMF:
             self._I_colmeans,
             self.D_.shape[0], self.k,
             self.k_item, self.k_main,
-            lambda_, self.w_item,
+            lambda_, self.w_main, self.w_item,
             self.NA_as_zero_item
         )
         return b_vec
@@ -1538,7 +1548,7 @@ class _CMF:
                     self._U_colmeans if not is_I else self._I_colmeans,
                     m_u, m_ub,
                     self.k, self.k_user if not is_I else self.k_item, self.k_main,
-                    lambda_, self.w_user if not is_I else self.w_item,
+                    lambda_, self.w_main, self.w_user if not is_I else self.w_item,
                     self.NA_as_zero_user if not is_I else self.NA_as_zero_item,
                     self.nthreads
                 )
@@ -1567,6 +1577,7 @@ class _CMF:
                     self.Cbin_,
                     self._BtBinvBt,
                     self._BtB,
+                    self._BtBchol,
                     self._CtCinvCt,
                     self._CtC,
                     self._CtCchol,
@@ -1600,7 +1611,7 @@ class _CMF:
                 self.C_,
                 self._BeTBe,
                 self._BtB_padded,
-                self._BtB_shrunk,
+                self._BeTBeChol,
                 n, m_u, 0,
                 self.k, self.k_user, self.k_item, self.k_main,
                 lambda_, self.alpha,
@@ -2271,6 +2282,12 @@ class CMF_explicit(_CMF):
         """
         Determine item-factors from new data, given I
 
+        Note
+        ----
+        Calculating item factors might be a lot slower than user factors,
+        as the model does not keep precomputed matrices that might speed
+        up these factor calculations.
+
         Parameters
         ----------
         I : array(q,), or None
@@ -2628,6 +2645,7 @@ class CMF_explicit(_CMF):
                 self.Cbin_,
                 self._BtBinvBt,
                 self._BtB,
+                self._BtBchol,
                 self._CtCinvCt,
                 self._CtC,
                 self._CtCchol,
@@ -2809,7 +2827,7 @@ class CMF_explicit(_CMF):
                 self._U_colmeans,
                 m_u, m_ubin,
                 self._k_pred, self.k_user, self._k_main_col,
-                lambda_, self.w_user,
+                lambda_, self.w_main, self.w_user,
                 self.NA_as_zero_user,
                 self.nthreads
             )
@@ -2837,6 +2855,7 @@ class CMF_explicit(_CMF):
                 self.Cbin_,
                 self._BtBinvBt,
                 self._BtB,
+                self._BtBchol,
                 self._CtCinvCt,
                 self._CtC,
                 self._CtCchol,
@@ -2866,6 +2885,7 @@ class CMF_explicit(_CMF):
         self
         
         """
+        ### TODO: should have an option to precompute also for item factors
         assert self.is_fitted_
         if isinstance(self.lambda_, np.ndarray):
             lambda_ = self.lambda_[2]
@@ -3267,6 +3287,7 @@ class CMF_implicit(_CMF):
         self
 
         """
+        ### TODO: should have an option to precompute also for item factors
         assert self.is_fitted_
         if isinstance(self.lambda_, np.ndarray):
             lambda_ = self.lambda_[2]
@@ -3426,6 +3447,12 @@ class CMF_implicit(_CMF):
         """
         Determine item-factors from new data, given I
 
+        Note
+        ----
+        Calculating item factors might be a lot slower than user factors,
+        as the model does not keep precomputed matrices that might speed
+        up these factor calculations.
+
         Parameters
         ----------
         I : array(q,), or None
@@ -3447,6 +3474,7 @@ class CMF_implicit(_CMF):
         factors : array(k_item+k+k_main,)
             The item-factors as determined by the model.
         """
+        ## TODO: is this correct?
         return self._item_factors_cold(I=I, I_bin=None, I_col=I_col, I_val=I_val)
 
     def predict_new(self, user, I):
@@ -3569,8 +3597,8 @@ class CMF_implicit(_CMF):
             self.B_,
             self.C_,
             self._BeTBe,
-            self._BtB_padded,
-            self._BtB_shrunk,
+            self._BtB,
+            self._BeTBeChol,
             self.k, self.k_user, self.k_item, self.k_main,
             lambda_, self.alpha,
             self._w_main_multiplier,
@@ -3758,7 +3786,7 @@ class CMF_implicit(_CMF):
             self.C_,
             self._BeTBe,
             self._BtB_padded,
-            self._BtB_shrunk,
+            self._BeTBeChol,
             n, m_u, m_x,
             self.k, self.k_user, self.k_item, self.k_main,
             lambda_, self.alpha,
