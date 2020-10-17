@@ -1,5 +1,6 @@
 import numpy as np
 cimport numpy as np
+from scipy.linalg.cython_lapack cimport dpotrf
 
 cdef extern from "cmfrec.h":
     void factors_closed_form(
@@ -12,6 +13,7 @@ cdef extern from "cmfrec.h":
         double lam, double lam_last,
         double *precomputedBtBinvBt,
         double *precomputedBtBw, int cnt_NA, int ld_BtB,
+        bint BtB_has_diag, bint BtB_is_scaled, double scale_BtB,
         double *precomputedBtBchol, bint NA_as_zero,
         bint use_cg, int max_cg_steps,
         bint force_add_diag
@@ -82,7 +84,6 @@ cdef extern from "cmfrec.h":
         double *C, double *Cb,
         double *CtCinvCt,
         double *CtCw,
-        double *CtCchol,
         double *col_means,
         int k, int k_user, int k_main,
         double lam, double w_main, double w_user,
@@ -104,8 +105,7 @@ cdef extern from "cmfrec.h":
         int k, int k_user, int k_item, int k_main,
         double lam, double w_main, double w_user, double lam_bias,
         double *BtBinvBt,
-        double *BtBw,
-        double *BtBchol,
+        double *BtB,
         double *BeTBeChol,
         double *CtCw,
         bint NA_as_zero_U, bint NA_as_zero_X,
@@ -159,9 +159,9 @@ cdef extern from "cmfrec.h":
     )
 
     void optimizeA_collective(
-        double* A, double* B, double* C,
+        double* A, int lda, double* B, int ldb, double* C,
         int m, int m_u, int n, int p,
-        int k, int k_main, int k_user, int k_item, int padding,
+        int k, int k_main, int k_user, int k_item,
         size_t Xcsr_p[], int Xcsr_i[], double* Xcsr,
         double* Xfull, bint full_dense, bint near_dense,
         int cnt_NA_x[], double* weight, bint NA_as_zero_X,
@@ -188,7 +188,7 @@ cdef extern from "cmfrec.h":
         bint use_cg, int max_cg_steps, bint is_first_iter,
         bint keep_precomputedBtB,
         double *precomputedBtB,
-        double *buffer_FPnum
+        double *buffer_double
     )
 
     double offsets_fun_grad(
@@ -329,6 +329,7 @@ def py_factors_closed_form(
         lam, lam,
         ptr_BtBinvBt,
         ptr_BtBw, np.sum(np.isnan(Xa_dense)), k,
+        1, 0, 1.,
         ptr_BtBchol, 0,
         0, 0,
         0
@@ -439,27 +440,49 @@ def py_collective_factors(
         ptr_weight = &weight[0]
 
     cdef double *ptr_BtBinvBt = NULL
-    cdef double *ptr_BtBw = NULL
-    cdef double *ptr_BtBchol = NULL
+    cdef double *ptr_BtB = NULL
+    cdef double *ptr_BeTBeChol = NULL
     cdef double *ptr_CtCw = NULL
     cdef np.ndarray[double, ndim=2] BtBinvBt
-    cdef np.ndarray[double, ndim=2] BtBw
-    cdef np.ndarray[double, ndim=2] BtBchol
+    cdef np.ndarray[double, ndim=2] BtB
+    cdef np.ndarray[double, ndim=2] BeTBeChol
     cdef np.ndarray[double, ndim=2] CtCw
     lam /= w_main
     w_user /= w_main
     w_main = 1.
+
+    cdef int one = 1
+    cdef char lo = 'L'
+    cdef int ignore = 0
+    cdef int k_totA = k_user + k + k_main
     if precompute:
-        if not weight.shape[0]:
-            # BtBinvBt, BtBw, BtBchol = py_AtAinvAt(B, k_item, lam, w_main)
-            BtBinvBt, BtBw, BtBchol = py_AtAinvAt(B, k_item, lam, 1.)
-            ptr_BtBinvBt = &BtBinvBt[0,0]
-            ptr_BtBw = &BtBw[0,0]
-            ptr_BtBchol = &BtBchol[0,0]
+        ## TODO: use the provided function to precompute once it's coded
+        # if not weight.shape[0]:
+        #     # BtBinvBt, BtBw, BtBchol = py_AtAinvAt(B, k_item, lam, w_main)
+        #     BtBinvBt, BtB, BtBchol = py_AtAinvAt(B, k_item, lam, 1.)
+        #     ptr_BtBinvBt = &BtBinvBt[0,0]
+        #     ptr_BtBw = &BtBw[0,0]
+        #     ptr_BtBchol = &BtBchol[0,0]
+        # if U.shape[0] or U_sp.shape[0]:
+        #     # CtCinvCt, CtCw, CtCchol = py_AtAinvAt(C, 0, lam, w_user)
+        #     CtCinvCt, CtCw, CtCchol = py_AtAinvAt(C, 0, lam/w_user, 1.)
+        #     ptr_CtCw = &CtCw[0,0]
+
         if U.shape[0] or U_sp.shape[0]:
-            # CtCinvCt, CtCw, CtCchol = py_AtAinvAt(C, 0, lam, w_user)
-            CtCinvCt, CtCw, CtCchol = py_AtAinvAt(C, 0, lam/w_user, 1.)
+            CtCw = w_user * C.T.dot(C)
             ptr_CtCw = &CtCw[0,0]
+
+        if not weight.shape[0]:
+            BtB = B[:,k_item:].T.dot(B[:,k_item:])
+            BtBinvBt = np.linalg.inv(BtB + lam*np.eye(BtB.shape[0])).dot(B[:,k_item:].T)
+            BeTBeChol = np.zeros((k_user+k+k_main, k_user+k+k_main))
+            BeTBeChol[k_user:,k_user:] = BtB
+            if C.shape[0]:
+                BeTBeChol[:k_user+k, :k_user+k] += w_user * (C.T.dot(C))
+            BeTBeChol[:,:] += lam * np.eye(BeTBeChol.shape[0])
+            dpotrf(&lo, &k_totA, &BeTBeChol[0,0], &k_totA, &ignore)
+            ptr_BeTBeChol = &BeTBeChol[0,0]
+
 
     cdef np.ndarray[double, ndim=1] col_means = np.zeros(p, dtype=ctypes.c_double)
     cdef double *ptr_col_means = NULL
@@ -479,7 +502,7 @@ def py_collective_factors(
         &B[0,0],
         k, k_user, k_item, k_main,
         lam, w_main, w_user, lam,
-        ptr_BtBinvBt, ptr_BtBw, ptr_BtBchol, <double*>NULL, ptr_CtCw,
+        ptr_BtBinvBt, ptr_BtB, ptr_BeTBeChol, ptr_CtCw,
         NA_as_zero_U, NA_as_zero_X,
         <double*>NULL
     )
@@ -816,13 +839,17 @@ def py_collective_cold_start(
     cdef double *ptr_CtCchol = NULL
     cdef np.ndarray[double, ndim=2] CtCinvCt
     cdef np.ndarray[double, ndim=2] CtCw
-    cdef np.ndarray[double, ndim=2] CtCchol
     if precompute and C.shape[0]:
-        # CtCinvCt, CtCw, CtCchol = py_AtAinvAt(C, 0, lam, w_user)
-        CtCinvCt, CtCw, CtCchol = py_AtAinvAt(C, 0, lam/w_user, 1.)
+        ## TODO: use provided function for precomputing once it's coded
+        # # CtCinvCt, CtCw, CtCchol = py_AtAinvAt(C, 0, lam, w_user)
+        # CtCinvCt, CtCw, CtCchol = py_AtAinvAt(C, 0, lam/w_user, 1.)
+        # ptr_CtCinvCt = &CtCinvCt[0,0]
+        # ptr_CtCw = &CtCw[0,0]
+
+        CtCw = w_user * C.T.dot(C)
+        CtCinvCt = np.linalg.inv(C.T.dot(C) + (lam/w_user)*np.eye(k_user+k)).dot(C.T)
         ptr_CtCinvCt = &CtCinvCt[0,0]
         ptr_CtCw = &CtCw[0,0]
-        ptr_CtCchol = &CtCchol[0,0]
 
     cdef int p = C.shape[0]
     cdef int pbin = Cb.shape[0]
@@ -855,7 +882,7 @@ def py_collective_cold_start(
         ptr_Usp, ptr_ixB_U, nnz_u_vec,
         ptr_Ubin, pbin,
         ptr_C, ptr_Cb,
-        ptr_CtCinvCt, ptr_CtCw, ptr_CtCchol,
+        ptr_CtCinvCt, ptr_CtCw,
         <double*>NULL,
         k, k_user, k_main,
         lam, 1., w_user,
@@ -998,9 +1025,9 @@ def py_optimizeA_collective(
         lam /= w_main
 
     optimizeA_collective(
-        &A[0,0], &B[0,0], &C[0,0],
+        &A[0,0], A.shape[1], &B[0,0], B.shape[1], &C[0,0],
         m, m_u, n, p,
-        k, k_main, k_user, k_item, 0,
+        k, k_main, k_user, k_item,
         ptr_Xcsr_p, ptr_Xcsr_i, ptr_Xcsr,
         ptr_Xfull, full_dense, as_near_dense_x,
         ptr_cnt_NA_x, ptr_weight, NA_as_zero_X,

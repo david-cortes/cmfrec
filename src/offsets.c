@@ -630,6 +630,7 @@ int offsets_factors_warm
                                     lam, lam,
                                     precomputedBtBinvBt,
                                     precomputedBtBw, cnt_NA, k_sec+k+k_main,
+                                    false, false, 1.,
                                     (FPnum*)NULL, false,
                                     false, 0, false);
             else {
@@ -642,6 +643,7 @@ int offsets_factors_warm
                                     lam, lam_bias,
                                     precomputedBtBinvBt,
                                     precomputedBtBw, cnt_NA, k_sec+k+k_main+1,
+                                    false, false, 1.,
                                     (FPnum*)NULL, false,
                                     false, 0, false);
                 memcpy(a_vec, a_plus_bias,
@@ -752,6 +754,7 @@ int offsets_factors_warm
                                     lam, lam,
                                     (FPnum*)NULL,
                                     (FPnum*)NULL, 0, 0,
+                                    false, false, 1.,
                                     (FPnum*)NULL, false,
                                     false, 0, false);
             else {
@@ -764,6 +767,7 @@ int offsets_factors_warm
                                     lam, lam_bias,
                                     (FPnum*)NULL,
                                     (FPnum*)NULL, 0, 0,
+                                    false, false, 1.,
                                     (FPnum*)NULL, false,
                                     false, 0, false);
                 memcpy(a_vec + k_sec, a_plus_bias + k_sec,

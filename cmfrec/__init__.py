@@ -161,11 +161,11 @@ class _CMF:
         self.glob_mean_ = 0.
 
         self._BtBinvBt = np.empty((0,0), dtype=self.dtype_)
+        ## will have lambda added for implicit but not for explicit, dim is k+k_main
         self._BtB = np.empty((0,0), dtype=self.dtype_)
-        self._BtBchol = np.empty((0,0), dtype=self.dtype_)
         self._CtCinvCt = np.empty((0,0), dtype=self.dtype_)
+        ## will be multiplied by w_user already
         self._CtC = np.empty((0,0), dtype=self.dtype_)
-        self._CtCchol = np.empty((0,0), dtype=self.dtype_)
         self._BeTBe = np.empty((0,0), dtype=self.dtype_)
         self._BeTBeChol = np.empty((0,0), dtype=self.dtype_)
 
@@ -792,6 +792,8 @@ class _CMF:
                 Xval = X.Value.astype(self.dtype_).to_numpy()
             else:
                 Xval = X.Rating.astype(self.dtype_).to_numpy()
+            if Xval.shape[0] == 0:
+                raise ValueError("'X' contains no non-zero entries.")
             Xarr = np.empty((0,0), dtype=self.dtype_)
             W_sp = np.empty(0, dtype=self.dtype_)
             if "Weight" in X.columns.values:
@@ -870,6 +872,9 @@ class _CMF:
             Irow, Icol, Ival, Iarr, self._I_cols, n_i, q = self._process_U_arr(I)
             _1, _2, _3, Ub_arr, self._Ub_cols, m_ub, pbin = self._process_U_arr(U_bin)
             _1, _2, _3, Ib_arr, self._Ib_cols, n_ib, qbin = self._process_U_arr(I_bin)
+
+            if (X.__class__.__name__ == "coo_matrix") and (Xval.shape[0] == 0):
+                raise ValueError("'X' contains no non-zero entries.")
 
             W_sp = np.empty(0, dtype=self.dtype_)
             W_dense = np.empty((0,0), dtype=self.dtype_)
@@ -1237,7 +1242,6 @@ class _CMF:
                     self.Cbin_,
                     self._CtCinvCt,
                     self._CtC,
-                    self._CtCchol,
                     self._U_colmeans,
                     self.C_.shape[0], self.k,
                     self.k_user, self.k_main,
@@ -1263,7 +1267,6 @@ class _CMF:
                     self.Cbin_,
                     self._BtBinvBt,
                     self._BtB,
-                    self._BtBchol,
                     self._BeTBeChol,
                     self._CtC,
                     self.glob_mean_,
@@ -1489,7 +1492,6 @@ class _CMF:
             self.Dbin_,
             np.empty((0,0), dtype=self.dtype_),
             np.empty((0,0), dtype=self.dtype_),
-            np.empty((0,0), dtype=self.dtype_),
             self._I_colmeans,
             self.D_.shape[0], self.k,
             self.k_item, self.k_main,
@@ -1551,7 +1553,6 @@ class _CMF:
                     MatBin,
                     np.empty((0,0), dtype=self.dtype_),
                     np.empty((0,0), dtype=self.dtype_),
-                    np.empty((0,0), dtype=self.dtype_),
                     self._U_colmeans if not is_I else self._I_colmeans,
                     m_u, m_ub,
                     self.k, self.k_user if not is_I else self.k_item, self.k_main,
@@ -1584,11 +1585,9 @@ class _CMF:
                     self.Cbin_,
                     self._BtBinvBt,
                     self._BtB,
-                    self._BtBchol,
                     self._BeTBeChol,
                     self._CtCinvCt,
                     self._CtC,
-                    self._CtCchol,
                     n, m_u, 0,
                     self.glob_mean_,
                     self._k_pred,
@@ -1618,7 +1617,7 @@ class _CMF:
                 self._B_pred,
                 self.C_,
                 self._BeTBe,
-                self._BtB_padded,
+                self._BtB,
                 self._BeTBeChol,
                 n, m_u, 0,
                 self.k, self.k_user, self.k_item, self.k_main,
@@ -2500,7 +2499,6 @@ class CMF_explicit(_CMF):
             self.Cbin_,
             self._BtBinvBt,
             self._BtB,
-            self._BtBchol,
             self._BeTBeChol,
             self._CtC,
             self.glob_mean_,
@@ -2654,11 +2652,9 @@ class CMF_explicit(_CMF):
                 self.Cbin_,
                 self._BtBinvBt,
                 self._BtB,
-                self._BtBchol,
                 self._BeTBeChol,
                 self._CtCinvCt,
                 self._CtC,
-                self._CtCchol,
                 n, m_u, m_x,
                 self.glob_mean_,
                 self._k_pred, self.k_user, self.k_item, self._k_main_col,
@@ -2833,7 +2829,6 @@ class CMF_explicit(_CMF):
                 self.Cbin_,
                 self._CtCinvCt,
                 self._CtC,
-                self._CtCchol,
                 self._U_colmeans,
                 m_u, m_ubin,
                 self._k_pred, self.k_user, self._k_main_col,
@@ -2865,11 +2860,9 @@ class CMF_explicit(_CMF):
                 self.Cbin_,
                 self._BtBinvBt,
                 self._BtB,
-                self._BtBchol,
                 self._BeTBeChol,
                 self._CtCinvCt,
                 self._CtC,
-                self._CtCchol,
                 n, m_u, m_x,
                 self.glob_mean_,
                 self._k_pred, self.k_user, self.k_item, self._k_main_col,
@@ -3796,7 +3789,7 @@ class CMF_implicit(_CMF):
             self._B_pred,
             self.C_,
             self._BeTBe,
-            self._BtB_padded,
+            self._BtB,
             self._BeTBeChol,
             n, m_u, m_x,
             self.k, self.k_user, self.k_item, self.k_main,

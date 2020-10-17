@@ -399,7 +399,8 @@ void factors_closed_form
     FPnum *restrict buffer_FPnum,
     FPnum lam, FPnum lam_last,
     FPnum *restrict precomputedBtBinvBt,
-    FPnum *restrict precomputedBtBw, int ld_BtB, int cnt_NA,
+    FPnum *restrict precomputedBtBw, int cnt_NA, int ld_BtB,
+    bool BtB_has_diag, bool BtB_is_scaled, FPnum scale_BtB,
     FPnum *restrict precomputedBtBchol, bool NA_as_zero,
     bool use_cg, int max_cg_steps,
     bool force_add_diag
@@ -742,7 +743,7 @@ void collective_closed_form_block
     int u_vec_ixB[], FPnum *restrict u_vec_sp, size_t nnz_u_vec,
     FPnum *restrict u_vec,
     bool NA_as_zero_X, bool NA_as_zero_U,
-    FPnum *restrict B, int n,
+    FPnum *restrict B, int n, int ldb,
     FPnum *restrict C, int p,
     FPnum *restrict weight,
     FPnum lam, FPnum w_user, FPnum lam_last,
@@ -763,7 +764,7 @@ void collective_closed_form_block_implicit
     bool NA_as_zero_U,
     FPnum lam, FPnum w_user,
     FPnum *restrict precomputedBeTBe,
-    FPnum *restrict precomputedBtB,
+    FPnum *restrict precomputedBtB, /* for cg, should NOT have lambda added */
     FPnum *restrict precomputedBeTBeChol,
     FPnum *restrict precomputedCtCw,
     bool add_U, bool shapes_match,
@@ -779,13 +780,13 @@ void collective_block_cg
     int u_vec_ixB[], FPnum *restrict u_vec_sp, size_t nnz_u_vec,
     FPnum *restrict u_vec,
     bool NA_as_zero_X, bool NA_as_zero_U,
-    FPnum *restrict B, int n,
+    FPnum *restrict B, int n, int ldb,
     FPnum *restrict C, int p,
     FPnum *restrict weight,
     FPnum lam, FPnum w_user, FPnum lam_last,
     int cnt_NA_x, int cnt_NA_u,
     FPnum *restrict precomputedBtB,
-    FPnum *restrict precomputedCtC,
+    FPnum *restrict precomputedCtC, /* should NOT be multiplied by 'w_user' */
     int max_cg_steps,
     FPnum *restrict buffer_FPnum
 );
@@ -831,7 +832,6 @@ int collective_factors_cold
     FPnum *restrict C, FPnum *restrict Cb,
     FPnum *restrict CtCinvCt,
     FPnum *restrict CtCw,
-    FPnum *restrict CtCchol,
     FPnum *restrict col_means,
     int k, int k_user, int k_main,
     FPnum lam, FPnum w_main, FPnum w_user,
@@ -844,9 +844,9 @@ int collective_factors_cold_implicit
     FPnum *restrict u_vec_sp, int u_vec_ixB[], size_t nnz_u_vec,
     FPnum *restrict B, int n,
     FPnum *restrict C,
-    FPnum *restrict precomputedBeTBe,
-    FPnum *restrict precomputedBtB,
-    FPnum *restrict precomputedBeTBeChol,
+    FPnum *restrict BeTBe,
+    FPnum *restrict BtB,
+    FPnum *restrict BeTBeChol,
     FPnum *restrict col_means,
     int k, int k_user, int k_item, int k_main,
     FPnum lam, FPnum w_main, FPnum w_user, FPnum w_main_multiplier,
@@ -868,8 +868,7 @@ int collective_factors_warm
     int k, int k_user, int k_item, int k_main,
     FPnum lam, FPnum w_main, FPnum w_user, FPnum lam_bias,
     FPnum *restrict BtBinvBt,
-    FPnum *restrict BtBw,
-    FPnum *restrict BtBchol,
+    FPnum *restrict BtB,
     FPnum *restrict BeTBeChol,
     FPnum *restrict CtCw,
     bool NA_as_zero_U, bool NA_as_zero_X,
@@ -887,9 +886,9 @@ int collective_factors_warm_implicit
     int k, int k_user, int k_item, int k_main,
     FPnum lam, FPnum alpha, FPnum w_main, FPnum w_user,
     FPnum w_main_multiplier,
-    FPnum *restrict precomputedBeTBe,
-    FPnum *restrict precomputedBtB,
-    FPnum *restrict precomputedBeTBeChol
+    FPnum *restrict BeTBe,
+    FPnum *restrict BtB,
+    FPnum *restrict BeTBeChol
 );
 FPnum fun_grad_A_collective
 (
@@ -942,9 +941,10 @@ void buffer_size_optimizeA_collective
 );
 void optimizeA_collective
 (
-    FPnum *restrict A, FPnum *restrict B, FPnum *restrict C,
+    FPnum *restrict A, int lda, FPnum *restrict B, int ldb,
+    FPnum *restrict C,
     int m, int m_u, int n, int p,
-    int k, int k_main, int k_user, int k_item, int padding,
+    int k, int k_main, int k_user, int k_item,
     size_t Xcsr_p[], int Xcsr_i[], FPnum *restrict Xcsr,
     FPnum *restrict Xfull, bool full_dense, bool near_dense,
     int cnt_NA_x[], FPnum *restrict weight, bool NA_as_zero_X,
@@ -960,18 +960,18 @@ void optimizeA_collective
 void build_BeTBe
 (
     FPnum *restrict bufferBeTBe,
-    FPnum *restrict B, FPnum *restrict C,
-    int k, int k_user, int k_main, int k_item, int padding,
+    FPnum *restrict B, int ldb, FPnum *restrict C,
+    int k, int k_user, int k_main, int k_item,
     int n, int p,
-    FPnum lam, FPnum w_main, FPnum w_user
+    FPnum lam, FPnum w_user
 );
 void build_BtB_CtC
 (
     FPnum *restrict BtB, FPnum *restrict CtC,
-    FPnum *restrict B, int n,
+    FPnum *restrict B, int n, int ldb,
     FPnum *restrict C, int p,
-    int k, int k_user, int k_main, int k_item, int padding,
-    FPnum w_main, FPnum w_user,
+    int k, int k_user, int k_main, int k_item,
+    FPnum w_user,
     FPnum *restrict weight
 );
 void build_XBw
@@ -979,7 +979,7 @@ void build_XBw
     FPnum *restrict A, int lda,
     FPnum *restrict B, int ldb,
     FPnum *restrict Xfull,
-    int m, int n, int k, FPnum w,
+    int m, int n, int k,
     bool do_B, bool overwrite
 );
 void preprocess_vec
@@ -1140,7 +1140,6 @@ int collective_factors_cold_multiple
     FPnum *restrict C, FPnum *restrict Cb,
     FPnum *restrict CtCinvCt,
     FPnum *restrict CtCw,
-    FPnum *restrict CtCchol,
     FPnum *restrict col_means,
     int k, int k_user, int k_main,
     FPnum lam, FPnum w_main, FPnum w_user,
@@ -1165,12 +1164,10 @@ int collective_factors_warm_multiple
     int k, int k_user, int k_item, int k_main,
     FPnum lam, FPnum w_main, FPnum w_user, FPnum lam_bias,
     FPnum *restrict BtBinvBt,
-    FPnum *restrict BtBw,
-    FPnum *restrict BtBchol,
+    FPnum *restrict BtB,
     FPnum *restrict BeTBeChol,
     FPnum *restrict CtCinvCt,
     FPnum *restrict CtCw,
-    FPnum *restrict CtCchol,
     bool NA_as_zero_U, bool NA_as_zero_X,
     FPnum *restrict B_plus_bias,
     int nthreads
@@ -1189,9 +1186,9 @@ int collective_factors_warm_implicit_multiple
     int k, int k_user, int k_item, int k_main,
     FPnum lam, FPnum alpha, FPnum w_main, FPnum w_user,
     FPnum w_main_multiplier,
-    FPnum *restrict precomputedBeTBe,
-    FPnum *restrict precomputedBtB,
-    FPnum *restrict precomputedBeTBeChol,
+    FPnum *restrict BeTBe,
+    FPnum *restrict BtB,
+    FPnum *restrict BeTBeChol,
     int nthreads
 );
 int collective_factors_cold_implicit_multiple
@@ -1202,9 +1199,9 @@ int collective_factors_cold_implicit_multiple
     size_t U_csr_p[], int U_csr_i[], FPnum *restrict U_csr,
     FPnum *restrict B, int n,
     FPnum *restrict C,
-    FPnum *restrict precomputedBeTBe,
-    FPnum *restrict precomputedBtB,
-    FPnum *restrict precomputedBeTBeChol,
+    FPnum *restrict BeTBe,
+    FPnum *restrict BtB,
+    FPnum *restrict BeTBeChol,
     FPnum *restrict col_means,
     int k, int k_user, int k_item, int k_main,
     FPnum lam, FPnum w_main, FPnum w_user, FPnum w_main_multiplier,

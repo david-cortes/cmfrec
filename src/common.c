@@ -740,12 +740,12 @@ void factors_closed_form
     FPnum lam, FPnum lam_last,
     FPnum *restrict precomputedBtBinvBt,
     FPnum *restrict precomputedBtBw, int cnt_NA, int ld_BtB,
+    bool BtB_has_diag, bool BtB_is_scaled, FPnum scale_BtB,
     FPnum *restrict precomputedBtBchol, bool NA_as_zero,
     bool use_cg, int max_cg_steps,
     bool force_add_diag
 )
 {
-    /* TODO: when does 'precomputedBtBw' have lambda added and when not? */
     FPnum *restrict bufferBtB = buffer_FPnum;
     if (ldb == 0) ldb = k;
     bool add_diag = true;
@@ -797,6 +797,9 @@ void factors_closed_form
         copy_mat(k, k,
                  precomputedBtBw, ld_BtB,
                  bufferBtB, k);
+        if (BtB_is_scaled && scale_BtB != 1.)
+            cblas_tscal(square(k), 1./scale_BtB, bufferBtB, 1);
+        add_diag = !BtB_has_diag;
 
         set_to_zero(a_vec, k, 1);
         for (size_t ix = 0; ix < (size_t)n; ix++)
@@ -848,7 +851,9 @@ void factors_closed_form
             copy_mat(k, k,
                      precomputedBtBw, ld_BtB,
                      bufferBtB, k);
-            add_diag = false;
+            if (BtB_is_scaled && scale_BtB != 1.)
+                cblas_tscal(square(k), 1./scale_BtB, bufferBtB, 1);
+            add_diag = !BtB_has_diag;
         }
 
         if (weight != NULL)
@@ -1451,7 +1456,8 @@ void factors_implicit_chol
     copy_mat(k, k,
              precomputedBtB, ld_BtB,
              BtB, k);
-    if (zero_out) set_to_zero(a_vec, k, 1);
+    if (zero_out || nnz == 0) set_to_zero(a_vec, k, 1);
+    if (nnz == 0) return;
 
     for (size_t ix = 0; ix < nnz; ix++) {
         cblas_tsyr(CblasRowMajor, CblasUpper, k,
@@ -1470,6 +1476,7 @@ void factors_implicit_chol
            &ignore);
 }
 
+/* TODO: This is not used any longer, can delete it */
 void factors_implicit
 (
     FPnum *restrict a_vec, int k,
@@ -1789,6 +1796,7 @@ void optimizeA
     FPnum *restrict buffer_FPnum
 )
 {
+    /* Note: the BtB produced here has diagonal, the one from collective doesn't. */
     /* TODO: handle case of all-missing when the values are not reset to zero */
     #if defined(_OPENMP) && \
                 ( (_OPENMP < 200801)  /* OpenMP < 3.0 */ \
@@ -1908,6 +1916,7 @@ void optimizeA
                         lam, lam_last,
                         (FPnum*)NULL,
                         bufferBtBcopy, cnt_NA[ix], k,
+                        true, false, 1.,
                         (FPnum*)NULL, false,
                         use_cg, k, /* <- A was reset to zero, need more steps */
                         false
@@ -1991,6 +2000,7 @@ void optimizeA
                 lam, lam_last,
                 (FPnum*)NULL,
                 bufferBtB, cnt_NA[ix], k,
+                true, false, 1.,
                 (FPnum*)NULL, false,
                 use_cg, max_cg_steps,
                 false
@@ -2071,6 +2081,7 @@ void optimizeA
                     lam, lam_last,
                     (FPnum*)NULL,
                     bufferBtB, 0, k,
+                    true, false, 1.,
                     (FPnum*)NULL, NA_as_zero,
                     use_cg, max_cg_steps,
                     false
@@ -2112,22 +2123,40 @@ void optimizeA_implicit
     size_t size_buffer = use_cg? (3 * k) : (square(k));
 
     int ix = 0;
-    #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
-            shared(A, B, lda, ldb, m, n, k, lam, \
-                   Xcsr, Xcsr_i, Xcsr_p, precomputedBtB, buffer_FPnum, \
-                   size_buffer, use_cg)
-    for (ix = 0; ix < m; ix++)
-        factors_implicit(
-            A + (size_t)ix*lda, k,
-            B, ldb,
-            Xcsr + Xcsr_p[ix], Xcsr_i + Xcsr_p[ix],
-            Xcsr_p[ix+(size_t)1] - Xcsr_p[ix],
-            lam,
-            precomputedBtB, k,
-            false, use_cg, max_cg_steps,
-            buffer_FPnum + ((size_t)omp_get_thread_num() * size_buffer),
-            false
-        );
+
+    if (use_cg)
+        #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
+                shared(A, B, lda, ldb, m, n, k, lam, \
+                       Xcsr, Xcsr_i, Xcsr_p, precomputedBtB, buffer_FPnum, \
+                       max_cg_steps, size_buffer)
+        for (ix = 0; ix < m; ix++)
+            factors_implicit_cg(
+                A + (size_t)ix*lda, k,
+                B, ldb,
+                Xcsr + Xcsr_p[ix], Xcsr_i + Xcsr_p[ix],
+                Xcsr_p[ix+(size_t)1] - Xcsr_p[ix],
+                lam,
+                precomputedBtB, k,
+                max_cg_steps,
+                buffer_FPnum + ((size_t)omp_get_thread_num() * size_buffer)
+            );
+    else
+        #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
+                shared(A, B, lda, ldb, m, n, k, lam, \
+                       Xcsr, Xcsr_i, Xcsr_p, precomputedBtB, buffer_FPnum, \
+                       size_buffer)
+        for (ix = 0; ix < m; ix++)
+            factors_implicit_chol(
+                A + (size_t)ix*lda, k,
+                B, ldb,
+                Xcsr + Xcsr_p[ix], Xcsr_i + Xcsr_p[ix],
+                Xcsr_p[ix+(size_t)1] - Xcsr_p[ix],
+                lam,
+                precomputedBtB, k,
+                false,
+                buffer_FPnum + ((size_t)omp_get_thread_num() * size_buffer),
+                false
+            );
 }
 
 int initialize_biases
