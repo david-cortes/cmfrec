@@ -2143,7 +2143,18 @@ class CMF_explicit(_CMF):
         It's possible to pass partially disjoints sets of users/items between
         the different matrices (e.g. it's possible for both the 'X' and 'U'
         matrices to have rows that the other doesn't have).
-        The procedure supports missing values for all inputs (except W).
+        The procedure supports missing values for all inputs (except for "W").
+        If any of the inputs has less rows/columns than the other(s) (e.g.
+        "U" has more rows than "X", or "I" has more rows than there are columns
+        in "X"), will assume that the rest of the rows/columns have only
+        missing values.
+
+        Note
+        ----
+        When passing NumPy arrays, missing (unobserved) entries should 
+        have value ``np.nan``. When passing sparse inputs, the zero-valued entries
+        will be considered as missing (unless using "NA_as_zero"), and it should
+        not contain "NaN" values among the non-zero entries.
 
         Parameters
         ----------
@@ -2152,8 +2163,6 @@ class CMF_explicit(_CMF):
             sparse COO matrix (recommended), as a dense NumPy array, or
             as a Pandas DataFrame, in which case it should contain the
             following columns: 'UserId', 'ItemId', and 'Rating'.
-            If passing a NumPy array, missing (unobserved) entries should 
-            have value ``np.nan``.
             Might additionally have a column 'Weight'. If passing a DataFrame,
             the IDs will be internally remapped.
             If passing sparse 'U' or sparse 'I', 'X' cannot be passed as
@@ -2162,26 +2171,22 @@ class CMF_explicit(_CMF):
             User attributes information. If 'X' is a DataFrame, should also
             be a DataFrame, containing column 'UserId'. If 'U' is sparse,
             'X' should be passed as a sparse COO matrix or as a dense NumPy array.
-            Might contain missing values.
         U_bin : array(m, p_bin), DataFrame(m, p_bin+1), or None
             User binary attributes information (all values should be zero, one,
             or missing). If 'X' is a DataFrame, should also
             be a DataFrame, containing column 'UserId'. Cannot be passed
             as a sparse matrix.
-            Might contain missing values.
             Note that 'U' and 'U_bin' are not mutually exclusive.
             Only supported with ``method='lbfgs'``.
         I : array(n, q), COO(n, q), DataFrame(n, q+1), or None
             Item attributes information. If 'X' is a DataFrame, should also
             be a DataFrame, containing column 'ItemId'. If 'I' is sparse,
             'X' should be passed as a sparse COO matrix or as a dense NumPy array.
-            Might contain missing values.
         I_bin : array(n, q_bin), DataFrame(n, q_bin+1), or None
             Item binary attributes information (all values should be zero, one,
             or missing). If 'X' is a DataFrame, should also
             be a DataFrame, containing column 'ItemId'. Cannot be passed
             as a sparse matrix.
-            Might contain missing values.
             Note that 'I' and 'I_bin' are not mutually exclusive.
             Only supported with ``method='lbfgs'``.
         W : None, array(nnz,), or array(m, n)
@@ -2350,12 +2355,12 @@ class CMF_explicit(_CMF):
             Attributes for the users for which to predict ratings/values.
             Data frames with 'UserId' column are not supported.
             Must have one row per entry
-            in ``item``. Might contain missing values.
+            in ``item``.
         U_bin : array(m, p_bin), or None
             Binary attributes for the users to predict ratings/values.
             Data frames with 'UserId'
             column are not supported. Must have one row per entry
-            in ``user``. Might contain missing values.
+            in ``user``.
             Only supported with ``method='lbfgs'``.
 
         Returns
@@ -2702,25 +2707,27 @@ class CMF_explicit(_CMF):
 
         Determines latent factors for multiple rows/users at once given new
         data for them.
+
+        Note
+        ----
+        See the documentation of "fit" for details about handling of missing values.
+
+        Note
+        ----
+        If fitting the model to DataFrame inputs (instead of NumPy arrays and/or
+        SciPy sparse matrices), the IDs are reindexed internally,
+        and the inputs provided here should match with the numeration that was
+        produced by the model. The mappings in such case are available under
+        attributes ``self.user_mapping_`` and ``self.item_mapping_``.
         
         Parameters
         ----------
         X : array(m_x, n), CSR matrix(m_x, n), COO matrix(m_x, n), or None
             New 'X' data.
-            Missing entries should have value ``np.nan`` when passing a dense
-            array. If the number of rows in 'X' is less than in 'U' or 'U_bin',
-            will assume the rest of the rows have missing values in all columns.
         U : array(m_u, p), CSR matrix(m_u, p), COO matrix(m_u, p), or None
             User attributes information for rows in 'X'.
-            Missing entries should have value ``np.nan`` when passing a dense
-            array.
-            If the number of rows in 'U' is less than in 'X' or 'U_bin',
-            will assume the rest of the rows have missing values in all columns.
         U_bin : array(m_ub, p_bin) or None
             User binary attributes for each row in 'X'.
-            Missing entries should have value ``np.nan``.
-            If the number of rows in 'U_bin' is less than in 'X' or 'U',
-            will assume the rest of the rows have missing values in all columns.
             Only supported with ``method='lbfgs'``.
         W : array(m_x, n), array(nnz,), or None
             Observation weights. Must have the same shape as 'X' - that is,
@@ -2826,12 +2833,14 @@ class CMF_explicit(_CMF):
         """
         Predict ratings for existing items, for new users, given 'X'
 
+        Note
+        ----
+        See the documentation of "fit" for details about handling of missing values.
+
         Parameters
         ----------
         X : array(m, n), CSR matrix(m, n) , or COO matrix(m, n)
             New 'X' data with potentially missing entries.
-            Missing entries should have value ``np.nan`` when passing a dense
-            array.
             Must have one row per entry of ``item``.
         item : array-like(m,)
             Items for whom ratings/values are to be predicted. If 'X' passed to
@@ -2841,11 +2850,8 @@ class CMF_explicit(_CMF):
             of ``X``.
         U : array(m, p), CSR matrix(m, p), COO matrix(m, p), or None
             User attributes information for each row in 'X'.
-            Missing entries should have value ``np.nan`` when passing a dense
-            array.
         U_bin : array(m, p_bin)
             User binary attributes for each row in 'X'.
-            Missing entries should have value ``np.nan``.
             Only supported with ``method='lbfgs'``.
         W : array(m, n), array(nnz,), or None
             Observation weights. Must have the same shape as 'X' - that is,
@@ -3012,9 +3018,11 @@ class CMF_explicit(_CMF):
 
         Note
         ----
-        This method is only available when fitting the model to NumPy arrays
-        and/or SciPy matrices. Will not work when fitting the model to Pandas
-        DataFrames.
+        If fitting the model to DataFrame inputs (instead of NumPy arrays and/or
+        SciPy sparse matrices), the IDs are reindexed internally,
+        and the inputs provided here should match with the numeration that was
+        produced by the model. The mappings in such case are available under
+        attributes ``self.user_mapping_`` and ``self.item_mapping_``.
 
         Parameters
         ----------
@@ -3022,16 +3030,18 @@ class CMF_explicit(_CMF):
             New 'X' data with potentially missing entries which are to be imputed.
             Missing entries should have value ``np.nan`` when passing a dense
             array.
+            If the input is sparse, the zero-valued entries will be considered as
+            missing (unless using "NA_as_zero"), and it should not contain "NaN"
+            values among the non-zero entries.
+            If using "NA_as_zero" and the input is sparse, no imputation will
+            occur.
         y : None
             Not used. Kept as a placeholder for compatibility with SciKit-Learn
             pipelines.
         U : array(m, p), CSR matrix(m, p), COO matrix(m, p), or None
             User attributes information for each row in 'X'.
-            Missing entries should have value ``np.nan`` when passing a dense
-            array.
         U_bin : array(m, p_bin) or None
             User binary attributes for each row in 'X'.
-            Missing entries should have value ``np.nan``.
             Only supported with ``method='lbfgs'``.
         W : array(m, n), array(nnz,), or None
             Observation weights. Must have the same shape as 'X' - that is,
@@ -3441,7 +3451,19 @@ class CMF_implicit(_CMF):
         the different matrices (e.g. it's possible for both the 'X' and 'U'
         matrices to have rows that the other doesn't have), but note that
         missing values in 'X' are treated as zeros.
-        The procedure supports missing values for all inputs (except W).
+        The procedure supports missing values for "U" and "I".
+        If any of the inputs has less rows/columns than the other(s) (e.g.
+        "U" has more rows than "X", or "I" has more rows than there are columns
+        in "X"), will assume that the rest of the rows/columns have only
+        missing values (zero values for "X").
+
+        Note
+        ----
+        When passing NumPy arrays, missing (unobserved) entries should 
+        have value ``np.nan``. When passing sparse inputs, the zero-valued entries
+        will be considered as missing (unless using "NA_as_zero", and except for
+        "X" for which missing will always be treated as zero), and it should
+        not contain "NaN" values among the non-zero entries.
 
         Parameters
         ----------
@@ -3450,20 +3472,16 @@ class CMF_implicit(_CMF):
             sparse COO matrix (recommended), or
             as a Pandas DataFrame, in which case it should contain the
             following columns: 'UserId', 'ItemId', and 'Value'.
-            If passing a NumPy array, missing (unobserved) entries should 
-            have value ``np.nan``.
             If passing a DataFrame,
             the IDs will be internally remapped.
         U : array(m, p), COO(m, p), DataFrame(m, p+1), or None
             User attributes information. If 'X' is a DataFrame, should also
             be a DataFrame, containing column 'UserId'. If 'U' is sparse,
             'X' should be passed as a sparse COO matrix too.
-            Might contain missing values.
         I : array(n, q), COO(n, q), DataFrame(n, q+1), or None
             Item attributes information. If 'X' is a DataFrame, should also
             be a DataFrame, containing column 'ItemId'. If 'I' is sparse,
             'X' should be passed as a sparse COO matrix too.
-            Might contain missing values.
 
         Returns
         -------
@@ -3665,6 +3683,10 @@ class CMF_implicit(_CMF):
         """
         Predict value/confidence given by new users to existing items, given U
 
+        Note
+        ----
+        See the documentation of "fit" for details about handling of missing values.
+
         Parameters
         ----------
         item : array-like(m,)
@@ -3675,7 +3697,7 @@ class CMF_implicit(_CMF):
             Attributes for the users for which to predict ratings/values.
             Data frames with 'UserId' column are not supported.
             Must have one row per entry
-            in ``item``. Might contain missing values.
+            in ``item``.
 
         Returns
         -------
@@ -3855,19 +3877,25 @@ class CMF_implicit(_CMF):
 
         Determines latent factors for multiple rows/users at once given new
         data for them.
+
+        Note
+        ----
+        See the documentation of "fit" for details about handling of missing values.
+
+        Note
+        ----
+        If fitting the model to DataFrame inputs (instead of NumPy arrays and/or
+        SciPy sparse matrices), the IDs are reindexed internally,
+        and the inputs provided here should match with the numeration that was
+        produced by the model. The mappings in such case are available under
+        attributes ``self.user_mapping_`` and ``self.item_mapping_``.
         
         Parameters
         ----------
         X : CSR matrix(m_x, n), COO matrix(m_x, n), or None
             New 'X' data.
-            If the number of rows in 'X' is less than in 'U',
-            will assume the rest of the rows have missing values in all columns.
         U : array(m_u, p), CSR matrix(m_u, p), COO matrix(m_u, p), or None
             User attributes information for rows in 'X'.
-            Missing entries should have value ``np.nan`` when passing a dense
-            array.
-            If the number of rows in 'U' is less than in 'X',
-            will assume the rest of the rows have missing values in all columns.
 
         Returns
         -------
@@ -4009,12 +4037,22 @@ class CMF_implicit(_CMF):
         """
         Predict scores for existing items, for new users, given 'X'
 
+        Note
+        ----
+        See the documentation of "fit" for details about handling of missing values.
+
+        Note
+        ----
+        If fitting the model to DataFrame inputs (instead of NumPy arrays and/or
+        SciPy sparse matrices), the IDs are reindexed internally,
+        and the inputs provided here should match with the numeration that was
+        produced by the model. The mappings in such case are available under
+        attributes ``self.user_mapping_`` and ``self.item_mapping_``.
+
         Parameters
         ----------
-        X : array(m, n), CSR matrix(m, n) , or COO matrix(m, n)
+        X : CSR matrix(m, n) , or COO matrix(m, n)
             New 'X' data with potentially missing entries.
-            Missing entries should have value ``np.nan`` when passing a dense
-            array.
             Must have one row per entry of ``item``.
         item : array-like(m,)
             Items for whom ratings/values are to be predicted. If 'X' passed to
@@ -4024,8 +4062,6 @@ class CMF_implicit(_CMF):
             of ``X``.
         U : array(m, p), CSR matrix(m, p), COO matrix(m, p), or None
             User attributes information for each row in 'X'.
-            Missing entries should have value ``np.nan`` when passing a dense
-            array.
 
         Returns
         -------
@@ -5284,9 +5320,11 @@ class OMF_explicit(_OMF):
 
         Note
         ----
-        This method is only available when fitting the model to NumPy arrays
-        and/or SciPy matrices. Will not work when fitting the model to Pandas
-        DataFrames.
+        If fitting the model to DataFrame inputs (instead of NumPy arrays and/or
+        SciPy sparse matrices), the IDs are reindexed internally,
+        and the inputs provided here should match with the numeration that was
+        produced by the model. The mappings in such case are available under
+        attributes ``self.user_mapping_`` and ``self.item_mapping_``.
 
         Parameters
         ----------
