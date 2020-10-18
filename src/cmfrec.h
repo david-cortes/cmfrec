@@ -243,6 +243,8 @@ FPnum sum_squares(FPnum *restrict arr, size_t n, int nthreads);
 void taxpy_large(FPnum *restrict A, FPnum x, FPnum *restrict Y, size_t n, int nthreads);
 void tscal_large(FPnum *restrict arr, FPnum alpha, size_t n, int nthreads);
 int rnorm(FPnum *restrict arr, size_t n, int seed, int nthreads);
+void rnorm_preserve_seed(FPnum *restrict arr, size_t n, int seed_arr[4]);
+void process_seed_for_larnv(int seed_arr[4]);
 void reduce_mat_sum(FPnum *restrict outp, size_t lda, FPnum *restrict inp,
                     int m, int n, int nthreads);
 void exp_neg_x(FPnum *restrict arr, size_t n, int nthreads);
@@ -532,11 +534,10 @@ void buffer_size_optimizeA
     bool full_dense, bool near_dense,
     bool has_dense, bool has_weight
 );
-void buffer_size_optimizeA_implicit
+size_t buffer_size_optimizeA_implicit
 (
-    size_t *buffer_size,
     int k, int nthreads,
-    bool use_precomputed,
+    bool pass_allocated_BtB,
     bool use_cg, bool finalize_chol
 );
 void optimizeA
@@ -821,6 +822,12 @@ void optimizeA_collective_implicit
     bool use_cg, int max_cg_steps, bool is_first_iter,
     bool keep_precomputedBtB,
     FPnum *restrict precomputedBtB, /* will not have lambda with CG */
+    FPnum *restrict precomputedBeTBe,
+    FPnum *restrict precomputedBeTBeChol,
+    FPnum *restrict precomputedCtC,
+    bool *filled_BeTBe,
+    bool *filled_BeTBeChol,
+    bool *filled_CtC,
     FPnum *restrict buffer_FPnum
 );
 int collective_factors_cold
@@ -1111,7 +1118,9 @@ int fit_collective_explicit_als
 );
 int fit_collective_implicit_als
 (
-    FPnum *restrict values, bool reset_values,
+    FPnum *restrict A, FPnum *restrict B,
+    FPnum *restrict C, FPnum *restrict D,
+    bool reset_values, int seed,
     FPnum *restrict U_colmeans, FPnum *restrict I_colmeans,
     int m, int n, int k,
     int ixA[], int ixB[], FPnum *restrict X, size_t nnz,
@@ -1125,10 +1134,23 @@ int fit_collective_implicit_als
     FPnum w_main, FPnum w_user, FPnum w_item,
     FPnum *restrict w_main_multiplier,
     FPnum alpha, bool adjust_weight,
-    int niter, int nthreads, int seed, bool verbose, bool handle_interrupt,
+    int niter, int nthreads, bool verbose, bool handle_interrupt,
     bool use_cg, int max_cg_steps, bool finalize_chol,
     bool precompute_for_predictions,
-    FPnum *restrict precomputedBtB
+    FPnum *restrict precomputedBtB,
+    FPnum *restrict precomputedBeTBe,
+    FPnum *restrict precomputedBeTBeChol
+);
+int precompute_collective_implicit
+(
+    FPnum *restrict B, int n,
+    FPnum *restrict C, int p,
+    int k, int k_user, int k_item, int k_main,
+    FPnum lam, FPnum w_main, FPnum w_user, FPnum w_main_multiplier,
+    bool extra_precision,
+    FPnum *restrict BtB,
+    FPnum *restrict BeTBe,
+    FPnum *restrict BeTBeChol
 );
 int collective_factors_cold_multiple
 (

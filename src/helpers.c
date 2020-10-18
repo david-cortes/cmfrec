@@ -450,9 +450,8 @@ void tscal_large(FPnum *restrict arr, FPnum alpha, size_t n, int nthreads)
 int rnorm(FPnum *restrict arr, size_t n, int seed, int nthreads)
 {
     int three = 3;
-    seed = max2(seed, 4095);
-    seed = min2(seed, 0);
     int seed_arr[4] = {seed, seed, seed, seed};
+    process_seed_for_larnv(seed_arr);
     if (n < (size_t)INT_MAX)
     {
         int n_int = (int)n;
@@ -489,6 +488,50 @@ int rnorm(FPnum *restrict arr, size_t n, int seed, int nthreads)
         free(mt_seed_arr);
     }
     return 0;
+}
+
+void rnorm_preserve_seed(FPnum *restrict arr, size_t n, int seed_arr[4])
+{
+    process_seed_for_larnv(seed_arr);
+    int three = 3;
+
+    if (n < (size_t)INT_MAX){
+        int n_int = (int)n;
+        tlarnv_(&three, seed_arr, &n_int, arr);
+    }
+
+    else {
+        size_t remainder = n;
+        int size_chunk = 0;
+        while (remainder)
+        {
+            if (remainder >= (size_t)INT_MAX)
+                size_chunk = INT_MAX;
+            else
+                size_chunk = remainder;
+            remainder -= (size_t)size_chunk;
+            tlarnv_(&three, seed_arr, &size_chunk, arr);
+            arr += size_chunk;
+        }
+    }
+}
+
+void process_seed_for_larnv(int seed_arr[4])
+{
+    for (int ix = 0; ix < 4; ix++)
+    {
+        seed_arr[ix] = min2(seed_arr[ix], 4095);
+        seed_arr[ix] = max2(seed_arr[ix], 0);
+        if (ix == 3 && (seed_arr[ix] % 2) == 0)
+        {
+            if ((seed_arr[ix] + 1) <= 4095 && (seed_arr[ix] + 1) >= 0)
+                seed_arr[ix]++;
+            else if ((seed_arr[ix] - 1) <= 4095 && (seed_arr[ix] - 1) >= 0)
+                seed_arr[ix]--;
+            else
+                seed_arr[ix] = 1;
+        }
+    }
 }
 
 void reduce_mat_sum(FPnum *restrict outp, size_t lda, FPnum *restrict inp,
@@ -678,6 +721,7 @@ void sum_mat
             cblas_taxpy(n_int, 1., A + row*lda, 1, B + row*ldb, 1);
 }
 
+/* TODO: remove all functions that use this */
 /* B <- inv(t(A)*A + diag(lam/w))*t(A) | AtAw <- w* (t(A)*A + diag(lam)) */
 void AtAinvAt_plus_chol(FPnum *restrict A, int lda, int offset,
                         FPnum *restrict AtAinvAt_out,

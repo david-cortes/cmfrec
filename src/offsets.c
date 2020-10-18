@@ -1292,6 +1292,18 @@ int fit_offsets_als
         return 2;
     }
 
+    FPnum *restrict biasA = values;
+    FPnum *restrict biasB = biasA + (user_bias? m : 0);
+    FPnum *restrict A = biasB + (item_bias? n : 0);
+    FPnum *restrict B = A + (size_t)m * (size_t)k;
+    FPnum *restrict C = B + (size_t)n * (size_t)k;
+    FPnum *restrict C_bias = C + ((U != NULL)?
+                                  ((size_t)p*(size_t)k) : ((size_t)0));
+    FPnum *restrict D = C_bias + ((add_intercepts && U != NULL)? (k) : (0));
+    FPnum *restrict MatTrans = NULL;
+    FPnum *restrict MatTransSec = NULL;
+    FPnum *restrict buffer_FPnum = NULL;
+
     /* TODO: should this retain some of the precomputed matrices? */
     int retval;
     if (!implicit)
@@ -1318,7 +1330,8 @@ int fit_offsets_als
                 );
     else
         retval = fit_collective_implicit_als(
-                    values, reset_values,
+                    A, B, (FPnum*)NULL, (FPnum*)NULL,
+                    reset_values, seed,
                     (FPnum*)NULL, (FPnum*)NULL,
                     m, n, k,
                     ixA, ixB, X, nnz,
@@ -1332,10 +1345,10 @@ int fit_offsets_als
                     1., 1., 1.,
                     w_main_multiplier,
                     alpha, adjust_weight,
-                    niter, nthreads, seed, verbose, handle_interrupt,
+                    niter, nthreads, verbose, handle_interrupt,
                     use_cg, max_cg_steps,
                     finalize_chol,
-                    false, (FPnum*)NULL
+                    false, (FPnum*)NULL, (FPnum*)NULL, (FPnum*)NULL
                 );
     if (retval == 1)
     {
@@ -1347,18 +1360,6 @@ int fit_offsets_als
         }
         return 1;
     }
-
-    FPnum *restrict biasA = values;
-    FPnum *restrict biasB = biasA + (user_bias? m : 0);
-    FPnum *restrict A = biasB + (item_bias? n : 0);
-    FPnum *restrict B = A + (size_t)m * (size_t)k;
-    FPnum *restrict C = B + (size_t)n * (size_t)k;
-    FPnum *restrict C_bias = C + ((U != NULL)?
-                                  ((size_t)p*(size_t)k) : ((size_t)0));
-    FPnum *restrict D = C_bias + ((add_intercepts && U != NULL)? (k) : (0));
-    FPnum *restrict MatTrans = NULL;
-    FPnum *restrict MatTransSec = NULL;
-    FPnum *restrict buffer_FPnum = NULL;
 
     int minus_one = -1;
     char trans = 'T';

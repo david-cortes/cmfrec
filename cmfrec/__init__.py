@@ -46,7 +46,7 @@ class _CMF:
         assert isinstance(k_item, int) and k_item >= 0
         assert isinstance(k_main, int) and k_main >= 0
 
-        if ((max(k_user, k_item) + k + k_main)**2 + 1) > np.iinfo(ctypes.c_int).max:
+        if ((max(k_user, k_item) + k + k_main + max(user_bias, item_bias))**2) > np.iinfo(ctypes.c_int).max:
             raise ValueError("Number of factors is too large.")
 
         lambda_ = float(lambda_) if isinstance(lambda_, int) else lambda_
@@ -54,9 +54,9 @@ class _CMF:
         if lambda_.__class__.__name__ == "ndarray":
             lambda_ = lambda_.reshape(-1)
             assert lambda_.shape[0] == 6
-            assert np.all(lambda_ >= 0)
+            assert np.all(lambda_ >= 0.)
         else:
-            assert isinstance(lambda_, float) and lambda_ >= 0
+            assert isinstance(lambda_, float) and lambda_ >= 0.
 
         
         niter = int(niter) if isinstance(niter, float) else niter
@@ -3480,7 +3480,10 @@ class CMF_implicit(_CMF):
              m, n, m_u, n_i, p, q,
              m_ub, n_ib, pbin, qbin):
         c_funs = wrapper_float if self.use_float else wrapper_double
-        self._U_colmeans, self._I_colmeans, values, self._w_main_multiplier = \
+
+        self.A_, self.B_, self.C_, self.D_, \
+        self._U_colmeans, self._I_colmeans, self._w_main_multiplier, \
+        self._BtB, self._BeTBe, self._BeTBeChol = \
             c_funs.call_fit_collective_implicit_als(
                 Xrow,
                 Xcol,
@@ -3504,22 +3507,13 @@ class CMF_implicit(_CMF):
                 self.nthreads, self.use_cg,
                 self.max_cg_steps, self.finalize_chol,
                 self.random_state, init=self.init,
-                handle_interrupt=self.handle_interrupt
-            )
-
-        self.A_, self.B_, self.C_, self.D_ = \
-            c_funs.unpack_values_collective_implicit(
-                values,
-                self.k, self.k_user, self.k_item, self.k_main,
-                m, n, p, q,
-                m_u, n_i
+                handle_interrupt=self.handle_interrupt,
+                precompute_for_predictions=self.precompute_for_predictions
             )
 
         self._A_pred = self.A_
         self._B_pred = self.B_
         self.is_fitted_ = True
-        if self.precompute_for_predictions:
-            self.force_precompute_for_predictions()
         return self
 
     def force_precompute_for_predictions(self):
@@ -3543,11 +3537,10 @@ class CMF_implicit(_CMF):
         else:
             lambda_ = self.lambda_
         c_funs = wrapper_float if self.use_float else wrapper_double
-        self._BeTBe, self._BtB_padded, self._BtB_shrunk = \
+        self._BtB, self._BeTBe, self._BeTBeChol = \
             c_funs.precompute_matrices_collective_implicit(
-                self.B_,
+                self.B_, self.C_,
                 self.k, self.k_main, self.k_user, self.k_item,
-                self.C_,
                 lambda_,
                 self.w_main, self.w_user,
                 self._w_main_multiplier

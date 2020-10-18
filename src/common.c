@@ -1748,37 +1748,32 @@ void buffer_size_optimizeA
     }
 }
 
-void buffer_size_optimizeA_implicit
+size_t buffer_size_optimizeA_implicit
 (
-    size_t *buffer_size,
     int k, int nthreads,
-    bool use_precomputed,
+    bool pass_allocated_BtB,
     bool use_cg, bool finalize_chol
 )
 {
     if (finalize_chol)
     {
-        size_t buffer_size_chol = 0;
-        size_t buffer_size_cg = 0;
-        buffer_size_optimizeA_implicit(
-            &buffer_size_chol,
-            k, nthreads,
-            use_precomputed,
-            false, false
+        return max2(
+            buffer_size_optimizeA_implicit(
+                k, nthreads,
+                pass_allocated_BtB,
+                false, false
+            ),
+            buffer_size_optimizeA_implicit(
+                k, nthreads,
+                pass_allocated_BtB,
+                true, false
+            )
         );
-        buffer_size_optimizeA_implicit(
-            &buffer_size_cg,
-            k, nthreads,
-            use_precomputed,
-            true, false
-        );
-        *buffer_size = max2(buffer_size_chol, buffer_size_cg);
-        return;
     }
 
     size_t size_thread_buffer = use_cg? (3 * k) : (square(k));
-    *buffer_size = (size_t)(use_precomputed? 0 : square(k))
-                    + (size_t)nthreads * size_thread_buffer;
+    return (size_t)(pass_allocated_BtB? 0 : square(k))
+            + (size_t)nthreads * size_thread_buffer;
 }
 
 void optimizeA

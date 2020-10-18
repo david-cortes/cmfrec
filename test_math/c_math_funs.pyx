@@ -1,6 +1,7 @@
 import numpy as np
 cimport numpy as np
 from scipy.linalg.cython_lapack cimport dpotrf
+from libcpp cimport bool as c_bool
 
 cdef extern from "cmfrec.h":
     void factors_closed_form(
@@ -188,6 +189,12 @@ cdef extern from "cmfrec.h":
         bint use_cg, int max_cg_steps, bint is_first_iter,
         bint keep_precomputedBtB,
         double *precomputedBtB,
+        double *precomputedBeTBe,
+        double *precomputedBeTBeChol,
+        double *precomputedCtC,
+        bint *filled_BeTBe,
+        bint *filled_BeTBeChol,
+        bint *filled_CtC,
         double *buffer_double
     )
 
@@ -1120,7 +1127,8 @@ def py_optimizeA_collective_implicit(
         ptr_Ucsr_p = &U_csr_p[0]
         ptr_Ucsr_i = &U_csr_i[0]
         ptr_Ucsr = &U_csr[0]
-    
+
+    cdef c_bool ignore = 0
 
     optimizeA_collective_implicit(
         &A[0,0], &B[0,0], &C[0,0],
@@ -1133,7 +1141,14 @@ def py_optimizeA_collective_implicit(
         lam/w_main, w_user/w_main,
         nthreads,
         0, 0, 1,
-        0, <double*>NULL,
+        0,
+        <double*>NULL,
+        <double*>NULL,
+        <double*>NULL,
+        <double*>NULL,
+        &ignore,
+        &ignore,
+        &ignore,
         &buffer_double[0]
     )
 

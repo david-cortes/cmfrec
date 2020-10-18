@@ -117,7 +117,9 @@ cdef extern from "cmfrec.h":
     )
 
     int fit_collective_implicit_als(
-        FPnum *values, bint reset_values,
+        FPnum *A, FPnum *B,
+        FPnum *C, FPnum *D,
+        bint reset_values, int seed,
         FPnum *U_colmeans, FPnum *I_colmeans,
         int m, int n, int k,
         int ixA[], int ixB[], FPnum *X, size_t nnz,
@@ -131,10 +133,12 @@ cdef extern from "cmfrec.h":
         FPnum w_main, FPnum w_user, FPnum w_item,
         FPnum *w_main_multiplier,
         FPnum alpha, bint adjust_weight,
-        int niter, int nthreads, int seed, bint verbose, bint handle_interrupt,
+        int niter, int nthreads, bint verbose, bint handle_interrupt,
         bint use_cg, int max_cg_steps, bint finalize_chol,
         bint precompute_for_predictions,
-        FPnum *precomputedBtB
+        FPnum *precomputedBtB,
+        FPnum *precomputedBeTBe,
+        FPnum *precomputedBeTBeChol
     )
 
     int fit_offsets_als(
@@ -158,6 +162,18 @@ cdef extern from "cmfrec.h":
         FPnum *B_plus_bias
     )
 
+    int precompute_collective_implicit(
+        FPnum *B, int n,
+        FPnum *C, int p,
+        int k, int k_user, int k_item, int k_main,
+        FPnum lam, FPnum w_main, FPnum w_user, FPnum w_main_multiplier,
+        bint extra_precision,
+        FPnum *BtB,
+        FPnum *BeTBe,
+        FPnum *BeTBeChol
+    )
+
+    ### TODO: delete this once it gets replaced
     int precompute_matrices_collective(
         FPnum *B, int n,
         FPnum *BtBinvBt,
@@ -1066,7 +1082,8 @@ def call_fit_collective_implicit_als(
         bint verbose=1, int niter=5,
         int nthreads=1, bint use_cg=0,
         int max_cg_steps=3, bint finalize_chol=0,
-        int seed=1, init="normal", bint handle_interrupt=1
+        int seed=1, init="normal", bint handle_interrupt=1,
+        bint precompute_for_predictions = 1
     ):
     
     cdef FPnum *ptr_U = NULL
@@ -1086,6 +1103,9 @@ def call_fit_collective_implicit_als(
     if U.shape[0] or (U_sp.shape[0] and not NA_as_zero_U):
         U_colmeans = np.empty(p, dtype=c_FPnum)
         ptr_U_colmeans = &U_colmeans[0]
+
+    if X.shape[0] == 0:
+        raise ValueError("Input data has no non-zero values.")
 
     cdef FPnum *ptr_I = NULL
     cdef int *ptr_I_row = NULL
@@ -1110,27 +1130,88 @@ def call_fit_collective_implicit_als(
         ptr_lam_unique = &lam_unique[0]
 
 
-    cdef size_t nvars = <size_t>max(m, m_u) * <size_t>(k_user+k+k_main) \
-                        + <size_t>max(n, n_i) * <size_t>(k_item+k+k_main)
+    cdef size_t sizeA = <size_t>max(m, m_u) * <size_t>(k_user+k+k_main)
+    cdef size_t sizeB = <size_t>max(n, n_i) * <size_t>(k_item+k+k_main)
+    if (sizeA == 0) or (sizeB == 0):
+        raise ValueError("Error: model must have variables to optimize for both A and B.")
+    cdef size_t sizeC = 0
+    cdef size_t sizeD = 0
     if U.shape[0] or U_sp.shape[0]:
-        nvars += <size_t>p * <size_t>(k_user + k)
+        sizeC = <size_t>p * <size_t>(k_user + k)
     if I.shape[0] or I_sp.shape[0]:
-        nvars += <size_t>q * <size_t>(k_item + k)
+        sizeD = <size_t>q * <size_t>(k_item + k)
+    
     rs = np.random.Generator(np.random.MT19937(seed = seed))
-    cdef np.ndarray[FPnum, ndim=1] values    
+
+    cdef FPnum *ptr_A = NULL
+    cdef FPnum *ptr_B = NULL
+    cdef FPnum *ptr_C = NULL
+    cdef FPnum *ptr_D = NULL
+    cdef np.ndarray[FPnum, ndim=2] A = np.zeros((0,0), dtype = c_FPnum)
+    cdef np.ndarray[FPnum, ndim=2] B = np.zeros((0,0), dtype = c_FPnum)
+    cdef np.ndarray[FPnum, ndim=2] C = np.zeros((0,0), dtype = c_FPnum)
+    cdef np.ndarray[FPnum, ndim=2] D = np.zeros((0,0), dtype = c_FPnum)
+
     if init == "normal":
-        values = rs.standard_normal(size = nvars, dtype = c_FPnum)
-    elif init == "gamma":
-        values = - np.log(rs.random(size = nvars, dtype = c_FPnum).clip(min=1e-6, max=20.))
-    elif init == "uniform":
-        values = rs.random(size = nvars, dtype = c_FPnum)
+        A = rs.standard_normal(size = (max(m, m_u), (k_user+k+k_main)), dtype = c_FPnum)
+        B = rs.standard_normal(size = (max(n, n_i), (k_item+k+k_main)), dtype = c_FPnum)
+        if sizeC:
+            C = rs.standard_normal(size = (p, k_user + k), dtype = c_FPnum)
+        if sizeD:
+            C = rs.standard_normal(size = (q, k_item + k), dtype = c_FPnum)
     else:
-        values = rs.random(size = nvars, dtype = c_FPnum) - 0.5
+        A = rs.random(size = (max(m, m_u), (k_user+k+k_main)), dtype = c_FPnum)
+        B = rs.random(size = (max(n, n_i), (k_item+k+k_main)), dtype = c_FPnum)
+        if sizeC:
+            C = rs.random(size = (p, k_user + k), dtype = c_FPnum)
+        if sizeD:
+            C = rs.random(size = (q, k_item + k), dtype = c_FPnum)
+    
+        if init == "gamma":
+            A[:] = -np.log(A.clip(min=1e-6, max=20.))
+            B[:] = -np.log(B.clip(min=1e-6, max=20.))
+            if sizeC:
+                C[:] = -np.log(C.clip(min=1e-6, max=20.))
+            if sizeD:
+                D[:] = -np.log(D.clip(min=1e-6, max=20.))
+        elif init != "uniform":
+            A[:] -= 0.5
+            B[:] -= 0.5
+            if sizeC:
+                C[:] -= 0.5
+            if sizeD:
+                D[:] -= 0.5
+
+    ptr_A = &A[0,0]
+    ptr_B = &B[0,0]
+    if sizeC:
+        ptr_C = &C[0,0]
+    if sizeD:
+        ptr_D = &D[0,0]
+
+    cdef np.ndarray[FPnum, ndim=2] precomputedBtB = np.zeros((0,0), dtype=c_FPnum)
+    cdef np.ndarray[FPnum, ndim=2] precomputedBeTBe = np.zeros((0,0), dtype=c_FPnum)
+    cdef np.ndarray[FPnum, ndim=2] precomputedBeTBeChol = np.zeros((0,0), dtype=c_FPnum)
+    cdef FPnum *ptr_BtB = NULL
+    cdef FPnum *ptr_BeTBe = NULL
+    cdef FPnum *ptr_BeTBeChol = NULL
+    if precompute_for_predictions:
+        precomputedBtB = np.empty((k+k_main, k+k_main), dtype=c_FPnum)
+        ptr_BtB = &precomputedBtB[0,0]
+        if U.shape[0] or U_sp.shape[0]:
+            precomputedBeTBe = np.empty((k_user+k+k_main, k_user+k+k_main), dtype=c_FPnum)
+            precomputedBeTBeChol = np.empty((k_user+k+k_main, k_user+k+k_main), dtype=c_FPnum)
+            ptr_BeTBe = &precomputedBeTBe[0,0]
+            ptr_BeTBeChol = &precomputedBeTBeChol[0,0]
+
+
+
 
     cdef FPnum w_main_multiplier = 1.
 
     cdef int retval = fit_collective_implicit_als(
-        &values[0], 0,
+        ptr_A, ptr_B, ptr_C, ptr_D,
+        0, 0,
         ptr_U_colmeans, ptr_I_colmeans,
         m, n, k,
         &ixA[0], &ixB[0], &X[0], X.shape[0],
@@ -1144,15 +1225,18 @@ def call_fit_collective_implicit_als(
         w_main, w_user, w_item,
         &w_main_multiplier,
         alpha, adjust_weight,
-        niter, nthreads, 1, verbose, handle_interrupt,
+        niter, nthreads, verbose, handle_interrupt,
         use_cg, max_cg_steps, finalize_chol,
-        0, NULL
+        precompute_for_predictions,
+        ptr_BtB, ptr_BeTBe, ptr_BeTBeChol
     )
 
     if retval == 1:
         raise MemoryError("Could not allocate sufficient memory.")
 
-    return U_colmeans, I_colmeans, values, w_main_multiplier
+    return A, B, C, D, \
+           U_colmeans, I_colmeans, w_main_multiplier, \
+           precomputedBtB, precomputedBeTBe, precomputedBeTBeChol
 
 def unpack_values_collective_implicit(
         np.ndarray[FPnum, ndim=1] values,
@@ -1449,15 +1533,15 @@ def precompute_matrices_collective_explicit(
 
 def precompute_matrices_collective_implicit(
         np.ndarray[FPnum, ndim=2] B,
-        int k, int k_main, int k_user, int k_item,
         np.ndarray[FPnum, ndim=2] C,
+        int k, int k_main, int k_user, int k_item,
         FPnum lam, FPnum w_main, FPnum w_user,
         FPnum w_main_multiplier
     ):
     cdef int n = B.shape[0]
+    cdef np.ndarray[FPnum, ndim=2] BtB = np.empty((k+k_main, k+k_main), dtype=c_FPnum)
     cdef np.ndarray[FPnum, ndim=2] BeTBe = np.empty((k_user+k+k_main, k_user+k+k_main), dtype=c_FPnum)
-    cdef np.ndarray[FPnum, ndim=2] BtB_padded = np.empty((k_user+k+k_main, k_user+k+k_main), dtype=c_FPnum)
-    cdef np.ndarray[FPnum, ndim=2] BtB_shrunk = np.empty((k+k_main, k+k_main), dtype=c_FPnum)
+    cdef np.ndarray[FPnum, ndim=2] BeTBeChol = np.empty((k_user+k+k_main, k_user+k+k_main), dtype=c_FPnum)
 
     cdef FPnum *ptr_C = NULL
     cdef int p = 0
@@ -1465,30 +1549,18 @@ def precompute_matrices_collective_implicit(
         p = C.shape[0]
         ptr_C = &C[0,0]
 
-    cdef int retval = precompute_matrices_collective(
+    cdef int retval = precompute_collective_implicit(
         &B[0,0], B.shape[0],
-        <FPnum*>NULL,
-        <FPnum*>NULL,
-        <FPnum*>NULL,
-        k, k_main, k_user, k_item,
         ptr_C, p,
-        <FPnum*>NULL,
-        <FPnum*>NULL,
-        <FPnum*>NULL,
-        &BeTBe[0,0],
-        &BtB_padded[0,0],
-        &BtB_shrunk[0,0],
-        lam, w_main, w_user, lam,
-        w_main_multiplier,
-        p>0, 0, 1
+        k, k_user, k_item, k_main,
+        lam, w_main, w_user, w_main_multiplier,
+        1,
+        &BtB[0,0], &BeTBe[0,0], &BeTBeChol[0,0]
     )
     if retval == 1:
         raise MemoryError("Could not allocate sufficient memory.")
 
-    if p == 0:
-        BeTBe = BtB_padded
-
-    return BeTBe, BtB_padded, BtB_shrunk
+    return BtB, BeTBe, BeTBeChol
 
 def precompute_matrices_offsets_explicit(
         np.ndarray[FPnum, ndim=2] A,
