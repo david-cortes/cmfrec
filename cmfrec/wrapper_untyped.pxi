@@ -2765,7 +2765,7 @@ def call_collective_factors_cold_implicit_multiple(
         np.ndarray[FPnum, ndim=2] BeTBe,
         np.ndarray[FPnum, ndim=2] BtB,
         np.ndarray[FPnum, ndim=2] BeTBeChol,
-        int n, int m_u, int m_x,
+        int m_u,
         int k, int k_user = 0, int k_item = 0, int k_main = 0,
         FPnum lam = 1e2, FPnum w_main = 1., FPnum w_user = 1.,
         FPnum w_main_multiplier = 1.,
@@ -2774,6 +2774,7 @@ def call_collective_factors_cold_implicit_multiple(
     ):
 
     cdef int p = C.shape[0]
+    cdef int n = B.shape[0]
 
     cdef FPnum *ptr_U = NULL
     cdef int *ptr_U_row = NULL
@@ -2817,7 +2818,7 @@ def call_collective_factors_cold_implicit_multiple(
     if BeTBeChol.shape[0]:
         ptr_BeTBeChol = &BeTBeChol[0,0]
 
-    cdef int m = max([m_x, m_u])
+    cdef int m = m_u
     cdef np.ndarray[FPnum, ndim=2] A = np.empty((m, k_user+k+k_main), dtype=c_FPnum)
     if m == 0:
         return A

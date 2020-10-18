@@ -533,6 +533,9 @@ class _CMF:
 
         m_ub, pbin = U_bin.shape if U_bin is not None else (0,0)
 
+        if max(m_ub, pbin) and (not Mat.shape[0] or not Mat.shape[1]):
+            raise ValueError("Cannot pass binary data if model was not fit to binary side info.")
+
         if (pbin != Mat.shape[0]) and (Mat.shape[0] > 0) and (pbin > 0):
             msg  = "'%s_bin' must have the same columns "
             msg += "as the data passed to 'fit'."
@@ -1301,6 +1304,9 @@ class _CMF:
                              return_bias=False):
         assert self.is_fitted_
 
+        if (return_bias) and (not self.user_bias):
+            raise ValueError("Cannot return bias with model that was fit without it.")
+
         if ((X_col is not None) and (X_val is None)) or ((X_col is None) and (X_val is  not None)):
             raise ValueError("Must pass 'X_col' and 'X_val' together.")
         if (X_col is not None) and (X is not None):
@@ -1380,8 +1386,11 @@ class _CMF:
                                   U, U_val, U_col, U_bin, return_bias)
 
     def _process_transform_inputs(self, X, U, U_bin, W, replace_existing):
-        if (X is None) and (U is None) and (U_bin):
-            raise ValueError("Must pass at least one of 'X', 'U', 'U_bin'.")
+        if (X is None) and (U is None) and (U_bin is None):
+            if (self.Cbin_.shape[0]) or (self.Dbin_.shape[0]):
+                raise ValueError("Must pass at least one of 'X', 'U', 'U_bin'.")
+            else:
+                raise ValueError("Must pass at least one of 'X', 'U'.")
         if (not replace_existing):
             if (X is None):
                 raise ValueError("Must pass 'X' if not passing 'replace_existing'.")
@@ -1465,6 +1474,139 @@ class _CMF:
 
         return outp
 
+    def _process_multiple_common(self, X, U, U_bin, W):
+        if (X is None) and (U is None) and (U_bin is None):
+            if (self.Cbin_.shape[0]) or (self.Dbin_.shape[0]):
+                raise ValueError("Must pass at least one of 'X', 'U', 'U_bin'.")
+            else:
+                raise ValueError("Must pass at least one of 'X', 'U'.")
+
+        Xarr, Xrow, Xcol, Xval, Xcsr_p, Xcsr_i, Xcsr, m_x, n, W_dense, W_sp = \
+            self._process_new_X_2d(X=X, W=W)
+        Uarr, Urow, Ucol, Uval, Ucsr_p, Ucsr_i, Ucsr, m_u, p = \
+            self._process_new_U_2d(U=U, is_I=False, allow_csr=True)
+        Ub_arr, m_ub, pbin = self._process_new_Ub_2d(U_bin=U_bin, is_I=False)
+
+        if (self.NA_as_zero) and (Xcsr_p.shape[0]) and (m_x < max(m_u, m_ub)):
+            diff = max(m_u, m_ub) - m_x
+            fill = Xcsr_p[-1]
+            Xcsr_p = np.r_[Xcsr_p, np.repeat(fill, diff)]
+            m_x = max(m_x, m_u, m_ub)
+
+        if (self.NA_as_zero_user) and (Xcsr_p.shape[0]) and (m_u < max(m_x, m_ub)):
+            diff = max(m_x, m_ub) - m_u
+            fill = Ucsr_p[-1]
+            Ucsr_p = np.r_[Ucsr_p, np.repeat(fill, diff)]
+            m_u = max(m_x, m_u, m_ub)
+
+        if isinstance(self.lambda_, np.ndarray):
+            lambda_ = self.lambda_[2]
+            lambda_bias = self.lambda_[0]
+        else:
+            lambda_ = self.lambda_
+            lambda_bias = self.lambda_
+
+        return Xrow, Xcol, Xval, W_sp, \
+               Xcsr_p, Xcsr_i, Xcsr, \
+               Xarr, W_dense, \
+               Uarr, Urow, Ucol, Uval, Ub_arr, \
+               Ucsr_p, Ucsr_i, Ucsr, \
+               n, m_u, m_x, p, pbin, \
+               lambda_, lambda_bias
+
+    def _factors_multiple_common(self, X, U, U_bin, W):
+        Xrow, Xcol, Xval, W_sp, \
+        Xcsr_p, Xcsr_i, Xcsr, \
+        Xarr, W_dense, \
+        Uarr, Urow, Ucol, Uval, Ub_arr, \
+        Ucsr_p, Ucsr_i, Ucsr, \
+        n, m_u, m_x, p, pbin, \
+        lambda_, lambda_bias = self._process_multiple_common(self, X, U, U_bin, W)
+        A, A_bias = self._factors_multiple(
+            Xrow, Xcol, Xval, W_sp,
+            Xcsr_p, Xcsr_i, Xcsr,
+            Xarr, W_dense,
+            Uarr, Urow, Ucol, Uval, Ub_arr,
+            Ucsr_p, Ucsr_i, Ucsr,
+            n, m_u, m_x, p, pbin,
+            lambda_, lambda_bias
+        )
+        return A, A_bias
+
+    def _factors_multiple(Xrow, Xcol, Xval, W_sp,
+                          Xcsr_p, Xcsr_i, Xcsr,
+                          Xarr, W_dense,
+                          Uarr, Urow, Ucol, Uval, Ub_arr,
+                          Ucsr_p, Ucsr_i, Ucsr,
+                          n, m_u, m_x, p, pbin,
+                          lambda_, lambda_bias):
+        c_funs = wrapper_float if self.use_float else wrapper_double
+        
+        if (not self.implicit):
+            A, A_bias = c_funs.call_collective_factors_warm_multiple(
+                Xrow,
+                Xcol,
+                Xval,
+                Xcsr_p, Xcsr_i, Xcsr,
+                W_sp,
+                Xarr,
+                W_dense,
+                Uarr,
+                Urow,
+                Ucol,
+                Uval,
+                Ucsr_p, Ucsr_i, Ucsr,
+                Ub_arr,
+                self._U_colmeans,
+                self.item_bias_,
+                self._B_pred,
+                self._B_plus_bias,
+                self.C_,
+                self.Cbin_,
+                self._BtBinvBt,
+                self._BtB,
+                self._BeTBeChol,
+                self._CtCinvCt,
+                self._CtC,
+                n, m_u, m_x,
+                self.glob_mean_,
+                self._k_pred, self.k_user, self.k_item, self._k_main_col,
+                lambda_, lambda_bias,
+                self.w_user, self.w_main,
+                self.user_bias,
+                self.NA_as_zero_user, self.NA_as_zero,
+                self.nthreads
+            )
+
+        else:
+            A_bias = np.zeros(0, dtype=self.dtype_)
+            A = c_funs.call_collective_factors_warm_implicit_multiple(
+                Xrow,
+                Xcol,
+                Xval,
+                Xcsr_p, Xcsr_i, Xcsr,
+                Uarr,
+                Urow,
+                Ucol,
+                Uval,
+                Ucsr_p, Ucsr_i, Ucsr,
+                self._U_colmeans,
+                self.B_,
+                self.C_,
+                self._BeTBe,
+                self._BtB,
+                self._BeTBeChol,
+                n, m_u, m_x,
+                self.k, self.k_user, self.k_item, self.k_main,
+                lambda_, self.alpha,
+                self._w_main_multiplier,
+                self.w_user, self.w_main,
+                self.NA_as_zero_user,
+                self.nthreads
+            )
+
+        return A, A_bias
+
     def _item_factors_cold(self, I=None, I_bin=None, I_col=None, I_val=None):
         assert self.is_fitted_
         if (self.D_.shape[0] == 0) and (self.Dbin_.shape[0] == 0):
@@ -1481,23 +1623,40 @@ class _CMF:
 
         c_funs = wrapper_float if self.use_float else wrapper_double
         
-        ### TODO: this is wrong for the implicit one.
-        ### Also could pass precomputed ones when having NA_as_zero 
-        b_vec = c_funs.call_factors_collective_cold(
-            I,
-            I_val,
-            I_col,
-            I_bin,
-            self.D_,
-            self.Dbin_,
-            np.empty((0,0), dtype=self.dtype_),
-            np.empty((0,0), dtype=self.dtype_),
-            self._I_colmeans,
-            self.D_.shape[0], self.k,
-            self.k_item, self.k_main,
-            lambda_, self.w_main, self.w_item,
-            self.NA_as_zero_item
-        )
+        if (not self.implicit):
+            b_vec = c_funs.call_factors_collective_cold(
+                I,
+                I_val,
+                I_col,
+                I_bin,
+                self.D_,
+                self.Dbin_,
+                np.empty((0,0), dtype=self.dtype_),
+                np.empty((0,0), dtype=self.dtype_),
+                self._I_colmeans,
+                self.D_.shape[0], self.k,
+                self.k_item, self.k_main,
+                lambda_, self.w_main, self.w_item,
+                self.NA_as_zero_item
+            )
+        else:
+            b_vec = c_funs.call_factors_collective_cold_implicit(
+                I,
+                I_val,
+                I_col,
+                self.A_,
+                self.D_,
+                np.empty((0,0), dtype=self.dtype_),
+                np.empty((0,0), dtype=self.dtype_),
+                np.empty((0,0), dtype=self.dtype_),
+                self._I_colmeans,
+                self.D_.shape[0], self.k,
+                self.k_item, self.k_user, self.k_main,
+                lambda_,
+                self.w_main, self.w_item,
+                self._w_main_multiplier,
+                self.NA_as_zero_item
+            )
         return b_vec
 
     def _factors_cold_multiple(self, U=None, U_bin=None, is_I=False):
@@ -1540,8 +1699,8 @@ class _CMF:
 
         c_funs = wrapper_float if self.use_float else wrapper_double
 
-        if (not self.implicit) or (is_I):
-            if (not self.NA_as_zero) or (is_I):
+        if (not self.implicit):
+            if is_I:
                 A = c_funs.call_collective_factors_cold_multiple(
                     Uarr,
                     Urow,
@@ -1601,32 +1760,54 @@ class _CMF:
                     self.nthreads
                 )
         else:
-            A = c_funs.call_collective_factors_warm_implicit_multiple(
-                np.empty((0,0), dtype=ctypes.c_int),
-                np.empty((0,0), dtype=ctypes.c_int),
-                np.empty((0,0), dtype=self.dtype_),
-                np.empty((0,0), dtype=ctypes.c_size_t),
-                np.empty((0,0), dtype=ctypes.c_int),
-                np.empty((0,0), dtype=self.dtype_),
-                Uarr,
-                Urow,
-                Ucol,
-                Uval,
-                Ucsr_p, Ucsr_i, Ucsr,
-                self._U_colmeans,
-                self._B_pred,
-                self.C_,
-                self._BeTBe,
-                self._BtB,
-                self._BeTBeChol,
-                n, m_u, 0,
-                self.k, self.k_user, self.k_item, self.k_main,
-                lambda_, self.alpha,
-                self._w_main_multiplier,
-                self.w_user, self.w_main,
-                self.NA_as_zero_user,
-                self.nthreads
-            )
+            if is_I:
+                A = c_funs.call_collective_factors_cold_implicit_multiple(
+                    Uarr,
+                    Urow,
+                    Ucol,
+                    Uval,
+                    Ucsr_p, Ucsr_i, Ucsr,
+                    self.A_,
+                    Mat,
+                    self._I_colmeans,
+                    np.empty((0,0), dtype=self.dtype_),
+                    np.empty((0,0), dtype=self.dtype_),
+                    np.empty((0,0), dtype=self.dtype_),
+                    m_u,
+                    self.k, self.k_item, self.k_user, self.k_main,
+                    lambda_, self.w_main, self.w_item,
+                    self._w_main_multiplier,
+                    self.NA_as_zero_item,
+                    self.nthreads
+                )
+
+            else:
+                A = c_funs.call_collective_factors_warm_implicit_multiple(
+                    np.empty((0,0), dtype=ctypes.c_int),
+                    np.empty((0,0), dtype=ctypes.c_int),
+                    np.empty((0,0), dtype=self.dtype_),
+                    np.empty((0,0), dtype=ctypes.c_size_t),
+                    np.empty((0,0), dtype=ctypes.c_int),
+                    np.empty((0,0), dtype=self.dtype_),
+                    Uarr,
+                    Urow,
+                    Ucol,
+                    Uval,
+                    Ucsr_p, Ucsr_i, Ucsr,
+                    self._U_colmeans,
+                    self._B_pred,
+                    self.C_,
+                    self._BeTBe,
+                    self._BtB,
+                    self._BeTBeChol,
+                    n, m_u, 0,
+                    self.k, self.k_user, self.k_item, self.k_main,
+                    lambda_, self.alpha,
+                    self._w_main_multiplier,
+                    self.w_user, self.w_main,
+                    self.NA_as_zero_user,
+                    self.nthreads
+                )
         return A
 
 
@@ -2514,6 +2695,64 @@ class CMF_explicit(_CMF):
         else:
             return a_vec
 
+    def factors_multiple(self, X=None, U=None, U_bin=None, W=None,
+                         return_bias=False):
+        """
+        Determine user latent factors based on new data (warm and cold)
+
+        Determines latent factors for multiple rows/users at once given new
+        data for them.
+        
+        Parameters
+        ----------
+        X : array(m_x, n), CSR matrix(m_x, n), COO matrix(m_x, n), or None
+            New 'X' data.
+            Missing entries should have value ``np.nan`` when passing a dense
+            array. If the number of rows in 'X' is less than in 'U' or 'U_bin',
+            will assume the rest of the rows have missing values in all columns.
+        U : array(m_u, p), CSR matrix(m_u, p), COO matrix(m_u, p), or None
+            User attributes information for rows in 'X'.
+            Missing entries should have value ``np.nan`` when passing a dense
+            array.
+            If the number of rows in 'U' is less than in 'X' or 'U_bin',
+            will assume the rest of the rows have missing values in all columns.
+        U_bin : array(m_ub, p_bin) or None
+            User binary attributes for each row in 'X'.
+            Missing entries should have value ``np.nan``.
+            If the number of rows in 'U_bin' is less than in 'X' or 'U',
+            will assume the rest of the rows have missing values in all columns.
+            Only supported with ``method='lbfgs'``.
+        W : array(m_x, n), array(nnz,), or None
+            Observation weights. Must have the same shape as 'X' - that is,
+            if 'X' is a sparse COO matrix, must be a 1-d array with the same
+            number of non-zero entries as 'X.data', if 'X' is a 2-d array,
+            'W' must also be a 2-d array.
+        return_bias : bool
+            Whether to return also the user bias determined by the model
+            given the data in 'X'. If passing 'False', will return an array
+            with the factors. If passing 'True', will return a tuple in which
+            the first entry will be an array with the factors, and the second
+            entry will be the estimated bias.
+
+        Returns
+        -------
+        A : array(max(m_x,m_u,m_ub), k_user+k+k_main)
+            The new factors determined for all the rows given the new data.
+        bias : array(max(m_x,m_u,m_ub)) or None
+            The user bias given the new 'X' data. Only returned if passing
+            ``return_bias=True``.
+        """
+        if (X is None) and (U is None) and (U_bin is None):
+            raise ValueError("Must pass at least one of 'X', 'U', 'U_bin'.")
+        if (W is not None) and (X is None):
+            raise ValueError("Cannot pass 'W' without 'X'.")
+        
+        A, A_bias = self._factors_multiple_common(X, U, U_bin, W)
+        if return_bias:
+            return A, A_bias
+        else:
+            return A
+
 
     def predict_warm(self, items, X=None, X_col=None, X_val=None, W=None,
                      U=None, U_bin=None, U_col=None, U_val=None):
@@ -2759,9 +2998,9 @@ class CMF_explicit(_CMF):
     def transform(self, X=None, y=None, U=None, U_bin=None, W=None,
                   replace_existing=False):
         """
-        Reconstruct entries of the 'X' matrix
+        Reconstruct missing entries of the 'X' matrix
 
-        Will reconstruct all the entries in the 'X' matrix as determined
+        Will reconstruct/impute all the entries in the 'X' matrix as determined
         by the model. This method is intended to be used for imputing tabular
         data, and can be used as part of SciKit-Learn pipelines.
 
@@ -2771,9 +3010,15 @@ class CMF_explicit(_CMF):
         alone, or with both 'X' and 'U'/'U_bin' together, in which case
         both matrices must have the same rows.
 
+        Note
+        ----
+        This method is only available when fitting the model to NumPy arrays
+        and/or SciPy matrices. Will not work when fitting the model to Pandas
+        DataFrames.
+
         Parameters
         ----------
-        X : array(m, n), CSR matrix(m, n), or COO matrix(m, n)
+        X : array(m, n), CSR matrix(m, n), COO matrix(m, n), or None
             New 'X' data with potentially missing entries which are to be imputed.
             Missing entries should have value ``np.nan`` when passing a dense
             array.
@@ -2784,7 +3029,7 @@ class CMF_explicit(_CMF):
             User attributes information for each row in 'X'.
             Missing entries should have value ``np.nan`` when passing a dense
             array.
-        U_bin : array(m, p_bin)
+        U_bin : array(m, p_bin) or None
             User binary attributes for each row in 'X'.
             Missing entries should have value ``np.nan``.
             Only supported with ``method='lbfgs'``.
@@ -3478,7 +3723,6 @@ class CMF_implicit(_CMF):
         factors : array(k_item+k+k_main,)
             The item-factors as determined by the model.
         """
-        ## TODO: is this correct?
         return self._item_factors_cold(I=I, I_bin=None, I_col=I_col, I_val=I_val)
 
     def predict_new(self, user, I):
@@ -3611,6 +3855,37 @@ class CMF_implicit(_CMF):
         )
 
         return a_vec
+
+    def factors_multiple(self, X=None, U=None):
+        """
+        Determine user latent factors based on new data (warm and cold)
+
+        Determines latent factors for multiple rows/users at once given new
+        data for them.
+        
+        Parameters
+        ----------
+        X : CSR matrix(m_x, n), COO matrix(m_x, n), or None
+            New 'X' data.
+            If the number of rows in 'X' is less than in 'U',
+            will assume the rest of the rows have missing values in all columns.
+        U : array(m_u, p), CSR matrix(m_u, p), COO matrix(m_u, p), or None
+            User attributes information for rows in 'X'.
+            Missing entries should have value ``np.nan`` when passing a dense
+            array.
+            If the number of rows in 'U' is less than in 'X',
+            will assume the rest of the rows have missing values in all columns.
+
+        Returns
+        -------
+        A : array(max(m_x,m_u), k_user+k+k_main)
+            The new factors determined for all the rows given the new data.
+        """
+        if (X is None) and (U is None):
+            raise ValueError("Must pass at least one of 'X', 'U'.")
+        
+        A, _ = self._factors_multiple_common(X, U, None, None)
+        return A
 
 
     def topN_warm(self, n=10, X_col=None, X_val=None,
@@ -4130,7 +4405,6 @@ class _OMF(_OMF_Base):
         """
         B = self._factors_cold_multiple(I=I, is_I=True)
         return self._topN(user=user, B=B, n=n, output_score=output_score)
-
 
 class OMF_explicit(_OMF):
     """
@@ -5014,6 +5288,12 @@ class OMF_explicit(_OMF):
         Note
         ----
         The argument 'NA_as_zero' is ignored here.
+
+        Note
+        ----
+        This method is only available when fitting the model to NumPy arrays
+        and/or SciPy matrices. Will not work when fitting the model to Pandas
+        DataFrames.
 
         Parameters
         ----------
@@ -5942,6 +6222,25 @@ class ContentBased(_OMF_Base):
             self.C_bias_
         )
         return a_vec
+
+    def factors_multiple(self, U=None):
+        """
+        Determine user-factors from new data for multiple rows, given U
+
+        Parameters
+        ----------
+        U : array-like(m, p)
+            User attributes in the new data.
+
+        Returns
+        -------
+        factors : array(m, k)
+            The user-factors as determined by the model.
+        """
+        factors = U.dot(self.C_)
+        if self.C_bias_.shape[0]:
+            factors[:] += self.C_bias_.reshape((1,-1))
+        return factors
 
     def topN_new(self, n=10, U=None, U_col=None, U_val=None,
                  I=None, output_score=False):

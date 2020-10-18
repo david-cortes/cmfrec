@@ -6423,8 +6423,8 @@ int collective_factors_warm_implicit_multiple
     if (ret == NULL) { retval = 1; goto cleanup; }
 
     size_t m_x = m;
-    m = max2(m, m_u);
     size_t m_lim  = (m > m_u && !NA_as_zero_U)? m_u : m;
+    m = max2(m, m_u);
     
     if (Xcsr == NULL) {
         retval = coo_to_csr_plus_alloc(
