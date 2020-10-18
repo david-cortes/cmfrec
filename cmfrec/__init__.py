@@ -2148,6 +2148,10 @@ class CMF_explicit(_CMF):
         "U" has more rows than "X", or "I" has more rows than there are columns
         in "X"), will assume that the rest of the rows/columns have only
         missing values.
+        Note however that when having partially disjoint inputs, the order of
+        the rows/columns matters for speed, as it might run faster when the "U"/"I"
+        inputs that do not have matching rows/columns in "X" have those unmatched
+        rows/columns at the end (last rows/columns) and the "X" input is shorter.
 
         Note
         ----
@@ -3456,6 +3460,10 @@ class CMF_implicit(_CMF):
         "U" has more rows than "X", or "I" has more rows than there are columns
         in "X"), will assume that the rest of the rows/columns have only
         missing values (zero values for "X").
+        Note however that when having partially disjoint inputs, the order of
+        the rows/columns matters for speed, as it might run faster when the "U"/"I"
+        inputs that do not have matching rows/columns in "X" have those unmatched
+        rows/columns at the end (last rows/columns) and the "X" input is shorter.
 
         Note
         ----
