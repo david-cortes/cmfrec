@@ -95,7 +95,10 @@ cdef extern from "cmfrec.h":
     )
 
     int fit_collective_explicit_als(
-        FPnum *values, bint reset_values,
+        FPnum *biasA, FPnum *biasB,
+        FPnum *A, FPnum *B,
+        FPnum *C, FPnum *D,
+        bint reset_values, int seed,
         FPnum *glob_mean,
         FPnum *U_colmeans, FPnum *I_colmeans,
         int m, int n, int k,
@@ -111,9 +114,15 @@ cdef extern from "cmfrec.h":
         bint NA_as_zero_X, bint NA_as_zero_U, bint NA_as_zero_I,
         int k_main, int k_user, int k_item,
         FPnum w_main, FPnum w_user, FPnum w_item,
-        int niter, int nthreads, int seed, bint verbose, bint handle_interrupt,
+        int niter, int nthreads, bint verbose, bint handle_interrupt,
         bint use_cg, int max_cg_steps, bint finalize_chol,
-        FPnum *B_plus_bias
+        bint precompute_for_predictions,
+        FPnum *B_plus_bias,
+        FPnum *precomputedBtB,
+        FPnum *precomputedTransBtBinvBt,
+        FPnum *precomputedBeTBeChol,
+        FPnum *precomputedTransCtCinvCt,
+        FPnum *precomputedCtCw
     )
 
     int fit_collective_implicit_als(
@@ -142,9 +151,12 @@ cdef extern from "cmfrec.h":
     )
 
     int fit_offsets_als(
-        FPnum *values, bint reset_values,
+        FPnum *biasA, FPnum *biasB,
+        FPnum *A, FPnum *B,
+        FPnum *C, FPnum *C_bias,
+        FPnum *D, FPnum *D_bias,
+        bint reset_values, int seed,
         FPnum *glob_mean,
-        FPnum *Am, FPnum *Bm,
         int m, int n, int k,
         int ixA[], int ixB[], FPnum *X, size_t nnz,
         FPnum *Xfull,
@@ -154,12 +166,31 @@ cdef extern from "cmfrec.h":
         FPnum *U, int p,
         FPnum *II, int q,
         bint implicit, bint NA_as_zero_X, FPnum alpha,
-        bint adjust_weight, FPnum *w_main_multiplier,
-        int niter, int seed,
+        int niter,
         int nthreads, bint use_cg,
         int max_cg_steps, bint finalize_chol,
         bint verbose, bint handle_interrupt,
-        FPnum *B_plus_bias
+        bint precompute_for_predictions,
+        FPnum *Am, FPnum *Bm,
+        FPnum *Bm_plus_bias,
+        FPnum *precomputedBtB,
+        FPnum *precomputedTransBtBinvBt
+
+    )
+
+    int precompute_collective_explicit(
+        FPnum *B, int n, int n_i, int n_ibin,
+        FPnum *C, int p,
+        int k, int k_user, int k_item, int k_main,
+        bint user_bias,
+        FPnum lam, FPnum *lam_unique,
+        FPnum w_main, FPnum w_user,
+        FPnum *B_plus_bias,
+        FPnum *BtB,
+        FPnum *TransBtBinvBt,
+        FPnum *BeTBeChol,
+        FPnum *TransCtCinvCt,
+        FPnum *CtCw
     )
 
     int precompute_collective_implicit(
@@ -173,54 +204,13 @@ cdef extern from "cmfrec.h":
         FPnum *BeTBeChol
     )
 
-    ### TODO: delete this once it gets replaced
-    int precompute_matrices_collective(
-        FPnum *B, int n,
-        FPnum *BtBinvBt,
-        FPnum *BtBw,
-        FPnum *BtBchol,
-        int k, int k_main, int k_user, int k_item,
-        FPnum *C, int p,
-        FPnum *CtCinvCt,
-        FPnum *CtC,
-        FPnum *CtCchol,
-        FPnum *BeTBe,
-        FPnum *BtB_padded,
-        FPnum *BtB_shrunk,
-        FPnum lam, FPnum w_main, FPnum w_user, FPnum lam_last,
-        FPnum w_main_multiplier,
-        bint has_U, bint has_U_bin, bint implicit
-    )
-
-    int precompute_matrices_offsets(
-        FPnum *A, int m,
-        FPnum *B, int n,
-        FPnum *C, int p,
-        FPnum *D, int q,
-        FPnum *C_bias, FPnum *D_bias,
-        bint add_intercepts,
-        FPnum *U,
-        size_t U_csr_p[], int U_csc_i[], FPnum *U_csr,
-        FPnum *II,
-        size_t I_csr_p[], int I_csc_i[], FPnum *I_csr,
-        FPnum *Am,
-        FPnum *Bm,
-        FPnum *BtBinvBt,
-        FPnum *BtBw,
-        FPnum *BtBchol,
-        int k, int k_main, int k_sec,
-        FPnum lam, FPnum w_user, FPnum w_item, FPnum lam_last,
-        bint implicit,
-        int nthreads
-    )
-
     int collective_factors_cold(
         FPnum *a_vec,
         FPnum *u_vec, int p,
         FPnum *u_vec_sp, int u_vec_ixB[], size_t nnz_u_vec,
         FPnum *u_bin_vec, int pbin,
         FPnum *C, FPnum *Cb,
-        FPnum *CtCinvCt,
+        FPnum *TransCtCinvCt,
         FPnum *CtCw,
         FPnum *col_means,
         int k, int k_user, int k_main,
@@ -257,7 +247,7 @@ cdef extern from "cmfrec.h":
         FPnum *B,
         int k, int k_user, int k_item, int k_main,
         FPnum lam, FPnum w_main, FPnum w_user, FPnum lam_bias,
-        FPnum *BtBinvBt,
+        FPnum *TransBtBinvBt,
         FPnum *BtB,
         FPnum *BeTBeChol,
         FPnum *CtCw,
@@ -305,8 +295,7 @@ cdef extern from "cmfrec.h":
         int p, FPnum w_user,
         FPnum lam, bint exact, FPnum lam_bias,
         bint implicit, FPnum alpha,
-        FPnum w_main_multiplier,
-        FPnum *precomputedBtBinvBt,
+        FPnum *precomputedTransBtBinvBt,
         FPnum *precomputedBtBw,
         FPnum *output_a,
         FPnum *Bm_plus_bias
@@ -402,7 +391,7 @@ cdef extern from "cmfrec.h":
         size_t U_csr_p[], int U_csr_i[], FPnum *U_csr,
         FPnum *Ub, int m_ubin, int pbin,
         FPnum *C, FPnum *Cb,
-        FPnum *CtCinvCt,
+        FPnum *TransCtCinvCt,
         FPnum *CtCw,
         FPnum *col_means,
         int k, int k_user, int k_main,
@@ -427,10 +416,10 @@ cdef extern from "cmfrec.h":
         FPnum *B,
         int k, int k_user, int k_item, int k_main,
         FPnum lam, FPnum w_main, FPnum w_user, FPnum lam_bias,
-        FPnum *BtBinvBt,
+        FPnum *TransBtBinvBt,
         FPnum *BtB,
         FPnum *BeTBeChol,
-        FPnum *CtCinvCt,
+        FPnum *TransCtCinvCt,
         FPnum *CtCw,
         bint NA_as_zero_U, bint NA_as_zero_X,
         FPnum *B_plus_bias,
@@ -500,8 +489,7 @@ cdef extern from "cmfrec.h":
         FPnum w_user,
         FPnum lam, bint exact, FPnum lam_bias,
         bint implicit, FPnum alpha,
-        FPnum w_main_multiplier,
-        FPnum *precomputedBtBinvBt,
+        FPnum *precomputedTransBtBinvBt,
         FPnum *precomputedBtBw,
         FPnum *Bm_plus_bias,
         FPnum *output_A,
@@ -935,7 +923,8 @@ def call_fit_collective_explicit_als(
         bint verbose=1, int nthreads=1,
         bint use_cg = 0, int max_cg_steps=3,
         bint finalize_chol=0,
-        int seed=1, int niter=5, bint handle_interrupt=1
+        int seed=1, int niter=5, bint handle_interrupt=1,
+        bint precompute_for_predictions = 1
     ):
 
     cdef FPnum *ptr_Xfull = NULL
@@ -996,29 +985,90 @@ def call_fit_collective_explicit_als(
     if lam_unique.shape[0]:
         ptr_lam_unique = &lam_unique[0]
 
-    cdef size_t nvars = <size_t>max(m, m_u) * <size_t>(k_user+k+k_main) \
-                        + <size_t>max(n, n_i) * <size_t>(k_item+k+k_main)
-    if user_bias:
-        nvars += max(m, m_u)
-    if item_bias:
-        nvars += max(n, n_i)
-    if U.shape[0] or U_sp.shape[0]:
-        nvars += <size_t>p * <size_t>(k_user + k)
-    if I.shape[0] or I_sp.shape[0]:
-        nvars += <size_t>q * <size_t>(k_item + k)
-    rs = np.random.Generator(np.random.MT19937(seed = seed))
-    cdef np.ndarray[FPnum, ndim=1] values = rs.standard_normal(size = nvars, dtype = c_FPnum)
+    cdef np.ndarray[FPnum, ndim=1] biasA = np.zeros(0, dtype=c_FPnum)
+    cdef np.ndarray[FPnum, ndim=1] biasB = np.zeros(0, dtype=c_FPnum)
+    cdef np.ndarray[FPnum, ndim=2] A = np.zeros((0,0), dtype=c_FPnum)
+    cdef np.ndarray[FPnum, ndim=2] B = np.zeros((0,0), dtype=c_FPnum)
+    cdef np.ndarray[FPnum, ndim=2] C = np.zeros((0,0), dtype=c_FPnum)
+    cdef np.ndarray[FPnum, ndim=2] D = np.zeros((0,0), dtype=c_FPnum)
+    cdef FPnum *ptr_biasA = NULL
+    cdef FPnum *ptr_biasB = NULL
+    cdef FPnum *ptr_A = NULL
+    cdef FPnum *ptr_B = NULL
+    cdef FPnum *ptr_C = NULL
+    cdef FPnum *ptr_D = NULL
 
-    cdef np.ndarray[FPnum, ndim=2] B_plus_bias = np.empty((0,0), dtype=c_FPnum)
-    cdef FPnum *ptr_B_plus_bias = NULL
+    cdef size_t sizeA = <size_t>max(m, m_u) * <size_t>(k_user+k+k_main)
+    cdef size_t sizeB = <size_t>max(n, n_i) * <size_t>(k_item+k+k_main)
+    if (sizeA == 0) or (sizeB == 0):
+        raise ValueError("Model cannot have empty 'A' or 'B' matrices.")
+
     if user_bias:
-        B_plus_bias = np.empty((max(n, n_i), k_item+k+k_main+1), dtype=c_FPnum)
-        ptr_B_plus_bias = &B_plus_bias[0,0]
+        biasA = np.zeros(max(m, m_u), dtype=c_FPnum)
+        ptr_biasA = &biasA[0]
+    if item_bias:
+        biasB = np.zeros(max(n, n_i), dtype=c_FPnum)
+        ptr_biasB = &biasB[0]
+
+    rs = np.random.Generator(np.random.MT19937(seed = seed))
+    A = rs.standard_normal(size = (max(m, m_u), k_user+k+k_main), dtype = c_FPnum)
+    B = rs.standard_normal(size = (max(n, n_i), k_item+k+k_main), dtype = c_FPnum)
+    ptr_A = &A[0,0]
+    ptr_B = &B[0,0]
+    if p:
+        C = rs.standard_normal(size = (p, k_user + k), dtype = c_FPnum)
+        if C.shape[0]:
+            ptr_C = &C[0,0]
+        else:
+            raise ValueError("Unexpected error.")
+    if q:
+        D = rs.standard_normal(size = (q, k_item + k), dtype = c_FPnum)
+        if D.shape[0]:
+            ptr_D = &D[0,0]
+        else:
+            raise ValueError("Unexpected error.")
+
+    cdef np.ndarray[FPnum, ndim=2] B_plus_bias = np.zeros((0,0), dtype=c_FPnum)
+    cdef np.ndarray[FPnum, ndim=2] BtB = np.zeros((0,0), dtype=c_FPnum)
+    cdef np.ndarray[FPnum, ndim=2] TransBtBinvBt = np.zeros((0,0), dtype=c_FPnum)
+    cdef np.ndarray[FPnum, ndim=2] BeTBeChol = np.zeros((0,0), dtype=c_FPnum)
+    cdef np.ndarray[FPnum, ndim=2] TransCtCinvCt = np.zeros((0,0), dtype=c_FPnum)
+    cdef np.ndarray[FPnum, ndim=2] CtCw = np.zeros((0,0), dtype=c_FPnum)
+    cdef FPnum *ptr_B_plus_bias = NULL
+    cdef FPnum *ptr_BtB = NULL
+    cdef FPnum *ptr_TransBtBinvBt = NULL
+    cdef FPnum *ptr_BeTBeChol = NULL
+    cdef FPnum *ptr_TransCtCinvCt = NULL
+    cdef FPnum *ptr_CtCw = NULL
+
+    if precompute_for_predictions:
+        if user_bias:
+            B_plus_bias = np.empty((B.shape[0],B.shape[1]), dtype=c_FPnum)
+            ptr_B_plus_bias = &B_plus_bias[0,0]
+        BtB = np.empty((k+k_main, k+k_main), dtype=c_FPnum)
+        ptr_BtB = &BtB[0,0]
+        TransBtBinvBt = np.empty((B.shape[0], k+k_main), dtype=c_FPnum)
+        ptr_TransBtBinvBt = &TransBtBinvBt[0,0]
+        if p:
+            BeTBeChol = np.empty((B.shape[1], B.shape[1]), dtype=c_FPnum)
+            ptr_BeTBeChol = &BeTBeChol[0,0]
+            CtCw = np.empty((k_user+k, k_user+k), dtype=c_FPnum)
+            if CtCw.shape[0]:
+                ptr_CtCw = &CtCw[0,0]
+            else:
+                raise ValueError("Unexpected error.")
+            TransCtCinvCt = np.empty((p, k_user+k), dtype=c_FPnum)
+            if TransCtCinvCt.shape[0]:
+                ptr_TransCtCinvCt = &TransCtCinvCt[0,0]
+            else:
+                raise ValueError("Unexpected error.")
 
     cdef FPnum glob_mean = 0
 
     cdef int retval = fit_collective_explicit_als(
-        &values[0], 0,
+        ptr_biasA, ptr_biasB,
+        ptr_A, ptr_B, ptr_C, ptr_D,
+        0, 0,
         &glob_mean,
         ptr_U_colmeans, ptr_I_colmeans,
         m, n, k,
@@ -1034,32 +1084,24 @@ def call_fit_collective_explicit_als(
         NA_as_zero_X, NA_as_zero_U, NA_as_zero_I,
         k_main, k_user, k_item,
         w_main, w_user, w_item,
-        niter, nthreads, seed, verbose, handle_interrupt,
+        niter, nthreads, verbose, handle_interrupt,
         use_cg, max_cg_steps, finalize_chol,
-        ptr_B_plus_bias
+        precompute_for_predictions,
+        ptr_B_plus_bias,
+        ptr_BtB,
+        ptr_TransBtBinvBt,
+        ptr_BeTBeChol,
+        ptr_TransCtCinvCt,
+        ptr_CtCw
     )
 
     if retval == 1:
         raise MemoryError("Could not allocate sufficient memory.")
 
-    return glob_mean, U_colmeans, I_colmeans, values, B_plus_bias
+    return biasA, biasB, A, B, C, D, \
+           glob_mean, U_colmeans, I_colmeans, \
+           B_plus_bias, BtB, TransBtBinvBt, BeTBeChol, TransCtCinvCt, CtCw
 
-def unpack_values_collective_als(
-        np.ndarray[FPnum, ndim=1] values,
-        bint user_bias, bint item_bias,
-        size_t k, size_t k_user, size_t k_item, size_t k_main,
-        size_t m, size_t n, size_t p, size_t q,
-        size_t m_u, size_t n_i
-    ):
-    biasA, biasB, A, B, C, Cbin, D, Dbin = unpack_values_lbfgs_collective(
-        values,
-        user_bias, item_bias,
-        k, k_user, k_item, k_main,
-        m, n, p, q,
-        0, 0,
-        m_u, n_i, 0, 0
-    )
-    return biasA, biasB, A, B, C, D
 
 def call_fit_collective_implicit_als(
         np.ndarray[int, ndim=1] ixA,
@@ -1238,22 +1280,6 @@ def call_fit_collective_implicit_als(
            U_colmeans, I_colmeans, w_main_multiplier, \
            precomputedBtB, precomputedBeTBe, precomputedBeTBeChol
 
-def unpack_values_collective_implicit(
-        np.ndarray[FPnum, ndim=1] values,
-        size_t k, size_t k_user, size_t k_item, size_t k_main,
-        size_t m, size_t n, size_t p, size_t q,
-        size_t m_u, size_t n_i
-    ):
-    biasA, biasB, A, B, C, Cbin, D, Dbin = unpack_values_lbfgs_collective(
-        values,
-        0, 0,
-        k, k_user, k_item, k_main,
-        m, n, p, q,
-        0, 0,
-        m_u, n_i, 0, 0
-    )
-    return A, B, C, D
-
 def call_fit_offsets_explicit_als(
         np.ndarray[int, ndim=1] ixA,
         np.ndarray[int, ndim=1] ixB,
@@ -1272,8 +1298,14 @@ def call_fit_offsets_explicit_als(
         bint verbose=1, int nthreads=1,
         bint use_cg=0, int max_cg_steps=3,
         bint finalize_chol=0,
-        int seed=1, int niter=5, bint handle_interrupt=1
+        int seed=1, int niter=5, bint handle_interrupt=1,
+        bint precompute_for_predictions=1
     ):
+    if k <= 0:
+        raise ValueError("'k' must be a positive number.")
+    if min(m,n) <= 0:
+        raise ValueError("'X' must have positive dimensions.")
+
     cdef FPnum *ptr_Xfull = NULL
     cdef FPnum *ptr_weight = NULL
     cdef int *ptr_ixA = NULL
@@ -1300,24 +1332,10 @@ def call_fit_offsets_explicit_als(
     if I.shape[0]:
         ptr_I = &I[0,0]
 
-    cdef size_t nvars = <size_t>m * <size_t>k \
-                        + <size_t>n * <size_t>k
-    if user_bias:
-        nvars += m
-    if item_bias:
-        nvars += n
-    if U.shape[0]:
-        nvars += <size_t>p * <size_t>k
-        if add_intercepts:
-            nvars += <size_t>k
-    if I.shape[0]:
-        nvars += <size_t>q * <size_t>k
-        if add_intercepts:
-            nvars += <size_t>k
-    np.random.seed(seed)
-    cdef np.ndarray[FPnum, ndim=1] values = np.random.normal(size = nvars)
     cdef np.ndarray[FPnum, ndim=2] Am = np.empty((m, k), dtype=c_FPnum)
     cdef np.ndarray[FPnum, ndim=2] Bm = np.empty((n, k), dtype=c_FPnum)
+    cdef FPnum *ptr_Am = &Am[0,0]
+    cdef FPnum *ptr_Bm = &Bm[0,0]
 
     cdef np.ndarray[FPnum, ndim=2] Bm_plus_bias = np.empty((0,0), dtype=c_FPnum)
     cdef FPnum *ptr_Bm_plus_bias = NULL
@@ -1325,12 +1343,67 @@ def call_fit_offsets_explicit_als(
         Bm_plus_bias = np.empty((n, k+1), dtype=c_FPnum)
         ptr_Bm_plus_bias = &Bm_plus_bias[0,0]
 
+    rs = np.random.Generator(np.random.MT19937(seed = seed))
+    cdef np.ndarray[FPnum, ndim=1] biasA = np.zeros(0, dtype=c_FPnum)
+    cdef np.ndarray[FPnum, ndim=1] biasB = np.zeros(0, dtype=c_FPnum)
+    cdef np.ndarray[FPnum, ndim=2] A = rs.standard_normal(size=(m,k), dtype=c_FPnum)
+    cdef np.ndarray[FPnum, ndim=2] B = rs.standard_normal(size=(n,k), dtype=c_FPnum)
+    cdef np.ndarray[FPnum, ndim=2] C = np.zeros((0,0), dtype=c_FPnum)
+    cdef np.ndarray[FPnum, ndim=2] D = np.zeros((0,0), dtype=c_FPnum)
+    cdef np.ndarray[FPnum, ndim=1] C_bias = np.zeros(0, dtype=c_FPnum)
+    cdef np.ndarray[FPnum, ndim=1] D_bias = np.zeros(0, dtype=c_FPnum)
+
+    cdef FPnum *ptr_biasA = NULL
+    cdef FPnum *ptr_biasB = NULL
+    cdef FPnum *ptr_A = &A[0,0]
+    cdef FPnum *ptr_B = &B[0,0]
+    cdef FPnum *ptr_C = NULL
+    cdef FPnum *ptr_D = NULL
+    cdef FPnum *ptr_C_bias = NULL
+    cdef FPnum *ptr_D_bias = NULL
+    if p:
+        C = np.empty((p,k), dtype=c_FPnum)
+        if C.shape[0]:
+            ptr_C = &C[0,0]
+        if add_intercepts:
+            C_bias = np.empty(k, dtype=c_FPnum)
+            if C_bias.shape[0]:
+                ptr_C_bias = &C_bias[0]
+    if q:
+        D = np.empty((q,k), dtype=c_FPnum)
+        if D.shape[0]:
+            ptr_D = &D[0,0]
+        if add_intercepts:
+            D_bias = np.empty(k, dtype=c_FPnum)
+            if D_bias.shape[0]:
+                ptr_D_bias = &D_bias[0]
+
+    if user_bias:
+        biasA = np.empty(k, dtype=c_FPnum)
+        ptr_biasA = &biasA[0]
+    if item_bias:
+        biasB = np.empty(k, dtype=c_FPnum)
+        ptr_biasB = &biasB[0]
+
+    cdef np.ndarray[FPnum, ndim=2] BtB = np.zeros((0,0), dtype=c_FPnum)
+    cdef np.ndarray[FPnum, ndim=2] TransBtBinvBt = np.zeros((0,0), dtype=c_FPnum)
+    cdef FPnum *ptr_BtB = NULL
+    cdef FPnum *ptr_TransBtBinvBt = NULL
+    if precompute_for_predictions:
+        BtB = np.empty((k,k), dtype=c_FPnum)
+        ptr_BtB = &BtB[0,0]
+        TransBtBinvBt = np.empty((n,k), dtype=c_FPnum)
+        ptr_TransBtBinvBt = &TransBtBinvBt[0,0]
+
     cdef FPnum glob_mean = 0
 
     cdef int retval = fit_offsets_als(
-        &values[0], 0,
+        ptr_biasA, ptr_biasB,
+        ptr_A, ptr_B,
+        ptr_C, ptr_C_bias,
+        ptr_D, ptr_D_bias,
+        0, 0,
         &glob_mean,
-        &Am[0,0], &Bm[0,0],
         m, n, k,
         ptr_ixA, ptr_ixB, ptr_X, nnz,
         ptr_Xfull,
@@ -1340,12 +1413,15 @@ def call_fit_offsets_explicit_als(
         ptr_U, p,
         ptr_I, q,
         0, NA_as_zero_X, 0.,
-        0, <FPnum*>NULL,
-        niter, seed,
+        niter,
         nthreads,
         use_cg, max_cg_steps, finalize_chol,
         verbose, handle_interrupt,
-        ptr_Bm_plus_bias
+        precompute_for_predictions,
+        ptr_Am, ptr_Bm,
+        ptr_Bm_plus_bias,
+        ptr_BtB,
+        ptr_TransBtBinvBt
     )
 
     if retval == 1:
@@ -1353,23 +1429,9 @@ def call_fit_offsets_explicit_als(
     elif retval == 2:
         raise ValueError("Invalid parameter combination.")
 
-    return glob_mean, Am, Bm, values, Bm_plus_bias
-
-def unpack_values_offsets_explicit_als(
-        np.ndarray[FPnum, ndim=1] values,
-        bint user_bias, bint item_bias,
-        size_t k,
-        size_t m, size_t n, size_t p, size_t q,
-        bint add_intercepts
-    ):
-    biasA, biasB, A, B, C, D, C_bias, D_bias = unpack_values_lbfgs_offsets(
-        values,
-        user_bias, item_bias,
-        k, 0, 0,
-        m, n, p, q,
-        add_intercepts
-    )
-    return biasA, biasB, A, B, C, D, C_bias, D_bias
+    return biasA, biasB, A, B, C, D, C_bias, D_bias, \
+           Am, Bm, glob_mean, \
+           Bm_plus_bias, BtB, TransBtBinvBt
 
 def call_fit_offsets_implicit_als(
         np.ndarray[int, ndim=1] ixA,
@@ -1384,8 +1446,13 @@ def call_fit_offsets_implicit_als(
         bint use_cg=0, int max_cg_steps=3,
         bint finalize_chol=0,
         bint adjust_weight = 1,
-        int seed=1, int niter=5, bint handle_interrupt=1
+        int seed=1, int niter=5, bint handle_interrupt=1,
+        bint precompute_for_predictions=1
     ):
+    if k <= 0:
+        raise ValueError("'k' must be a positive integer.")
+    if min(m,n) <= 0:
+        raise ValueError("'X' must have positive dimensions.")
     cdef int *ptr_ixA = NULL
     cdef int *ptr_ixB = NULL
     cdef FPnum *ptr_X = NULL
@@ -1402,29 +1469,56 @@ def call_fit_offsets_implicit_als(
     cdef FPnum *ptr_I = NULL
     if I.shape[0]:
         ptr_I = &I[0,0]
-
-    cdef size_t nvars = <size_t>m * <size_t>k \
-                        + <size_t>n * <size_t>k
-    if U.shape[0]:
-        nvars += <size_t>p * <size_t>k
-        if add_intercepts:
-            nvars += <size_t>k
-    if I.shape[0]:
-        nvars += <size_t>q * <size_t>k
-        if add_intercepts:
-            nvars += <size_t>k
-    np.random.seed(seed)
-    cdef np.ndarray[FPnum, ndim=1] values = np.random.normal(size = nvars)
+    
     cdef np.ndarray[FPnum, ndim=2] Am = np.empty((m, k), dtype=c_FPnum)
     cdef np.ndarray[FPnum, ndim=2] Bm = np.empty((n, k), dtype=c_FPnum)
+    cdef FPnum *ptr_Am = &Am[0,0]
+    cdef FPnum *ptr_Bm = &Bm[0,0]
 
-    cdef FPnum placeholder
-    cdef FPnum w_main_multiplier = 1.
+    rs = np.random.Generator(np.random.MT19937(seed = seed))
+    cdef np.ndarray[FPnum, ndim=2] A = rs.standard_normal(size=(m,k), dtype=c_FPnum)
+    cdef np.ndarray[FPnum, ndim=2] B = rs.standard_normal(size=(n,k), dtype=c_FPnum)
+    cdef np.ndarray[FPnum, ndim=2] C = np.zeros((0,0), dtype=c_FPnum)
+    cdef np.ndarray[FPnum, ndim=2] D = np.zeros((0,0), dtype=c_FPnum)
+    cdef np.ndarray[FPnum, ndim=1] C_bias = np.zeros(0, dtype=c_FPnum)
+    cdef np.ndarray[FPnum, ndim=1] D_bias = np.zeros(0, dtype=c_FPnum)
+
+    cdef FPnum *ptr_A = &A[0,0]
+    cdef FPnum *ptr_B = &B[0,0]
+    cdef FPnum *ptr_C = NULL
+    cdef FPnum *ptr_D = NULL
+    cdef FPnum *ptr_C_bias = NULL
+    cdef FPnum *ptr_D_bias = NULL
+    if p:
+        C = np.empty((p,k), dtype=c_FPnum)
+        if C.shape[0]:
+            ptr_C = &C[0,0]
+        if add_intercepts:
+            C_bias = np.empty(k, dtype=c_FPnum)
+            if C_bias.shape[0]:
+                ptr_C_bias = &C_bias[0]
+    if q:
+        D = np.empty((q,k), dtype=c_FPnum)
+        if D.shape[0]:
+            ptr_D = &D[0,0]
+        if add_intercepts:
+            D_bias = np.empty(k, dtype=c_FPnum)
+            if D_bias.shape[0]:
+                ptr_D_bias = &D_bias[0]
+
+    cdef np.ndarray[FPnum, ndim=2] BtB = np.zeros((0,0), dtype=c_FPnum)
+    cdef FPnum *ptr_BtB = NULL
+    if precompute_for_predictions:
+        BtB = np.empty((k,k), dtype=c_FPnum)
+        ptr_BtB = &BtB[0,0]
+
+    cdef FPnum placeholder = 0
 
     cdef int retval = fit_offsets_als(
-        &values[0], 0,
+        <FPnum*>NULL, <FPnum*>NULL,
+        ptr_A, ptr_B, ptr_C, ptr_C_bias, ptr_D, ptr_D_bias,
+        0, 0,
         &placeholder,
-        &Am[0,0], &Bm[0,0],
         m, n, k,
         ptr_ixA, ptr_ixB, ptr_X, nnz,
         <FPnum*>NULL,
@@ -1434,11 +1528,14 @@ def call_fit_offsets_implicit_als(
         ptr_U, p,
         ptr_I, q,
         1, 0, alpha,
-        adjust_weight, &w_main_multiplier,
-        niter, seed,
+        niter,
         nthreads, use_cg,
         max_cg_steps, finalize_chol,
         verbose, handle_interrupt,
+        precompute_for_predictions,
+        ptr_Am, ptr_Bm,
+        <FPnum*>NULL,
+        ptr_BtB,
         <FPnum*>NULL
     )
 
@@ -1447,89 +1544,82 @@ def call_fit_offsets_implicit_als(
     elif retval == 2:
         raise ValueError("Invalid parameter combination.")
 
-    return Am, Bm, values, w_main_multiplier
-
-def unpack_values_offsets_implicit_als(
-        np.ndarray[FPnum, ndim=1] values,
-        size_t k,
-        size_t m, size_t n, size_t p, size_t q,
-        bint add_intercepts
-    ):
-    biasA, biasB, A, B, C, D, C_bias, D_bias = unpack_values_lbfgs_offsets(
-        values,
-        0, 0,
-        k, 0, 0,
-        m, n, p, q,
-        add_intercepts
-    )
-    return A, B, C, D, C_bias, D_bias
+    return A, B, C, D, \
+           Am, Bm, BtB
 
 def precompute_matrices_collective_explicit(
         np.ndarray[FPnum, ndim=2] B,
-        np.ndarray[FPnum, ndim=2] B_plus_bias,
-        int k, int k_main, int k_user, int k_item,
         np.ndarray[FPnum, ndim=2] C,
+        bint user_bias,
+        int k, int k_user, int k_item, int k_main,
         FPnum lam, FPnum lam_bias, FPnum w_main, FPnum w_user,
-        bint has_U, bint has_U_bin
     ):
-    cdef int n = max(B.shape[0], B_plus_bias.shape[0])
-    cdef int b = B_plus_bias.shape[0] > 0
-    cdef np.ndarray[FPnum, ndim=2] BtBinvBt = np.empty((k+k_main+b, n), dtype=c_FPnum)
-    cdef np.ndarray[FPnum, ndim=2] BtBw = np.empty((k+k_main+b, k+k_main+b),
-                                                   dtype=c_FPnum)
-    cdef np.ndarray[FPnum, ndim=2] BtBchol = np.empty((k+k_main+b, k+k_main+b),
-                                                      dtype=c_FPnum)
+    cdef int n = B.shape[0]
+    cdef int p = C.shape[0]
 
-    cdef np.ndarray[FPnum, ndim=2] CtCinvCt = np.empty((0, 0), dtype=c_FPnum)
-    cdef np.ndarray[FPnum, ndim=2] CtC = np.empty((0, 0), dtype=c_FPnum)
-    cdef np.ndarray[FPnum, ndim=2] CtCchol = np.empty((0, 0), dtype=c_FPnum)
-    cdef FPnum *ptr_CtCinvCt = NULL
-    cdef FPnum *ptr_CtC = NULL
-    cdef FPnum *ptr_CtCchol = NULL
-    cdef int p = 0
-    if has_U and not has_U_bin:
-        p = C.shape[0]
-        CtCinvCt = np.empty((k_user+k, p), dtype=c_FPnum)
-        CtC = np.empty((k_user+k, k_user+k), dtype=c_FPnum)
-        CtCchol = np.empty((k_user+k, k_user+k), dtype=c_FPnum)
-        ptr_CtCinvCt = &CtCinvCt[0,0]
-        ptr_CtC = &CtC[0,0]
-        ptr_CtCchol = &CtCchol[0,0]
+    if n == 0:
+        raise ValueError("'B' has no entries.")
 
+    cdef FPnum *ptr_B = &B[0,0]
     cdef FPnum *ptr_C = NULL
-    if C.shape[0]:
+    if p:
         ptr_C = &C[0,0]
-    else:
-        has_U = 0
-        has_U_bin = 0
 
-    cdef FPnum *ptr_B = NULL
-    if B_plus_bias.shape[0]:
-        ptr_B = &B_plus_bias[0,0]
-    else:
-        ptr_B = &B[0,0]
+    cdef np.ndarray[FPnum, ndim=2] B_plus_bias = np.zeros((0,0), dtype=c_FPnum)
+    cdef np.ndarray[FPnum, ndim=2] BtB = np.zeros((0,0), dtype=c_FPnum)
+    cdef np.ndarray[FPnum, ndim=2] TransBtBinvBt = np.zeros((0,0), dtype=c_FPnum)
+    cdef np.ndarray[FPnum, ndim=2] BeTBeChol = np.zeros((0,0), dtype=c_FPnum)
+    cdef np.ndarray[FPnum, ndim=2] TransCtCinvCt = np.zeros((0,0), dtype=c_FPnum)
+    cdef np.ndarray[FPnum, ndim=2] CtCw = np.zeros((0,0), dtype=c_FPnum)
+    cdef FPnum *ptr_B_plus_bias = NULL
+    cdef FPnum *ptr_BtB = NULL
+    cdef FPnum *ptr_TransBtBinvBt = NULL
+    cdef FPnum *ptr_BeTBeChol = NULL
+    cdef FPnum *ptr_TransCtCinvCt = NULL
+    cdef FPnum *ptr_CtCw = NULL
 
-    cdef int retval = precompute_matrices_collective(
-        ptr_B, n,
-        &BtBinvBt[0,0],
-        &BtBw[0,0],
-        &BtBchol[0,0],
-        k, k_main+b, k_user, k_item,
-        ptr_C, C.shape[0],
-        ptr_CtCinvCt,
-        ptr_CtC,
-        ptr_CtCchol,
-        <FPnum*>NULL,
-        <FPnum*>NULL,
-        <FPnum*>NULL,
-        lam, w_main, w_user, lam_bias,
-        1.,
-        has_U, has_U_bin, 0
+    BtB = np.empty((k+k_main, k+k_main), dtype=c_FPnum)
+    TransBtBinvBt = np.empty((B.shape[0], k+k_main), dtype=c_FPnum)
+    ptr_BtB = &BtB[0,0]
+    ptr_TransBtBinvBt = &TransBtBinvBt[0,0]
+    if user_bias:
+        B_plus_bias = np.empty((B.shape[0], B.shape[0]+1), dtype=c_FPnum)
+        ptr_B_plus_bias = &B_plus_bias[0,0]
+    else:
+        B_plus_bias = B
+    if p > 0:
+        BeTBeChol = np.empty((k_user+k+k_main, k_user+k+k_main), dtype=c_FPnum)
+        TransCtCinvCt = np.empty((C.shape[0], k_user+k), dtype=c_FPnum)
+        CtCw = np.empty((k_user+k, k_user+k), dtype=c_FPnum)
+        ptr_BeTBeChol = &BeTBeChol[0,0]
+        ptr_TransCtCinvCt = &TransCtCinvCt[0,0]
+        ptr_CtCw = &CtCw[0,0]
+
+    cdef FPnum *ptr_lam_unique = NULL
+    cdef np.ndarray[FPnum, ndim=1] lam_unique = np.zeros(6, dtype=c_FPnum)
+    if lam_bias != lam:
+        lam_unique[0] = lam_bias
+        lam_unique[2] = lam
+        ptr_lam_unique = &lam_unique[0]
+
+    cdef int retval = precompute_collective_explicit(
+        ptr_B, n, n, n,
+        ptr_C, p,
+        k, k_user, k_item, k_main,
+        user_bias,
+        lam, ptr_lam_unique,
+        w_main, w_user,
+        ptr_B_plus_bias,
+        ptr_BtB,
+        ptr_TransBtBinvBt,
+        ptr_BeTBeChol,
+        ptr_TransCtCinvCt,
+        ptr_CtCw
     )
     if retval == 1:
         raise MemoryError("Could not allocate sufficient memory.")
 
-    return BtBinvBt, BtBw, BtBchol, CtCinvCt, CtC, CtCchol
+    return B_plus_bias, BtB, TransBtBinvBt, BeTBeChol, TransCtCinvCt, CtCw
 
 def precompute_matrices_collective_implicit(
         np.ndarray[FPnum, ndim=2] B,
@@ -1540,8 +1630,18 @@ def precompute_matrices_collective_implicit(
     ):
     cdef int n = B.shape[0]
     cdef np.ndarray[FPnum, ndim=2] BtB = np.empty((k+k_main, k+k_main), dtype=c_FPnum)
-    cdef np.ndarray[FPnum, ndim=2] BeTBe = np.empty((k_user+k+k_main, k_user+k+k_main), dtype=c_FPnum)
-    cdef np.ndarray[FPnum, ndim=2] BeTBeChol = np.empty((k_user+k+k_main, k_user+k+k_main), dtype=c_FPnum)
+    cdef np.ndarray[FPnum, ndim=2] BeTBe = np.zeros((0,0), dtype=c_FPnum)
+    cdef np.ndarray[FPnum, ndim=2] BeTBeChol = np.zeros((0,0), dtype=c_FPnum)
+    if C.shape[0] and C.shape[1]:
+        BeTBe = np.empty((k_user+k+k_main, k_user+k+k_main), dtype=c_FPnum)
+        BeTBeChol = np.empty((k_user+k+k_main, k_user+k+k_main), dtype=c_FPnum)
+
+    cdef FPnum *ptr_BtB = &BtB[0,0]
+    cdef FPnum *ptr_BeTBe = NULL
+    cdef FPnum *ptr_BeTBeChol = NULL
+    if C.shape[0] and C.shape[1]:
+        ptr_BeTBe = &BeTBe[0,0]
+        ptr_BeTBeChol = &BeTBeChol[0,0]
 
     cdef FPnum *ptr_C = NULL
     cdef int p = 0
@@ -1562,218 +1662,6 @@ def precompute_matrices_collective_implicit(
 
     return BtB, BeTBe, BeTBeChol
 
-def precompute_matrices_offsets_explicit(
-        np.ndarray[FPnum, ndim=2] A,
-        np.ndarray[FPnum, ndim=2] B,
-        np.ndarray[FPnum, ndim=2] C,
-        np.ndarray[FPnum, ndim=1] C_bias,
-        np.ndarray[FPnum, ndim=2] D,
-        np.ndarray[FPnum, ndim=1] D_bias,
-        np.ndarray[FPnum, ndim=2] Am,
-        np.ndarray[FPnum, ndim=2] Bm,
-        np.ndarray[FPnum, ndim=2] Bm_plus_bias,
-        np.ndarray[FPnum, ndim=2] U,
-        np.ndarray[FPnum, ndim=2] I,
-        np.ndarray[size_t, ndim=1] U_csr_p,
-        np.ndarray[int, ndim=1] U_csr_i,
-        np.ndarray[FPnum, ndim=1] U_csr,
-        np.ndarray[size_t, ndim=1] I_csr_p,
-        np.ndarray[int, ndim=1] I_csr_i,
-        np.ndarray[FPnum, ndim=1] I_csr,
-        int k, int k_main, int k_sec,
-        FPnum lam, FPnum lam_bias, FPnum w_user, FPnum w_item,
-        int nthreads
-    ):
-    cdef int b = Bm_plus_bias.shape[0] > 0
-    cdef int m = max(A.shape[0], Am.shape[0])
-    cdef int n = max(B.shape[0], Bm.shape[0])
-    cdef int p = C.shape[0]
-    cdef int q = D.shape[0]
-
-    cdef FPnum *ptr_C = NULL
-    cdef FPnum *ptr_D = NULL
-    if C.shape[0]:
-        ptr_C = &C[0,0]
-    if D.shape[0]:
-        ptr_D = &D[0,0]
-
-    cdef bint add_intercepts = 0
-    cdef FPnum *ptr_C_bias = NULL
-    if C_bias.shape[0]:
-        ptr_C_bias = &C_bias[0]
-        add_intercepts = 1
-    cdef FPnum *ptr_D_bias = NULL
-    if D_bias.shape[0]:
-        ptr_D_bias = &D_bias[0]
-        add_intercepts = 1
-
-    cdef FPnum *ptr_Am = NULL
-    cdef FPnum *ptr_Bm = NULL
-    cdef FPnum *ptr_A = NULL
-    cdef FPnum *ptr_B = NULL
-    if not Am.shape[0]:
-        Am = np.empty((m, k_sec+k+k_main), dtype=c_FPnum)
-        ptr_Am = &Am[0,0]
-        ptr_A = &A[0,0]
-    else:
-        ptr_A = &Am[0,0]
-    if Bm_plus_bias.shape[0]:
-        ptr_B = &Bm_plus_bias[0,0]
-    else:
-        if not Bm.shape[0]:
-            Bm = np.empty((n, k_sec+k+k_main+b), dtype=c_FPnum)
-            ptr_Bm = &Bm[0,0]
-            ptr_B = &B[0,0]
-        else:
-            ptr_B = &Bm[0,0]
-
-    cdef np.ndarray[FPnum, ndim=2] BtBinvBt = np.empty((k_sec+k+k_main+b, n), dtype=c_FPnum)
-    cdef np.ndarray[FPnum, ndim=2] BtBw = np.empty((k_sec+k+k_main+b, k_sec+k+k_main+b), dtype=c_FPnum)
-    cdef np.ndarray[FPnum, ndim=2] BtBchol = np.empty((k_sec+k+k_main+b, k_sec+k+k_main+b), dtype=c_FPnum)
-
-    cdef FPnum *ptr_U = NULL
-    cdef size_t *ptr_U_csr_p = NULL
-    cdef int *ptr_U_csr_i = NULL
-    cdef FPnum *ptr_U_csr = NULL
-    if U.shape[0]:
-        ptr_U = &U[0,0]
-    elif U_csr.shape[0]:
-        ptr_U_csr_p = &U_csr_p[0]
-        ptr_U_csr_i = &U_csr_i[0]
-        ptr_U_csr = &U_csr[0]
-
-    cdef FPnum *ptr_I = NULL
-    cdef size_t *ptr_I_csr_p = NULL
-    cdef int *ptr_I_csr_i = NULL
-    cdef FPnum *ptr_I_csr = NULL
-    if I.shape[0]:
-        ptr_I = &I[0,0]
-    elif I_csr.shape[0]:
-        ptr_I_csr_p = &I_csr_p[0]
-        ptr_I_csr_i = &I_csr_i[0]
-        ptr_I_csr = &I_csr[0]
-
-    cdef int retval = precompute_matrices_offsets(
-        ptr_A, m,
-        ptr_B, n,
-        ptr_C, p,
-        ptr_D, q,
-        ptr_C_bias, ptr_D_bias,
-        add_intercepts,
-        ptr_U,
-        ptr_U_csr_p, ptr_U_csr_i, ptr_U_csr,
-        ptr_I,
-        ptr_I_csr_p, ptr_I_csr_i, ptr_I_csr,
-        ptr_Am,
-        ptr_Bm,
-        &BtBinvBt[0,0],
-        &BtBw[0,0],
-        &BtBchol[0,0],
-        k, k_main+b, k_sec,
-        lam, w_user, w_item, lam_bias,
-        0,
-        nthreads
-    )
-    if retval == 1:
-        raise MemoryError("Could not allocate sufficient memory.")
-
-    return Am, Bm, BtBinvBt, BtBw, BtBchol
-
-
-
-def precompute_matrices_offsets_implicit(
-        np.ndarray[FPnum, ndim=2] C,
-        np.ndarray[FPnum, ndim=1] C_bias,
-        np.ndarray[FPnum, ndim=2] D,
-        np.ndarray[FPnum, ndim=1] D_bias,
-        np.ndarray[FPnum, ndim=2] Am,
-        np.ndarray[FPnum, ndim=2] Bm,
-        np.ndarray[FPnum, ndim=2] U,
-        np.ndarray[FPnum, ndim=2] I,
-        np.ndarray[size_t, ndim=1] U_csr_p,
-        np.ndarray[int, ndim=1] U_csr_i,
-        np.ndarray[FPnum, ndim=1] U_csr,
-        np.ndarray[size_t, ndim=1] I_csr_p,
-        np.ndarray[int, ndim=1] I_csr_i,
-        np.ndarray[FPnum, ndim=1] I_csr,
-        int k,
-        FPnum lam,
-        int nthreads
-    ):
-    cdef int m = Am.shape[0]
-    cdef int n = Bm.shape[0]
-    cdef int p = C.shape[0]
-    cdef int q = D.shape[0]
-
-    cdef FPnum *ptr_C = NULL
-    cdef FPnum *ptr_D = NULL
-    if C.shape[0]:
-        ptr_C = &C[0,0]
-    if D.shape[0]:
-        ptr_D = &D[0,0]
-
-    cdef bint add_intercepts = 0
-    cdef FPnum *ptr_C_bias = NULL
-    if C_bias.shape[0]:
-        ptr_C_bias = &C_bias[0]
-        add_intercepts = 1
-    cdef FPnum *ptr_D_bias = NULL
-    if D_bias.shape[0]:
-        ptr_D_bias = &D_bias[0]
-        add_intercepts = 1
-
-    cdef int k_sec = 0
-    cdef int k_main = 0
-    cdef np.ndarray[FPnum, ndim=2] BtBw = np.empty((k_sec+k+k_main, k_sec+k+k_main), dtype=c_FPnum)
-
-    cdef FPnum *ptr_U = NULL
-    cdef size_t *ptr_U_csr_p = NULL
-    cdef int *ptr_U_csr_i = NULL
-    cdef FPnum *ptr_U_csr = NULL
-    if U.shape[0]:
-        ptr_U = &U[0,0]
-    elif U_csr.shape[0]:
-        ptr_U_csr_p = &U_csr_p[0]
-        ptr_U_csr_i = &U_csr_i[0]
-        ptr_U_csr = &U_csr[0]
-
-    cdef FPnum *ptr_I = NULL
-    cdef size_t *ptr_I_csr_p = NULL
-    cdef int *ptr_I_csr_i = NULL
-    cdef FPnum *ptr_I_csr = NULL
-    if I.shape[0]:
-        ptr_I = &I[0,0]
-    elif I_csr.shape[0]:
-        ptr_I_csr_p = &I_csr_p[0]
-        ptr_I_csr_i = &I_csr_i[0]
-        ptr_I_csr = &I_csr[0]
-
-    cdef int retval = precompute_matrices_offsets(
-        &Am[0,0], m,
-        &Bm[0,0], n,
-        ptr_C, p,
-        ptr_D, q,
-        ptr_C_bias, ptr_D_bias,
-        add_intercepts,
-        ptr_U,
-        ptr_U_csr_p, ptr_U_csr_i, ptr_U_csr,
-        ptr_I,
-        ptr_I_csr_p, ptr_I_csr_i, ptr_I_csr,
-        <FPnum*>NULL,
-        <FPnum*>NULL,
-        <FPnum*>NULL,
-        &BtBw[0,0],
-        <FPnum*>NULL,
-        k, 0, 0,
-        lam, 1., 1., lam,
-        1,
-        nthreads
-    )
-    if retval == 1:
-        raise MemoryError("Could not allocate sufficient memory.")
-
-    return Am, Bm, BtBw
-
 def call_factors_collective_cold(
         np.ndarray[FPnum, ndim=1] U,
         np.ndarray[FPnum, ndim=1] U_sp,
@@ -1781,7 +1669,7 @@ def call_factors_collective_cold(
         np.ndarray[FPnum, ndim=1] U_bin,
         np.ndarray[FPnum, ndim=2] C,
         np.ndarray[FPnum, ndim=2] C_bin,
-        np.ndarray[FPnum, ndim=2] CtCinvCt,
+        np.ndarray[FPnum, ndim=2] TransCtCinvCt,
         np.ndarray[FPnum, ndim=2] CtC,
         np.ndarray[FPnum, ndim=1] U_colmeans,
         int p, int k,
@@ -1804,14 +1692,14 @@ def call_factors_collective_cold(
 
     cdef FPnum *ptr_C = NULL
     cdef FPnum *ptr_C_bin = NULL
-    cdef FPnum *ptr_CtCinvCt = NULL
+    cdef FPnum *ptr_TransCtCinvCt = NULL
     cdef FPnum *ptr_CtC = NULL
     if C.shape[0]:
         ptr_C = &C[0,0]
     if C_bin.shape[0]:
         ptr_C_bin = &C_bin[0,0]
-    if CtCinvCt.shape[0]:
-        ptr_CtCinvCt = &CtCinvCt[0,0]
+    if TransCtCinvCt.shape[0]:
+        ptr_TransCtCinvCt = &TransCtCinvCt[0,0]
     if CtC.shape[0]:
         ptr_CtC = &CtC[0,0]
 
@@ -1827,7 +1715,7 @@ def call_factors_collective_cold(
         ptr_U_sp, ptr_U_sp_i, U_sp.shape[0],
         ptr_U_bin, U_bin.shape[0],
         ptr_C, ptr_C_bin,
-        ptr_CtCinvCt,
+        ptr_TransCtCinvCt,
         ptr_CtC,
         ptr_U_colmeans,
         k, k_user, k_main,
@@ -1925,7 +1813,7 @@ def call_factors_collective_warm_explicit(
         np.ndarray[FPnum, ndim=2] B_plus_bias,
         np.ndarray[FPnum, ndim=2] C,
         np.ndarray[FPnum, ndim=2] C_bin,
-        np.ndarray[FPnum, ndim=2] BtBinvBt,
+        np.ndarray[FPnum, ndim=2] TransBtBinvBt,
         np.ndarray[FPnum, ndim=2] BtB,
         np.ndarray[FPnum, ndim=2] BeTBeChol,
         np.ndarray[FPnum, ndim=2] CtCw,
@@ -1979,12 +1867,12 @@ def call_factors_collective_warm_explicit(
     if C_bin.shape[0]:
         ptr_C_bin = &C_bin[0,0]
 
-    cdef FPnum *ptr_BtBinvBt = NULL
+    cdef FPnum *ptr_TransBtBinvBt = NULL
     cdef FPnum *ptr_BtB = NULL
     cdef FPnum *ptr_BeTBeChol = NULL
     cdef FPnum *ptr_CtCw = NULL
-    if BtBinvBt.shape[0]:
-        ptr_BtBinvBt = &BtBinvBt[0,0]
+    if TransBtBinvBt.shape[0]:
+        ptr_TransBtBinvBt = &TransBtBinvBt[0,0]
     if BtB.shape[0]:
         ptr_BtB = &BtB[0,0]
     if BeTBeChol.shape[0]:
@@ -2016,7 +1904,7 @@ def call_factors_collective_warm_explicit(
         &B[0,0],
         k, k_user, k_item, k_main,
         lam, w_main, w_user, lam_bias,
-        ptr_BtBinvBt,
+        ptr_TransBtBinvBt,
         ptr_BtB,
         ptr_BeTBeChol,
         ptr_CtCw,
@@ -2148,7 +2036,7 @@ def call_factors_offsets_warm_explicit(
         np.ndarray[FPnum, ndim=2] Bm_plus_bias,
         np.ndarray[FPnum, ndim=2] C,
         np.ndarray[FPnum, ndim=1] C_bias,
-        np.ndarray[FPnum, ndim=2] BtBinvBt,
+        np.ndarray[FPnum, ndim=2] TransBtBinvBt,
         np.ndarray[FPnum, ndim=2] BtB,
         FPnum glob_mean,
         int k, int k_sec = 0, int k_main = 0,
@@ -2189,10 +2077,10 @@ def call_factors_offsets_warm_explicit(
     if biasB.shape[0]:
         ptr_biasB = &biasB[0]
 
-    cdef FPnum *ptr_BtBinvBt = NULL
+    cdef FPnum *ptr_TransBtBinvBt = NULL
     cdef FPnum *ptr_BtB = NULL
-    if BtBinvBt.shape[0]:
-        ptr_BtBinvBt = &BtBinvBt[0,0]
+    if TransBtBinvBt.shape[0]:
+        ptr_TransBtBinvBt = &TransBtBinvBt[0,0]
     if BtB.shape[0]:
         ptr_BtB = &BtB[0,0]
     
@@ -2230,8 +2118,7 @@ def call_factors_offsets_warm_explicit(
         C.shape[0], w_user,
         lam, exact, lam_bias,
         0, 0.,
-        1.,
-        ptr_BtBinvBt,
+        ptr_TransBtBinvBt,
         ptr_BtB,
         ptr_A,
         ptr_Bm_plus_bias
@@ -2250,11 +2137,10 @@ def call_factors_offsets_warm_implicit(
         np.ndarray[FPnum, ndim=2] Bm,
         np.ndarray[FPnum, ndim=2] C,
         np.ndarray[FPnum, ndim=1] C_bias,
-        np.ndarray[FPnum, ndim=2] BtBinvBt,
+        np.ndarray[FPnum, ndim=2] TransBtBinvBt,
         np.ndarray[FPnum, ndim=2] BtB,
         int k, int k_sec = 0, int k_main = 0,
         FPnum lam = 1e2, FPnum alpha = 40.,
-        FPnum w_main_multiplier = 1.,
         bint user_bias = 1,
         bint output_a = 1
     ):
@@ -2272,10 +2158,10 @@ def call_factors_offsets_warm_implicit(
     if C.shape[0]:
         ptr_C = &C[0,0]
 
-    cdef FPnum *ptr_BtBinvBt = NULL
+    cdef FPnum *ptr_TransBtBinvBt = NULL
     cdef FPnum *ptr_BtB = NULL
-    if BtBinvBt.shape[0]:
-        ptr_BtBinvBt = &BtBinvBt[0,0]
+    if TransBtBinvBt.shape[0]:
+        ptr_TransBtBinvBt = &TransBtBinvBt[0,0]
     if BtB.shape[0]:
         ptr_BtB = &BtB[0,0]
 
@@ -2304,8 +2190,7 @@ def call_factors_offsets_warm_implicit(
         C.shape[0], 1.,
         lam, 0, lam,
         1, alpha,
-        w_main_multiplier,
-        ptr_BtBinvBt,
+        ptr_TransBtBinvBt,
         ptr_BtB,
         ptr_A,
         <FPnum*>NULL
@@ -2744,7 +2629,7 @@ def call_collective_factors_cold_multiple(
         np.ndarray[FPnum, ndim=2] Ub,
         np.ndarray[FPnum, ndim=2] C,
         np.ndarray[FPnum, ndim=2] C_bin,
-        np.ndarray[FPnum, ndim=2] CtCinvCt,
+        np.ndarray[FPnum, ndim=2] TransCtCinvCt,
         np.ndarray[FPnum, ndim=2] CtC,
         np.ndarray[FPnum, ndim=1] U_colmeans,
         int m_u, int m_ubin,
@@ -2779,14 +2664,14 @@ def call_collective_factors_cold_multiple(
 
     cdef FPnum *ptr_C = NULL
     cdef FPnum *ptr_C_bin = NULL
-    cdef FPnum *ptr_CtCinvCt = NULL
+    cdef FPnum *ptr_TransCtCinvCt = NULL
     cdef FPnum *ptr_CtC = NULL
     if C.shape[0]:
         ptr_C = &C[0,0]
     if C_bin.shape[0]:
         ptr_C_bin = &C_bin[0,0]
-    if CtCinvCt.shape[0]:
-        ptr_CtCinvCt = &CtCinvCt[0,0]
+    if TransCtCinvCt.shape[0]:
+        ptr_TransCtCinvCt = &TransCtCinvCt[0,0]
     if CtC.shape[0]:
         ptr_CtC = &CtC[0,0]
 
@@ -2810,7 +2695,7 @@ def call_collective_factors_cold_multiple(
         ptr_U_csr_p, ptr_U_csr_i, ptr_U_csr,
         ptr_Ub, m_ubin, C_bin.shape[0],
         ptr_C, ptr_C_bin,
-        ptr_CtCinvCt,
+        ptr_TransCtCinvCt,
         ptr_CtC,
         ptr_U_colmeans,
         k, k_user, k_main,
@@ -2940,10 +2825,10 @@ def call_collective_factors_warm_multiple(
         np.ndarray[FPnum, ndim=2] B_plus_bias,
         np.ndarray[FPnum, ndim=2] C,
         np.ndarray[FPnum, ndim=2] C_bin,
-        np.ndarray[FPnum, ndim=2] BtBinvBt,
+        np.ndarray[FPnum, ndim=2] TransBtBinvBt,
         np.ndarray[FPnum, ndim=2] BtB,
         np.ndarray[FPnum, ndim=2] BeTBeChol,
-        np.ndarray[FPnum, ndim=2] CtCinvCt,
+        np.ndarray[FPnum, ndim=2] TransCtCinvCt,
         np.ndarray[FPnum, ndim=2] CtCw,
         int n, int m_u, int m_x,
         FPnum glob_mean,
@@ -3023,22 +2908,22 @@ def call_collective_factors_warm_multiple(
 
     cdef FPnum *ptr_C = NULL
     cdef FPnum *ptr_C_bin = NULL
-    cdef FPnum *ptr_CtCinvCt = NULL
+    cdef FPnum *ptr_TransCtCinvCt = NULL
     cdef FPnum *ptr_CtCw = NULL
     if C.shape[0]:
         ptr_C = &C[0,0]
     if C_bin.shape[0]:
         ptr_C_bin = &C_bin[0,0]
-    if CtCinvCt.shape[0]:
-        ptr_CtCinvCt = &CtCinvCt[0,0]
+    if TransCtCinvCt.shape[0]:
+        ptr_TransCtCinvCt = &TransCtCinvCt[0,0]
     if CtCw.shape[0]:
         ptr_CtCw = &CtCw[0,0]
 
-    cdef FPnum *ptr_BtBinvBt = NULL
+    cdef FPnum *ptr_TransBtBinvBt = NULL
     cdef FPnum *ptr_BtB = NULL
     cdef FPnum *ptr_BeTBeChol = NULL
-    if BtBinvBt.shape[0]:
-        ptr_BtBinvBt = &BtBinvBt[0,0]
+    if TransBtBinvBt.shape[0]:
+        ptr_TransBtBinvBt = &TransBtBinvBt[0,0]
     if BtB.shape[0]:
         ptr_BtB = &BtB[0,0]
     if BeTBeChol.shape[0]:
@@ -3070,10 +2955,10 @@ def call_collective_factors_warm_multiple(
         &B[0,0],
         k, k_user, k_item, k_main,
         lam, w_main, w_user, lam_bias,
-        ptr_BtBinvBt,
+        ptr_TransBtBinvBt,
         ptr_BtB,
         ptr_BeTBeChol,
-        ptr_CtCinvCt,
+        ptr_TransCtCinvCt,
         ptr_CtCw,
         NA_as_zero_U, NA_as_zero_X,
         ptr_B_plus_bias,
@@ -3279,7 +3164,7 @@ def call_offsets_factors_warm_multiple(
         np.ndarray[FPnum, ndim=2] Bm_plus_bias,
         np.ndarray[FPnum, ndim=2] C,
         np.ndarray[FPnum, ndim=1] C_bias,
-        np.ndarray[FPnum, ndim=2] BtBinvBt,
+        np.ndarray[FPnum, ndim=2] TransBtBinvBt,
         np.ndarray[FPnum, ndim=2] BtB,
         FPnum glob_mean,
         int m, int n,
@@ -3348,10 +3233,10 @@ def call_offsets_factors_warm_multiple(
     if biasB.shape[0]:
         ptr_biasB = &biasB[0]
 
-    cdef FPnum *ptr_BtBinvBt = NULL
+    cdef FPnum *ptr_TransBtBinvBt = NULL
     cdef FPnum *ptr_BtB = NULL
-    if BtBinvBt.shape[0]:
-        ptr_BtBinvBt = &BtBinvBt[0,0]
+    if TransBtBinvBt.shape[0]:
+        ptr_TransBtBinvBt = &TransBtBinvBt[0,0]
     if BtB.shape[0]:
         ptr_BtB = &BtB[0,0]
 
@@ -3393,8 +3278,7 @@ def call_offsets_factors_warm_multiple(
         w_user,
         lam, exact, lam_bias,
         0, 0.,
-        1.,
-        ptr_BtBinvBt,
+        ptr_TransBtBinvBt,
         ptr_BtB,
         ptr_Bm_plus_bias,
         ptr_A,
@@ -3414,12 +3298,11 @@ def call_offsets_factors_warm_implicit_multiple(
         np.ndarray[FPnum, ndim=1] Xcsr,
         np.ndarray[FPnum, ndim=2] Bm,
         np.ndarray[FPnum, ndim=2] C,
-        np.ndarray[FPnum, ndim=2] BtBinvBt,
+        np.ndarray[FPnum, ndim=2] TransBtBinvBt,
         np.ndarray[FPnum, ndim=2] BtB,
         int m, int n,
         int k,
         FPnum lam = 1e2, FPnum alpha = 40.,
-        FPnum w_main_multiplier = 1.,
         bint output_a = 1,
         int nthreads = 1
     ):
@@ -3447,10 +3330,10 @@ def call_offsets_factors_warm_implicit_multiple(
         ptr_C = &C[0,0]
 
 
-    cdef FPnum *ptr_BtBinvBt = NULL
+    cdef FPnum *ptr_TransBtBinvBt = NULL
     cdef FPnum *ptr_BtB = NULL
-    if BtBinvBt.shape[0]:
-        ptr_BtBinvBt = &BtBinvBt[0,0]
+    if TransBtBinvBt.shape[0]:
+        ptr_TransBtBinvBt = &TransBtBinvBt[0,0]
     if BtB.shape[0]:
         ptr_BtB = &BtB[0,0]
 
@@ -3479,8 +3362,7 @@ def call_offsets_factors_warm_implicit_multiple(
         1.,
         lam, 0, lam,
         1, alpha,
-        w_main_multiplier,
-        ptr_BtBinvBt,
+        ptr_TransBtBinvBt,
         ptr_BtB,
         <FPnum*> NULL,
         ptr_A,

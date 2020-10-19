@@ -570,9 +570,9 @@ void exp_neg_x(FPnum *restrict arr, size_t n, int nthreads)
         arr[ix] = exp_t(-arr[ix]);
 }
 
-void add_to_diag(FPnum *restrict A, FPnum val, int n)
+void add_to_diag(FPnum *restrict A, FPnum val, size_t n)
 {
-    for (int ix = 0; ix < n; ix++)
+    for (size_t ix = 0; ix < n; ix++)
         A[ix + ix*n] += val;
 }
 
@@ -719,48 +719,6 @@ void sum_mat
     else
         for (size_t row = 0; row < m; row++)
             cblas_taxpy(n_int, 1., A + row*lda, 1, B + row*ldb, 1);
-}
-
-/* TODO: remove all functions that use this */
-/* B <- inv(t(A)*A + diag(lam/w))*t(A) | AtAw <- w* (t(A)*A + diag(lam)) */
-void AtAinvAt_plus_chol(FPnum *restrict A, int lda, int offset,
-                        FPnum *restrict AtAinvAt_out,
-                        FPnum *restrict AtAw_out,
-                        FPnum *restrict AtAchol_out,
-                        FPnum lam, FPnum lam_last, int m, int n, FPnum w,
-                        FPnum *restrict buffer_FPnum,
-                        bool no_reg_to_AtA)
-{
-    cblas_tsyrk(CblasRowMajor, CblasUpper, CblasTrans,
-                n, m,
-                w, A + offset, lda,
-                0., AtAchol_out, n);
-    if (AtAw_out != NULL && no_reg_to_AtA)
-        memcpy(AtAw_out, AtAchol_out, (size_t)square(n)*sizeof(FPnum));
-    if (lam != 0.)
-        add_to_diag(AtAchol_out, lam, n);
-    if (lam_last != lam) AtAchol_out[(size_t)square(n)-(size_t)1] += (lam_last-lam);
-    if (AtAw_out != NULL && !no_reg_to_AtA)
-        memcpy(AtAw_out, AtAchol_out, (size_t)square(n)*sizeof(FPnum));
-
-    char uplo = 'L';
-    int ignore;
-    if (AtAinvAt_out != NULL)
-    {
-        copy_mat(m, n, A + offset, lda, AtAinvAt_out, n);
-        if (w != 1.)
-            tscal_large(AtAinvAt_out, w, (size_t)m*(size_t)n, 1);
-        tposv_(&uplo, &n, &m,
-               AtAchol_out, &n,
-               AtAinvAt_out, &n,
-               &ignore);
-        transpose_mat(AtAinvAt_out, m, n, buffer_FPnum);
-    }
-
-    else if (AtAchol_out != NULL)
-    {
-        tpotrf_(&uplo, &n, AtAchol_out, &n, &ignore);
-    }
 }
 
 void transpose_mat(FPnum *restrict A, size_t m, size_t n, FPnum *restrict buffer_FPnum)
@@ -1137,13 +1095,20 @@ void qs_argpartition(int arr[], FPnum values[], int n, int k)
 
 void append_ones_last_col
 (
-    FPnum *restrict orig, int m, int n,
+    FPnum *restrict orig, size_t m, size_t n,
     FPnum *restrict outp
 )
 {
     copy_mat(m, n,
              orig, n,
              outp, n+1);
-    for (size_t ix = 0; ix < (size_t)m; ix++)
-        outp[n + ix*(size_t)(n+1)] = 1.;
+    for (size_t ix = 0; ix < m; ix++)
+        outp[n + ix*(n+(size_t)1)] = 1.;
+}
+
+void fill_lower_triangle(FPnum A[], size_t n, size_t lda)
+{
+    for (size_t row = 1; row < n; row++)
+        for (size_t col = 0; col < row; col++)
+            A[col + row*lda] = A[row + col*lda];
 }

@@ -160,10 +160,10 @@ class _CMF:
         self.D_bias_ = np.empty(0, dtype=self.dtype_)
         self.glob_mean_ = 0.
 
-        self._BtBinvBt = np.empty((0,0), dtype=self.dtype_)
+        self._TransBtBinvBt = np.empty((0,0), dtype=self.dtype_)
         ## will have lambda added for implicit but not for explicit, dim is k+k_main
         self._BtB = np.empty((0,0), dtype=self.dtype_)
-        self._CtCinvCt = np.empty((0,0), dtype=self.dtype_)
+        self._TransCtCinvCt = np.empty((0,0), dtype=self.dtype_)
         ## will be multiplied by w_user already
         self._CtC = np.empty((0,0), dtype=self.dtype_)
         self._BeTBe = np.empty((0,0), dtype=self.dtype_)
@@ -1243,7 +1243,7 @@ class _CMF:
                     U_bin,
                     self.C_,
                     self.Cbin_,
-                    self._CtCinvCt,
+                    self._TransCtCinvCt,
                     self._CtC,
                     self._U_colmeans,
                     self.C_.shape[0], self.k,
@@ -1268,7 +1268,7 @@ class _CMF:
                     self._B_plus_bias,
                     self.C_,
                     self.Cbin_,
-                    self._BtBinvBt,
+                    self._TransBtBinvBt,
                     self._BtB,
                     self._BeTBeChol,
                     self._CtC,
@@ -1563,10 +1563,10 @@ class _CMF:
                 self._B_plus_bias,
                 self.C_,
                 self.Cbin_,
-                self._BtBinvBt,
+                self._TransBtBinvBt,
                 self._BtB,
                 self._BeTBeChol,
-                self._CtCinvCt,
+                self._TransCtCinvCt,
                 self._CtC,
                 n, m_u, m_x,
                 self.glob_mean_,
@@ -1742,10 +1742,10 @@ class _CMF:
                     self._B_plus_bias,
                     self.C_,
                     self.Cbin_,
-                    self._BtBinvBt,
+                    self._TransBtBinvBt,
                     self._BtB,
                     self._BeTBeChol,
-                    self._CtCinvCt,
+                    self._TransCtCinvCt,
                     self._CtC,
                     n, m_u, 0,
                     self.glob_mean_,
@@ -2254,7 +2254,11 @@ class CMF_explicit(_CMF):
                     m_u, n_i, m_ub, n_ib
                 )
         else:
-            self.glob_mean_,  self._U_colmeans, self._I_colmeans, values, self._B_plus_bias = \
+            self.user_bias_, self.item_bias_, \
+            self.A_, self.B_, self.C_, self.D_, \
+            self.glob_mean_,  self._U_colmeans, self._I_colmeans, \
+            self._B_plus_bias, self._BtB, self._TransBtBinvBt, \
+            self._BeTBeChol, self._TransCtCinvCt, self._CtC = \
                 c_funs.call_fit_collective_explicit_als(
                     Xrow,
                     Xcol,
@@ -2281,15 +2285,8 @@ class CMF_explicit(_CMF):
                     self.use_cg, self.max_cg_steps,
                     self.finalize_chol,
                     self.random_state, self.niter,
-                    self.handle_interrupt
-                )
-            self.user_bias_, self.item_bias_, self.A_, self.B_, self.C_, self.D_ = \
-                c_funs.unpack_values_collective_als(
-                    values,
-                    self.user_bias, self.item_bias,
-                    self.k, self.k_user, self.k_item, self.k_main,
-                    m, n, p, q,
-                    m_u, n_i
+                    self.handle_interrupt,
+                    precompute_for_predictions=self.precompute_for_predictions
                 )
 
         self._A_pred = self.A_
@@ -2687,7 +2684,7 @@ class CMF_explicit(_CMF):
             self._B_plus_bias,
             self.C_,
             self.Cbin_,
-            self._BtBinvBt,
+            self._TransBtBinvBt,
             self._BtB,
             self._BeTBeChol,
             self._CtC,
@@ -2899,10 +2896,10 @@ class CMF_explicit(_CMF):
                 self._B_plus_bias,
                 self.C_,
                 self.Cbin_,
-                self._BtBinvBt,
+                self._TransBtBinvBt,
                 self._BtB,
                 self._BeTBeChol,
-                self._CtCinvCt,
+                self._TransCtCinvCt,
                 self._CtC,
                 n, m_u, m_x,
                 self.glob_mean_,
@@ -3086,7 +3083,7 @@ class CMF_explicit(_CMF):
                 Ub_arr,
                 self.C_,
                 self.Cbin_,
-                self._CtCinvCt,
+                self._TransCtCinvCt,
                 self._CtC,
                 self._U_colmeans,
                 m_u, m_ubin,
@@ -3117,10 +3114,10 @@ class CMF_explicit(_CMF):
                 self._B_plus_bias,
                 self.C_,
                 self.Cbin_,
-                self._BtBinvBt,
+                self._TransBtBinvBt,
                 self._BtB,
                 self._BeTBeChol,
-                self._CtCinvCt,
+                self._TransCtCinvCt,
                 self._CtC,
                 n, m_u, m_x,
                 self.glob_mean_,
@@ -3157,14 +3154,15 @@ class CMF_explicit(_CMF):
             lambda_ = self.lambda_
             lambda_bias = self.lambda_
         c_funs = wrapper_float if self.use_float else wrapper_double
-        self._BtBinvBt, self._BtB, self._BtBchol, self._CtCinvCt, self._CtC, self._CtCchol = \
+        
+        self._B_plus_bias, self._BtB, self._TransBtBinvBt, self._BeTBeChol, \
+        self._TransCtCinvCt, self._CtC = \
             c_funs.precompute_matrices_collective_explicit(
                 self.B_,
-                self._B_plus_bias,
-                self.k, self.k_main, self.k_user, self.k_item,
                 self.C_,
+                self.user_bias,
+                self.k, self.k_user, self.k_item, self.k_main,
                 lambda_, lambda_bias, self.w_main, self.w_user,
-                self.C_.shape[0]>0, self.Cbin_.shape[0]>0
             )
         return self
 
@@ -4879,7 +4877,9 @@ class OMF_explicit(_OMF):
             if (not Iarr.shape[0]) and (not Ival.shape[0]):
                 self._B_pred = self.B_
         else:
-            self.glob_mean_, self._A_pred, self._B_pred, values, self._B_plus_bias = \
+            self.user_bias_, self.item_bias_, self.A_, self.B_, self.C_, self.D_, \
+            self._A_pred, self._B_pred, self.glob_mean_, \
+            self._B_plus_bias, self._BtB, self._TransBtBinvBt = \
                 c_funs.call_fit_offsets_explicit_als(
                     Xrow,
                     Xcol,
@@ -4899,49 +4899,10 @@ class OMF_explicit(_OMF):
                     self.use_cg, self.max_cg_steps,
                     self.finalize_chol,
                     self.random_state, self.niter,
-                    self.handle_interrupt
-                )
-            self.user_bias_, self.item_bias_, self.A_, self.B_, self.C_, self.D_, \
-            self.C_bias_, self.D_bias_ = \
-                c_funs.unpack_values_offsets_explicit_als(
-                    values,
-                    self.user_bias, self.item_bias,
-                    self.k,
-                    m, n, p, q,
-                    self.add_intercepts
+                    self.handle_interrupt,
+                    precompute_for_predictions=self.precompute_for_predictions
                 )
         
-        if isinstance(self.lambda_, np.ndarray):
-            lambda_ = self.lambda_[2]
-            lambda_bias = self.lambda_[0]
-        else:
-            lambda_ = self.lambda_
-            lambda_bias = self.lambda_
-        
-        self._A_pred, self._B_pred, self._BtBinvBt, self._BtB, self._BtBchol = \
-            c_funs.precompute_matrices_offsets_explicit(
-                self.A_,
-                self.B_,
-                self.C_,
-                self.C_bias_,
-                self.D_,
-                self.D_bias_,
-                self._A_pred,
-                self._B_pred,
-                self._B_plus_bias,
-                Uarr,
-                Iarr,
-                np.empty(0, dtype=ctypes.c_size_t),
-                np.empty(0, dtype=ctypes.c_int),
-                np.empty(0, dtype=self.dtype_),
-                np.empty(0, dtype=ctypes.c_size_t),
-                np.empty(0, dtype=ctypes.c_int),
-                np.empty(0, dtype=self.dtype_),
-                self.k, self.k_main, self.k_sec,
-                lambda_, lambda_bias, self.w_user, self.w_item,
-                self.nthreads
-            )
-
         self.is_fitted_ = True
         return self
 
@@ -5067,7 +5028,7 @@ class OMF_explicit(_OMF):
             self._B_plus_bias,
             self.C_,
             self.C_bias_,
-            self._BtBinvBt,
+            self._TransBtBinvBt,
             self._BtB,
             self.glob_mean_,
             self.k, self.k_sec, self.k_main,
@@ -5214,7 +5175,7 @@ class OMF_explicit(_OMF):
             self._B_plus_bias,
             self.C_,
             self.C_bias_,
-            self._BtBinvBt,
+            self._TransBtBinvBt,
             self._BtB,
             self.glob_mean_,
             m_x, n,
@@ -5399,7 +5360,7 @@ class OMF_explicit(_OMF):
             self._B_plus_bias,
             self.C_,
             self.C_bias_,
-            self._BtBinvBt,
+            self._TransBtBinvBt,
             self._BtB,
             self.glob_mean_,
             m_x, n,
@@ -5664,7 +5625,9 @@ class OMF_implicit(_OMF):
              m, n, m_u, n_i, p, q,
              m_ub, n_ib, pbin, qbin):
         c_funs = wrapper_float if self.use_float else wrapper_double
-        self._A_pred, self._B_pred, values, self._w_main_multiplier = \
+        self._w_main_multiplier = 1.
+        self.A_, self.B_, self.C_, self.D_, \
+        self._A_pred, self._B_pred, self._BtB = 
             c_funs.call_fit_offsets_implicit_als(
                 Xrow,
                 Xcol,
@@ -5680,40 +5643,6 @@ class OMF_implicit(_OMF):
                 self.random_state, self.niter,
                 self.handle_interrupt
             )
-        self.A_, self.B_, self.C_, self.D_, self.C_bias_, self.D_bias_ = \
-            c_funs.unpack_values_offsets_implicit_als(
-                values,
-                self.k,
-                m, n, p, q,
-                self.add_intercepts
-            )
-
-        if isinstance(self.lambda_, np.ndarray):
-            lambda_ = self.lambda_[2]
-        else:
-            lambda_ = self.lambda_
-
-        self._A_pred, self._B_pred, self._BtB = \
-            c_funs.precompute_matrices_offsets_implicit(
-                self.C_,
-                self.C_bias_,
-                self.D_,
-                self.D_bias_,
-                self._A_pred,
-                self._B_pred,
-                Uarr,
-                Iarr,
-                np.empty(0, dtype=ctypes.c_size_t),
-                np.empty(0, dtype=ctypes.c_int),
-                np.empty(0, dtype=self.dtype_),
-                np.empty(0, dtype=ctypes.c_size_t),
-                np.empty(0, dtype=ctypes.c_int),
-                np.empty(0, dtype=self.dtype_),
-                self.k,
-                lambda_,
-                self.nthreads
-            )
-
         self.is_fitted_ = True
         return self
 
@@ -5757,11 +5686,10 @@ class OMF_implicit(_OMF):
             self._B_pred,
             self.C_,
             self.C_bias_,
-            self._BtBinvBt,
+            self._TransBtBinvBt,
             self._BtB,
             self.k, 0, 0,
             self.lambda_, self.alpha,
-            self._w_main_multiplier,
             0,
             0
         )
@@ -5837,12 +5765,11 @@ class OMF_implicit(_OMF):
             Xcsr_p, Xcsr_i, Xcsr,
             self._B_pred,
             self.C_,
-            self._BtBinvBt,
+            self._TransBtBinvBt,
             self._BtB,
             m_x, n,
             self._k_pred,
             lambda_, self.alpha,
-            self._w_main_multiplier,
             0,
             self.nthreads
         )

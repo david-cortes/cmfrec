@@ -1,7 +1,9 @@
+#cython: language_level=3
 import numpy as np
 cimport numpy as np
 from scipy.linalg.cython_lapack cimport dpotrf
 from libcpp cimport bool as c_bool
+from libc.stdio cimport printf
 
 cdef extern from "cmfrec.h":
     void factors_closed_form(
@@ -12,7 +14,7 @@ cdef extern from "cmfrec.h":
         double *weight,
         double *buffer_double,
         double lam, double lam_last,
-        double *precomputedBtBinvBt,
+        double *precomputedTransBtBinvBt,
         double *precomputedBtBw, int cnt_NA, int ld_BtB,
         bint BtB_has_diag, bint BtB_is_scaled, double scale_BtB,
         double *precomputedBtBchol, bint NA_as_zero,
@@ -83,7 +85,7 @@ cdef extern from "cmfrec.h":
         double *u_vec_sp, int u_vec_ixB[], size_t nnz_u_vec,
         double *u_bin_vec, int pbin,
         double *C, double *Cb,
-        double *CtCinvCt,
+        double *TransCtCinvCt,
         double *CtCw,
         double *col_means,
         int k, int k_user, int k_main,
@@ -105,7 +107,7 @@ cdef extern from "cmfrec.h":
         double *B,
         int k, int k_user, int k_item, int k_main,
         double lam, double w_main, double w_user, double lam_bias,
-        double *BtBinvBt,
+        double *TransBtBinvBt,
         double *BtB,
         double *BeTBeChol,
         double *CtCw,
@@ -236,20 +238,26 @@ cdef extern from "cmfrec.h":
         int p, double w_user,
         double lam, bint exact, double lam_bias,
         bint implicit, double alpha,
-        double w_main_multiplier,
-        double *precomputedBtBinvBt,
+        double *precomputedTransBtBinvBt,
         double *precomputedBtBw,
         double *output_a,
         double *Bm_plus_bias
     )
 
-    void AtAinvAt_plus_chol(double *A, int lda, int offset,
-                            double *AtAinvAt_out,
-                            double *AtAw_out,
-                            double *AtAchol_out,
-                            double lam, double lam_last, int m, int n, double w,
-                            double *buffer_double,
-                            bint no_reg_to_AtA)
+    int precompute_collective_explicit(
+        double *B, int n, int n_i, int n_ibin,
+        double *C, int p,
+        int k, int k_user, int k_item, int k_main,
+        bint user_bias,
+        double lam, double *lam_unique,
+        double w_main, double w_user,
+        double *B_plus_bias,
+        double *BtB,
+        double *TransBtBinvBt,
+        double *BeTBeChol,
+        double *TransCtCinvCt,
+        double *CtCw
+    )
 
     int initialize_biases(
         double *glob_mean, double *biasA, double *biasB,
@@ -314,17 +322,34 @@ def py_factors_closed_form(
     if weight.shape[0]:
         ptr_weight = &weight[0]
 
-    cdef double *ptr_BtBinvBt = NULL
+    cdef double *ptr_TransBtBinvBt = NULL
     cdef double *ptr_BtBw = NULL
     cdef double *ptr_BtBchol = NULL
-    cdef np.ndarray[double, ndim=2] BtBinvBt
+    cdef np.ndarray[double, ndim=2] TransBtBinvBt
     cdef np.ndarray[double, ndim=2] BtBw
     cdef np.ndarray[double, ndim=2] BtBchol
+    cdef char lo = 76#'L'
+    cdef int ignore = 0
+    cdef int n = B.shape[1]
     if precompute:
-        BtBinvBt, BtBw, BtBchol = py_AtAinvAt(B, 0, lam, 1.)
-        ptr_BtBinvBt = &BtBinvBt[0,0]
-        ptr_BtBw = &BtBw[0,0]
-        ptr_BtBchol = &BtBchol[0,0]
+        BtBw = np.empty((k,k))
+        TransBtBinvBt = np.empty((n, k))
+        BtBchol = np.empty((k,k))
+        precompute_collective_explicit(
+            &B[0,0], n, 0, 0,
+            <double*>NULL, 0,
+            k, 0, 0, 0,
+            0,
+            lam, <double*>NULL,
+            1., 1.,
+            <double*>NULL,
+            &BtBw[0,0],
+            &TransBtBinvBt[0,0],
+            <double*>NULL,
+            <double*>NULL,
+            <double*>NULL
+        )
+        dpotrf(&lo, &k, &BtBchol[0,0], &k, &ignore)
 
     factors_closed_form(
         &outp[0], k,
@@ -334,7 +359,7 @@ def py_factors_closed_form(
         ptr_weight,
         &buffer_double[0],
         lam, lam,
-        ptr_BtBinvBt,
+        ptr_TransBtBinvBt,
         ptr_BtBw, np.sum(np.isnan(Xa_dense)), k,
         1, 0, 1.,
         ptr_BtBchol, 0,
@@ -446,11 +471,11 @@ def py_collective_factors(
     if weight.shape[0]:
         ptr_weight = &weight[0]
 
-    cdef double *ptr_BtBinvBt = NULL
+    cdef double *ptr_TransBtBinvBt = NULL
     cdef double *ptr_BtB = NULL
     cdef double *ptr_BeTBeChol = NULL
     cdef double *ptr_CtCw = NULL
-    cdef np.ndarray[double, ndim=2] BtBinvBt
+    cdef np.ndarray[double, ndim=2] TransBtBinvBt
     cdef np.ndarray[double, ndim=2] BtB
     cdef np.ndarray[double, ndim=2] BeTBeChol
     cdef np.ndarray[double, ndim=2] CtCw
@@ -459,36 +484,50 @@ def py_collective_factors(
     w_main = 1.
 
     cdef int one = 1
-    cdef char lo = 'L'
+    cdef char lo = 76#'L'
     cdef int ignore = 0
     cdef int k_totA = k_user + k + k_main
     if precompute:
-        ## TODO: use the provided function to precompute once it's coded
-        # if not weight.shape[0]:
-        #     # BtBinvBt, BtBw, BtBchol = py_AtAinvAt(B, k_item, lam, w_main)
-        #     BtBinvBt, BtB, BtBchol = py_AtAinvAt(B, k_item, lam, 1.)
-        #     ptr_BtBinvBt = &BtBinvBt[0,0]
-        #     ptr_BtBw = &BtBw[0,0]
-        #     ptr_BtBchol = &BtBchol[0,0]
+        TransBtBinvBt = np.empty((B.shape[0], k+k_main))
+        BtB = np.empty((k+k_main, k+k_main))
+        ptr_TransBtBinvBt = &TransBtBinvBt[0,0]
+        ptr_BtB = &BtB[0,0]
+        if C.shape[0]:
+            CtCw = np.empty((k_user+k,k_user+k))
+            ptr_CtCw = &CtCw[0,0]
+            BeTBeChol = np.empty((k_user+k+k_main,k_user+k+k_main))
+            ptr_BeTBeChol = &BeTBeChol[0,0]
+        precompute_collective_explicit(
+            &B[0,0], B.shape[0], 0, 0,
+            ptr_C, p,
+            k, k_user, k_item, k_main,
+            0,
+            lam, <double*>NULL,
+            w_main, w_user,
+            <double*>NULL,
+            ptr_BtB,
+            ptr_TransBtBinvBt,
+            ptr_BeTBeChol,
+            <double*>NULL,
+            ptr_CtCw
+        )
+
         # if U.shape[0] or U_sp.shape[0]:
-        #     # CtCinvCt, CtCw, CtCchol = py_AtAinvAt(C, 0, lam, w_user)
-        #     CtCinvCt, CtCw, CtCchol = py_AtAinvAt(C, 0, lam/w_user, 1.)
+        #     CtCw = w_user * C.T.dot(C)
         #     ptr_CtCw = &CtCw[0,0]
 
-        if U.shape[0] or U_sp.shape[0]:
-            CtCw = w_user * C.T.dot(C)
-            ptr_CtCw = &CtCw[0,0]
-
-        if not weight.shape[0]:
-            BtB = B[:,k_item:].T.dot(B[:,k_item:])
-            BtBinvBt = np.linalg.inv(BtB + lam*np.eye(BtB.shape[0])).dot(B[:,k_item:].T)
-            BeTBeChol = np.zeros((k_user+k+k_main, k_user+k+k_main))
-            BeTBeChol[k_user:,k_user:] = BtB
-            if C.shape[0]:
-                BeTBeChol[:k_user+k, :k_user+k] += w_user * (C.T.dot(C))
-            BeTBeChol[:,:] += lam * np.eye(BeTBeChol.shape[0])
-            dpotrf(&lo, &k_totA, &BeTBeChol[0,0], &k_totA, &ignore)
-            ptr_BeTBeChol = &BeTBeChol[0,0]
+        # BtB = B[:,k_item:].T.dot(B[:,k_item:])
+        # TransBtBinvBt = np.linalg.inv(BtB + lam*np.eye(BtB.shape[0])).dot(B[:,k_item:].T)
+        # TransBtBinvBt = np.ascontiguousarray(TransBtBinvBt.T)
+        
+        # if C.shape[0]:
+        #     BeTBeChol = np.zeros((k_user+k+k_main, k_user+k+k_main))
+        #     BeTBeChol[k_user:,k_user:] = BtB
+        #     if C.shape[0]:
+        #         BeTBeChol[:k_user+k, :k_user+k] += w_user * (C.T.dot(C))
+        #     BeTBeChol[:,:] += lam * np.eye(BeTBeChol.shape[0])
+        #     dpotrf(&lo, &k_totA, &BeTBeChol[0,0], &k_totA, &ignore)
+        #     ptr_BeTBeChol = &BeTBeChol[0,0]
 
 
     cdef np.ndarray[double, ndim=1] col_means = np.zeros(p, dtype=ctypes.c_double)
@@ -509,7 +548,7 @@ def py_collective_factors(
         &B[0,0],
         k, k_user, k_item, k_main,
         lam, w_main, w_user, lam,
-        ptr_BtBinvBt, ptr_BtB, ptr_BeTBeChol, ptr_CtCw,
+        ptr_TransBtBinvBt, ptr_BtB, ptr_BeTBeChol, ptr_CtCw,
         NA_as_zero_U, NA_as_zero_X,
         <double*>NULL
     )
@@ -727,24 +766,6 @@ def py_fun_grad_collective(
     )
     return f, grad
 
-def py_AtAinvAt(
-        np.ndarray[double, ndim=2] A,
-        int offset,
-        double lam,
-        double weight = 1.
-    ):
-    cdef int m = A.shape[0]
-    cdef int n = A.shape[1] - offset
-    cdef np.ndarray[double, ndim=2] outp = np.empty((n,m), dtype=ctypes.c_double)
-    cdef np.ndarray[double, ndim=2] AtAw = np.empty((n,n), dtype=ctypes.c_double)
-    cdef np.ndarray[double, ndim=2] AtAchol = np.empty((n,n), dtype=ctypes.c_double)
-    cdef np.ndarray[double, ndim=2] buffer_double = np.empty((n,m), dtype=ctypes.c_double)
-    
-    AtAinvAt_plus_chol(&A[0,0], A.shape[1], offset,
-                       &outp[0,0], &AtAw[0,0], &AtAchol[0,0],
-                       lam, lam, m, n, weight, &buffer_double[0,0],
-                       0)
-    return outp, AtAw, AtAchol
 
 def py_fun_grad_collective_single(
         np.ndarray[double, ndim=1] a_vec,
@@ -841,25 +862,40 @@ def py_collective_cold_start(
     ):
     
     cdef np.ndarray[double, ndim=1] outp = np.empty(k_user+k+k_main, dtype=ctypes.c_double)
-    cdef double *ptr_CtCinvCt = NULL
+    cdef double *ptr_TransCtCinvCt = NULL
     cdef double *ptr_CtCw = NULL
-    cdef double *ptr_CtCchol = NULL
-    cdef np.ndarray[double, ndim=2] CtCinvCt
+    cdef np.ndarray[double, ndim=2] TransCtCinvCt
     cdef np.ndarray[double, ndim=2] CtCw
-    if precompute and C.shape[0]:
-        ## TODO: use provided function for precomputing once it's coded
-        # # CtCinvCt, CtCw, CtCchol = py_AtAinvAt(C, 0, lam, w_user)
-        # CtCinvCt, CtCw, CtCchol = py_AtAinvAt(C, 0, lam/w_user, 1.)
-        # ptr_CtCinvCt = &CtCinvCt[0,0]
-        # ptr_CtCw = &CtCw[0,0]
-
-        CtCw = w_user * C.T.dot(C)
-        CtCinvCt = np.linalg.inv(C.T.dot(C) + (lam/w_user)*np.eye(k_user+k)).dot(C.T)
-        ptr_CtCinvCt = &CtCinvCt[0,0]
-        ptr_CtCw = &CtCw[0,0]
-
     cdef int p = C.shape[0]
     cdef int pbin = Cb.shape[0]
+    if precompute and C.shape[0]:
+        CtCw = np.empty((k_user+k, k_user+k))
+        TransCtCinvCt = np.empty((p, k_user+k))
+        ptr_CtCw = &CtCw[0,0]
+        ptr_TransCtCinvCt = &TransCtCinvCt[0,0]
+        if np.isfortran(C):
+            C = np.ascontiguousarray(C)
+
+        precompute_collective_explicit(
+            <double*>NULL, 0, 0, 0,
+            &C[0,0], p,
+            k, k_user, 0, k_main,
+            0,
+            lam, <double*>NULL,
+            1., w_user,
+            <double*>NULL,
+            <double*>NULL,
+            <double*>NULL,
+            <double*>NULL,
+            ptr_TransCtCinvCt,
+            ptr_CtCw
+        )
+
+        # CtCw = w_user * C.T.dot(C)
+        # TransCtCinvCt = np.linalg.inv(C.T.dot(C) + (lam/w_user)*np.eye(k_user+k)).dot(C.T)
+        # TransCtCinvCt = np.ascontiguousarray(TransCtCinvCt.T)
+        # ptr_TransCtCinvCt = &TransCtCinvCt[0,0]
+        # ptr_CtCw = &CtCw[0,0]
 
     cdef double *ptr_C = NULL
     cdef double *ptr_Cb = NULL
@@ -889,7 +925,7 @@ def py_collective_cold_start(
         ptr_Usp, ptr_ixB_U, nnz_u_vec,
         ptr_Ubin, pbin,
         ptr_C, ptr_Cb,
-        ptr_CtCinvCt, ptr_CtCw,
+        ptr_TransCtCinvCt, ptr_CtCw,
         <double*>NULL,
         k, k_user, k_main,
         lam, 1., w_user,
@@ -1319,14 +1355,14 @@ def py_offsets_warm_start(
     if C_bias.shape[0]:
         ptr_C_bias = &C_bias[0]
 
-    cdef np.ndarray[double, ndim=2] precomputedBtBinvBt
+    cdef np.ndarray[double, ndim=2] precomputedTransBtBinvBt
     cdef np.ndarray[double, ndim=2] precomputedBtBw
-    cdef double *ptr_BtBinvBt = NULL
+    cdef double *ptr_TransBtBinvBt = NULL
     cdef double *ptr_BtBw = NULL
     if precompute:
         precomputedBtBw = Bm.T.dot(Bm)
-        precomputedBtBinvBt = np.linalg.inv(Bm.T.dot(Bm)).dot(Bm.T)
-        ptr_BtBinvBt = &precomputedBtBinvBt[0,0]
+        precomputedTransBtBinvBt = np.linalg.inv(Bm.T.dot(Bm)).dot(Bm.T)
+        ptr_TransBtBinvBt = &precomputedTransBtBinvBt[0,0]
         ptr_BtBw = &precomputedBtBw[0,0]
 
     offsets_factors_warm(
@@ -1343,8 +1379,7 @@ def py_offsets_warm_start(
         C.shape[0], w_user,
         lam, exact, 0.,
         0, 0.,
-        1.,
-        ptr_BtBinvBt,
+        ptr_TransBtBinvBt,
         ptr_BtBw,
         ptr_outp2,
         <double*>NULL

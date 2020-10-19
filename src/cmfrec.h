@@ -75,6 +75,7 @@ extern "C" {
 #endif
 
 #ifdef _FOR_PYTHON
+    /* This contains the standard cblas.h header */
     #include "findblas.h" /* https://www.github.com/david-cortes/findblas */
 #elif defined(_FOR_R)
     #include <R.h>
@@ -248,7 +249,7 @@ void process_seed_for_larnv(int seed_arr[4]);
 void reduce_mat_sum(FPnum *restrict outp, size_t lda, FPnum *restrict inp,
                     int m, int n, int nthreads);
 void exp_neg_x(FPnum *restrict arr, size_t n, int nthreads);
-void add_to_diag(FPnum *restrict A, FPnum val, int n);
+void add_to_diag(FPnum *restrict A, FPnum val, size_t n);
 FPnum sum_sq_div_w(FPnum *restrict arr, FPnum *restrict w, size_t n, bool compensated, int nthreads);
 void tgemm_sp_dense
 (
@@ -298,13 +299,6 @@ void sum_mat
     FPnum *restrict A, size_t lda,
     FPnum *restrict B, size_t ldb
 );
-void AtAinvAt_plus_chol(FPnum *restrict A, int lda, int offset,
-                        FPnum *restrict AtAinvAt_out,
-                        FPnum *restrict AtAw_out,
-                        FPnum *restrict AtAchol_out,
-                        FPnum lam, FPnum lam_last, int m, int n, FPnum w,
-                        FPnum *restrict buffer_FPnum,
-                        bool no_reg_to_AtA);
 void transpose_mat(FPnum *restrict A, size_t m, size_t n, FPnum *restrict buffer_FPnum);
 void transpose_mat2(FPnum *restrict A, size_t m, size_t n, FPnum *restrict outp);
 int coo_to_csr_plus_alloc
@@ -366,9 +360,10 @@ bool check_is_sorted(int arr[], int n);
 void qs_argpartition(int arr[], FPnum values[], int n, int k);
 void append_ones_last_col
 (
-    FPnum *restrict orig, int m, int n,
+    FPnum *restrict orig, size_t m, size_t n,
     FPnum *restrict outp
 );
+void fill_lower_triangle(FPnum A[], size_t n, size_t lda);
 
 
 /* common.c */
@@ -400,7 +395,7 @@ void factors_closed_form
     FPnum *restrict weight,
     FPnum *restrict buffer_FPnum,
     FPnum lam, FPnum lam_last,
-    FPnum *restrict precomputedBtBinvBt,
+    FPnum *restrict precomputedTransBtBinvBt,
     FPnum *restrict precomputedBtBw, int cnt_NA, int ld_BtB,
     bool BtB_has_diag, bool BtB_is_scaled, FPnum scale_BtB,
     FPnum *restrict precomputedBtBchol, bool NA_as_zero,
@@ -837,7 +832,7 @@ int collective_factors_cold
     FPnum *restrict u_vec_sp, int u_vec_ixB[], size_t nnz_u_vec,
     FPnum *restrict u_bin_vec, int pbin,
     FPnum *restrict C, FPnum *restrict Cb,
-    FPnum *restrict CtCinvCt,
+    FPnum *restrict TransCtCinvCt,
     FPnum *restrict CtCw,
     FPnum *restrict col_means,
     int k, int k_user, int k_main,
@@ -874,7 +869,7 @@ int collective_factors_warm
     FPnum *restrict B,
     int k, int k_user, int k_item, int k_main,
     FPnum lam, FPnum w_main, FPnum w_user, FPnum lam_bias,
-    FPnum *restrict BtBinvBt,
+    FPnum *restrict TransBtBinvBt,
     FPnum *restrict BtB,
     FPnum *restrict BeTBeChol,
     FPnum *restrict CtCw,
@@ -1017,24 +1012,6 @@ int preprocess_sideinfo_matrix
     bool *full_dense_u, bool *near_dense_u_row, bool *near_dense_u_col,
     bool NA_as_zero_U, int nthreads
 );
-int precompute_matrices_collective
-(
-    FPnum *restrict B, int n,
-    FPnum *restrict BtBinvBt, /* explicit, no side info, no NAs */
-    FPnum *restrict BtBw,     /* explicit, few NAs */
-    FPnum *restrict BtBchol,  /* explicit, NA as zero */
-    int k, int k_main, int k_user, int k_item,
-    FPnum *restrict C, int p,
-    FPnum *restrict CtCinvCt,   /* cold-start, no NAs, no binaries */
-    FPnum *restrict CtC,        /* cold-start, few NAs, no bin. */
-    FPnum *restrict CtCchol,    /* cold-start, NA as zero, no bin. */
-    FPnum *restrict BeTBe,      /* implicit, warm-start, few NAs or NA as zero*/
-    FPnum *restrict BtB_padded, /* implicit, warm-start, many NAs */
-    FPnum *restrict BtB_shrunk, /* implicit, no side info */
-    FPnum lam, FPnum w_main, FPnum w_user, FPnum lam_last,
-    FPnum w_main_multiplier,
-    bool has_U, bool has_U_bin, bool implicit
-);
 lbfgsFPnumval_t wrapper_collective_fun_grad
 (
     void *instance,
@@ -1096,7 +1073,10 @@ int fit_collective_explicit_lbfgs
 );
 int fit_collective_explicit_als
 (
-    FPnum *restrict values, bool reset_values,
+    FPnum *restrict biasA, FPnum *restrict biasB,
+    FPnum *restrict A, FPnum *restrict B,
+    FPnum *restrict C, FPnum *restrict D,
+    bool reset_values, int seed,
     FPnum *restrict glob_mean,
     FPnum *restrict U_colmeans, FPnum *restrict I_colmeans,
     int m, int n, int k,
@@ -1112,9 +1092,15 @@ int fit_collective_explicit_als
     bool NA_as_zero_X, bool NA_as_zero_U, bool NA_as_zero_I,
     int k_main, int k_user, int k_item,
     FPnum w_main, FPnum w_user, FPnum w_item,
-    int niter, int nthreads, int seed, bool verbose, bool handle_interrupt,
+    int niter, int nthreads, bool verbose, bool handle_interrupt,
     bool use_cg, int max_cg_steps, bool finalize_chol,
-    FPnum *restrict B_plus_bias
+    bool precompute_for_predictions,
+    FPnum *restrict B_plus_bias,
+    FPnum *restrict precomputedBtB,
+    FPnum *restrict precomputedTransBtBinvBt,
+    FPnum *restrict precomputedBeTBeChol,
+    FPnum *restrict precomputedTransCtCinvCt,
+    FPnum *restrict precomputedCtCw
 );
 int fit_collective_implicit_als
 (
@@ -1141,6 +1127,21 @@ int fit_collective_implicit_als
     FPnum *restrict precomputedBeTBe,
     FPnum *restrict precomputedBeTBeChol
 );
+int precompute_collective_explicit
+(
+    FPnum *restrict B, int n, int n_i, int n_ibin,
+    FPnum *restrict C, int p,
+    int k, int k_user, int k_item, int k_main,
+    bool user_bias,
+    FPnum lam, FPnum *restrict lam_unique,
+    FPnum w_main, FPnum w_user,
+    FPnum *restrict B_plus_bias,
+    FPnum *restrict BtB,
+    FPnum *restrict TransBtBinvBt,
+    FPnum *restrict BeTBeChol,
+    FPnum *restrict TransCtCinvCt,
+    FPnum *restrict CtCw
+);
 int precompute_collective_implicit
 (
     FPnum *restrict B, int n,
@@ -1160,7 +1161,7 @@ int collective_factors_cold_multiple
     size_t U_csr_p[], int U_csr_i[], FPnum *restrict U_csr,
     FPnum *restrict Ub, int m_ubin, int pbin,
     FPnum *restrict C, FPnum *restrict Cb,
-    FPnum *restrict CtCinvCt,
+    FPnum *restrict TransCtCinvCt,
     FPnum *restrict CtCw,
     FPnum *restrict col_means,
     int k, int k_user, int k_main,
@@ -1185,10 +1186,10 @@ int collective_factors_warm_multiple
     FPnum *restrict B,
     int k, int k_user, int k_item, int k_main,
     FPnum lam, FPnum w_main, FPnum w_user, FPnum lam_bias,
-    FPnum *restrict BtBinvBt,
+    FPnum *restrict TransBtBinvBt,
     FPnum *restrict BtB,
     FPnum *restrict BeTBeChol,
-    FPnum *restrict CtCinvCt,
+    FPnum *restrict TransCtCinvCt,
     FPnum *restrict CtCw,
     bool NA_as_zero_U, bool NA_as_zero_X,
     FPnum *restrict B_plus_bias,
@@ -1300,13 +1301,58 @@ int offsets_factors_warm
     int p, FPnum w_user,
     FPnum lam, bool exact, FPnum lam_bias,
     bool implicit, FPnum alpha,
-    FPnum w_main_multiplier,
-    FPnum *restrict precomputedBtBinvBt,
+    FPnum *restrict precomputedTransBtBinvBt,
     FPnum *restrict precomputedBtBw,
     FPnum *restrict output_a,
     FPnum *restrict Bm_plus_bias
 );
-int precompute_matrices_offsets
+int precompute_offsets_both
+(
+    FPnum *restrict A, int m,
+    FPnum *restrict B, int n,
+    FPnum *restrict C, int p,
+    FPnum *restrict D, int q,
+    FPnum *restrict C_bias, FPnum *restrict D_bias,
+    bool user_bias, bool add_intercepts, bool implicit,
+    int k, int k_main, int k_sec,
+    FPnum lam, FPnum *restrict lam_unique,
+    FPnum w_user, FPnum w_item, 
+    FPnum *restrict U,
+    int U_row[], int U_col[], FPnum *restrict U_sp, size_t nnz_U,
+    size_t U_csr_p[], int U_csr_i[], FPnum *restrict U_csr,
+    FPnum *restrict II,
+    size_t I_csr_p[], int I_csr_i[], FPnum *restrict I_csr,
+    int I_row[], int I_col[], FPnum *restrict I_sp, size_t nnz_I,
+    FPnum *restrict Am,
+    FPnum *restrict Bm,
+    FPnum *restrict Bm_plus_bias,
+    FPnum *restrict BtB,
+    FPnum *restrict TransBtBinvBt
+);
+int precompute_offsets_explicit
+(
+    FPnum *restrict A, int m,
+    FPnum *restrict B, int n,
+    FPnum *restrict C, int p,
+    FPnum *restrict D, int q,
+    FPnum *restrict C_bias, FPnum *restrict D_bias,
+    bool user_bias, bool add_intercepts,
+    int k, int k_main, int k_sec,
+    FPnum lam, FPnum *restrict lam_unique,
+    FPnum w_user, FPnum w_item, 
+    FPnum *restrict U,
+    int U_row[], int U_col[], FPnum *restrict U_sp, size_t nnz_U,
+    size_t U_csr_p[], int U_csr_i[], FPnum *restrict U_csr,
+    FPnum *restrict II,
+    size_t I_csr_p[], int I_csr_i[], FPnum *restrict I_csr,
+    int I_row[], int I_col[], FPnum *restrict I_sp, size_t nnz_I,
+    FPnum *restrict Am,
+    FPnum *restrict Bm,
+    FPnum *restrict Bm_plus_bias,
+    FPnum *restrict BtB,
+    FPnum *restrict TransBtBinvBt
+);
+int precompute_offsets_implicit
 (
     FPnum *restrict A, int m,
     FPnum *restrict B, int n,
@@ -1314,19 +1360,17 @@ int precompute_matrices_offsets
     FPnum *restrict D, int q,
     FPnum *restrict C_bias, FPnum *restrict D_bias,
     bool add_intercepts,
+    int k,
+    FPnum lam,
     FPnum *restrict U,
-    size_t U_csr_p[], int U_csc_i[], FPnum *restrict U_csr,
+    int U_row[], int U_col[], FPnum *restrict U_sp, size_t nnz_U,
+    size_t U_csr_p[], int U_csr_i[], FPnum *restrict U_csr,
     FPnum *restrict II,
-    size_t I_csr_p[], int I_csc_i[], FPnum *restrict I_csr,
-    FPnum *restrict Am,       /* used for existing cases */
-    FPnum *restrict Bm,       /* warm-start, with item info */
-    FPnum *restrict BtBinvBt, /* explicit, no side info, no NAs */
-    FPnum *restrict BtBw,     /* implicit + explicit, few NAs */
-    FPnum *restrict BtBchol,  /* explicit, NA as zero */
-    int k, int k_main, int k_sec,
-    FPnum lam, FPnum w_user, FPnum w_item, FPnum lam_last,
-    bool implicit,
-    int nthreads
+    size_t I_csr_p[], int I_csr_i[], FPnum *restrict I_csr,
+    int I_row[], int I_col[], FPnum *restrict I_sp, size_t nnz_I,
+    FPnum *restrict Am,
+    FPnum *restrict Bm,
+    FPnum *restrict BtB
 );
 typedef struct data_offsets_fun_grad {
     int *ixA; int *ixB; FPnum *X;
@@ -1386,9 +1430,12 @@ int fit_offsets_explicit_lbfgs
 );
 int fit_offsets_als
 (
-    FPnum *restrict values, bool reset_values,
+    FPnum *restrict biasA, FPnum *restrict biasB,
+    FPnum *restrict A, FPnum *restrict B,
+    FPnum *restrict C, FPnum *restrict C_bias,
+    FPnum *restrict D, FPnum *restrict D_bias,
+    bool reset_values, int seed,
     FPnum *restrict glob_mean,
-    FPnum *restrict Am, FPnum *restrict Bm,
     int m, int n, int k,
     int ixA[], int ixB[], FPnum *restrict X, size_t nnz,
     FPnum *restrict Xfull,
@@ -1398,12 +1445,16 @@ int fit_offsets_als
     FPnum *restrict U, int p,
     FPnum *restrict II, int q,
     bool implicit, bool NA_as_zero_X, FPnum alpha,
-    bool adjust_weight, FPnum *restrict w_main_multiplier,
-    int niter, int seed,
+    int niter,
     int nthreads, bool use_cg,
     int max_cg_steps, bool finalize_chol,
     bool verbose, bool handle_interrupt,
-    FPnum *restrict Bm_plus_bias
+    bool precompute_for_predictions,
+    FPnum *restrict Am, FPnum *restrict Bm,
+    FPnum *restrict Bm_plus_bias,
+    FPnum *restrict precomputedBtB,
+    FPnum *restrict precomputedTransBtBinvBt
+
 );
 void factors_content_based
 (
@@ -1489,8 +1540,7 @@ int offsets_factors_warm_multiple
     FPnum w_user,
     FPnum lam, bool exact, FPnum lam_bias,
     bool implicit, FPnum alpha,
-    FPnum w_main_multiplier,
-    FPnum *restrict precomputedBtBinvBt,
+    FPnum *restrict precomputedTransBtBinvBt,
     FPnum *restrict precomputedBtBw,
     FPnum *restrict Bm_plus_bias,
     FPnum *restrict output_A,

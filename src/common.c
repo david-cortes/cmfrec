@@ -706,7 +706,7 @@ FPnum fun_grad_cannonical_form
         with full_dense=false, must have space for k^2 + n*k elements.
     lam
         Regularization parameter applied on the A matrix.
-    precomputedBtBinvBt
+    precomputedTransBtBinvBt
         Precomputed matrix inv(t(B)*B + diag(lam))*t(B). Can only be used
         if passing 'Xa_dense' + 'full_dense=true' + 'weight=NULL'. This is
         used in order to speed up computations, but if not passed, will not be
@@ -738,7 +738,7 @@ void factors_closed_form
     FPnum *restrict weight,
     FPnum *restrict buffer_FPnum,
     FPnum lam, FPnum lam_last,
-    FPnum *restrict precomputedBtBinvBt,
+    FPnum *restrict precomputedTransBtBinvBt,
     FPnum *restrict precomputedBtBw, int cnt_NA, int ld_BtB,
     bool BtB_has_diag, bool BtB_is_scaled, FPnum scale_BtB,
     FPnum *restrict precomputedBtBchol, bool NA_as_zero,
@@ -766,21 +766,21 @@ void factors_closed_form
        The intended use-case for this is for cold-start recommendations
        for the collective model with no missing values, given that the
        C matrix is already fixed and is the same for all users. */
-    if (precomputedBtBinvBt != NULL && weight == NULL &&
+    if (precomputedTransBtBinvBt != NULL && weight == NULL &&
         ((full_dense && Xa_dense != NULL) || (Xa_dense == NULL && NA_as_zero)))
     {
         if (Xa_dense != NULL)
-            cblas_tgemv(CblasRowMajor, CblasNoTrans,
-                        k, n,
-                        1., precomputedBtBinvBt, n,
+            cblas_tgemv(CblasRowMajor, CblasTrans,
+                        n, k,
+                        1., precomputedTransBtBinvBt, k,
                         Xa_dense, 1,
                         0., a_vec, 1);
         else
         {
             set_to_zero(a_vec, k, 1);
-            tgemv_dense_sp_notrans(
-                k, n,
-                precomputedBtBinvBt, n,
+            tgemv_dense_sp(
+                n, k,
+                1., precomputedTransBtBinvBt, k,
                 ixB, Xa, nnz,
                 a_vec
             );
