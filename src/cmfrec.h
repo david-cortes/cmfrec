@@ -383,7 +383,6 @@ FPnum fun_grad_cannonical_form
     FPnum scaling,
     FPnum *restrict buffer_FPnum,
     FPnum *restrict buffer_mt,
-    bool overwrite_grad,
     int nthreads
 );
 void factors_closed_form

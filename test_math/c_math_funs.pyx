@@ -130,7 +130,6 @@ cdef extern from "cmfrec.h":
         double scaling,
         double *buffer_double,
         double *buffer_mt,
-        bint overwrite_grad,
         int nthreads
     )
 
@@ -578,7 +577,6 @@ def py_fun_grad_classic(
     ):
 
     cdef double scaling = 1
-    cdef bint overwrite_grad = bias_u or bias_i
     cdef bint full_dense = 0
 
     cdef double* biasA = &values[0]
@@ -647,7 +645,6 @@ def py_fun_grad_classic(
         scaling,
         &buffer_double[0],
         ptr_buffer_mt,
-        overwrite_grad,
         nthreads
     )
     return f, grad

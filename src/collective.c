@@ -318,6 +318,9 @@
     
 *******************************************************************************/
 
+/* Note: the descriptions about input parameters of the functions might be
+   outdated and might not match with the actual code anymore. */
+
 
 /*******************************************************************************
     Function and Gradient Calculation
@@ -626,7 +629,6 @@ FPnum collective_fun_grad
         w_main,
         buffer_FPnum,
         buffer_mt,
-        true,
         nthreads
     );
 
@@ -649,7 +651,6 @@ FPnum collective_fun_grad
             w_user,
             buffer_FPnum + sizeA, 
             buffer_mt,
-            false,
             nthreads
         );
         taxpy_large(buffer_FPnum, 1., g_A, sizeA, nthreads);
@@ -674,7 +675,6 @@ FPnum collective_fun_grad
             w_item,
             buffer_FPnum + sizeB,
             buffer_mt,
-            false,
             nthreads
         );
         taxpy_large(buffer_FPnum, 1., g_B, sizeB, nthreads);

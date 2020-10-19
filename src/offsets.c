@@ -374,7 +374,6 @@ FPnum offsets_fun_grad
         1.,
         buffer_remainder,
         buffer_mt,
-        true,
         nthreads
     );
 
@@ -583,7 +582,7 @@ int offsets_factors_warm
     /* TODO: add functionality for obtaining an exact solution through
        the L-BFGS solver for a single row of A, like it was done for
        the collective model. */
-    /* TODO: do something about 'NA_as_zero_X' and 'NA_as_zero_U'. */
+    /* TODO: do something about 'NA_as_zero' */
     int retval = 0;
     FPnum *restrict buffer_FPnum = NULL;
     size_t size_buffer = 0;

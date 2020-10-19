@@ -62,6 +62,9 @@
 
 #include "cmfrec.h"
 
+/* Note: the descriptions about input parameters of the functions might be
+   outdated and might not match with the actual code anymore. */
+
 /*******************************************************************************
     Function and Gradient for cannonical form
     -----------------------------------------
@@ -204,11 +207,9 @@ FPnum fun_grad_cannonical_form
     FPnum scaling,
     FPnum *restrict buffer_FPnum,
     FPnum *restrict buffer_mt,
-    bool overwrite_grad,
     int nthreads
 )
 {
-    /* TODO: 'overwrite_grad' is no longer used, should remove that code */
     #if defined(_OPENMP) && \
                 ( (_OPENMP < 200801)  /* OpenMP < 3.0 */ \
                   || defined(_WIN32) || defined(_WIN64) \
@@ -268,318 +269,197 @@ FPnum fun_grad_cannonical_form
            gradients already have some information from a previous factorization
            to which these should add instead of overwrite them, it's necessary
            to apply the scaling observation-by-observation instead */
-        if (!overwrite_grad)
+        #ifdef _OPENMP
+        if (    nthreads <= 1 ||
+                (Xcsr == NULL && !parallel_onepass) ||
+                (Xcsr != NULL && nthreads <= 2) )
+        #endif
         {
-            #ifdef _OPENMP
-            if (    nthreads <= 1 ||
-                    (Xcsr == NULL && !parallel_onepass) ||
-                    (Xcsr != NULL && nthreads <= 2) )
-            #endif
+            for (size_t ix = 0; ix < nnz; ix++)
             {
-                for (size_t ix = 0; ix < nnz; ix++)
-                {
-                    ia = (size_t)ixA[ix];
-                    ib = (size_t)ixB[ix];
-                    err = cblas_tdot(k, A + ia*(size_t)lda, 1,
-                                     B + ib*(size_t)ldb, 1)
-                           - X[ix];
+                ia = (size_t)ixA[ix];
+                ib = (size_t)ixB[ix];
+                err = cblas_tdot(k, A + ia*(size_t)lda, 1,
+                                 B + ib*(size_t)ldb, 1)
+                       - X[ix];
+                err += (user_bias? biasA[ia] : 0.)
+                     + (item_bias? biasB[ib] : 0.);
 
-                    tempf = square(err)*((weight==NULL)? 1. : weight[ix])-corr;
-                    fsum = f + tempf;
-                    corr = (fsum - f) - tempf;
-                    f = fsum;
+                tempf = square(err)*((weight==NULL)? 1. : weight[ix])-corr;
+                fsum = f + tempf;
+                corr = (fsum - f) - tempf;
+                f = fsum;
 
-                    err *= scaling * ((weight == NULL)? 1. : weight[ix]);
+                err *= ((weight == NULL)? 1. : weight[ix]);
 
-                    cblas_taxpy(k, err, B + ib*(size_t)ldb, 1,
-                                g_A + ia*(size_t)lda, 1);
-                    cblas_taxpy(k, err, A + ia*(size_t)lda, 1,
-                                g_B + ib*(size_t)ldb, 1);
-                }
+                g_biasA[ia] += user_bias? err : 0.;
+                g_biasB[ib] += item_bias? err : 0.;
+                cblas_taxpy(k, err, B + ib*(size_t)ldb, 1,
+                            g_A + ia*(size_t)lda, 1);
+                cblas_taxpy(k, err, A + ia*(size_t)lda, 1,
+                            g_B + ib*(size_t)ldb, 1);
             }
-            #ifdef _OPENMP
-            else if (parallel_onepass)
-            {
-                size_t thr_szA = (size_t)m*(size_t)k;
-                size_t thr_szB = (size_t)n*(size_t)k;
-                FPnum *restrict g_A_t = buffer_mt;
-                FPnum *restrict g_B_t = g_A_t + (size_t)nthreads*thr_szA;
-
-                #pragma omp parallel for schedule(static) num_threads(nthreads)\
-                        reduction(+:f) private(ia, ib, err) \
-                        shared(ixA, ixB, X, nnz, A, B, lda, ldb, k, weight, \
-                               scaling, thr_szA, thr_szB)
-                for (size_t_for ix = 0; ix < nnz; ix++)
-                {
-                    ia = (size_t)ixA[ix];
-                    ib = (size_t)ixB[ix];
-                    err = cblas_tdot(k, A + ia*(size_t)lda, 1,
-                                     B + ib*(size_t)ldb, 1)
-                           - X[ix];
-
-                    f += square(err)*((weight == NULL)? 1. : weight[ix]);
-                    err *= scaling * ((weight == NULL)? 1. : weight[ix]);
-
-                    cblas_taxpy(k, err, B + ib*(size_t)ldb, 1,
-                                g_A_t + (size_t)(omp_get_thread_num())*thr_szA
-                                      + ia*(size_t)lda, 1);
-                    cblas_taxpy(k, err, A + ia*(size_t)lda, 1,
-                                g_B_t + (size_t)(omp_get_thread_num())*thr_szB
-                                      + ib*(size_t)ldb, 1);
-                }
-
-                reduce_mat_sum(g_A, lda, g_A_t,
-                               m, k, nthreads);
-                reduce_mat_sum(g_B, ldb, g_B_t,
-                               n, k, nthreads);
-            }
-
-            else
-            {
-                #pragma omp parallel for schedule(dynamic) \
-                        num_threads(nthreads) \
-                        private(err, ib, tempf) reduction(+:f) \
-                        shared(m, k, A, B, lda, ldb, Xcsr, Xcsr_p, Xcsr_i, \
-                               scaling, weightR, g_A)
-                for (size_t_for ia = 0; ia < (size_t)m; ia++)
-                {
-                    tempf = 0;
-                    for (size_t ix = (size_t)Xcsr_p[ia];
-                         ix < (size_t)Xcsr_p[ia+(size_t)1]; ix++)
-                    {
-                        ib = (size_t)Xcsr_i[ix];
-                        err = cblas_tdot(k, A + ia*(size_t)lda, 1,
-                                         B + ib*(size_t)ldb, 1)
-                               - Xcsr[ix];
-
-                        tempf += square(err)
-                                  * ((weightR == NULL)? 1. : weightR[ix]);
-                        err *= scaling * ((weightR == NULL)? 1. : weightR[ix]);
-
-                        cblas_taxpy(k, err, B + ib*(size_t)ldb, 1,
-                                    g_A + ia*(size_t)lda, 1);
-                    }
-                    f += tempf;
-                }
-
-                #pragma omp parallel for schedule(dynamic) \
-                        num_threads(nthreads) private(err, ia) \
-                        shared(n, k, A, B, lda, ldb, Xcsc, Xcsc_p, Xcsc_i, \
-                               scaling, weightC, g_B)
-                for (size_t_for ib = 0; ib < (size_t)n; ib++)
-                {
-                    for (size_t ix = (size_t)Xcsc_p[ib];
-                         ix < (size_t)Xcsc_p[ib+(size_t)1]; ix++)
-                    {
-                        ia = (size_t)Xcsc_i[ix];
-                        err = cblas_tdot(k, A + ia*(size_t)lda, 1,
-                                         B + ib*(size_t)ldb, 1)
-                               - Xcsc[ix];
-                        err *= scaling * ((weightC == NULL)? 1. : weightC[ix]);
-
-                        cblas_taxpy(k, err, A + ia*(size_t)lda, 1,
-                                    g_B + ib*(size_t)ldb, 1);
-                    }
-                }
-
-            }
-            #endif
         }
 
-        else /* overwrite_grad */
+        #ifdef _OPENMP
+        else if (parallel_onepass)
         {
-            #ifdef _OPENMP
-            if (    nthreads <= 1 ||
-                    (Xcsr == NULL && !parallel_onepass) ||
-                    (Xcsr != NULL && nthreads <= 2) )
-            #endif
+            size_t thr_szA = (size_t)m*(size_t)k;
+            size_t thr_szB = (size_t)n*(size_t)k;
+            FPnum *restrict g_A_t = buffer_mt;
+            FPnum *restrict g_B_t = g_A_t + (size_t)nthreads*thr_szA;
+            FPnum *restrict g_biasA_t = g_B_t + (size_t)nthreads*thr_szB;
+            FPnum *restrict g_biasB_t = g_biasA_t
+                                         + (user_bias?
+                                            ((size_t)nthreads * (size_t)m)
+                                            : (0));
+
+            #pragma omp parallel for schedule(static) num_threads(nthreads)\
+                    reduction(+:f) private(ia, ib, err) \
+                    shared(ixA, ixB, X, nnz, A, B, lda, ldb, k, weight, \
+                           scaling, thr_szA, thr_szB, g_biasA_t, g_biasB_t,\
+                           biasA, biasB, user_bias, item_bias, m, n)
+            for (size_t_for ix = 0; ix < nnz; ix++)
             {
-                for (size_t ix = 0; ix < nnz; ix++)
-                {
-                    ia = (size_t)ixA[ix];
-                    ib = (size_t)ixB[ix];
-                    err = cblas_tdot(k, A + ia*(size_t)lda, 1,
-                                     B + ib*(size_t)ldb, 1)
-                           - X[ix];
-                    err += (user_bias? biasA[ia] : 0.)
-                         + (item_bias? biasB[ib] : 0.);
+                ia = (size_t)ixA[ix];
+                ib = (size_t)ixB[ix];
+                err = cblas_tdot(k, A + ia*(size_t)lda, 1,
+                                 B + ib*(size_t)ldb, 1)
+                       + (user_bias? biasA[ia] : 0.)
+                       + (item_bias? biasB[ib] : 0.)
+                       - X[ix];
 
-                    tempf = square(err)*((weight==NULL)? 1. : weight[ix])-corr;
-                    fsum = f + tempf;
-                    corr = (fsum - f) - tempf;
-                    f = fsum;
+                f += square(err) * ((weight == NULL)? 1. : weight[ix]);
+                err *= ((weight == NULL)? 1. : weight[ix]);
 
-                    err *= ((weight == NULL)? 1. : weight[ix]);
+                g_biasA_t[ia + (size_t)m*(size_t)(omp_get_thread_num())]
+                    += user_bias? err : 0.;
+                g_biasB_t[ib + (size_t)n*(size_t)(omp_get_thread_num())]
+                    += item_bias? err : 0.;
 
-                    g_biasA[ia] += user_bias? err : 0.;
-                    g_biasB[ib] += item_bias? err : 0.;
-                    cblas_taxpy(k, err, B + ib*(size_t)ldb, 1,
-                                g_A + ia*(size_t)lda, 1);
-                    cblas_taxpy(k, err, A + ia*(size_t)lda, 1,
-                                g_B + ib*(size_t)ldb, 1);
-                }
+                cblas_taxpy(k, err, B + ib*(size_t)ldb, 1,
+                            g_A_t + (size_t)(omp_get_thread_num())*thr_szA
+                                  + ia*(size_t)lda, 1);
+                cblas_taxpy(k, err, A + ia*(size_t)lda, 1,
+                            g_B_t + (size_t)(omp_get_thread_num())*thr_szB
+                                  + ib*(size_t)ldb, 1);
             }
 
-            #ifdef _OPENMP
-            else if (parallel_onepass)
-            {
-                size_t thr_szA = (size_t)m*(size_t)k;
-                size_t thr_szB = (size_t)n*(size_t)k;
-                FPnum *restrict g_A_t = buffer_mt;
-                FPnum *restrict g_B_t = g_A_t + (size_t)nthreads*thr_szA;
-                FPnum *restrict g_biasA_t = g_B_t + (size_t)nthreads*thr_szB;
-                FPnum *restrict g_biasB_t = g_biasA_t
-                                             + (user_bias?
-                                                ((size_t)nthreads * (size_t)m)
-                                                : (0));
+            reduce_mat_sum(g_A, lda, g_A_t,
+                           m, k, nthreads);
+            reduce_mat_sum(g_B, ldb, g_B_t,
+                           n, k, nthreads);
+            if (user_bias)
+                reduce_mat_sum(g_biasA, 1, g_biasA_t,
+                               m, 1, nthreads);
+            if (item_bias)
+                reduce_mat_sum(g_biasB, 1, g_biasB_t,
+                               n, 1, nthreads);
+        }
 
-                #pragma omp parallel for schedule(static) num_threads(nthreads)\
-                        reduction(+:f) private(ia, ib, err) \
-                        shared(ixA, ixB, X, nnz, A, B, lda, ldb, k, weight, \
-                               scaling, thr_szA, thr_szB, g_biasA_t, g_biasB_t,\
-                               biasA, biasB, user_bias, item_bias, m, n)
-                for (size_t_for ix = 0; ix < nnz; ix++)
+        else
+        {
+            #pragma omp parallel for schedule(dynamic) reduction(+:f) \
+                    num_threads(nthreads) private(err, ib, tempf) \
+                    shared(m, k, A, B, lda, ldb, Xcsr, Xcsr_p, Xcsr_i, \
+                           scaling, weightR, g_A, user_bias, item_bias, \
+                           biasA, biasB, g_biasA)
+            for (ia = 0; ia < (size_t)m; ia++)
+            {
+                tempf = 0;
+                for (size_t ix = (size_t)Xcsr_p[ia];
+                            ix < (size_t)Xcsr_p[ia+(size_t)1]; ix++)
                 {
-                    ia = (size_t)ixA[ix];
-                    ib = (size_t)ixB[ix];
+                    ib = (size_t)Xcsr_i[ix];
+                    err = cblas_tdot(k, A + ia*(size_t)lda, 1,
+                                     B + ib*(size_t)ldb, 1)
+                         + (user_bias? biasA[ia] : 0.)
+                         + (item_bias? biasB[ib] : 0.)
+                         - Xcsr[ix];
+
+                    tempf += square(err)
+                              * ((weightR == NULL)? 1. : weightR[ix]);
+                    err *= ((weightR == NULL)? 1. : weightR[ix]);
+
+                    g_biasA[ia] += user_bias? err : 0.;
+                    cblas_taxpy(k, err, B + ib*(size_t)ldb, 1,
+                                g_A + ia*(size_t)lda, 1);
+                }
+                f += tempf;
+            }
+
+
+            #pragma omp parallel for schedule(dynamic) \
+                    num_threads(nthreads) private(err, ia) \
+                    shared(n, k, A, B, lda, ldb, Xcsc, Xcsc_p, Xcsc_i, \
+                           scaling, weightC, g_B, user_bias, item_bias, \
+                           biasA, biasB, g_biasB)
+            for (ib = 0; ib < (size_t)n; ib++)
+            {
+                for (size_t ix = (size_t)Xcsc_p[ib];
+                            ix < (size_t)Xcsc_p[ib+(size_t)1]; ix++)
+                {
+                    ia = (size_t)Xcsc_i[ix];
                     err = cblas_tdot(k, A + ia*(size_t)lda, 1,
                                      B + ib*(size_t)ldb, 1)
                            + (user_bias? biasA[ia] : 0.)
                            + (item_bias? biasB[ib] : 0.)
-                           - X[ix];
+                           - Xcsc[ix];
+                    err *= ((weightC == NULL)? 1. : weightC[ix]);
 
-                    f += square(err) * ((weight == NULL)? 1. : weight[ix]);
-                    err *= ((weight == NULL)? 1. : weight[ix]);
-
-                    g_biasA_t[ia + (size_t)m*(size_t)(omp_get_thread_num())]
-                        += user_bias? err : 0.;
-                    g_biasB_t[ib + (size_t)n*(size_t)(omp_get_thread_num())]
-                        += item_bias? err : 0.;
-
-                    cblas_taxpy(k, err, B + ib*(size_t)ldb, 1,
-                                g_A_t + (size_t)(omp_get_thread_num())*thr_szA
-                                      + ia*(size_t)lda, 1);
+                    g_biasB[ib] += item_bias? err : 0.;
                     cblas_taxpy(k, err, A + ia*(size_t)lda, 1,
-                                g_B_t + (size_t)(omp_get_thread_num())*thr_szB
-                                      + ib*(size_t)ldb, 1);
+                                g_B + ib*(size_t)ldb, 1);
                 }
+            }
+        }
+        #endif
 
-                reduce_mat_sum(g_A, lda, g_A_t,
-                               m, k, nthreads);
-                reduce_mat_sum(g_B, ldb, g_B_t,
-                               n, k, nthreads);
-                if (user_bias)
-                    reduce_mat_sum(g_biasA, 1, g_biasA_t,
-                                   m, 1, nthreads);
-                if (item_bias)
-                    reduce_mat_sum(g_biasB, 1, g_biasB_t,
-                                   n, 1, nthreads);
+        #pragma omp barrier
+        if (scaling != 1.)
+        {
+            /* Note: the gradients should be contiguous in memory in the
+               following order: biasA, biasB, A, B - hence these conditions.
+               If passing discontiguous arrays (e.g. when the gradient is
+               a zeroed-out array and later summed to the previous
+               gradient), there should be no biases, and the biases
+               should already be assigned to the same memory locations as
+               the gradient arrays. Otherwise should pass
+               'overwrite_grad=false', which should not used within this
+               module */
+            if (g_B == g_biasA
+                            + (size_t)(user_bias? m : 0)
+                            + (size_t)(item_bias? n : 0)
+                            + ((size_t)m*(size_t)lda  - (size_t)(lda-k)))
+            {
+                tscal_large(g_biasA, scaling,
+                            ((size_t)m*(size_t)lda + (size_t)n*(size_t)ldb)
+                            + (size_t)(user_bias? m : 0)
+                            + (size_t)(item_bias? n : 0)
+                            - (size_t)(lda-k),
+                            nthreads);
+            }
+
+            else if (!user_bias && !item_bias &&
+                     g_B == g_A + (size_t)m*(size_t)lda- (size_t)(lda-k))
+            {
+                tscal_large(g_A, scaling,
+                            ((size_t)m*(size_t)lda + (size_t)n*(size_t)ldb),
+                            nthreads);
             }
 
             else
             {
-                #pragma omp parallel for schedule(dynamic) reduction(+:f) \
-                        num_threads(nthreads) private(err, ib, tempf) \
-                        shared(m, k, A, B, lda, ldb, Xcsr, Xcsr_p, Xcsr_i, \
-                               scaling, weightR, g_A, user_bias, item_bias, \
-                               biasA, biasB, g_biasA)
-                for (ia = 0; ia < (size_t)m; ia++)
-                {
-                    tempf = 0;
-                    for (size_t ix = (size_t)Xcsr_p[ia];
-                                ix < (size_t)Xcsr_p[ia+(size_t)1]; ix++)
-                    {
-                        ib = (size_t)Xcsr_i[ix];
-                        err = cblas_tdot(k, A + ia*(size_t)lda, 1,
-                                         B + ib*(size_t)ldb, 1)
-                             + (user_bias? biasA[ia] : 0.)
-                             + (item_bias? biasB[ib] : 0.)
-                             - Xcsr[ix];
-
-                        tempf += square(err)
-                                  * ((weightR == NULL)? 1. : weightR[ix]);
-                        err *= ((weightR == NULL)? 1. : weightR[ix]);
-
-                        g_biasA[ia] += user_bias? err : 0.;
-                        cblas_taxpy(k, err, B + ib*(size_t)ldb, 1,
-                                    g_A + ia*(size_t)lda, 1);
-                    }
-                    f += tempf;
-                }
-
-
-                #pragma omp parallel for schedule(dynamic) \
-                        num_threads(nthreads) private(err, ia) \
-                        shared(n, k, A, B, lda, ldb, Xcsc, Xcsc_p, Xcsc_i, \
-                               scaling, weightC, g_B, user_bias, item_bias, \
-                               biasA, biasB, g_biasB)
-                for (ib = 0; ib < (size_t)n; ib++)
-                {
-                    for (size_t ix = (size_t)Xcsc_p[ib];
-                                ix < (size_t)Xcsc_p[ib+(size_t)1]; ix++)
-                    {
-                        ia = (size_t)Xcsc_i[ix];
-                        err = cblas_tdot(k, A + ia*(size_t)lda, 1,
-                                         B + ib*(size_t)ldb, 1)
-                               + (user_bias? biasA[ia] : 0.)
-                               + (item_bias? biasB[ib] : 0.)
-                               - Xcsc[ix];
-                        err *= ((weightC == NULL)? 1. : weightC[ix]);
-
-                        g_biasB[ib] += item_bias? err : 0.;
-                        cblas_taxpy(k, err, A + ia*(size_t)lda, 1,
-                                    g_B + ib*(size_t)ldb, 1);
-                    }
-                }
-            }
-            #endif
-
-            #pragma omp barrier
-            if (scaling != 1.)
-            {
-                /* Note: the gradients should be contiguous in memory in the
-                   following order: biasA, biasB, A, B - hence these conditions.
-                   If passing discontiguous arrays (e.g. when the gradient is
-                   a zeroed-out array and later summed to the previous
-                   gradient), there should be no biases, and the biases
-                   should already be assigned to the same memory locations as
-                   the gradient arrays. Otherwise should pass
-                   'overwrite_grad=false', which should not used within this
-                   module */
-                if (g_B == g_biasA
-                                + (size_t)(user_bias? m : 0)
-                                + (size_t)(item_bias? n : 0)
-                                + ((size_t)m*(size_t)lda  - (size_t)(lda-k)))
-                {
-                    tscal_large(g_biasA, scaling,
-                                ((size_t)m*(size_t)lda + (size_t)n*(size_t)ldb)
-                                + (size_t)(user_bias? m : 0)
-                                + (size_t)(item_bias? n : 0)
-                                - (size_t)(lda-k),
-                                nthreads);
-                }
-
-                else if (!user_bias && !item_bias &&
-                         g_B == g_A + (size_t)m*(size_t)lda- (size_t)(lda-k))
-                {
-                    tscal_large(g_A, scaling,
-                                ((size_t)m*(size_t)lda + (size_t)n*(size_t)ldb),
-                                nthreads);
-                }
-
-                else
-                {
-                    if (user_bias)
-                        cblas_tscal(m, scaling, g_biasA, 1);
-                    if (item_bias)
-                        cblas_tscal(n, scaling, g_biasB, 1);
-                    tscal_large(g_A, scaling,
-                                ((size_t)m*(size_t)lda) - (size_t)(lda-k),
-                                nthreads);
-                    tscal_large(g_B, scaling,
-                                ((size_t)n*(size_t)ldb) - (size_t)(ldb-k),
-                                nthreads);
-                }
+                if (user_bias)
+                    cblas_tscal(m, scaling, g_biasA, 1);
+                if (item_bias)
+                    cblas_tscal(n, scaling, g_biasB, 1);
+                tscal_large(g_A, scaling,
+                            ((size_t)m*(size_t)lda) - (size_t)(lda-k),
+                            nthreads);
+                tscal_large(g_B, scaling,
+                            ((size_t)n*(size_t)ldb) - (size_t)(ldb-k),
+                            nthreads);
             }
         }
     }
@@ -633,12 +513,12 @@ FPnum fun_grad_cannonical_form
         cblas_tgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,
                     m, k, n,
                     scaling, buffer_FPnum, n, B, ldb,
-                    overwrite_grad? 0. : 1., g_A, lda);
+                    0., g_A, lda);
         /* grad(B) = scaling * t(E) * A */
         cblas_tgemm(CblasRowMajor, CblasTrans, CblasNoTrans,
                     n, k, m,
                     scaling, buffer_FPnum, n, A, lda,
-                    overwrite_grad? 0. : 1., g_B, ldb);
+                    0., g_B, ldb);
         /* Note: don't apply the scaling earlier as otherwise it
            loses precision, even if it manages to save some operations */
     }
