@@ -1060,7 +1060,7 @@ lbfgsFPnumval_t wrapper_offsets_fun_grad
     );
 }
 
-int fit_offsets_explicit_lbfgs
+int fit_offsets_explicit_lbfgs_internal
 (
     FPnum *restrict values, bool reset_values,
     FPnum *restrict glob_mean,
@@ -1407,6 +1407,192 @@ int fit_offsets_explicit_lbfgs
         return 1;
     }
     return 0;
+}
+
+int fit_offsets_explicit_lbfgs
+(
+    FPnum *restrict biasA, FPnum *restrict biasB,
+    FPnum *restrict A, FPnum *restrict B,
+    FPnum *restrict C, FPnum *restrict C_bias,
+    FPnum *restrict D, FPnum *restrict D_bias,
+    bool reset_values, int seed,
+    FPnum *restrict glob_mean,
+    int m, int n, int k,
+    int ixA[], int ixB[], FPnum *restrict X, size_t nnz,
+    FPnum *restrict Xfull,
+    FPnum *restrict weight,
+    bool user_bias, bool item_bias,
+    bool add_intercepts,
+    FPnum lam, FPnum *restrict lam_unique,
+    FPnum *restrict U, int p,
+    FPnum *restrict II, int q,
+    int U_row[], int U_col[], FPnum *restrict U_sp, size_t nnz_U,
+    int I_row[], int I_col[], FPnum *restrict I_sp, size_t nnz_I,
+    int k_main, int k_sec,
+    FPnum w_user, FPnum w_item,
+    int n_corr_pairs, size_t maxiter,
+    int nthreads, bool prefer_onepass,
+    bool verbose, int print_every, bool handle_interrupt,
+    int *restrict niter, int *restrict nfev,
+    bool precompute_for_predictions,
+    FPnum *restrict Am, FPnum *restrict Bm,
+    FPnum *restrict Bm_plus_bias,
+    FPnum *restrict precomputedBtB,
+    FPnum *restrict precomputedTransBtBinvBt
+)
+{
+    int retval = 0;
+    size_t edge = 0;
+    FPnum *restrict values = NULL;
+
+    int k_totA = k_sec + k + k_main;
+    int k_totB = k_totA;
+    int k_szA = k + k_main;
+    int k_szB = k_szA;
+    size_t dimC = (size_t)(k_sec + k) * (size_t)p;
+    size_t dimD = (size_t)(k_sec + k) * (size_t)q;
+
+    bool has_U = (U  != NULL || nnz_U);
+    bool has_I = (II != NULL || nnz_I);
+
+    size_t nvars = (size_t)m * (size_t)k_szA + (size_t)n * (size_t)k_szB;
+    if (user_bias) nvars += m;
+    if (item_bias) nvars += n;
+    if (has_U) nvars += dimC;
+    if (has_I) nvars += dimD;
+    if (add_intercepts && has_U) nvars += (size_t)(k_sec + k);
+    if (add_intercepts && has_I) nvars += (size_t)(k_sec + k);
+    if (!has_U) k_szA = k_totA;
+    if (!has_I) k_szB = k_totB;
+
+    values = (FPnum*)malloc(nvars*sizeof(FPnum));
+    if (values == NULL) goto throw_oom;
+
+    if (!reset_values)
+    {
+        edge = 0;
+        if (user_bias) {
+            copy_arr(biasA, values + edge, m, 1);
+            edge += m;
+        }
+        if (item_bias) {
+            copy_arr(biasB, values + edge, n, 1);
+            edge += n;
+        }
+        copy_arr(A, values + edge, (size_t)m*k_szA, nthreads);
+        edge += (size_t)m*k_szA;
+        copy_arr(B, values + edge, (size_t)n*k_szB, nthreads);
+        edge += (size_t)n*k_szB;
+        if (p) {
+            copy_arr(C, values + edge, (size_t)p*(size_t)(k_sec+k), nthreads);
+            edge += (size_t)p*(size_t)(k_sec+k);
+            if (add_intercepts) {
+                copy_arr(C_bias, values + edge, k_sec+k, 1);
+                edge += k_sec+k;
+            }
+        }
+        if (q) {
+            copy_arr(D, values + edge, (size_t)q*(size_t)(k_sec+k), nthreads);
+            edge += (size_t)q*(size_t)(k_sec+k);
+            if (add_intercepts) {
+                copy_arr(D_bias, values + edge, k_sec+k, 1);
+                edge += k_sec+k;
+            }
+        }
+    }
+
+    retval = fit_offsets_explicit_lbfgs_internal(
+        values, reset_values,
+        glob_mean,
+        m, n, k,
+        ixA, ixB, X, nnz,
+        Xfull,
+        weight,
+        user_bias, item_bias,
+        add_intercepts,
+        lam, lam_unique,
+        U, p,
+        II, q,
+        U_row, U_col, U_sp, nnz_U,
+        I_row, I_col, I_sp, nnz_I,
+        k_main, k_sec,
+        w_user, w_item,
+        n_corr_pairs, maxiter, seed,
+        nthreads, prefer_onepass,
+        verbose, print_every, handle_interrupt,
+        niter, nfev,
+        Am, Bm,
+        Bm_plus_bias
+    );
+    if (retval != 0) goto cleanup;
+
+    if (true)
+    {
+        edge = 0;
+        if (user_bias) {
+            copy_arr(values + edge, biasA, m, 1);
+            edge += m;
+        }
+        if (item_bias) {
+            copy_arr(values + edge, biasB, n, 1);
+            edge += n;
+        }
+        copy_arr(values + edge, A, (size_t)m*k_szA, nthreads);
+        edge += (size_t)m*k_szA;
+        copy_arr(values + edge, B, (size_t)n*k_szB, nthreads);
+        edge += (size_t)n*k_szB;
+        if (p) {
+            copy_arr(values + edge, C, (size_t)p*(size_t)(k_sec+k), nthreads);
+            edge += (size_t)p*(size_t)(k_sec+k);
+            if (add_intercepts) {
+                copy_arr(values + edge, C_bias, k_sec+k, 1);
+                edge += k_sec+k;
+            }
+        }
+        if (q) {
+            copy_arr(values + edge, D, (size_t)q*(size_t)(k_sec+k), nthreads);
+            edge += (size_t)q*(size_t)(k_sec+k);
+            if (add_intercepts) {
+                copy_arr(values + edge, D_bias, k_sec+k, 1);
+                edge += k_sec+k;
+            }
+        }
+        free(values); values = NULL;
+    }
+
+    if (precompute_for_predictions)
+    {
+        retval = precompute_collective_explicit(
+            Bm, n, 0, 0,
+            (FPnum*)NULL, 0,
+            k_sec+k+k_main, 0, 0, 0,
+            user_bias,
+            lam, lam_unique,
+            1., 1.,
+            Bm_plus_bias,
+            precomputedBtB,
+            precomputedTransBtBinvBt,
+            (FPnum*)NULL,
+            (FPnum*)NULL,
+            (FPnum*)NULL
+        );
+        if (retval != 0) goto cleanup;
+    }
+
+    cleanup:
+        free(values);
+        return retval;
+    throw_oom:
+    {
+        if (verbose) {
+            fprintf(stderr, "Error: could not allocate enough memory.\n");
+            #ifndef _FOR_R
+            fflush(stderr);
+            #endif
+        }
+        retval = 1;
+        goto cleanup;
+    }
 }
 
 int fit_offsets_als
@@ -2879,7 +3065,7 @@ int fit_content_based_lbfgs
         values = user_bias? biasA : (item_bias? biasB : C);
     }
 
-    retval = fit_offsets_explicit_lbfgs(
+    retval = fit_offsets_explicit_lbfgs_internal(
         values, reset_values,
         glob_mean,
         m, n, 0,
@@ -2902,9 +3088,7 @@ int fit_content_based_lbfgs
         Am, Bm,
         (FPnum*)NULL
     );
-    if (retval == 1)
-        goto throw_oom;
-    else if (retval != 0)
+    if (retval != 0)
         goto cleanup;
 
     if (free_values)
@@ -2940,6 +3124,12 @@ int fit_content_based_lbfgs
         return retval;
     throw_oom:
     {
+        if (verbose) {
+            fprintf(stderr, "Error: could not allocate enough memory.\n");
+            #ifndef _FOR_R
+            fflush(stderr);
+            #endif
+        }
         retval = 1;
         goto cleanup;
     }

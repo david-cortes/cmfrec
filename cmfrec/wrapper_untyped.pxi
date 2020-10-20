@@ -76,7 +76,7 @@ cdef extern from "cmfrec.h":
         FPnum *B_plus_bias
     )
 
-    int fit_offsets_explicit_lbfgs(
+    int fit_offsets_explicit_lbfgs_internal(
         FPnum *values, bint reset_values,
         FPnum *glob_mean,
         int m, int n, int k,
@@ -738,7 +738,7 @@ def unpack_values_lbfgs_collective(
 
     return biasA, biasB, A, B, C, Cbin, D, Dbin
 
-def call_fit_offsets_explicit_lbfgs(
+def call_fit_offsets_explicit_lbfgs_internal(
         np.ndarray[int, ndim=1] ixA,
         np.ndarray[int, ndim=1] ixB,
         np.ndarray[FPnum, ndim=1] X,
@@ -845,7 +845,7 @@ def call_fit_offsets_explicit_lbfgs(
 
     cdef FPnum glob_mean
     cdef int niter, nfev
-    cdef int retval = fit_offsets_explicit_lbfgs(
+    cdef int retval = fit_offsets_explicit_lbfgs_internal(
         &values[0], 0,
         &glob_mean,
         m, n, k,

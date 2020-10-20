@@ -4821,7 +4821,7 @@ class OMF_explicit(_OMF):
         c_funs = wrapper_float if self.use_float else wrapper_double
         if self.method == "lbfgs":
             self.glob_mean_, self._A_pred, self._B_pred, values, self.nupd_, self.nfev_, self._B_plus_bias = \
-                c_funs.call_fit_offsets_explicit_lbfgs(
+                c_funs.call_fit_offsets_explicit_lbfgs_internal(
                     Xrow,
                     Xcol,
                     Xval,

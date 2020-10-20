@@ -1638,7 +1638,7 @@ lbfgsFPnumval_t wrapper_offsets_fun_grad
     const size_t n,
     const lbfgsFPnumval_t step
 );
-int fit_offsets_explicit_lbfgs
+int fit_offsets_explicit_lbfgs_internal
 (
     FPnum *restrict values, bool reset_values,
     FPnum *restrict glob_mean,
@@ -1661,6 +1661,37 @@ int fit_offsets_explicit_lbfgs
     int *restrict niter, int *restrict nfev,
     FPnum *restrict Am, FPnum *restrict Bm,
     FPnum *restrict Bm_plus_bias
+);
+int fit_offsets_explicit_lbfgs
+(
+    FPnum *restrict biasA, FPnum *restrict biasB,
+    FPnum *restrict A, FPnum *restrict B,
+    FPnum *restrict C, FPnum *restrict C_bias,
+    FPnum *restrict D, FPnum *restrict D_bias,
+    bool reset_values, int seed,
+    FPnum *restrict glob_mean,
+    int m, int n, int k,
+    int ixA[], int ixB[], FPnum *restrict X, size_t nnz,
+    FPnum *restrict Xfull,
+    FPnum *restrict weight,
+    bool user_bias, bool item_bias,
+    bool add_intercepts,
+    FPnum lam, FPnum *restrict lam_unique,
+    FPnum *restrict U, int p,
+    FPnum *restrict II, int q,
+    int U_row[], int U_col[], FPnum *restrict U_sp, size_t nnz_U,
+    int I_row[], int I_col[], FPnum *restrict I_sp, size_t nnz_I,
+    int k_main, int k_sec,
+    FPnum w_user, FPnum w_item,
+    int n_corr_pairs, size_t maxiter,
+    int nthreads, bool prefer_onepass,
+    bool verbose, int print_every, bool handle_interrupt,
+    int *restrict niter, int *restrict nfev,
+    bool precompute_for_predictions,
+    FPnum *restrict Am, FPnum *restrict Bm,
+    FPnum *restrict Bm_plus_bias,
+    FPnum *restrict precomputedBtB,
+    FPnum *restrict precomputedTransBtBinvBt
 );
 int fit_offsets_als
 (
