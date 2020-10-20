@@ -4862,10 +4862,25 @@ class OMF_explicit(_OMF):
                 self._A_pred = self.A_
             if (not Iarr.shape[0]) and (not Ival.shape[0]):
                 self._B_pred = self.B_
-            ### TODO: here need to add a call to precompute
+            
             if self.precompute_for_predictions:
-                pass
-                ## TODO: fill in
+                if isinstance(self.lambda_, np.ndarray):
+                    lambda_ = self.lambda_[2]
+                    lambda_bias = self.lambda_[0]
+                else:
+                    lambda_ = self.lambda_
+                    lambda_bias = self.lambda_
+
+                _1, self._BtB, self._TransBtBinvBt, _2, _3, _4 = \
+                    c_funs.precompute_matrices_collective_explicit(
+                        self._B_pred,
+                        np.empty((0,0), dtype=self.dtype_),
+                        self.user_bias,
+                        self.k_sec+self.k+self.k_main,
+                        0, 0, 0,
+                        lambda_, lambda_bias, 1., 1.,
+                    )
+
         else:
             self.user_bias_, self.item_bias_, self.A_, self.B_, self.C_, self.D_, \
             self._A_pred, self._B_pred, self.glob_mean_, \
