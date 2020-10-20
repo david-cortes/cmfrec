@@ -2443,6 +2443,31 @@ int topN
         return 2;
     }
 
+    if (include_ix != NULL)
+    {
+        for (int ix = 0; ix < n_include; ix++)
+            if (include_ix[ix] < 0 || include_ix[ix] >= n)
+            {
+                fprintf(stderr, "'include_ix' contains invalid entries\n");
+                #ifndef _FOR_R
+                fflush(stderr);
+                #endif
+                return 2;
+            }
+    }
+    if (exclude_ix != NULL)
+    {
+        for (int ix = 0; ix < n_exclude; ix++)
+            if (exclude_ix[ix] < 0 || exclude_ix[ix] >= n)
+            {
+                fprintf(stderr, "'exclude_ix' contains invalid entries\n");
+                #ifndef _FOR_R
+                fflush(stderr);
+                #endif
+                return 2;
+            }
+    }
+
     int ix = 0;
 
     int retval = 0;
@@ -2463,7 +2488,7 @@ int topN
 
     else {
         buffer_ix = (int*)malloc((size_t)n*sizeof(int));
-        if (buffer_ix == NULL) { retval = 1; goto cleanup; }
+        if (buffer_ix == NULL) goto throw_oom;
         for (int ix = 0; ix < n; ix++) buffer_ix[ix] = ix;
     }
 
@@ -2489,10 +2514,7 @@ int topN
     {
         buffer_scores = (FPnum*)malloc((size_t)n_include*sizeof(FPnum));
         buffer_mask = (int*)malloc((size_t)n_include*sizeof(int));
-        if (buffer_scores == NULL || buffer_mask == NULL) {
-            retval = 1;
-            goto cleanup;
-        }
+        if (buffer_scores == NULL || buffer_mask == NULL) goto throw_oom;
         #pragma omp parallel for schedule(static) num_threads(nthreads) \
                 shared(a_vec, B, k_pred, k_item, n_include, k_totB, \
                        include_ix, biasB, buffer_scores)
@@ -2513,10 +2535,7 @@ int topN
     {
         buffer_scores = (FPnum*)malloc(n_take*sizeof(FPnum));
         buffer_mask = (int*)malloc(n_take*sizeof(int));
-        if (buffer_scores == NULL || buffer_mask == NULL) {
-            retval = 1;
-            goto cleanup;
-        }
+        if (buffer_scores == NULL || buffer_mask == NULL) goto throw_oom;
         #pragma omp parallel for schedule(static) num_threads(nthreads) \
                 shared(a_vec, B, k_pred, k_item, n_take, k_totB, \
                        buffer_ix, biasB, buffer_scores)
@@ -2535,7 +2554,7 @@ int topN
     else
     {
         buffer_scores = (FPnum*)malloc((size_t)n*sizeof(FPnum));
-        if (buffer_scores == NULL) { retval = 1; goto cleanup; }
+        if (buffer_scores == NULL) goto throw_oom;
         cblas_tgemv(CblasRowMajor, CblasNoTrans,
                     n, k_pred,
                     1., B + k_item, k_totB,
@@ -2602,8 +2621,13 @@ int topN
         if (include_ix == NULL)
             free(buffer_ix);
         free(buffer_mask);
-    if (retval == 1) return retval;
-    return 0;
+    return retval;
+
+    throw_oom:
+    {
+        retval = 1;
+        goto cleanup;
+    }
 }
 
 int fit_most_popular
@@ -2631,11 +2655,7 @@ int fit_most_popular
     {
         cnt_by_col = (int*)calloc((size_t)n, sizeof(int));
         sum_by_col = (float*)calloc((size_t)n, sizeof(float));
-        if (cnt_by_col == NULL || sum_by_col == NULL)
-        {
-            retval = 1;
-            goto cleanup;
-        }
+        if (cnt_by_col == NULL || sum_by_col == NULL) goto throw_oom;
 
         if (Xfull != NULL)
         {
@@ -2688,8 +2708,7 @@ int fit_most_popular
         if ((cnt_by_col == NULL && sum_by_col == NULL) ||
             (cnt_by_row == NULL && sum_by_row == NULL))
         {
-            retval = 1;
-            goto cleanup;
+            goto throw_oom;
         }
     }
 
@@ -2705,7 +2724,7 @@ int fit_most_popular
         (size_t*)NULL, (int*)NULL, (FPnum*)NULL,
         nthreads
     );
-    if (retval == 1) return retval;
+    if (retval == 1) goto throw_oom;
 
 
     if (biasA == NULL && !implicit)
@@ -2864,4 +2883,71 @@ int fit_most_popular
         free(sum_by_row);
 
     return retval;
+    throw_oom:
+    {
+        retval = 1;
+        goto cleanup;
+    }
+}
+
+int topN_old_most_popular
+(
+    bool user_bias,
+    FPnum a_bias,
+    FPnum *restrict biasA, int row_index,
+    FPnum *restrict B,
+    FPnum *restrict biasB,
+    FPnum glob_mean,
+    int *restrict include_ix, int n_include,
+    int *restrict exclude_ix, int n_exclude,
+    int *restrict outp_ix, FPnum *restrict outp_score,
+    int n_top, int n
+)
+{
+    int retval = 0;
+    FPnum one = 1.;
+    FPnum *restrict ones = (FPnum*)malloc((size_t)n*sizeof(FPnum));
+    if (ones == NULL) goto throw_oom;
+    for (int ix = 0; ix < n; ix++)
+        ones[ix] = 1.;
+    if (biasA != NULL && user_bias)
+        a_bias = biasA[row_index];
+    if (!user_bias)
+        a_bias = 0.;
+
+    retval = topN(
+        &one, 0,
+        biasB, 0,
+        (FPnum*)NULL,
+        glob_mean, a_bias,
+        1, 0,
+        include_ix, n_include,
+        exclude_ix, n_exclude,
+        outp_ix, outp_score,
+        n_top, n, 1
+    );
+
+    cleanup:
+        free(ones);
+        return retval;
+    throw_oom:
+    {
+        retval = 1;
+        goto cleanup;
+    }
+}
+
+int predict_X_old_most_popular
+(
+    int row[], int col[], FPnum *restrict predicted, size_t n_predict,
+    FPnum *restrict biasA, FPnum *restrict biasB,
+    FPnum glob_mean
+)
+{
+    bool user_bias = biasA != NULL;
+    for (size_t ix = 0; ix < n_predict; ix++)
+        predicted[ix] =   biasB[col[ix]]
+                        + (user_bias? biasA[row[ix]] : 0.)
+                        + glob_mean;
+    return 0;
 }

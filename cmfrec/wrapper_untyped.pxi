@@ -44,8 +44,14 @@ import ctypes
 #     from scipy.linalg.cython_lapack cimport dpotrs as dpotrs_
 #     from scipy.linalg.cython_lapack cimport dgels as dgels_
 
+
+
+### TODO: this module should move from doing operations in Python to
+### using the new designated C functions for each type of prediction.
+
+
 cdef extern from "cmfrec.h":
-    int fit_collective_explicit_lbfgs(
+    int fit_collective_explicit_lbfgs_internal(
         FPnum *values, bint reset_values,
         FPnum *glob_mean,
         FPnum *U_colmeans, FPnum *I_colmeans,
@@ -324,41 +330,8 @@ cdef extern from "cmfrec.h":
         int n_top, int n, int nthreads
     )
 
-    void factors_content_based(
-        FPnum *a_vec, int k_sec,
-        FPnum *u_vec, int p,
-        FPnum *u_vec_sp, int u_vec_ixB[], size_t nnz_u_vec,
-        FPnum *C, FPnum *C_bias
-    )
-
-    int predict_content_based_new(
-        FPnum *scores_new, int n_new, int k_sec,
-        FPnum *U, int p,
-        int U_row[], int U_col[], FPnum *U_sp, size_t nnz_U,
-        size_t U_csr_p[], int U_csr_i[], FPnum *U_csr,
-        FPnum *II, int q,
-        int I_row[], int I_col[], FPnum *I_sp, size_t nnz_I,
-        size_t I_csr_p[], int I_csr_i[], FPnum *I_csr,
-        FPnum *C, FPnum *C_bias,
-        FPnum *D, FPnum *D_bias,
-        FPnum glob_mean,
-        int nthreads
-    )
-
-    int predict_content_based_old(
-        FPnum *scores_new, int n_new, int k_sec,
-        FPnum *U, int p,
-        int U_row[], int U_col[], FPnum *U_sp, size_t nnz_U,
-        size_t U_csr_p[], int U_csr_i[], FPnum *U_csr,
-        FPnum *C, FPnum *C_bias,
-        FPnum *Bm, FPnum *biasB, int ixB[],
-        FPnum glob_mean,
-        int nthreads
-    )
-
-    int rank_content_based_new(
-        FPnum *scores_new, int *rank_new,
-        int n_new, int k_sec, int n_top,
+    int topN_new_content_based(
+        int k, int n_new,
         FPnum *u_vec, int p,
         FPnum *u_vec_sp, int u_vec_ixB[], size_t nnz_u_vec,
         FPnum *II, int q,
@@ -367,7 +340,8 @@ cdef extern from "cmfrec.h":
         FPnum *C, FPnum *C_bias,
         FPnum *D, FPnum *D_bias,
         FPnum glob_mean,
-        int nthreads
+        int *outp_ix, FPnum *outp_score,
+        int n_top, int nthreads
     )
 
     int fit_most_popular(
@@ -384,25 +358,96 @@ cdef extern from "cmfrec.h":
         int nthreads
     )
 
-    int collective_factors_cold_multiple(
-        FPnum *A, int m,
+    int impute_X_collective_explicit(
+        int m, bint user_bias,
         FPnum *U, int m_u, int p,
+        bint NA_as_zero_U,
         int U_row[], int U_col[], FPnum *U_sp, size_t nnz_U,
         size_t U_csr_p[], int U_csr_i[], FPnum *U_csr,
         FPnum *Ub, int m_ubin, int pbin,
         FPnum *C, FPnum *Cb,
+        FPnum glob_mean, FPnum *biasB,
+        FPnum *col_means,
+        FPnum *Xfull, int n,
+        FPnum *weight,
+        FPnum *B,
+        int k, int k_user, int k_item, int k_main,
+        FPnum lam, FPnum *lam_unique,
+        FPnum w_main, FPnum w_user,
+        FPnum *TransBtBinvBt,
+        FPnum *BtB,
+        FPnum *BeTBeChol,
         FPnum *TransCtCinvCt,
         FPnum *CtCw,
-        FPnum *col_means,
-        int k, int k_user, int k_main,
-        FPnum lam, FPnum w_main, FPnum w_user,
-        bint NA_as_zero_U,
+        FPnum *B_plus_bias,
         int nthreads
     )
 
-    int collective_factors_warm_multiple(
-        FPnum *A, FPnum *biasA, int m, int m_x,
+    int predict_X_old_content_based(
+        FPnum *predicted, size_t n_predict,
+        int m_new, int k,
+        int row[],
+        int col[],
+        FPnum *U, int p,
+        int U_row[], int U_col[], FPnum *U_sp, size_t nnz_U,
+        size_t U_csr_p[], int U_csr_i[], FPnum *U_csr,
+        FPnum *C, FPnum *C_bias,
+        FPnum *Bm, FPnum *biasB,
+        FPnum glob_mean,
+        int nthreads
+    )
+
+    int predict_X_new_content_based(
+        FPnum *predicted, size_t n_predict,
+        int m_new, int n_new, int k,
+        int row[], int col[],
+        FPnum *U, int p,
+        int U_row[], int U_col[], FPnum *U_sp, size_t nnz_U,
+        size_t U_csr_p[], int U_csr_i[], FPnum *U_csr,
+        FPnum *II, int q,
+        int I_row[], int I_col[], FPnum *I_sp, size_t nnz_I,
+        size_t I_csr_p[], int I_csr_i[], FPnum *I_csr,
+        FPnum *C, FPnum *C_bias,
+        FPnum *D, FPnum *D_bias,
+        FPnum glob_mean,
+        int nthreads
+    )
+
+    int factors_content_based_single(
+        FPnum *a_vec, int k,
+        FPnum *u_vec, int p,
+        FPnum *u_vec_sp, int u_vec_ixB[], size_t nnz_u_vec,
+        FPnum *C, FPnum *C_bias
+    )
+
+    int fit_content_based_lbfgs(
+        FPnum *biasA, FPnum *biasB,
+        FPnum *C, FPnum *C_bias,
+        FPnum *D, FPnum *D_bias,
+        bint start_with_ALS, bint reset_values, int seed,
+        FPnum *glob_mean,
+        int m, int n, int k,
+        int ixA[], int ixB[], FPnum *X, size_t nnz,
+        FPnum *Xfull,
+        FPnum *weight,
+        bint user_bias, bint item_bias,
+        bint add_intercepts,
+        FPnum lam, FPnum *lam_unique,
+        FPnum *U, int p,
+        FPnum *II, int q,
+        int U_row[], int U_col[], FPnum *U_sp, size_t nnz_U,
+        int I_row[], int I_col[], FPnum *I_sp, size_t nnz_I,
+        int n_corr_pairs, size_t maxiter,
+        int nthreads, bint prefer_onepass,
+        bint verbose, int print_every, bint handle_interrupt,
+        int *niter, int *nfev,
+        FPnum *Am, FPnum *Bm
+    )
+
+    int factors_collective_explicit_multiple(
+        FPnum *A, FPnum *biasA, int m,
         FPnum *U, int m_u, int p,
+        bint NA_as_zero_U, bint NA_as_zero_X,
         int U_row[], int U_col[], FPnum *U_sp, size_t nnz_U,
         size_t U_csr_p[], int U_csr_i[], FPnum *U_csr,
         FPnum *Ub, int m_ubin, int pbin,
@@ -415,27 +460,28 @@ cdef extern from "cmfrec.h":
         FPnum *weight,
         FPnum *B,
         int k, int k_user, int k_item, int k_main,
-        FPnum lam, FPnum w_main, FPnum w_user, FPnum lam_bias,
+        FPnum lam, FPnum *lam_unique,
+        FPnum w_main, FPnum w_user,
         FPnum *TransBtBinvBt,
         FPnum *BtB,
         FPnum *BeTBeChol,
         FPnum *TransCtCinvCt,
         FPnum *CtCw,
-        bint NA_as_zero_U, bint NA_as_zero_X,
         FPnum *B_plus_bias,
         int nthreads
     )
 
-    int collective_factors_warm_implicit_multiple(
+    int factors_collective_implicit_multiple(
         FPnum *A, int m,
         FPnum *U, int m_u, int p,
+        bint NA_as_zero_U,
         int U_row[], int U_col[], FPnum *U_sp, size_t nnz_U,
         size_t U_csr_p[], int U_csr_i[], FPnum *U_csr,
-        bint NA_as_zero_U,
-        FPnum *col_means,
-        FPnum *B, int n, FPnum *C,
         FPnum *X, int ixA[], int ixB[], size_t nnz,
         size_t *Xcsr_p, int *Xcsr_i, FPnum *Xcsr,
+        FPnum *B, int n,
+        FPnum *C,
+        FPnum *col_means,
         int k, int k_user, int k_item, int k_main,
         FPnum lam, FPnum alpha, FPnum w_main, FPnum w_user,
         FPnum w_main_multiplier,
@@ -445,36 +491,9 @@ cdef extern from "cmfrec.h":
         int nthreads
     )
 
-    int collective_factors_cold_implicit_multiple(
+    int factors_offsets_explicit_multiple(
+        FPnum *Am, FPnum *biasA,
         FPnum *A, int m,
-        FPnum *U, int m_u, int p,
-        int U_row[], int U_col[], FPnum *U_sp, size_t nnz_U,
-        size_t U_csr_p[], int U_csr_i[], FPnum *U_csr,
-        FPnum *B, int n,
-        FPnum *C,
-        FPnum *BeTBe,
-        FPnum *BtB,
-        FPnum *BeTBeChol,
-        FPnum *col_means,
-        int k, int k_user, int k_item, int k_main,
-        FPnum lam, FPnum w_main, FPnum w_user, FPnum w_main_multiplier,
-        bint NA_as_zero_U,
-        int nthreads
-    )
-
-    int offsets_factors_cold_multiple(
-        FPnum *A, int m,
-        FPnum *U, int p,
-        int U_row[], int U_col[], FPnum *U_sp, size_t nnz_U,
-        size_t U_csr_p[], int U_csr_i[], FPnum *U_csr,
-        FPnum *C, FPnum *C_bias,
-        int k, int k_sec, int k_main,
-        FPnum w_user,
-        int nthreads
-    )
-
-    int offsets_factors_warm_multiple(
-        FPnum *A, FPnum *biasA, int m,
         FPnum *U, int p,
         int U_row[], int U_col[], FPnum *U_sp, size_t nnz_U,
         size_t U_csr_p[], int U_csr_i[], FPnum *U_csr,
@@ -487,12 +506,26 @@ cdef extern from "cmfrec.h":
         FPnum glob_mean, FPnum *biasB,
         int k, int k_sec, int k_main,
         FPnum w_user,
-        FPnum lam, bint exact, FPnum lam_bias,
-        bint implicit, FPnum alpha,
+        FPnum lam, FPnum *lam_unique, bint exact,
         FPnum *precomputedTransBtBinvBt,
-        FPnum *precomputedBtBw,
+        FPnum *precomputedBtB,
         FPnum *Bm_plus_bias,
-        FPnum *output_A,
+        int nthreads
+    )
+
+    int factors_offsets_implicit_multiple(
+        FPnum *Am, int m,
+        FPnum *A,
+        FPnum *U, int p,
+        int U_row[], int U_col[], FPnum *U_sp, size_t nnz_U,
+        size_t U_csr_p[], int U_csr_i[], FPnum *U_csr,
+        FPnum *X, int ixA[], int ixB[], size_t nnz,
+        size_t *Xcsr_p, int *Xcsr_i, FPnum *Xcsr,
+        FPnum *Bm, FPnum *C,
+        FPnum *C_bias,
+        int k,
+        FPnum lam, FPnum alpha,
+        FPnum *precomputedBtB,
         int nthreads
     )
 
@@ -623,7 +656,7 @@ def call_fit_collective_explicit_lbfgs(
 
     cdef FPnum glob_mean
     cdef int niter, nfev
-    cdef int retval = fit_collective_explicit_lbfgs(
+    cdef int retval = fit_collective_explicit_lbfgs_internal(
         &values[0], 0,
         &glob_mean,
         ptr_U_colmeans, ptr_I_colmeans,
@@ -2200,7 +2233,7 @@ def call_factors_offsets_warm_implicit(
 
     return Am, A
 
-def call_factors_content_based(
+def call_factors_content_based_single(
         np.ndarray[FPnum, ndim=1] U,
         np.ndarray[FPnum, ndim=1] U_sp,
         np.ndarray[int, ndim=1] U_sp_i,
@@ -2221,12 +2254,14 @@ def call_factors_content_based(
         ptr_C_bias = &C_bias[0]
     
     cdef np.ndarray[FPnum, ndim=1] a_vec = np.empty(C.shape[1], dtype=c_FPnum)
-    factors_content_based(
+    cdef int retval = factors_content_based_single(
         &a_vec[0], C.shape[1],
         ptr_U, C.shape[0],
         ptr_U_sp, ptr_U_sp_i, U_sp.shape[0],
         &C[0,0], ptr_C_bias
     )
+    if retval == 1:
+        raise MemoryError("Could not allocate sufficient memory.")
     return a_vec
 
 def call_predict_multiple(
@@ -2309,7 +2344,73 @@ def call_topN(
 
     return outp_ix, outp_score
 
-def call_predict_content_based_new(
+def call_predict_X_old_content_based(
+        np.ndarray[FPnum, ndim=2] U,
+        np.ndarray[int, ndim=1] U_row,
+        np.ndarray[int, ndim=1] U_col,
+        np.ndarray[FPnum, ndim=1] U_sp,
+        np.ndarray[size_t, ndim=1] U_csr_p,
+        np.ndarray[int, ndim=1] U_csr_i,
+        np.ndarray[FPnum, ndim=1] U_csr,
+        np.ndarray[int, ndim=1] ixB,
+        np.ndarray[FPnum, ndim=2] Bm,
+        np.ndarray[FPnum, ndim=2] C,
+        np.ndarray[FPnum, ndim=1] C_bias,
+        np.ndarray[FPnum, ndim=1] biasB,
+        int n_new,
+        FPnum glob_mean,
+        int nthreads
+    ):
+
+    cdef FPnum *ptr_U = NULL
+    cdef int *ptr_U_row = NULL
+    cdef int *ptr_U_col = NULL
+    cdef FPnum *ptr_U_sp = NULL
+    cdef size_t nnz_U = 0
+    if U.shape[0]:
+        ptr_U = &U[0,0]
+    elif U_sp.shape[0]:
+        ptr_U_row = &U_row[0]
+        ptr_U_col = &U_col[0]
+        ptr_U_sp = &U_sp[0]
+        nnz_U = U_sp.shape[0]
+
+    cdef size_t *ptr_U_csr_p = NULL
+    cdef int *ptr_U_csr_i = NULL
+    cdef FPnum *ptr_U_csr = NULL
+    if U_csr.shape[0]:
+        ptr_U_csr_p = &U_csr_p[0]
+        ptr_U_csr_i = &U_csr_i[0]
+        ptr_U_csr = &U_csr[0]
+
+    cdef FPnum *ptr_biasB = NULL
+    if biasB.shape[0]:
+        ptr_biasB = &biasB[0]
+
+    cdef FPnum *ptr_C_bias = NULL
+    if C_bias.shape[0]:
+        ptr_C_bias = &C_bias[0]
+
+    cdef np.ndarray[FPnum, ndim=1] scores_new = np.empty(n_new, dtype=c_FPnum)
+    cdef int k = C.shape[1]
+    
+    cdef int retval = predict_X_old_content_based(
+        &scores_new[0], n_new, n_new, k,
+        <int*>NULL, &ixB[0],
+        ptr_U, C.shape[0],
+        ptr_U_row, ptr_U_col, ptr_U_sp, nnz_U,
+        ptr_U_csr_p, ptr_U_csr_i, ptr_U_csr,
+        &C[0,0], ptr_C_bias,
+        &Bm[0,0], ptr_biasB,
+        glob_mean,
+        nthreads
+    )
+    if retval == 1:
+        raise MemoryError("Could not allocate sufficient memory.")
+
+    return scores_new
+
+def call_predict_X_new_content_based(
         np.ndarray[FPnum, ndim=2] U,
         np.ndarray[int, ndim=1] U_row,
         np.ndarray[int, ndim=1] U_col,
@@ -2384,8 +2485,11 @@ def call_predict_content_based_new(
         ptr_D_bias = &D_bias[0]
     
     cdef np.ndarray[FPnum, ndim=1] scores_new = np.empty(n_new, dtype=c_FPnum)
-    cdef int retval = predict_content_based_new(
-        &scores_new[0], n_new, C.shape[1],
+    cdef int k = C.shape[1]
+    cdef int retval = predict_X_new_content_based(
+        &scores_new[0], n_new,
+        n_new, n_new, k,
+        <int*>NULL, <int*>NULL,
         ptr_U, C.shape[0],
         ptr_U_row, ptr_U_col, ptr_U_sp, nnz_U,
         ptr_U_csr_p, ptr_U_csr_i, ptr_U_csr,
@@ -2402,71 +2506,7 @@ def call_predict_content_based_new(
 
     return scores_new
 
-def call_predict_content_based_old(
-        np.ndarray[FPnum, ndim=2] U,
-        np.ndarray[int, ndim=1] U_row,
-        np.ndarray[int, ndim=1] U_col,
-        np.ndarray[FPnum, ndim=1] U_sp,
-        np.ndarray[size_t, ndim=1] U_csr_p,
-        np.ndarray[int, ndim=1] U_csr_i,
-        np.ndarray[FPnum, ndim=1] U_csr,
-        np.ndarray[int, ndim=1] ixB,
-        np.ndarray[FPnum, ndim=2] Bm,
-        np.ndarray[FPnum, ndim=2] C,
-        np.ndarray[FPnum, ndim=1] C_bias,
-        np.ndarray[FPnum, ndim=1] biasB,
-        int n_new,
-        FPnum glob_mean,
-        int nthreads
-    ):
-
-    cdef FPnum *ptr_U = NULL
-    cdef int *ptr_U_row = NULL
-    cdef int *ptr_U_col = NULL
-    cdef FPnum *ptr_U_sp = NULL
-    cdef size_t nnz_U = 0
-    if U.shape[0]:
-        ptr_U = &U[0,0]
-    elif U_sp.shape[0]:
-        ptr_U_row = &U_row[0]
-        ptr_U_col = &U_col[0]
-        ptr_U_sp = &U_sp[0]
-        nnz_U = U_sp.shape[0]
-
-    cdef size_t *ptr_U_csr_p = NULL
-    cdef int *ptr_U_csr_i = NULL
-    cdef FPnum *ptr_U_csr = NULL
-    if U_csr.shape[0]:
-        ptr_U_csr_p = &U_csr_p[0]
-        ptr_U_csr_i = &U_csr_i[0]
-        ptr_U_csr = &U_csr[0]
-
-    cdef FPnum *ptr_biasB = NULL
-    if biasB.shape[0]:
-        ptr_biasB = &biasB[0]
-
-    cdef FPnum *ptr_C_bias = NULL
-    if C_bias.shape[0]:
-        ptr_C_bias = &C_bias[0]
-
-    cdef np.ndarray[FPnum, ndim=1] scores_new = np.empty(n_new, dtype=c_FPnum)
-    
-    cdef int retval = predict_content_based_old(
-        &scores_new[0], n_new, C.shape[1],
-        ptr_U, C.shape[0],
-        ptr_U_row, ptr_U_col, ptr_U_sp, nnz_U,
-        ptr_U_csr_p, ptr_U_csr_i, ptr_U_csr,
-        &C[0,0], ptr_C_bias,
-        &Bm[0,0], ptr_biasB, &ixB[0],
-        glob_mean,
-        nthreads
-    )
-    if retval == 1:
-        raise MemoryError("Could not allocate sufficient memory.")
-
-    return scores_new
-
-def call_rank_content_based_new(
+def call_topN_new_content_based(
         np.ndarray[FPnum, ndim=1] U,
         np.ndarray[FPnum, ndim=1] U_sp,
         np.ndarray[int, ndim=1] U_sp_i,
@@ -2530,11 +2570,13 @@ def call_rank_content_based_new(
     if output_score:
         scores_new = np.empty(n_top, dtype=c_FPnum)
         ptr_scores_new = &scores_new[0]
+    if n_top <= 0:
+        raise ValueError("'n_top' must be a positive integer.")
     cdef np.ndarray[int, ndim=1] rank_new = np.empty(n_top, dtype=ctypes.c_int)
+    cdef int k = C.shape[1]
     
-    cdef int retval = rank_content_based_new(
-        ptr_scores_new, &rank_new[0],
-        n_new_I, C.shape[1], n_top,
+    cdef int retval = topN_new_content_based(
+        k, n_new_I,
         ptr_U, C.shape[0],
         ptr_U_sp, ptr_U_sp_i, U_sp.shape[0],
         ptr_I, D.shape[0],
@@ -2543,7 +2585,8 @@ def call_rank_content_based_new(
         &C[0,0], ptr_C_bias,
         &D[0,0], ptr_D_bias,
         glob_mean,
-        nthreads
+        &rank_new[0], ptr_scores_new,
+        n_top, nthreads
     )
     if retval == 1:
         raise MemoryError("Could not allocate sufficient memory.")
@@ -2618,33 +2661,57 @@ def call_fit_most_popular(
     else:
         return glob_mean, np.empty(0, dtype=c_FPnum), values, w_main_multiplier
 
-def call_collective_factors_cold_multiple(
+def call_fit_content_based_lbfgs(
+        np.ndarray[int, ndim=1] ixA,
+        np.ndarray[int, ndim=1] ixB,
+        np.ndarray[FPnum, ndim=1] X,
+        np.ndarray[FPnum, ndim=1] W,
+        np.ndarray[FPnum, ndim=2] Xfull,
+        np.ndarray[FPnum, ndim=2] Wfull,
         np.ndarray[FPnum, ndim=2] U,
         np.ndarray[int, ndim=1] U_row,
         np.ndarray[int, ndim=1] U_col,
         np.ndarray[FPnum, ndim=1] U_sp,
-        np.ndarray[size_t, ndim=1] U_csr_p,
-        np.ndarray[int, ndim=1] U_csr_i,
-        np.ndarray[FPnum, ndim=1] U_csr,
-        np.ndarray[FPnum, ndim=2] Ub,
-        np.ndarray[FPnum, ndim=2] C,
-        np.ndarray[FPnum, ndim=2] C_bin,
-        np.ndarray[FPnum, ndim=2] TransCtCinvCt,
-        np.ndarray[FPnum, ndim=2] CtC,
-        np.ndarray[FPnum, ndim=1] U_colmeans,
-        int m_u, int m_ubin,
-        int k, int k_user, int k_main,
-        FPnum lam = 1e2, FPnum w_main = 1., FPnum w_user = 1.,
-        bint NA_as_zero_U = 0,
-        int nthreads = 1
+        np.ndarray[FPnum, ndim=2] I,
+        np.ndarray[int, ndim=1] I_row,
+        np.ndarray[int, ndim=1] I_col,
+        np.ndarray[FPnum, ndim=1] I_sp,
+        int m, int n, int p, int q,
+        int k=50,
+        bint user_bias=1, bint item_bias=1,
+        bint add_intercepts=1,
+        FPnum lam=1e2,
+        np.ndarray[FPnum, ndim=1] lam_unique=np.empty(0, dtype=c_FPnum),
+        bint verbose=1, int print_every=10,
+        int n_corr_pairs=5, int maxiter=400,
+        int nthreads=1, bint prefer_onepass=0,
+        int seed=1, bint handle_interrupt=1,
+        bint start_with_ALS=1
     ):
+
+    cdef FPnum *ptr_Xfull = NULL
+    cdef FPnum *ptr_weight = NULL
+    cdef int *ptr_ixA = NULL
+    cdef int *ptr_ixB = NULL
+    cdef FPnum *ptr_X = NULL
+    cdef size_t nnz = 0
+    if Xfull.shape[0]:
+        ptr_Xfull = &Xfull[0,0]
+        if Wfull.shape[0]:
+            ptr_weight = &Wfull[0,0]
+    else:
+        ptr_ixA = &ixA[0]
+        ptr_ixB = &ixB[0]
+        ptr_X = &X[0]
+        nnz = X.shape[0]
+        if W.shape[0]:
+            ptr_weight = &W[0]
 
     cdef FPnum *ptr_U = NULL
     cdef int *ptr_U_row = NULL
     cdef int *ptr_U_col = NULL
     cdef FPnum *ptr_U_sp = NULL
     cdef size_t nnz_U = 0
-    cdef FPnum *ptr_U_colmeans = NULL
     if U.shape[0]:
         ptr_U = &U[0,0]
     elif U_sp.shape[0]:
@@ -2652,156 +2719,83 @@ def call_collective_factors_cold_multiple(
         ptr_U_col = &U_col[0]
         ptr_U_sp = &U_sp[0]
         nnz_U = U_sp.shape[0]
-    if U_colmeans.shape[0]:
-        ptr_U_colmeans = &U_colmeans[0]
 
-    cdef FPnum *ptr_Ub = NULL
-    cdef int pbin = 0
-    if Ub.shape[0]:
-        ptr_Ub = &Ub[0,0]
-        m_ubin = Ub.shape[0]
-        pbin = Ub.shape[1]
+    cdef FPnum *ptr_I = NULL
+    cdef int *ptr_I_row = NULL
+    cdef int *ptr_I_col = NULL
+    cdef FPnum *ptr_I_sp = NULL
+    cdef size_t nnz_I = 0
+    if I.shape[0]:
+        ptr_I = &I[0,0]
+    elif I_sp.shape[0]:
+        ptr_I_row = &I_row[0]
+        ptr_I_col = &I_col[0]
+        ptr_I_sp = &I_sp[0]
+        nnz_I = I_sp.shape[0]
 
-    cdef FPnum *ptr_C = NULL
-    cdef FPnum *ptr_C_bin = NULL
-    cdef FPnum *ptr_TransCtCinvCt = NULL
-    cdef FPnum *ptr_CtC = NULL
-    if C.shape[0]:
-        ptr_C = &C[0,0]
-    if C_bin.shape[0]:
-        ptr_C_bin = &C_bin[0,0]
-    if TransCtCinvCt.shape[0]:
-        ptr_TransCtCinvCt = &TransCtCinvCt[0,0]
-    if CtC.shape[0]:
-        ptr_CtC = &CtC[0,0]
+    cdef FPnum *ptr_lam_unique = NULL
+    if lam_unique.shape[0]:
+        ptr_lam_unique = &lam_unique[0]
 
-    cdef size_t *ptr_U_csr_p = NULL
-    cdef int *ptr_U_csr_i = NULL
-    cdef FPnum *ptr_U_csr = NULL
-    if U_csr.shape[0]:
-        ptr_U_csr_p = &U_csr_p[0]
-        ptr_U_csr_i = &U_csr_i[0]
-        ptr_U_csr = &U_csr[0]
-    
-    cdef int m = max([m_u, m_ubin])
-    cdef np.ndarray[FPnum, ndim=2] A = np.empty((m, k_user+k+k_main), dtype=c_FPnum)
-    if m == 0:
-        return A
+    cdef np.ndarray[FPnum, ndim=2] Am = np.empty((m, k), dtype=c_FPnum)
+    cdef np.ndarray[FPnum, ndim=2] Bm = np.empty((n, k), dtype=c_FPnum)
 
-    cdef int retval = collective_factors_cold_multiple(
-        &A[0,0], m,
-        ptr_U, m_u, C.shape[0],
+    rs = np.random.Generator(np.random.MT19937(seed = seed))
+    cdef np.ndarray[FPnum, ndim=2] C = rs.standard_normal(size=(p,k), dtype = c_FPnum)
+    cdef np.ndarray[FPnum, ndim=2] D = rs.standard_normal(size=(q,k), dtype = c_FPnum)
+    cdef np.ndarray[FPnum, ndim=1] C_bias = np.zeros(0, dtype=c_FPnum)
+    cdef np.ndarray[FPnum, ndim=1] D_bias = np.zeros(0, dtype=c_FPnum)
+    cdef FPnum *ptr_C = &C[0,0]
+    cdef FPnum *ptr_D = &D[0,0]
+    cdef FPnum *ptr_C_bias = NULL
+    cdef FPnum *ptr_D_bias = NULL
+    if add_intercepts:
+        ptr_C_bias = &C_bias[0]
+        ptr_D_bias = &D_bias[0]
+
+    cdef np.ndarray[FPnum, ndim=1] biasA = np.zeros(0, dtype=c_FPnum)
+    cdef np.ndarray[FPnum, ndim=1] biasB = np.zeros(0, dtype=c_FPnum)
+    cdef FPnum *ptr_biasA = NULL
+    cdef FPnum *ptr_biasB = NULL
+    if user_bias:
+        biasA = np.empty(m, dtype=c_FPnum)
+        ptr_biasA = &biasA[0]
+    if item_bias:
+        biasB = np.empty(n, dtype=c_FPnum)
+        ptr_biasB = &biasB[0]
+
+    cdef FPnum glob_mean
+    cdef int niter, nfev
+
+    cdef int retval = fit_content_based_lbfgs(
+        ptr_biasA, ptr_biasB,
+        ptr_C, ptr_C_bias,
+        ptr_D, ptr_D_bias,
+        start_with_ALS, 0, 0,
+        &glob_mean,
+        m, n, k,
+        ptr_ixA, ptr_ixB, ptr_X, nnz,
+        ptr_Xfull,
+        ptr_weight,
+        user_bias, item_bias,
+        add_intercepts,
+        lam, ptr_lam_unique,
+        ptr_U, p,
+        ptr_I, q,
         ptr_U_row, ptr_U_col, ptr_U_sp, nnz_U,
-        ptr_U_csr_p, ptr_U_csr_i, ptr_U_csr,
-        ptr_Ub, m_ubin, C_bin.shape[0],
-        ptr_C, ptr_C_bin,
-        ptr_TransCtCinvCt,
-        ptr_CtC,
-        ptr_U_colmeans,
-        k, k_user, k_main,
-        lam, w_main, w_user,
-        NA_as_zero_U,
-        nthreads
+        ptr_I_row, ptr_I_col, ptr_I_sp, nnz_I,
+        n_corr_pairs, maxiter,
+        nthreads, prefer_onepass,
+        verbose, print_every, handle_interrupt,
+        &niter, &nfev,
+        &Am[0,0], &Bm[0,0]
     )
     if retval == 1:
         raise MemoryError("Could not allocate sufficient memory.")
 
-    return A
+    return biasA, biasB, C, D, C_bias, D_bias, Am, Bm, glob_mean, niter, nfev
 
-def call_collective_factors_cold_implicit_multiple(
-        np.ndarray[FPnum, ndim=2] U,
-        np.ndarray[int, ndim=1] U_row,
-        np.ndarray[int, ndim=1] U_col,
-        np.ndarray[FPnum, ndim=1] U_sp,
-        np.ndarray[size_t, ndim=1] U_csr_p,
-        np.ndarray[int, ndim=1] U_csr_i,
-        np.ndarray[FPnum, ndim=1] U_csr,
-        np.ndarray[FPnum, ndim=2] B,
-        np.ndarray[FPnum, ndim=2] C,
-        np.ndarray[FPnum, ndim=1] U_colmeans,
-        np.ndarray[FPnum, ndim=2] BeTBe,
-        np.ndarray[FPnum, ndim=2] BtB,
-        np.ndarray[FPnum, ndim=2] BeTBeChol,
-        int m_u,
-        int k, int k_user = 0, int k_item = 0, int k_main = 0,
-        FPnum lam = 1e2, FPnum w_main = 1., FPnum w_user = 1.,
-        FPnum w_main_multiplier = 1.,
-        bint NA_as_zero_U = 0,
-        int nthreads = 1
-    ):
-
-    cdef int p = C.shape[0]
-    cdef int n = B.shape[0]
-
-    cdef FPnum *ptr_U = NULL
-    cdef int *ptr_U_row = NULL
-    cdef int *ptr_U_col = NULL
-    cdef FPnum *ptr_U_sp = NULL
-    cdef size_t nnz_U = 0
-    cdef FPnum *ptr_U_colmeans = NULL
-    if U.shape[0]:
-        ptr_U = &U[0,0]
-    elif U_sp.shape[0]:
-        ptr_U_row = &U_row[0]
-        ptr_U_col = &U_col[0]
-        ptr_U_sp = &U_sp[0]
-        nnz_U = U_sp.shape[0]
-    if U_colmeans.shape[0]:
-        ptr_U_colmeans = &U_colmeans[0]
-
-    cdef size_t *ptr_U_csr_p = NULL
-    cdef int *ptr_U_csr_i = NULL
-    cdef FPnum *ptr_U_csr = NULL
-    if U_csr.shape[0]:
-        ptr_U_csr_p = &U_csr_p[0]
-        ptr_U_csr_i = &U_csr_i[0]
-        ptr_U_csr = &U_csr[0]
-
-    cdef FPnum *ptr_B = NULL
-    if B.shape[0]:
-        ptr_B = &B[0,0]
-
-    cdef FPnum *ptr_C = NULL
-    if C.shape[0]:
-        ptr_C = &C[0,0]
-
-    cdef FPnum *ptr_BeTBe = NULL
-    cdef FPnum *ptr_BtB = NULL
-    cdef FPnum *ptr_BeTBeChol = NULL
-    if BeTBe.shape[0]:
-        ptr_BeTBe = &BeTBe[0,0]
-    if BtB.shape[0]:
-        ptr_BtB = &BtB[0,0]
-    if BeTBeChol.shape[0]:
-        ptr_BeTBeChol = &BeTBeChol[0,0]
-
-    cdef int m = m_u
-    cdef np.ndarray[FPnum, ndim=2] A = np.empty((m, k_user+k+k_main), dtype=c_FPnum)
-    if m == 0:
-        return A
-    
-    cdef int retval = collective_factors_cold_implicit_multiple(
-        &A[0,0], m,
-        ptr_U, m_u, p,
-        ptr_U_row, ptr_U_col, ptr_U_sp, nnz_U,
-        ptr_U_csr_p, ptr_U_csr_i, ptr_U_csr,
-        ptr_B, B.shape[0],
-        ptr_C,
-        ptr_BeTBe,
-        ptr_BtB,
-        ptr_BeTBeChol,
-        ptr_U_colmeans,
-        k, k_user, k_item, k_main,
-        lam, w_main, w_user, w_main_multiplier,
-        NA_as_zero_U,
-        nthreads
-    )
-    if retval == 1:
-        raise MemoryError("Could not allocate sufficient memory.")
-
-    return A
-
-def call_collective_factors_warm_multiple(
+def call_factors_collective_explicit_multiple(
         np.ndarray[int, ndim=1] ixA,
         np.ndarray[int, ndim=1] ixB,
         np.ndarray[FPnum, ndim=1] X,
@@ -2938,10 +2932,18 @@ def call_collective_factors_warm_multiple(
     if user_bias:
         biasA = np.empty(m, dtype=c_FPnum)
         ptr_biasA = &biasA[0]
-    
-    cdef int retval = collective_factors_warm_multiple(
-        &A[0,0], ptr_biasA, m, m_x,
+
+    cdef np.ndarray[FPnum, ndim=1] lam_unique = np.zeros(6, dtype=c_FPnum)
+    cdef FPnum *ptr_lam_unique = NULL
+    if lam_bias != lam:
+        lam_unique[0] = lam_bias
+        lam_unique[2] = lam
+        ptr_lam_unique = &lam_unique[0]
+
+    cdef int retval = factors_collective_explicit_multiple(
+        &A[0,0], ptr_biasA, m,
         ptr_U, m_u, p,
+        NA_as_zero_U, NA_as_zero_X,
         ptr_U_row, ptr_U_col, ptr_U_sp, nnz_U,
         ptr_U_csr_p, ptr_U_csr_i, ptr_U_csr,
         ptr_Ub, m_ubin, pbin,
@@ -2954,13 +2956,13 @@ def call_collective_factors_warm_multiple(
         ptr_weight,
         &B[0,0],
         k, k_user, k_item, k_main,
-        lam, w_main, w_user, lam_bias,
+        lam, ptr_lam_unique,
+        w_main, w_user,
         ptr_TransBtBinvBt,
         ptr_BtB,
         ptr_BeTBeChol,
         ptr_TransCtCinvCt,
         ptr_CtCw,
-        NA_as_zero_U, NA_as_zero_X,
         ptr_B_plus_bias,
         nthreads
     )
@@ -2969,7 +2971,7 @@ def call_collective_factors_warm_multiple(
 
     return A, biasA
 
-def call_collective_factors_warm_implicit_multiple(
+def call_factors_collective_implicit_multiple(
         np.ndarray[int, ndim=1] ixA,
         np.ndarray[int, ndim=1] ixB,
         np.ndarray[FPnum, ndim=1] X,
@@ -3059,16 +3061,17 @@ def call_collective_factors_warm_implicit_multiple(
     if m == 0:
         return A
 
-    cdef int retval = collective_factors_warm_implicit_multiple(
+    cdef int retval = factors_collective_implicit_multiple(
         &A[0,0], m,
         ptr_U, m_u, C.shape[0],
+        NA_as_zero_U,
         ptr_U_row, ptr_U_col, ptr_U_sp, nnz_U,
         ptr_U_csr_p, ptr_U_csr_i, ptr_U_csr,
-        NA_as_zero_U,
-        ptr_U_colmeans,
-        &B[0,0], n, ptr_C,
         ptr_X, ptr_ixA, ptr_ixB, nnz,
         ptr_Xcsr_p, ptr_Xcsr_i, ptr_Xcsr,
+        &B[0,0], n,
+        ptr_C,
+        ptr_U_colmeans,
         k, k_user, k_item, k_main,
         lam, alpha, w_main, w_user,
         w_main_multiplier,
@@ -3082,67 +3085,7 @@ def call_collective_factors_warm_implicit_multiple(
 
     return A
 
-def call_offsets_factors_cold_multiple(
-        np.ndarray[FPnum, ndim=2] U,
-        np.ndarray[int, ndim=1] U_row,
-        np.ndarray[int, ndim=1] U_col,
-        np.ndarray[FPnum, ndim=1] U_sp,
-        np.ndarray[size_t, ndim=1] U_csr_p,
-        np.ndarray[int, ndim=1] U_csr_i,
-        np.ndarray[FPnum, ndim=1] U_csr,
-        np.ndarray[FPnum, ndim=2] C,
-        np.ndarray[FPnum, ndim=1] C_bias,
-        int m,
-        int k,
-        int k_sec = 0, int k_main = 0,
-        FPnum w_user = 1.,
-        int nthreads = 1
-    ):
-    cdef FPnum *ptr_U = NULL
-    cdef int *ptr_U_row = NULL
-    cdef int *ptr_U_col = NULL
-    cdef FPnum *ptr_U_sp = NULL
-    cdef size_t nnz_U = 0
-    if U.shape[0]:
-        ptr_U = &U[0,0]
-    elif U_sp.shape[0]:
-        ptr_U_row = &U_row[0]
-        ptr_U_col = &U_col[0]
-        ptr_U_sp = &U_sp[0]
-        nnz_U = U_sp.shape[0]
-
-    cdef size_t *ptr_U_csr_p = NULL
-    cdef int *ptr_U_csr_i = NULL
-    cdef FPnum *ptr_U_csr = NULL
-    if U_csr.shape[0]:
-        ptr_U_csr_p = &U_csr_p[0]
-        ptr_U_csr_i = &U_csr_i[0]
-        ptr_U_csr = &U_csr[0]
-
-    cdef FPnum *ptr_C_bias = NULL
-    if C_bias.shape[0]:
-        ptr_C_bias = &C_bias[0]
-
-    cdef np.ndarray[FPnum, ndim=2] A = np.empty((m, k_sec+k+k_main), dtype=c_FPnum)
-    if m == 0:
-        return A
-
-    cdef int retval = offsets_factors_cold_multiple(
-        &A[0,0], m,
-        ptr_U, C.shape[0],
-        ptr_U_row, ptr_U_col, ptr_U_sp, nnz_U,
-        ptr_U_csr_p, ptr_U_csr_i, ptr_U_csr,
-        &C[0,0], ptr_C_bias,
-        k, k_sec, k_main,
-        w_user,
-        nthreads
-    )
-    if retval == 1:
-        raise MemoryError("Could not allocate sufficient memory.")
-
-    return A
-
-def call_offsets_factors_warm_multiple(
+def call_factors_offsets_explicit_multiple(
         np.ndarray[int, ndim=1] ixA,
         np.ndarray[int, ndim=1] ixB,
         np.ndarray[FPnum, ndim=1] X,
@@ -3262,9 +3205,19 @@ def call_offsets_factors_warm_multiple(
         A = np.empty((m, k+k_main), dtype=c_FPnum)
         ptr_A = &A[0,0]
 
-    cdef int retval = offsets_factors_warm_multiple(
-        &Am[0,0], ptr_biasA, m,
-        ptr_U, C.shape[0],
+    cdef np.ndarray[FPnum, ndim=1] lam_unique = np.zeros(6, dtype=c_FPnum)
+    cdef FPnum *ptr_lam_unique = NULL
+    if lam != lam_bias:
+        lam_unique[0] = lam_bias
+        lam_unique[2] = lam
+        ptr_lam_unique = &lam_unique[0]
+
+    cdef int p = C.shape[0]
+
+    cdef int retval =  factors_offsets_explicit_multiple(
+        &Am[0,0], ptr_biasA,
+        ptr_A, m,
+        ptr_U, p,
         ptr_U_row, ptr_U_col, ptr_U_sp, nnz_U,
         ptr_U_csr_p, ptr_U_csr_i, ptr_U_csr,
         ptr_X, ptr_ixA, ptr_ixB, nnz,
@@ -3276,33 +3229,38 @@ def call_offsets_factors_warm_multiple(
         glob_mean, ptr_biasB,
         k, k_sec, k_main,
         w_user,
-        lam, exact, lam_bias,
-        0, 0.,
+        lam, ptr_lam_unique, exact,
         ptr_TransBtBinvBt,
         ptr_BtB,
         ptr_Bm_plus_bias,
-        ptr_A,
         nthreads
     )
     if retval == 1:
         raise MemoryError("Could not allocate sufficient memory.")
 
-    return Am, biasA, A
+    return Am, A, biasA
 
-def call_offsets_factors_warm_implicit_multiple(
+def call_factors_offsets_implicit_multiple(
         np.ndarray[int, ndim=1] ixA,
         np.ndarray[int, ndim=1] ixB,
         np.ndarray[FPnum, ndim=1] X,
         np.ndarray[size_t, ndim=1] Xcsr_p,
         np.ndarray[int, ndim=1] Xcsr_i,
         np.ndarray[FPnum, ndim=1] Xcsr,
+        np.ndarray[FPnum, ndim=2] U,
+        np.ndarray[int, ndim=1] U_row,
+        np.ndarray[int, ndim=1] U_col,
+        np.ndarray[FPnum, ndim=1] U_sp,
+        np.ndarray[size_t, ndim=1] U_csr_p,
+        np.ndarray[int, ndim=1] U_csr_i,
+        np.ndarray[FPnum, ndim=1] U_csr,
         np.ndarray[FPnum, ndim=2] Bm,
         np.ndarray[FPnum, ndim=2] C,
-        np.ndarray[FPnum, ndim=2] TransBtBinvBt,
+        np.ndarray[FPnum, ndim=1] C_bias,
         np.ndarray[FPnum, ndim=2] BtB,
         int m, int n,
         int k,
-        FPnum lam = 1e2, FPnum alpha = 40.,
+        FPnum lam = 1e2, FPnum alpha = 1.,
         bint output_a = 1,
         int nthreads = 1
     ):
@@ -3319,23 +3277,44 @@ def call_offsets_factors_warm_implicit_multiple(
         ptr_Xcsr_i = &Xcsr_i[0]
         ptr_Xcsr = &Xcsr[0]
         nnz = Xcsr.shape[0]
-    else:
+    elif X.shape[0]:
         ptr_ixA = &ixA[0]
         ptr_ixB = &ixB[0]
         ptr_X = &X[0]
         nnz = X.shape[0]
 
+    cdef FPnum *ptr_U = NULL
+    cdef int *ptr_U_row = NULL
+    cdef int *ptr_U_col = NULL
+    cdef FPnum *ptr_U_sp = NULL
+    cdef size_t nnz_U = 0
+    if U.shape[0]:
+        ptr_U = &U[0,0]
+    elif U_sp.shape[0]:
+        ptr_U_row = &U_row[0]
+        ptr_U_col = &U_col[0]
+        ptr_U_sp = &U_sp[0]
+        nnz_U = U_sp.shape[0]
+
+    cdef size_t *ptr_U_csr_p = NULL
+    cdef int *ptr_U_csr_i = NULL
+    cdef FPnum *ptr_U_csr = NULL
+    if U_csr.shape[0]:
+        ptr_U_csr_p = &U_csr_p[0]
+        ptr_U_csr_i = &U_csr_i[0]
+        ptr_U_csr = &U_csr[0]
+
     cdef FPnum *ptr_C = NULL
     if C.shape[0]:
         ptr_C = &C[0,0]
 
-
-    cdef FPnum *ptr_TransBtBinvBt = NULL
     cdef FPnum *ptr_BtB = NULL
-    if TransBtBinvBt.shape[0]:
-        ptr_TransBtBinvBt = &TransBtBinvBt[0,0]
     if BtB.shape[0]:
         ptr_BtB = &BtB[0,0]
+
+    cdef FPnum *ptr_C_bias = NULL
+    if C_bias.shape[0]:
+        ptr_C_bias = &C_bias[0]
 
     cdef np.ndarray[FPnum, ndim=2] Am = np.empty((m, k), dtype=c_FPnum)
     cdef np.ndarray[FPnum, ndim=2] A = np.empty((0,0), dtype=c_FPnum)
@@ -3346,29 +3325,164 @@ def call_offsets_factors_warm_implicit_multiple(
         A = np.empty((m, k), dtype=c_FPnum)
         ptr_A = &A[0,0]
 
-    cdef int retval = offsets_factors_warm_multiple(
-        &Am[0,0], <FPnum*> NULL, m,
-        <FPnum*> NULL, C.shape[0],
-        <int*>NULL, <int*>NULL, <FPnum*> NULL, 0,
-        <size_t*>NULL, <int*>NULL, <FPnum*> NULL,
+    cdef int p = C.shape[0]
+
+    cdef int retval =  factors_offsets_implicit_multiple(
+        &Am[0,0], m,
+        ptr_A,
+        ptr_U, p,
+        ptr_U_row, ptr_U_col, ptr_U_sp, nnz_U,
+        ptr_U_csr_p, ptr_U_csr_i, ptr_U_csr,
         ptr_X, ptr_ixA, ptr_ixB, nnz,
         ptr_Xcsr_p, ptr_Xcsr_i, ptr_Xcsr,
-        <FPnum*> NULL, n,
-        <FPnum*> NULL,
         &Bm[0,0], ptr_C,
-        <FPnum*> NULL,
-        0., <FPnum*> NULL,
-        k, 0, 0,
-        1.,
-        lam, 0, lam,
-        1, alpha,
-        ptr_TransBtBinvBt,
+        ptr_C_bias,
+        k,
+        lam, alpha,
         ptr_BtB,
-        <FPnum*> NULL,
-        ptr_A,
         nthreads
     )
     if retval == 1:
         raise MemoryError("Could not allocate sufficient memory.")
 
     return Am, A
+    
+def call_impute_X_collective_explicit(
+        np.ndarray[FPnum, ndim=2] Xfull,
+        np.ndarray[FPnum, ndim=2] Wfull,
+        np.ndarray[FPnum, ndim=2] U,
+        np.ndarray[int, ndim=1] U_row,
+        np.ndarray[int, ndim=1] U_col,
+        np.ndarray[FPnum, ndim=1] U_sp,
+        np.ndarray[size_t, ndim=1] U_csr_p,
+        np.ndarray[int, ndim=1] U_csr_i,
+        np.ndarray[FPnum, ndim=1] U_csr,
+        np.ndarray[FPnum, ndim=2] Ub,
+        np.ndarray[FPnum, ndim=1] U_colmeans,
+        np.ndarray[FPnum, ndim=1] biasB,
+        np.ndarray[FPnum, ndim=2] B,
+        np.ndarray[FPnum, ndim=2] B_plus_bias,
+        np.ndarray[FPnum, ndim=2] C,
+        np.ndarray[FPnum, ndim=2] C_bin,
+        np.ndarray[FPnum, ndim=2] TransBtBinvBt,
+        np.ndarray[FPnum, ndim=2] BtB,
+        np.ndarray[FPnum, ndim=2] BeTBeChol,
+        np.ndarray[FPnum, ndim=2] TransCtCinvCt,
+        np.ndarray[FPnum, ndim=2] CtCw,
+        int m_u,
+        FPnum glob_mean,
+        int k, int k_user = 0, int k_item = 0, int k_main = 0,
+        FPnum lam = 1e2, FPnum lam_bias = 1e2,
+        FPnum w_user = 1., FPnum w_main = 1.,
+        bint user_bias = 1,
+        bint NA_as_zero_U = 0,
+        int nthreads = 1
+    ):
+    
+    cdef int n = B.shape[0]
+    cdef int p = C.shape[0]
+    cdef int pbin = C_bin.shape[0]
+    cdef int m = Xfull.shape[0]
+    if min(m, n) <= 0:
+        raise ValueError("Invalid input dimensions.")
+    cdef np.ndarray[FPnum, ndim=1] lam_unique = np.zeros(6, dtype=c_FPnum)
+    cdef FPnum *ptr_lam_unique = NULL
+    if (lam != lam_bias):
+        lam_unique[0] = lam_bias
+        lam_unique[2] = lam
+        ptr_lam_unique = &lam_unique[0]
+
+    cdef FPnum *ptr_Xfull = &Xfull[0,0]
+    cdef FPnum *ptr_weight = NULL
+    if Wfull.shape[0]:
+        ptr_weight = &Wfull[0,0]
+
+    cdef FPnum *ptr_U = NULL
+    cdef int *ptr_U_row = NULL
+    cdef int *ptr_U_col = NULL
+    cdef FPnum *ptr_U_sp = NULL
+    cdef size_t nnz_U = 0
+    cdef FPnum *ptr_U_colmeans = NULL
+    if U.shape[0]:
+        ptr_U = &U[0,0]
+    elif U_sp.shape[0]:
+        ptr_U_row = &U_row[0]
+        ptr_U_col = &U_col[0]
+        ptr_U_sp = &U_sp[0]
+        nnz_U = U_sp.shape[0]
+    if U_colmeans.shape[0]:
+        ptr_U_colmeans = &U_colmeans[0]
+
+    cdef size_t *ptr_U_csr_p = NULL
+    cdef int *ptr_U_csr_i = NULL
+    cdef FPnum *ptr_U_csr = NULL
+    if U_csr.shape[0]:
+        ptr_U_csr_p = &U_csr_p[0]
+        ptr_U_csr_i = &U_csr_i[0]
+        ptr_U_csr = &U_csr[0]
+
+    cdef FPnum *ptr_Ub = NULL
+    cdef int m_ubin = 0
+    if Ub.shape[0]:
+        ptr_Ub = &Ub[0,0]
+        m_ubin = Ub.shape[0]
+
+    cdef FPnum *ptr_B = &B[0,0]
+    cdef FPnum *ptr_biasB = NULL
+    cdef FPnum *ptr_B_plus_bias = NULL
+    if biasB.shape[0]:
+        ptr_biasB = &biasB[0]
+    if B_plus_bias.shape[0]:
+        ptr_B_plus_bias = &B_plus_bias[0,0]
+
+    cdef FPnum *ptr_C = NULL
+    cdef FPnum *ptr_C_bin = NULL
+    cdef FPnum *ptr_TransCtCinvCt = NULL
+    cdef FPnum *ptr_CtCw = NULL
+    if C.shape[0]:
+        ptr_C = &C[0,0]
+    if C_bin.shape[0]:
+        ptr_C_bin = &C_bin[0,0]
+    if TransCtCinvCt.shape[0]:
+        ptr_TransCtCinvCt = &TransCtCinvCt[0,0]
+    if CtCw.shape[0]:
+        ptr_CtCw = &CtCw[0,0]
+
+    cdef FPnum *ptr_TransBtBinvBt = NULL
+    cdef FPnum *ptr_BtB = NULL
+    cdef FPnum *ptr_BeTBeChol = NULL
+    if TransBtBinvBt.shape[0]:
+        ptr_TransBtBinvBt = &TransBtBinvBt[0,0]
+    if BtB.shape[0]:
+        ptr_BtB = &BtB[0,0]
+    if BeTBeChol.shape[0]:
+        ptr_BeTBeChol = &BeTBeChol[0,0]
+
+    cdef int retval = impute_X_collective_explicit(
+        m, user_bias,
+        ptr_U, m_u, p,
+        NA_as_zero_U,
+        ptr_U_row, ptr_U_col, ptr_U_sp, nnz_U,
+        ptr_U_csr_p, ptr_U_csr_i, ptr_U_csr,
+        ptr_Ub, m_ubin, pbin,
+        ptr_C, ptr_C_bin,
+        glob_mean, ptr_biasB,
+        ptr_U_colmeans,
+        ptr_Xfull, n,
+        ptr_weight,
+        ptr_B,
+        k, k_user, k_item, k_main,
+        lam, ptr_lam_unique,
+        w_main, w_user,
+        ptr_TransBtBinvBt,
+        ptr_BtB,
+        ptr_BeTBeChol,
+        ptr_TransCtCinvCt,
+        ptr_CtCw,
+        ptr_B_plus_bias,
+        nthreads
+    )
+    if retval == 1:
+        raise MemoryError("Could not allocate sufficient memory.")
+
+    return Xfull

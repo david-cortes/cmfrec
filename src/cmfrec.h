@@ -627,6 +627,25 @@ int fit_most_popular
     FPnum *restrict w_main_multiplier,
     int nthreads
 );
+int topN_old_most_popular
+(
+    bool user_bias,
+    FPnum a_bias,
+    FPnum *restrict biasA, int row_index,
+    FPnum *restrict B,
+    FPnum *restrict biasB,
+    FPnum glob_mean,
+    int *restrict include_ix, int n_include,
+    int *restrict exclude_ix, int n_exclude,
+    int *restrict outp_ix, FPnum *restrict outp_score,
+    int n_top, int n
+);
+int predict_X_old_most_popular
+(
+    int row[], int col[], FPnum *restrict predicted, size_t n_predict,
+    FPnum *restrict biasA, FPnum *restrict biasB,
+    FPnum glob_mean
+);
 
 /* collective.c */
 void nvars_collective_fun_grad
@@ -636,7 +655,7 @@ void nvars_collective_fun_grad
     size_t nnz, size_t nnz_U, size_t nnz_I,
     size_t k, size_t k_main, size_t k_user, size_t k_item,
     bool user_bias, bool item_bias, size_t nthreads,
-    FPnum *X, FPnum *Xfull, FPnum *Xcsr,
+    FPnum *X, FPnum *Xfull,
     FPnum *U, FPnum *Ub, FPnum *II, FPnum *Ib,
     FPnum *U_sp, FPnum *U_csr, FPnum *I_sp, FPnum *I_csr,
     size_t *nvars, size_t *nbuffer, size_t *nbuffer_mt
@@ -1045,7 +1064,7 @@ typedef struct data_collective_fun_grad {
     int print_every; int nfev; int niter;
     bool handle_interrupt;
 } data_collective_fun_grad;
-int fit_collective_explicit_lbfgs
+int fit_collective_explicit_lbfgs_internal
 (
     FPnum *restrict values, bool reset_values,
     FPnum *restrict glob_mean,
@@ -1069,6 +1088,41 @@ int fit_collective_explicit_lbfgs
     bool verbose, int print_every, bool handle_interrupt,
     int *restrict niter, int *restrict nfev,
     FPnum *restrict B_plus_bias
+);
+int fit_collective_explicit_lbfgs
+(
+    FPnum *restrict biasA, FPnum *restrict biasB,
+    FPnum *restrict A, FPnum *restrict B,
+    FPnum *restrict C, FPnum *restrict Cb,
+    FPnum *restrict D, FPnum *restrict Db,
+    bool reset_values, int seed,
+    FPnum *restrict glob_mean,
+    FPnum *restrict U_colmeans, FPnum *restrict I_colmeans,
+    int m, int n, int k,
+    int ixA[], int ixB[], FPnum *restrict X, size_t nnz,
+    FPnum *restrict Xfull,
+    FPnum *restrict weight,
+    bool user_bias, bool item_bias,
+    FPnum lam, FPnum *restrict lam_unique,
+    FPnum *restrict U, int m_u, int p,
+    FPnum *restrict II, int n_i, int q,
+    FPnum *restrict Ub, int m_ubin, int pbin,
+    FPnum *restrict Ib, int n_ibin, int qbin,
+    int U_row[], int U_col[], FPnum *restrict U_sp, size_t nnz_U,
+    int I_row[], int I_col[], FPnum *restrict I_sp, size_t nnz_I,
+    int k_main, int k_user, int k_item,
+    FPnum w_main, FPnum w_user, FPnum w_item,
+    int n_corr_pairs, size_t maxiter,
+    int nthreads, bool prefer_onepass,
+    bool verbose, int print_every, bool handle_interrupt,
+    int *restrict niter, int *restrict nfev,
+    bool precompute_for_predictions,
+    FPnum *restrict B_plus_bias,
+    FPnum *restrict precomputedBtB,
+    FPnum *restrict precomputedTransBtBinvBt,
+    FPnum *restrict precomputedBeTBeChol,
+    FPnum *restrict precomputedTransCtCinvCt,
+    FPnum *restrict precomputedCtCw
 );
 int fit_collective_explicit_als
 (
@@ -1152,26 +1206,51 @@ int precompute_collective_implicit
     FPnum *restrict BeTBe,
     FPnum *restrict BeTBeChol
 );
-int collective_factors_cold_multiple
+int factors_collective_explicit_single
 (
-    FPnum *restrict A, int m,
-    FPnum *restrict U, int m_u, int p,
-    int U_row[], int U_col[], FPnum *restrict U_sp, size_t nnz_U,
-    size_t U_csr_p[], int U_csr_i[], FPnum *restrict U_csr,
-    FPnum *restrict Ub, int m_ubin, int pbin,
+    FPnum *restrict a_vec, FPnum *restrict a_bias,
+    FPnum *restrict u_vec, int p,
+    FPnum *restrict u_vec_sp, int u_vec_ixB[], size_t nnz_u_vec,
+    FPnum *restrict u_bin_vec, int pbin,
+    bool NA_as_zero_U, bool NA_as_zero_X,
     FPnum *restrict C, FPnum *restrict Cb,
-    FPnum *restrict TransCtCinvCt,
-    FPnum *restrict CtCw,
+    FPnum glob_mean, FPnum *restrict biasB,
     FPnum *restrict col_means,
-    int k, int k_user, int k_main,
-    FPnum lam, FPnum w_main, FPnum w_user,
-    bool NA_as_zero_U,
-    int nthreads
+    FPnum *restrict Xa, int ixB[], size_t nnz,
+    FPnum *restrict Xa_dense, int n,
+    FPnum *restrict weight,
+    FPnum *restrict B,
+    int k, int k_user, int k_item, int k_main,
+    FPnum lam, FPnum *restrict lam_unique,
+    FPnum w_main, FPnum w_user,
+    FPnum *restrict TransBtBinvBt,
+    FPnum *restrict BtB,
+    FPnum *restrict BeTBeChol,
+    FPnum *restrict CtCw,
+    FPnum *restrict TransCtCinvCt,
+    FPnum *restrict B_plus_bias
 );
-int collective_factors_warm_multiple
+int factors_collective_implicit_single
 (
-    FPnum *restrict A, FPnum *restrict biasA, int m, int m_x,
+    FPnum *restrict a_vec,
+    FPnum *restrict u_vec, int p,
+    FPnum *restrict u_vec_sp, int u_vec_ixB[], size_t nnz_u_vec,
+    bool NA_as_zero_U,
+    FPnum *restrict col_means,
+    FPnum *restrict B, int n, FPnum *restrict C,
+    FPnum *restrict Xa, int ixB[], size_t nnz,
+    int k, int k_user, int k_item, int k_main,
+    FPnum lam, FPnum alpha, FPnum w_main, FPnum w_user,
+    FPnum w_main_multiplier,
+    FPnum *restrict BeTBe,
+    FPnum *restrict BtB,
+    FPnum *restrict BeTBeChol
+);
+int factors_collective_explicit_multiple
+(
+    FPnum *restrict A, FPnum *restrict biasA, int m,
     FPnum *restrict U, int m_u, int p,
+    bool NA_as_zero_U, bool NA_as_zero_X,
     int U_row[], int U_col[], FPnum *restrict U_sp, size_t nnz_U,
     size_t U_csr_p[], int U_csr_i[], FPnum *restrict U_csr,
     FPnum *restrict Ub, int m_ubin, int pbin,
@@ -1184,27 +1263,28 @@ int collective_factors_warm_multiple
     FPnum *restrict weight,
     FPnum *restrict B,
     int k, int k_user, int k_item, int k_main,
-    FPnum lam, FPnum w_main, FPnum w_user, FPnum lam_bias,
+    FPnum lam, FPnum *restrict lam_unique,
+    FPnum w_main, FPnum w_user,
     FPnum *restrict TransBtBinvBt,
     FPnum *restrict BtB,
     FPnum *restrict BeTBeChol,
     FPnum *restrict TransCtCinvCt,
     FPnum *restrict CtCw,
-    bool NA_as_zero_U, bool NA_as_zero_X,
     FPnum *restrict B_plus_bias,
     int nthreads
 );
-int collective_factors_warm_implicit_multiple
+int factors_collective_implicit_multiple
 (
     FPnum *restrict A, int m,
     FPnum *restrict U, int m_u, int p,
+    bool NA_as_zero_U,
     int U_row[], int U_col[], FPnum *restrict U_sp, size_t nnz_U,
     size_t U_csr_p[], int U_csr_i[], FPnum *restrict U_csr,
-    bool NA_as_zero_U,
-    FPnum *restrict col_means,
-    FPnum *restrict B, int n, FPnum *restrict C,
     FPnum *restrict X, int ixA[], int ixB[], size_t nnz,
     size_t *restrict Xcsr_p, int *restrict Xcsr_i, FPnum *restrict Xcsr,
+    FPnum *restrict B, int n,
+    FPnum *restrict C,
+    FPnum *restrict col_means,
     int k, int k_user, int k_item, int k_main,
     FPnum lam, FPnum alpha, FPnum w_main, FPnum w_user,
     FPnum w_main_multiplier,
@@ -1213,22 +1293,177 @@ int collective_factors_warm_implicit_multiple
     FPnum *restrict BeTBeChol,
     int nthreads
 );
-int collective_factors_cold_implicit_multiple
+int impute_X_collective_explicit
 (
-    FPnum *restrict A, int m,
+    int m, bool user_bias,
     FPnum *restrict U, int m_u, int p,
+    bool NA_as_zero_U,
     int U_row[], int U_col[], FPnum *restrict U_sp, size_t nnz_U,
     size_t U_csr_p[], int U_csr_i[], FPnum *restrict U_csr,
-    FPnum *restrict B, int n,
-    FPnum *restrict C,
+    FPnum *restrict Ub, int m_ubin, int pbin,
+    FPnum *restrict C, FPnum *restrict Cb,
+    FPnum glob_mean, FPnum *restrict biasB,
+    FPnum *restrict col_means,
+    FPnum *restrict Xfull, int n,
+    FPnum *restrict weight,
+    FPnum *restrict B,
+    int k, int k_user, int k_item, int k_main,
+    FPnum lam, FPnum *restrict lam_unique,
+    FPnum w_main, FPnum w_user,
+    FPnum *restrict TransBtBinvBt,
+    FPnum *restrict BtB,
+    FPnum *restrict BeTBeChol,
+    FPnum *restrict TransCtCinvCt,
+    FPnum *restrict CtCw,
+    FPnum *restrict B_plus_bias,
+    int nthreads
+);
+int topN_old_collective_explicit
+(
+    FPnum *restrict a_vec, FPnum a_bias,
+    FPnum *restrict A, FPnum *restrict biasA, int row_index,
+    FPnum *restrict B,
+    FPnum *restrict biasB,
+    FPnum glob_mean,
+    int k, int k_user, int k_item, int k_main,
+    int *restrict include_ix, int n_include,
+    int *restrict exclude_ix, int n_exclude,
+    int *restrict outp_ix, FPnum *restrict outp_score,
+    int n_top, int n, int nthreads
+);
+int topN_old_collective_implicit
+(
+    FPnum *restrict a_vec,
+    FPnum *restrict A, int row_index,
+    FPnum *restrict B,
+    int k, int k_user, int k_item, int k_main,
+    int *restrict include_ix, int n_include,
+    int *restrict exclude_ix, int n_exclude,
+    int *restrict outp_ix, FPnum *restrict outp_score,
+    int n_top, int n, int nthreads
+);
+int topN_new_collective_explicit
+(
+    /* inputs for the factors */
+    bool user_bias, int n,
+    FPnum *restrict u_vec, int p,
+    FPnum *restrict u_vec_sp, int u_vec_ixB[], size_t nnz_u_vec,
+    FPnum *restrict u_bin_vec, int pbin,
+    bool NA_as_zero_U, bool NA_as_zero_X,
+    FPnum *restrict C, FPnum *restrict Cb,
+    FPnum glob_mean, FPnum *restrict biasB,
+    FPnum *restrict col_means,
+    FPnum *restrict Xa, int ixB[], size_t nnz,
+    FPnum *restrict Xa_dense,
+    FPnum *restrict weight,
+    FPnum *restrict B,
+    int k, int k_user, int k_item, int k_main,
+    FPnum lam, FPnum *restrict lam_unique,
+    FPnum w_main, FPnum w_user,
+    FPnum *restrict TransBtBinvBt,
+    FPnum *restrict BtB,
+    FPnum *restrict BeTBeChol,
+    FPnum *restrict CtCw,
+    FPnum *restrict TransCtCinvCt,
+    FPnum *restrict B_plus_bias,
+    /* inputs for topN */
+    int *restrict include_ix, int n_include,
+    int *restrict exclude_ix, int n_exclude,
+    int *restrict outp_ix, FPnum *restrict outp_score,
+    int n_top, int nthreads
+);
+int topN_new_collective_implicit
+(
+    /* inputs for the factors */
+    int n,
+    FPnum *restrict u_vec, int p,
+    FPnum *restrict u_vec_sp, int u_vec_ixB[], size_t nnz_u_vec,
+    bool NA_as_zero_U,
+    FPnum *restrict col_means,
+    FPnum *restrict B, FPnum *restrict C,
+    FPnum *restrict Xa, int ixB[], size_t nnz,
+    int k, int k_user, int k_item, int k_main,
+    FPnum lam, FPnum alpha, FPnum w_main, FPnum w_user,
+    FPnum w_main_multiplier,
     FPnum *restrict BeTBe,
     FPnum *restrict BtB,
     FPnum *restrict BeTBeChol,
+    /* inputs for topN */
+    int *restrict include_ix, int n_include,
+    int *restrict exclude_ix, int n_exclude,
+    int *restrict outp_ix, FPnum *restrict outp_score,
+    int n_top, int nthreads
+);
+int predict_X_old_collective_explicit
+(
+    int row[], int col[], FPnum *restrict predicted, size_t n_predict,
+    FPnum *restrict A, FPnum *restrict biasA,
+    FPnum *restrict B, FPnum *restrict biasB,
+    FPnum glob_mean,
+    int k, int k_user, int k_item, int k_main,
+    int nthreads
+);
+int predict_X_old_collective_implicit
+(
+    int row[], int col[], FPnum *restrict predicted, size_t n_predict,
+    FPnum *restrict A,
+    FPnum *restrict B,
+    int k, int k_user, int k_item, int k_main,
+    int nthreads
+);
+int predict_X_new_collective_explicit
+(
+    /* inputs for predictions */
+    int m_new,
+    int row[], int col[], FPnum *restrict predicted, size_t n_predict,
+    int nthreads,
+    /* inputs for factors */
+    bool user_bias,
+    FPnum *restrict U, int m_u, int p,
+    bool NA_as_zero_U, bool NA_as_zero_X,
+    int U_row[], int U_col[], FPnum *restrict U_sp, size_t nnz_U,
+    size_t U_csr_p[], int U_csr_i[], FPnum *restrict U_csr,
+    FPnum *restrict Ub, int m_ubin, int pbin,
+    FPnum *restrict C, FPnum *restrict Cb,
+    FPnum glob_mean, FPnum *restrict biasB,
+    FPnum *restrict col_means,
+    FPnum *restrict X, int ixA[], int ixB[], size_t nnz,
+    size_t *restrict Xcsr_p, int *restrict Xcsr_i, FPnum *restrict Xcsr,
+    FPnum *restrict Xfull, int n,
+    FPnum *restrict weight,
+    FPnum *restrict B,
+    int k, int k_user, int k_item, int k_main,
+    FPnum lam, FPnum *restrict lam_unique,
+    FPnum w_main, FPnum w_user,
+    FPnum *restrict TransBtBinvBt,
+    FPnum *restrict BtB,
+    FPnum *restrict BeTBeChol,
+    FPnum *restrict TransCtCinvCt,
+    FPnum *restrict CtCw,
+    FPnum *restrict B_plus_bias
+);
+int predict_X_new_collective_implicit
+(
+    /* inputs for predictions */
+    int m_new,
+    int row[], int col[], FPnum *restrict predicted, size_t n_predict,
+    int nthreads,
+    /* inputs for factors */
+    FPnum *restrict U, int m_u, int p,
+    bool NA_as_zero_U,
+    int U_row[], int U_col[], FPnum *restrict U_sp, size_t nnz_U,
+    size_t U_csr_p[], int U_csr_i[], FPnum *restrict U_csr,
+    FPnum *restrict X, int ixA[], int ixB[], size_t nnz,
+    size_t *restrict Xcsr_p, int *restrict Xcsr_i, FPnum *restrict Xcsr,
+    FPnum *restrict B, int n,
+    FPnum *restrict C,
     FPnum *restrict col_means,
     int k, int k_user, int k_item, int k_main,
-    FPnum lam, FPnum w_main, FPnum w_user, FPnum w_main_multiplier,
-    bool NA_as_zero_U,
-    int nthreads
+    FPnum lam, FPnum alpha, FPnum w_main, FPnum w_user,
+    FPnum w_main_multiplier,
+    FPnum *restrict BeTBe,
+    FPnum *restrict BtB,
+    FPnum *restrict BeTBeChol
 );
 
 /* offsets.c */
@@ -1455,12 +1690,55 @@ int fit_offsets_als
     FPnum *restrict precomputedTransBtBinvBt
 
 );
-void factors_content_based
+int fit_offsets_explicit_als
 (
-    FPnum *restrict a_vec, int k_sec,
-    FPnum *restrict u_vec, int p,
-    FPnum *restrict u_vec_sp, int u_vec_ixB[], size_t nnz_u_vec,
-    FPnum *restrict C, FPnum *restrict C_bias
+    FPnum *restrict biasA, FPnum *restrict biasB,
+    FPnum *restrict A, FPnum *restrict B,
+    FPnum *restrict C, FPnum *restrict C_bias,
+    FPnum *restrict D, FPnum *restrict D_bias,
+    bool reset_values, int seed,
+    FPnum *restrict glob_mean,
+    int m, int n, int k,
+    int ixA[], int ixB[], FPnum *restrict X, size_t nnz,
+    FPnum *restrict Xfull,
+    FPnum *restrict weight,
+    bool user_bias, bool item_bias, bool add_intercepts,
+    FPnum lam,
+    FPnum *restrict U, int p,
+    FPnum *restrict II, int q,
+    bool NA_as_zero_X,
+    int niter,
+    int nthreads, bool use_cg,
+    int max_cg_steps, bool finalize_chol,
+    bool verbose, bool handle_interrupt,
+    bool precompute_for_predictions,
+    FPnum *restrict Am, FPnum *restrict Bm,
+    FPnum *restrict Bm_plus_bias,
+    FPnum *restrict precomputedBtB,
+    FPnum *restrict precomputedTransBtBinvBt
+);
+int fit_offsets_implicit_als
+(
+    FPnum *restrict A, FPnum *restrict B,
+    FPnum *restrict C, FPnum *restrict C_bias,
+    FPnum *restrict D, FPnum *restrict D_bias,
+    bool reset_values, int seed,
+    int m, int n, int k,
+    int ixA[], int ixB[], FPnum *restrict X, size_t nnz,
+    bool add_intercepts,
+    FPnum lam,
+    FPnum *restrict U, int p,
+    FPnum *restrict II, int q,
+    FPnum alpha,
+    int niter,
+    int nthreads, bool use_cg,
+    int max_cg_steps, bool finalize_chol,
+    bool verbose, bool handle_interrupt,
+    bool precompute_for_predictions,
+    FPnum *restrict Am, FPnum *restrict Bm,
+    FPnum *restrict Bm_plus_bias,
+    FPnum *restrict precomputedBtB,
+    FPnum *restrict precomputedTransBtBinvBt
 );
 int matrix_content_based
 (
@@ -1472,59 +1750,42 @@ int matrix_content_based
     FPnum *restrict C, FPnum *restrict C_bias,
     int nthreads
 );
-int predict_content_based_new
+int factors_offsets_explicit_single
 (
-    FPnum *restrict scores_new, int n_new, int k_sec,
-    FPnum *restrict U, int p,
-    int U_row[], int U_col[], FPnum *restrict U_sp, size_t nnz_U,
-    size_t U_csr_p[], int U_csr_i[], FPnum *restrict U_csr,
-    FPnum *restrict II, int q,
-    int I_row[], int I_col[], FPnum *restrict I_sp, size_t nnz_I,
-    size_t I_csr_p[], int I_csr_i[], FPnum *restrict I_csr,
-    FPnum *restrict C, FPnum *restrict C_bias,
-    FPnum *restrict D, FPnum *restrict D_bias,
-    FPnum glob_mean,
-    int nthreads
-);
-int predict_content_based_old
-(
-    FPnum *restrict scores_new, int n_new, int k_sec,
-    FPnum *restrict U, int p,
-    int U_row[], int U_col[], FPnum *restrict U_sp, size_t nnz_U,
-    size_t U_csr_p[], int U_csr_i[], FPnum *restrict U_csr,
-    FPnum *restrict C, FPnum *restrict C_bias,
-    FPnum *restrict Bm, FPnum *restrict biasB, int ixB[],
-    FPnum glob_mean,
-    int nthreads
-);
-int rank_content_based_new
-(
-    FPnum *restrict scores_new, int *restrict rank_new,
-    int n_new, int k_sec, int n_top,
+    FPnum *restrict a_vec, FPnum *restrict a_bias, FPnum *restrict output_a,
     FPnum *restrict u_vec, int p,
     FPnum *restrict u_vec_sp, int u_vec_ixB[], size_t nnz_u_vec,
-    FPnum *restrict II, int q,
-    int I_row[], int I_col[], FPnum *restrict I_sp, size_t nnz_I,
-    size_t I_csr_p[], int I_csr_i[], FPnum *restrict I_csr,
-    FPnum *restrict C, FPnum *restrict C_bias,
-    FPnum *restrict D, FPnum *restrict D_bias,
-    FPnum glob_mean,
-    int nthreads
-);
-int offsets_factors_cold_multiple
-(
-    FPnum *restrict A, int m,
-    FPnum *restrict U, int p,
-    int U_row[], int U_col[], FPnum *restrict U_sp, size_t nnz_U,
-    size_t U_csr_p[], int U_csr_i[], FPnum *restrict U_csr,
-    FPnum *restrict C, FPnum *restrict C_bias,
+    FPnum *restrict Xa, int ixB[], size_t nnz,
+    FPnum *restrict Xa_dense, int n,
+    FPnum *restrict weight,
+    FPnum *restrict Bm, FPnum *restrict C,
+    FPnum *restrict C_bias,
+    FPnum glob_mean, FPnum *restrict biasB,
     int k, int k_sec, int k_main,
     FPnum w_user,
-    int nthreads
+    FPnum lam, FPnum *restrict lam_unique,
+    bool exact,
+    FPnum *restrict precomputedTransBtBinvBt,
+    FPnum *restrict precomputedBtB,
+    FPnum *restrict Bm_plus_bias
 );
-int offsets_factors_warm_multiple
+int factors_offsets_implicit_single
 (
-    FPnum *restrict A, FPnum *restrict biasA, int m,
+    FPnum *restrict a_vec,
+    FPnum *restrict u_vec, int p,
+    FPnum *restrict u_vec_sp, int u_vec_ixB[], size_t nnz_u_vec,
+    FPnum *restrict Xa, int ixB[], size_t nnz,
+    FPnum *restrict Bm, FPnum *restrict C,
+    FPnum *restrict C_bias,
+    int k,
+    FPnum lam, FPnum alpha,
+    FPnum *restrict precomputedBtB,
+    FPnum *restrict output_a
+);
+int factors_offsets_explicit_multiple
+(
+    FPnum *restrict Am, FPnum *restrict biasA,
+    FPnum *restrict A, int m,
     FPnum *restrict U, int p,
     int U_row[], int U_col[], FPnum *restrict U_sp, size_t nnz_U,
     size_t U_csr_p[], int U_csr_i[], FPnum *restrict U_csr,
@@ -1537,12 +1798,250 @@ int offsets_factors_warm_multiple
     FPnum glob_mean, FPnum *restrict biasB,
     int k, int k_sec, int k_main,
     FPnum w_user,
-    FPnum lam, bool exact, FPnum lam_bias,
-    bool implicit, FPnum alpha,
+    FPnum lam, FPnum *restrict lam_unique, bool exact,
     FPnum *restrict precomputedTransBtBinvBt,
-    FPnum *restrict precomputedBtBw,
+    FPnum *restrict precomputedBtB,
     FPnum *restrict Bm_plus_bias,
-    FPnum *restrict output_A,
+    int nthreads
+);
+int factors_offsets_implicit_multiple
+(
+    FPnum *restrict Am, int m,
+    FPnum *restrict A,
+    FPnum *restrict U, int p,
+    int U_row[], int U_col[], FPnum *restrict U_sp, size_t nnz_U,
+    size_t U_csr_p[], int U_csr_i[], FPnum *restrict U_csr,
+    FPnum *restrict X, int ixA[], int ixB[], size_t nnz,
+    size_t *restrict Xcsr_p, int *restrict Xcsr_i, FPnum *restrict Xcsr,
+    FPnum *restrict Bm, FPnum *restrict C,
+    FPnum *restrict C_bias,
+    int k,
+    FPnum lam, FPnum alpha,
+    FPnum *restrict precomputedBtB,
+    int nthreads
+);
+int topN_old_offsets_explicit
+(
+    FPnum *restrict a_vec, FPnum a_bias,
+    FPnum *restrict Am, FPnum *restrict biasA, int row_index,
+    FPnum *restrict Bm,
+    FPnum *restrict biasB,
+    FPnum glob_mean,
+    int k, int k_sec, int k_main,
+    int *restrict include_ix, int n_include,
+    int *restrict exclude_ix, int n_exclude,
+    int *restrict outp_ix, FPnum *restrict outp_score,
+    int n_top, int n, int nthreads
+);
+int topN_old_offsets_implicit
+(
+    FPnum *restrict a_vec,
+    FPnum *restrict Am, int row_index,
+    FPnum *restrict Bm,
+    int k,
+    int *restrict include_ix, int n_include,
+    int *restrict exclude_ix, int n_exclude,
+    int *restrict outp_ix, FPnum *restrict outp_score,
+    int n_top, int n, int nthreads
+);
+int topN_new_offsets_explicit
+(
+    /* inputs for factors */
+    bool user_bias, int n,
+    FPnum *restrict u_vec, int p,
+    FPnum *restrict u_vec_sp, int u_vec_ixB[], size_t nnz_u_vec,
+    FPnum *restrict Xa, int ixB[], size_t nnz,
+    FPnum *restrict Xa_dense,
+    FPnum *restrict weight,
+    FPnum *restrict Bm, FPnum *restrict C,
+    FPnum *restrict C_bias,
+    FPnum glob_mean, FPnum *restrict biasB,
+    int k, int k_sec, int k_main,
+    FPnum w_user,
+    FPnum lam, FPnum *restrict lam_unique,
+    bool exact,
+    FPnum *restrict precomputedTransBtBinvBt,
+    FPnum *restrict precomputedBtB,
+    FPnum *restrict Bm_plus_bias,
+    /* inputs for topN */
+    int *restrict include_ix, int n_include,
+    int *restrict exclude_ix, int n_exclude,
+    int *restrict outp_ix, FPnum *restrict outp_score,
+    int n_top, int nthreads
+);
+int topN_new_offsets_implicit
+(
+    /* inputs for factors */
+    FPnum *restrict u_vec, int p,
+    FPnum *restrict u_vec_sp, int u_vec_ixB[], size_t nnz_u_vec,
+    FPnum *restrict Xa, int ixB[], size_t nnz,
+    FPnum *restrict Bm, FPnum *restrict C,
+    FPnum *restrict C_bias,
+    int k,
+    FPnum lam, FPnum alpha,
+    FPnum *restrict precomputedBtB,
+    /* inputs for topN */
+    int *restrict include_ix, int n_include,
+    int *restrict exclude_ix, int n_exclude,
+    int *restrict outp_ix, FPnum *restrict outp_score,
+    int n_top, int n, int nthreads
+);
+int predict_X_old_offsets_explicit
+(
+    int row[], int col[], FPnum *restrict predicted, size_t n_predict,
+    FPnum *restrict Am, FPnum *restrict biasA,
+    FPnum *restrict Bm, FPnum *restrict biasB,
+    FPnum glob_mean,
+    int k, int k_sec, int k_main,
+    int nthreads
+);
+int predict_X_old_offsets_implicit
+(
+    int row[], int col[], FPnum *restrict predicted, size_t n_predict,
+    FPnum *restrict Am,
+    FPnum *restrict Bm,
+    int k,
+    int nthreads
+);
+int predict_X_new_offsets_explicit
+(
+    /* inputs for predictions */
+    int m_new, bool user_bias,
+    int row[], int col[], FPnum *restrict predicted, size_t n_predict,
+    int nthreads,
+    /* inputs for factors */
+    FPnum *restrict U, int p,
+    int U_row[], int U_col[], FPnum *restrict U_sp, size_t nnz_U,
+    size_t U_csr_p[], int U_csr_i[], FPnum *restrict U_csr,
+    FPnum *restrict X, int ixA[], int ixB[], size_t nnz,
+    size_t *restrict Xcsr_p, int *restrict Xcsr_i, FPnum *restrict Xcsr,
+    FPnum *restrict Xfull, int n,
+    FPnum *restrict weight,
+    FPnum *restrict Bm, FPnum *restrict C,
+    FPnum *restrict C_bias,
+    FPnum glob_mean, FPnum *restrict biasB,
+    int k, int k_sec, int k_main,
+    FPnum w_user,
+    FPnum lam, FPnum *restrict lam_unique, bool exact,
+    FPnum *restrict precomputedTransBtBinvBt,
+    FPnum *restrict precomputedBtB,
+    FPnum *restrict Bm_plus_bias
+);
+int predict_X_new_offsets_implicit
+(
+    /* inputs for predictions */
+    int m_new,
+    int row[], int col[], FPnum *restrict predicted, size_t n_predict,
+    int nthreads,
+    /* inputs for factors */
+    FPnum *restrict U, int p,
+    int U_row[], int U_col[], FPnum *restrict U_sp, size_t nnz_U,
+    size_t U_csr_p[], int U_csr_i[], FPnum *restrict U_csr,
+    FPnum *restrict X, int ixA[], int ixB[], size_t nnz,
+    size_t *restrict Xcsr_p, int *restrict Xcsr_i, FPnum *restrict Xcsr,
+    FPnum *restrict Bm, FPnum *restrict C,
+    FPnum *restrict C_bias,
+    int k,
+    FPnum lam, FPnum alpha,
+    FPnum *restrict precomputedBtB
+);
+int fit_content_based_lbfgs
+(
+    FPnum *restrict biasA, FPnum *restrict biasB,
+    FPnum *restrict C, FPnum *restrict C_bias,
+    FPnum *restrict D, FPnum *restrict D_bias,
+    bool start_with_ALS, bool reset_values, int seed,
+    FPnum *restrict glob_mean,
+    int m, int n, int k,
+    int ixA[], int ixB[], FPnum *restrict X, size_t nnz,
+    FPnum *restrict Xfull,
+    FPnum *restrict weight,
+    bool user_bias, bool item_bias,
+    bool add_intercepts,
+    FPnum lam, FPnum *restrict lam_unique,
+    FPnum *restrict U, int p,
+    FPnum *restrict II, int q,
+    int U_row[], int U_col[], FPnum *restrict U_sp, size_t nnz_U,
+    int I_row[], int I_col[], FPnum *restrict I_sp, size_t nnz_I,
+    int n_corr_pairs, size_t maxiter,
+    int nthreads, bool prefer_onepass,
+    bool verbose, int print_every, bool handle_interrupt,
+    int *restrict niter, int *restrict nfev,
+    FPnum *restrict Am, FPnum *restrict Bm
+);
+int factors_content_based_single
+(
+    FPnum *restrict a_vec, int k,
+    FPnum *restrict u_vec, int p,
+    FPnum *restrict u_vec_sp, int u_vec_ixB[], size_t nnz_u_vec,
+    FPnum *restrict C, FPnum *restrict C_bias
+);
+int factors_content_based_mutliple
+(
+    FPnum *restrict Am, int m_new, int k,
+    FPnum *restrict C, FPnum *restrict C_bias,
+    FPnum *restrict U, int p,
+    int U_row[], int U_col[], FPnum *restrict U_sp, size_t nnz_U,
+    size_t U_csr_p[], int U_csr_i[], FPnum *restrict U_csr,
+    int nthreads
+);
+int topN_old_content_based
+(
+    FPnum *restrict a_vec, FPnum a_bias,
+    FPnum *restrict Am, FPnum *restrict biasA, int row_index,
+    FPnum *restrict Bm,
+    FPnum *restrict biasB,
+    FPnum glob_mean,
+    int k,
+    int *restrict include_ix, int n_include,
+    int *restrict exclude_ix, int n_exclude,
+    int *restrict outp_ix, FPnum *restrict outp_score,
+    int n_top, int n, int nthreads
+);
+int topN_new_content_based
+(
+    /* inputs for the factors */
+    int k, int n_new,
+    FPnum *restrict u_vec, int p,
+    FPnum *restrict u_vec_sp, int u_vec_ixB[], size_t nnz_u_vec,
+    FPnum *restrict II, int q,
+    int I_row[], int I_col[], FPnum *restrict I_sp, size_t nnz_I,
+    size_t I_csr_p[], int I_csr_i[], FPnum *restrict I_csr,
+    FPnum *restrict C, FPnum *restrict C_bias,
+    FPnum *restrict D, FPnum *restrict D_bias,
+    FPnum glob_mean,
+    /* inputs for topN */
+    int *restrict outp_ix, FPnum *restrict outp_score,
+    int n_top, int nthreads
+);
+int predict_X_old_content_based
+(
+    FPnum *restrict predicted, size_t n_predict,
+    int m_new, int k,
+    int row[], /* <- optional */
+    int col[],
+    FPnum *restrict U, int p,
+    int U_row[], int U_col[], FPnum *restrict U_sp, size_t nnz_U,
+    size_t U_csr_p[], int U_csr_i[], FPnum *restrict U_csr,
+    FPnum *restrict C, FPnum *restrict C_bias,
+    FPnum *restrict Bm, FPnum *restrict biasB,
+    FPnum glob_mean,
+    int nthreads
+);
+int predict_X_new_content_based
+(
+    FPnum *restrict predicted, size_t n_predict,
+    int m_new, int n_new, int k,
+    int row[], int col[], /* <- optional */
+    FPnum *restrict U, int p,
+    int U_row[], int U_col[], FPnum *restrict U_sp, size_t nnz_U,
+    size_t U_csr_p[], int U_csr_i[], FPnum *restrict U_csr,
+    FPnum *restrict II, int q,
+    int I_row[], int I_col[], FPnum *restrict I_sp, size_t nnz_I,
+    size_t I_csr_p[], int I_csr_i[], FPnum *restrict I_csr,
+    FPnum *restrict C, FPnum *restrict C_bias,
+    FPnum *restrict D, FPnum *restrict D_bias,
+    FPnum glob_mean,
     int nthreads
 );
 

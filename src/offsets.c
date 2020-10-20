@@ -823,7 +823,7 @@ int precompute_offsets_both
     int retval = 0;
     bool free_U_csr = false;
     bool free_I_csr = false;
-    if (U_sp != NULL && U_csr_p == NULL)
+    if (nnz_U && U_csr_p == NULL)
     {
         free_U_csr = true;
         U_csr_p = (size_t*)malloc(((size_t)m+(size_t)1)*sizeof(size_t));
@@ -840,7 +840,7 @@ int precompute_offsets_both
         );
     }
 
-    if (I_sp != NULL && I_csr_p == NULL)
+    if (nnz_I && I_csr_p == NULL)
     {
         free_I_csr = true;
         I_csr_p = (size_t*)malloc(((size_t)n+(size_t)1)*sizeof(size_t));
@@ -1435,7 +1435,6 @@ int fit_offsets_als
     FPnum *restrict Bm_plus_bias,
     FPnum *restrict precomputedBtB,
     FPnum *restrict precomputedTransBtBinvBt
-
 )
 {
     if (p > m || q > n || k > m || k > n) {
@@ -1716,36 +1715,112 @@ int fit_offsets_als
     }
 }
 
-void factors_content_based
+int fit_offsets_explicit_als
 (
-    FPnum *restrict a_vec, int k_sec,
-    FPnum *restrict u_vec, int p,
-    FPnum *restrict u_vec_sp, int u_vec_ixB[], size_t nnz_u_vec,
-    FPnum *restrict C, FPnum *restrict C_bias
+    FPnum *restrict biasA, FPnum *restrict biasB,
+    FPnum *restrict A, FPnum *restrict B,
+    FPnum *restrict C, FPnum *restrict C_bias,
+    FPnum *restrict D, FPnum *restrict D_bias,
+    bool reset_values, int seed,
+    FPnum *restrict glob_mean,
+    int m, int n, int k,
+    int ixA[], int ixB[], FPnum *restrict X, size_t nnz,
+    FPnum *restrict Xfull,
+    FPnum *restrict weight,
+    bool user_bias, bool item_bias, bool add_intercepts,
+    FPnum lam,
+    FPnum *restrict U, int p,
+    FPnum *restrict II, int q,
+    bool NA_as_zero_X,
+    int niter,
+    int nthreads, bool use_cg,
+    int max_cg_steps, bool finalize_chol,
+    bool verbose, bool handle_interrupt,
+    bool precompute_for_predictions,
+    FPnum *restrict Am, FPnum *restrict Bm,
+    FPnum *restrict Bm_plus_bias,
+    FPnum *restrict precomputedBtB,
+    FPnum *restrict precomputedTransBtBinvBt
 )
 {
-    if (a_vec != NULL)
-    {
-        cblas_tgemv(CblasRowMajor, CblasTrans,
-                    p, k_sec,
-                    1., C, k_sec,
-                    u_vec, 1,
-                    0., a_vec, 1);
-    }
+    return fit_offsets_als(
+        biasA, biasB,
+        A, B,
+        C, C_bias,
+        D, D_bias,
+        reset_values, seed,
+        glob_mean,
+        m, n, k,
+        ixA, ixB, X, nnz,
+        Xfull,
+        weight,
+        user_bias, item_bias, add_intercepts,
+        lam,
+        U, p,
+        II, q,
+        false, NA_as_zero_X, 1.,
+        niter,
+        nthreads, use_cg,
+        max_cg_steps, finalize_chol,
+        verbose, handle_interrupt,
+        precompute_for_predictions,
+        Am, Bm,
+        Bm_plus_bias,
+        precomputedBtB,
+        precomputedTransBtBinvBt
+    );
+}
 
-    else
-    {
-        set_to_zero(a_vec, k_sec, 1);
-        tgemv_dense_sp(
-            p, k_sec,
-            1., C, (size_t)k_sec,
-            u_vec_ixB, u_vec_sp, nnz_u_vec,
-            a_vec
-        );
-    }
-
-    if (C_bias != NULL)
-        cblas_taxpy(k_sec, 1., C_bias, 1, a_vec, 1);
+int fit_offsets_implicit_als
+(
+    FPnum *restrict A, FPnum *restrict B,
+    FPnum *restrict C, FPnum *restrict C_bias,
+    FPnum *restrict D, FPnum *restrict D_bias,
+    bool reset_values, int seed,
+    int m, int n, int k,
+    int ixA[], int ixB[], FPnum *restrict X, size_t nnz,
+    bool add_intercepts,
+    FPnum lam,
+    FPnum *restrict U, int p,
+    FPnum *restrict II, int q,
+    FPnum alpha,
+    int niter,
+    int nthreads, bool use_cg,
+    int max_cg_steps, bool finalize_chol,
+    bool verbose, bool handle_interrupt,
+    bool precompute_for_predictions,
+    FPnum *restrict Am, FPnum *restrict Bm,
+    FPnum *restrict Bm_plus_bias,
+    FPnum *restrict precomputedBtB,
+    FPnum *restrict precomputedTransBtBinvBt
+)
+{
+    return fit_offsets_als(
+        (FPnum*)NULL, (FPnum*)NULL,
+        A, B,
+        C, C_bias,
+        D, D_bias,
+        reset_values, seed,
+        (FPnum*)NULL,
+        m, n, k,
+        ixA, ixB, X, nnz,
+        (FPnum*)NULL,
+        (FPnum*)NULL,
+        false, false, add_intercepts,
+        lam,
+        U, p,
+        II, q,
+        true, false, alpha,
+        niter,
+        nthreads, use_cg,
+        max_cg_steps, finalize_chol,
+        verbose, handle_interrupt,
+        precompute_for_predictions,
+        Am, Bm,
+        Bm_plus_bias,
+        precomputedBtB,
+        precomputedTransBtBinvBt
+    );
 }
 
 int matrix_content_based
@@ -1813,18 +1888,173 @@ int matrix_content_based
     return 0;
 }
 
-int predict_content_based_new
+int factors_offsets_explicit_single
 (
-    FPnum *restrict scores_new, int n_new, int k_sec,
+    FPnum *restrict a_vec, FPnum *restrict a_bias, FPnum *restrict output_a,
+    FPnum *restrict u_vec, int p,
+    FPnum *restrict u_vec_sp, int u_vec_ixB[], size_t nnz_u_vec,
+    FPnum *restrict Xa, int ixB[], size_t nnz,
+    FPnum *restrict Xa_dense, int n,
+    FPnum *restrict weight,
+    FPnum *restrict Bm, FPnum *restrict C,
+    FPnum *restrict C_bias,
+    FPnum glob_mean, FPnum *restrict biasB,
+    int k, int k_sec, int k_main,
+    FPnum w_user,
+    FPnum lam, FPnum *restrict lam_unique,
+    bool exact,
+    FPnum *restrict precomputedTransBtBinvBt,
+    FPnum *restrict precomputedBtB,
+    FPnum *restrict Bm_plus_bias
+)
+{
+    if (exact && (k_sec || k_main)) {
+        fprintf(stderr, "Option 'exact' incompatible with 'k_sec'/'k_main'\n");
+        #ifndef _FOR_R
+        fflush(stderr);
+        #endif
+        return 2;
+    }
+    int retval = 0;
+
+    bool free_Bm_plus_bias = false;
+    FPnum lam_bias = lam;
+    if (lam_unique != NULL)
+    {
+        lam_bias = lam_unique[0];
+        lam = lam_unique[2];
+    }
+
+    if (nnz && (Bm_plus_bias == NULL && a_bias != NULL))
+    {
+        if (a_bias != NULL)
+        {
+            free_Bm_plus_bias = true;
+            Bm_plus_bias = (FPnum*)malloc((size_t)n*(size_t)(k_sec+k+k_main)
+                                           * sizeof(FPnum));
+            if (Bm_plus_bias == NULL) goto throw_oom;
+            append_ones_last_col(
+                Bm, n, k_sec+k+k_main,
+                Bm_plus_bias
+            );
+        }
+    }
+
+
+    if (!nnz)
+    {
+        if (a_bias != NULL)
+            *a_bias = 0;
+        retval = offsets_factors_cold(
+            a_vec,
+            u_vec,
+            u_vec_ixB, u_vec_sp, nnz_u_vec,
+            C, p,
+            C_bias,
+            k, k_sec, k_main,
+            w_user
+        );
+    }
+
+    else
+        retval = offsets_factors_warm(
+            a_vec, a_bias,
+            u_vec,
+            u_vec_ixB, u_vec_sp, nnz_u_vec,
+            ixB, Xa, nnz,
+            Xa_dense, n,
+            weight,
+            Bm, C,
+            C_bias,
+            glob_mean, biasB,
+            k, k_sec, k_main,
+            p, w_user,
+            lam, exact, lam_bias,
+            false, 1.,
+            precomputedTransBtBinvBt,
+            precomputedBtB,
+            output_a,
+            Bm_plus_bias
+        );
+
+    cleanup:
+        if (free_Bm_plus_bias)
+            free(Bm_plus_bias);
+        return retval;
+
+    throw_oom:
+    {
+        retval = 1;
+        goto cleanup;
+    }
+}
+
+int factors_offsets_implicit_single
+(
+    FPnum *restrict a_vec,
+    FPnum *restrict u_vec, int p,
+    FPnum *restrict u_vec_sp, int u_vec_ixB[], size_t nnz_u_vec,
+    FPnum *restrict Xa, int ixB[], size_t nnz,
+    FPnum *restrict Bm, FPnum *restrict C,
+    FPnum *restrict C_bias,
+    int k,
+    FPnum lam, FPnum alpha,
+    FPnum *restrict precomputedBtB,
+    FPnum *restrict output_a
+)
+{
+    if (!nnz)
+        return offsets_factors_cold(
+            a_vec,
+            u_vec,
+            u_vec_ixB, u_vec_sp, nnz_u_vec,
+            C, p,
+            C_bias,
+            k, 0, 0,
+            1.
+        );
+    else
+        return offsets_factors_warm(
+            a_vec, (FPnum*)NULL,
+            u_vec,
+            u_vec_ixB, u_vec_sp, nnz_u_vec,
+            ixB, Xa, nnz,
+            (FPnum*)NULL, 0,
+            (FPnum*)NULL,
+            Bm, C,
+            C_bias,
+            0., (FPnum*)NULL,
+            k, 0, 0,
+            p, 1.,
+            lam, false, lam,
+            true, alpha,
+            (FPnum*)NULL,
+            precomputedBtB,
+            output_a,
+            (FPnum*)NULL
+        );
+}
+
+int factors_offsets_explicit_multiple
+(
+    FPnum *restrict Am, FPnum *restrict biasA,
+    FPnum *restrict A, int m,
     FPnum *restrict U, int p,
     int U_row[], int U_col[], FPnum *restrict U_sp, size_t nnz_U,
     size_t U_csr_p[], int U_csr_i[], FPnum *restrict U_csr,
-    FPnum *restrict II, int q,
-    int I_row[], int I_col[], FPnum *restrict I_sp, size_t nnz_I,
-    size_t I_csr_p[], int I_csr_i[], FPnum *restrict I_csr,
-    FPnum *restrict C, FPnum *restrict C_bias,
-    FPnum *restrict D, FPnum *restrict D_bias,
-    FPnum glob_mean,
+    FPnum *restrict X, int ixA[], int ixB[], size_t nnz,
+    size_t *restrict Xcsr_p, int *restrict Xcsr_i, FPnum *restrict Xcsr,
+    FPnum *restrict Xfull, int n,
+    FPnum *restrict weight,
+    FPnum *restrict Bm, FPnum *restrict C,
+    FPnum *restrict C_bias,
+    FPnum glob_mean, FPnum *restrict biasB,
+    int k, int k_sec, int k_main,
+    FPnum w_user,
+    FPnum lam, FPnum *restrict lam_unique, bool exact,
+    FPnum *restrict precomputedTransBtBinvBt,
+    FPnum *restrict precomputedBtB,
+    FPnum *restrict Bm_plus_bias,
     int nthreads
 )
 {
@@ -1834,106 +2064,974 @@ int predict_content_based_new
                 )
     long long ix;
     #endif
-
-    FPnum *restrict Am = (FPnum*)malloc((size_t)n_new *
-                                        (size_t)k_sec *
-                                        sizeof(FPnum));
-    FPnum *restrict Bm = (FPnum*)malloc((size_t)n_new *
-                                        (size_t)k_sec *
-                                        sizeof(FPnum));
     int retval = 0;
-    if (Am == NULL || Bm == NULL)
+
+    bool free_Bm_plus_bias = false;
+    bool free_U_csr = false;
+    bool free_X_csr = false;
+    size_t lda = k_sec + k + k_main;
+    size_t ld_A_orig = k + k_main;
+    FPnum *restrict weightR = NULL;
+    int *restrict ret = (int*)malloc(m*sizeof(int));
+    if (ret == NULL) goto throw_oom;
+
+    if (!nnz && (Bm_plus_bias == NULL && biasA != NULL))
+    {
+        if (biasA != NULL)
+        {
+            free_Bm_plus_bias = true;
+            Bm_plus_bias = (FPnum*)malloc((size_t)n*(size_t)(k_sec+k+k_main)
+                                           * sizeof(FPnum));
+            if (Bm_plus_bias == NULL) goto throw_oom;
+            append_ones_last_col(
+                Bm, n, k_sec+k+k_main,
+                Bm_plus_bias
+            );
+        }
+    }
+
+    if (Xfull != NULL) {
+        Xcsr_p = NULL;
+        nnz = 0;
+    }
+
+    if (Xfull == NULL && Xcsr == NULL && nnz)
+    {
+        free_X_csr = true;
+        Xcsr_p = (size_t*)malloc(((size_t)m + (size_t)1) * sizeof(size_t));
+        Xcsr_i = (int*)malloc(nnz*sizeof(int));
+        Xcsr = (FPnum*)malloc(nnz*sizeof(FPnum));
+        if (Xcsr_p == NULL || Xcsr_i == NULL || Xcsr == NULL)
+            goto throw_oom;
+        if (weight != NULL) {
+            weightR = (FPnum*)malloc(nnz*sizeof(FPnum));
+            if (weightR == NULL) goto throw_oom;
+        }
+        coo_to_csr(
+            ixA, ixB, X,
+            weight,
+            m, n, nnz,
+            Xcsr_p, Xcsr_i, Xcsr,
+            weightR
+        );
+    }
+
+    else if (Xfull == NULL && Xcsr_p != NULL && weight != NULL) {
+        weightR = weight;
+    }
+
+    if (U != NULL) {
+        nnz_U = 0;
+        U_csr_p = NULL;
+    }
+
+    if (U == NULL && nnz_U && U_csr_p == NULL)
+    {
+        free_U_csr = true;
+        U_csr_p = (size_t*)malloc(((size_t)m + (size_t)1) * sizeof(size_t));
+        U_csr_i = (int*)malloc(nnz_U*sizeof(int));
+        U_csr = (FPnum*)malloc(nnz_U*sizeof(FPnum));
+        if (U_csr_p == NULL || U_csr_i == NULL || U_csr == NULL)
+            goto throw_oom;
+        coo_to_csr(
+            U_row, U_col, U_sp,
+            (FPnum*)NULL,
+            m, p, nnz_U,
+            U_csr_p, U_csr_i, U_csr,
+            (FPnum*)NULL
+        );
+    }
+
+    #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
+            shared(A, Am, Bm, C, C_bias, biasA, biasB, lda, ld_A_orig, \
+                   U, U_csr, U_csr_i, U_csr_p, p, \
+                   Xfull, Xcsr, Xcsr_i, Xcsr_p, n, weight, weightR, glob_mean, \
+                   k, k_sec, k_main, w_user, lam, lam_unique, \
+                   exact, precomputedTransBtBinvBt, precomputedBtB,Bm_plus_bias)
+    for (size_t_for ix = 0; ix < (size_t)m; ix++)
+        ret[ix] = factors_offsets_explicit_single(
+            Am + ix*lda,
+            (biasA == NULL)? ((FPnum*)NULL) : (biasA + ix),
+            (A == NULL)? ((FPnum*)NULL) : (A + ix*ld_A_orig),
+            (U == NULL)?
+                ((FPnum*)NULL) : (U + ix*(size_t)p),
+            p,
+            (U_csr_p == NULL)?
+                ((FPnum*)NULL) : (U_csr + U_csr_p[ix]),
+            (U_csr_p == NULL)?
+                ((int*)NULL) : (U_csr_i + U_csr_p[ix]),
+            (U_csr_p == NULL)?
+                ((size_t)0) : (U_csr_p[ix+1] - U_csr_p[ix]),
+            (Xcsr_p != NULL)?
+                (Xcsr + Xcsr_p[ix]) : ((FPnum*)NULL),
+            (Xcsr_p != NULL)?
+                (Xcsr_i + Xcsr_p[ix]) : ((int*)NULL),
+            (Xcsr_p != NULL)?
+                (Xcsr_p[ix+1] - Xcsr_p[ix]) : ((size_t)0),
+            (Xfull == NULL)?
+                ((FPnum*)NULL) : (Xfull + ix*(size_t)n),
+            n,
+            (weight == NULL)?
+                ((FPnum*)NULL)
+                    :
+                ((Xfull != NULL)?
+                    (weight + ix*(size_t)n) : (weightR + Xcsr_p[ix])),
+            Bm, C,
+            C_bias,
+            glob_mean, biasB,
+            k, k_sec, k_main,
+            w_user,
+            lam, lam_unique,
+            exact,
+            precomputedTransBtBinvBt,
+            precomputedBtB,
+            Bm_plus_bias
+        );
+
+
+    for (size_t ix = 0; ix < (size_t)m; ix++)
+        retval = max2(retval, ret[ix]);
+    if (retval == 1) goto throw_oom;
+
+
+    cleanup:
+        if (free_U_csr) {
+            free(U_csr);
+            free(U_csr_i);
+            free(U_csr_p);
+        }
+        if (free_X_csr) {
+            free(Xcsr);
+            free(Xcsr_p);
+            free(Xcsr_i);
+            free(weightR);
+        }
+        if (free_Bm_plus_bias)
+            free(Bm_plus_bias);
+        free(ret);
+        return retval;
+
+    throw_oom:
     {
         retval = 1;
         goto cleanup;
     }
 
-    retval = matrix_content_based(
-        Am,
-        n_new, k_sec,
-        U, p,
-        U_row, U_col, U_sp, nnz_U,
-        U_csr_p, U_csr_i, U_csr,
-        C, C_bias,
-        nthreads
-    );
-    if (retval == 1) goto cleanup;
-
-    retval = matrix_content_based(
-        Bm,
-        n_new, k_sec,
-        II, q,
-        I_row, I_col, I_sp, nnz_I,
-        I_csr_p, I_csr_i, I_csr,
-        D, D_bias,
-        nthreads
-    );
-    if (retval == 1) goto cleanup;
-
-    #pragma omp parallel for schedule(static) num_threads(nthreads) \
-            shared(scores_new, n_new, k_sec, Am, Bm, glob_mean)
-    for (size_t_for ix = 0; ix < (size_t)n_new; ix++)
-        scores_new[ix] = cblas_tdot(k_sec, Am + ix*(size_t)k_sec, 1,
-                                    Bm + ix*(size_t)k_sec, 1)
-                          + glob_mean;
-
-    cleanup:
-        free(Am);
-        free(Bm);
-    return retval;
+    return 0;
 }
 
-int predict_content_based_old
+int factors_offsets_implicit_multiple
 (
-    FPnum *restrict scores_new, int n_new, int k_sec,
+    FPnum *restrict Am, int m,
+    FPnum *restrict A,
     FPnum *restrict U, int p,
     int U_row[], int U_col[], FPnum *restrict U_sp, size_t nnz_U,
     size_t U_csr_p[], int U_csr_i[], FPnum *restrict U_csr,
-    FPnum *restrict C, FPnum *restrict C_bias,
-    FPnum *restrict Bm, FPnum *restrict biasB, int ixB[],
-    FPnum glob_mean,
+    FPnum *restrict X, int ixA[], int ixB[], size_t nnz,
+    size_t *restrict Xcsr_p, int *restrict Xcsr_i, FPnum *restrict Xcsr,
+    FPnum *restrict Bm, FPnum *restrict C,
+    FPnum *restrict C_bias,
+    int k,
+    FPnum lam, FPnum alpha,
+    FPnum *restrict precomputedBtB,
     int nthreads
 )
 {
-    int ix = 0;
-    FPnum *restrict Am = (FPnum*)malloc((size_t)n_new *
-                                        (size_t)k_sec *
-                                        sizeof(FPnum));
+    #if defined(_OPENMP) && \
+                ( (_OPENMP < 200801)  /* OpenMP < 3.0 */ \
+                  || defined(_WIN32) || defined(_WIN64) \
+                )
+    long long ix;
+    #endif
     int retval = 0;
-    if (Am == NULL)
+    
+    bool free_U_csr = false;
+    bool free_X_csr = false;
+    int *restrict ret = (int*)malloc(m*sizeof(int));
+    if (ret == NULL) goto throw_oom;
+
+    if (Xcsr == NULL && nnz)
+    {
+        free_X_csr = true;
+        Xcsr_p = (size_t*)malloc(((size_t)m + (size_t)1) * sizeof(size_t));
+        Xcsr_i = (int*)malloc(nnz*sizeof(int));
+        Xcsr = (FPnum*)malloc(nnz*sizeof(FPnum));
+        if (Xcsr_p == NULL || Xcsr_i == NULL || Xcsr == NULL)
+            goto throw_oom;
+        coo_to_csr(
+            ixA, ixB, X,
+            (FPnum*)NULL,
+            m, 0, nnz,
+            Xcsr_p, Xcsr_i, Xcsr,
+            (FPnum*)NULL
+        );
+    }
+
+    if (U != NULL) {
+        nnz_U = 0;
+        U_csr_p = NULL;
+    }
+
+    if (U == NULL && nnz_U && U_csr_p == NULL)
+    {
+        free_U_csr = true;
+        U_csr_p = (size_t*)malloc(((size_t)m + (size_t)1) * sizeof(size_t));
+        U_csr_i = (int*)malloc(nnz_U*sizeof(int));
+        U_csr = (FPnum*)malloc(nnz_U*sizeof(FPnum));
+        if (U_csr_p == NULL || U_csr_i == NULL || U_csr == NULL)
+            goto throw_oom;
+        coo_to_csr(
+            U_row, U_col, U_sp,
+            (FPnum*)NULL,
+            m, p, nnz_U,
+            U_csr_p, U_csr_i, U_csr,
+            (FPnum*)NULL
+        );
+    }
+
+    #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
+            shared(Am, Bm, C, C_bias, A, \
+                   Xcsr, Xcsr_i, Xcsr_p, \
+                   U, U_csr, U_csr_i, U_csr_p, p, \
+                   k, lam, alpha, precomputedBtB)
+    for (size_t_for ix = 0; ix < (size_t)m; ix++)
+        ret[ix] = factors_offsets_implicit_single(
+            Am + ix*(size_t)k,
+            (U == NULL)?
+                ((FPnum*)NULL) : (U + ix*(size_t)p),
+            p,
+            (U_csr_p == NULL)?
+                ((FPnum*)NULL) : (U_csr + U_csr_p[ix]),
+            (U_csr_p == NULL)?
+                ((int*)NULL) : (U_csr_i + U_csr_p[ix]),
+            (U_csr_p == NULL)?
+                ((size_t)0) : (U_csr_p[ix+1] - U_csr_p[ix]),
+            Xcsr + Xcsr_p[ix],
+            Xcsr_i + Xcsr_p[ix],
+            Xcsr_p[ix+1] - Xcsr_p[ix],
+            Bm, C,
+            C_bias,
+            k,
+            lam, alpha,
+            precomputedBtB,
+            (A == NULL)? ((FPnum*)NULL) : (A + ix*(size_t)k)
+        );
+    
+    for (size_t ix = 0; ix < (size_t)m; ix++)
+        retval = max2(retval, ret[ix]);
+    if (retval == 1) goto throw_oom;
+
+    cleanup:
+        if (free_U_csr) {
+            free(U_csr);
+            free(U_csr_i);
+            free(U_csr_p);
+        }
+        if (free_X_csr) {
+            free(Xcsr);
+            free(Xcsr_p);
+            free(Xcsr_i);
+        }
+        free(ret);
+        return retval;
+
+    throw_oom:
     {
         retval = 1;
         goto cleanup;
     }
+}
 
-    retval = matrix_content_based(
+int topN_old_offsets_explicit
+(
+    FPnum *restrict a_vec, FPnum a_bias,
+    FPnum *restrict Am, FPnum *restrict biasA, int row_index,
+    FPnum *restrict Bm,
+    FPnum *restrict biasB,
+    FPnum glob_mean,
+    int k, int k_sec, int k_main,
+    int *restrict include_ix, int n_include,
+    int *restrict exclude_ix, int n_exclude,
+    int *restrict outp_ix, FPnum *restrict outp_score,
+    int n_top, int n, int nthreads
+)
+{
+    if (a_vec != NULL)
+        return topN(
+            a_vec, 0,
+            Bm, 0,
+            biasB,
+            glob_mean, a_bias,
+            k_sec+k+k_main, 0,
+            include_ix, n_include,
+            exclude_ix, n_exclude,
+            outp_ix, outp_score,
+            n_top, n, nthreads
+        );
+
+    else
+        return topN(
+            Am + (size_t)row_index*(size_t)(k_sec+k+k_main), 0,
+            Bm, 0,
+            biasB,
+            glob_mean, (biasA == NULL)? (0.) : (biasA[row_index]),
+            k_sec+k+k_main, 0,
+            include_ix, n_include,
+            exclude_ix, n_exclude,
+            outp_ix, outp_score,
+            n_top, n, nthreads
+        );
+}
+
+int topN_old_offsets_implicit
+(
+    FPnum *restrict a_vec,
+    FPnum *restrict Am, int row_index,
+    FPnum *restrict Bm,
+    int k,
+    int *restrict include_ix, int n_include,
+    int *restrict exclude_ix, int n_exclude,
+    int *restrict outp_ix, FPnum *restrict outp_score,
+    int n_top, int n, int nthreads
+)
+{
+    if (a_vec != NULL)
+        return topN(
+            a_vec, 0,
+            Bm, 0,
+            (FPnum*)NULL,
+            0., 0.,
+            k, 0,
+            include_ix, n_include,
+            exclude_ix, n_exclude,
+            outp_ix, outp_score,
+            n_top, n, nthreads
+        );
+
+    else
+        return topN(
+            Am + (size_t)row_index*(size_t)k, 0,
+            Bm, 0,
+            (FPnum*)NULL,
+            0., 0.,
+            k, 0,
+            include_ix, n_include,
+            exclude_ix, n_exclude,
+            outp_ix, outp_score,
+            n_top, n, nthreads
+        );
+}
+
+int topN_new_offsets_explicit
+(
+    /* inputs for factors */
+    bool user_bias, int n,
+    FPnum *restrict u_vec, int p,
+    FPnum *restrict u_vec_sp, int u_vec_ixB[], size_t nnz_u_vec,
+    FPnum *restrict Xa, int ixB[], size_t nnz,
+    FPnum *restrict Xa_dense,
+    FPnum *restrict weight,
+    FPnum *restrict Bm, FPnum *restrict C,
+    FPnum *restrict C_bias,
+    FPnum glob_mean, FPnum *restrict biasB,
+    int k, int k_sec, int k_main,
+    FPnum w_user,
+    FPnum lam, FPnum *restrict lam_unique,
+    bool exact,
+    FPnum *restrict precomputedTransBtBinvBt,
+    FPnum *restrict precomputedBtB,
+    FPnum *restrict Bm_plus_bias,
+    /* inputs for topN */
+    int *restrict include_ix, int n_include,
+    int *restrict exclude_ix, int n_exclude,
+    int *restrict outp_ix, FPnum *restrict outp_score,
+    int n_top, int nthreads
+)
+{
+    int retval = 0;
+    FPnum *restrict a_vec = (FPnum*)malloc((size_t)(k_sec+k+k_main)
+                                            * sizeof(FPnum));
+    FPnum a_bias = 0.;
+    if (a_vec == NULL) goto throw_oom;
+
+    retval = factors_offsets_explicit_single(
+        a_vec, user_bias? &a_bias : (FPnum*)NULL, (FPnum*)NULL,
+        u_vec, p,
+        u_vec_sp, u_vec_ixB, nnz_u_vec,
+        Xa, ixB, nnz,
+        Xa_dense, n,
+        weight,
+        Bm, C,
+        C_bias,
+        glob_mean, biasB,
+        k, k_sec, k_main,
+        w_user,
+        lam, lam_unique,
+        exact,
+        precomputedTransBtBinvBt,
+        precomputedBtB,
+        Bm_plus_bias
+    );
+
+    if (retval == 1)
+        goto throw_oom;
+    else if (retval != 0)
+        goto cleanup;
+
+    retval = topN_old_offsets_explicit(
+        a_vec, a_bias,
+        (FPnum*)NULL, (FPnum*)NULL, 0,
+        Bm,
+        biasB,
+        glob_mean,
+        k, k_sec, k_main,
+        include_ix, n_include,
+        exclude_ix, n_exclude,
+        outp_ix, outp_score,
+        n_top, n, nthreads
+    );
+
+    cleanup:
+        free(a_vec);
+        return retval;
+    throw_oom:
+    {
+        retval = 1;
+        goto cleanup;
+    }
+}
+
+int topN_new_offsets_implicit
+(
+    /* inputs for factors */
+    FPnum *restrict u_vec, int p,
+    FPnum *restrict u_vec_sp, int u_vec_ixB[], size_t nnz_u_vec,
+    FPnum *restrict Xa, int ixB[], size_t nnz,
+    FPnum *restrict Bm, FPnum *restrict C,
+    FPnum *restrict C_bias,
+    int k,
+    FPnum lam, FPnum alpha,
+    FPnum *restrict precomputedBtB,
+    /* inputs for topN */
+    int *restrict include_ix, int n_include,
+    int *restrict exclude_ix, int n_exclude,
+    int *restrict outp_ix, FPnum *restrict outp_score,
+    int n_top, int n, int nthreads
+)
+{
+    int retval = 0;
+    FPnum *restrict a_vec = (FPnum*)malloc((size_t)k * sizeof(FPnum));
+    if (a_vec == NULL) goto throw_oom;
+
+    retval = factors_offsets_implicit_single(
+        a_vec,
+        u_vec, p,
+        u_vec_sp, u_vec_ixB, nnz_u_vec,
+        Xa, ixB, nnz,
+        Bm, C,
+        C_bias,
+        k,
+        lam, alpha,
+        precomputedBtB,
+        (FPnum*)NULL
+    );
+
+    if (retval == 1)
+        goto throw_oom;
+    else if (retval != 0)
+        goto cleanup;
+
+    retval = topN_old_offsets_implicit(
+        a_vec,
+        (FPnum*)NULL, 0,
+        Bm,
+        k,
+        include_ix, n_include,
+        exclude_ix, n_exclude,
+        outp_ix, outp_score,
+        n_top, n, nthreads
+    );
+    
+    cleanup:
+        free(a_vec);
+        return retval;
+    throw_oom:
+    {
+        retval = 1;
+        goto cleanup;
+    }
+}
+
+int predict_X_old_offsets_explicit
+(
+    int row[], int col[], FPnum *restrict predicted, size_t n_predict,
+    FPnum *restrict Am, FPnum *restrict biasA,
+    FPnum *restrict Bm, FPnum *restrict biasB,
+    FPnum glob_mean,
+    int k, int k_sec, int k_main,
+    int nthreads
+)
+{
+    predict_multiple(
+        Am, 0,
+        Bm, 0,
+        biasA, biasB,
+        glob_mean,
+        k_sec+k+k_main, 0,
+        row, col, n_predict,
+        predicted,
+        nthreads
+    );
+
+    return 0;
+}
+
+int predict_X_old_offsets_implicit
+(
+    int row[], int col[], FPnum *restrict predicted, size_t n_predict,
+    FPnum *restrict Am,
+    FPnum *restrict Bm,
+    int k,
+    int nthreads
+)
+{
+    predict_multiple(
+        Am, 0,
+        Bm, 0,
+        (FPnum*)NULL, (FPnum*)NULL,
+        0.,
+        k, 0,
+        row, col, n_predict,
+        predicted,
+        nthreads
+    );
+
+    return 0;
+}
+
+int predict_X_new_offsets_explicit
+(
+    /* inputs for predictions */
+    int m_new, bool user_bias,
+    int row[], int col[], FPnum *restrict predicted, size_t n_predict,
+    int nthreads,
+    /* inputs for factors */
+    FPnum *restrict U, int p,
+    int U_row[], int U_col[], FPnum *restrict U_sp, size_t nnz_U,
+    size_t U_csr_p[], int U_csr_i[], FPnum *restrict U_csr,
+    FPnum *restrict X, int ixA[], int ixB[], size_t nnz,
+    size_t *restrict Xcsr_p, int *restrict Xcsr_i, FPnum *restrict Xcsr,
+    FPnum *restrict Xfull, int n,
+    FPnum *restrict weight,
+    FPnum *restrict Bm, FPnum *restrict C,
+    FPnum *restrict C_bias,
+    FPnum glob_mean, FPnum *restrict biasB,
+    int k, int k_sec, int k_main,
+    FPnum w_user,
+    FPnum lam, FPnum *restrict lam_unique, bool exact,
+    FPnum *restrict precomputedTransBtBinvBt,
+    FPnum *restrict precomputedBtB,
+    FPnum *restrict Bm_plus_bias
+)
+{
+    int retval = 0;
+    FPnum *restrict biasA = NULL;
+    FPnum *restrict Am = (FPnum*)malloc((size_t)m_new * (size_t)(k_sec+k+k_main)
+                                         * sizeof(FPnum));
+    if (Am == NULL) goto throw_oom;
+    if (user_bias) {
+        biasA = (FPnum*)malloc((size_t)m_new * sizeof(FPnum));
+        if (biasA == NULL) goto throw_oom;
+    }
+
+
+    retval = factors_offsets_explicit_multiple(
+        Am, biasA,
+        (FPnum*)NULL, m_new,
+        U, p,
+        U_row, U_col, U_sp, nnz_U,
+        U_csr_p, U_csr_i, U_csr,
+        X, ixA, ixB, nnz,
+        Xcsr_p, Xcsr_i, Xcsr,
+        Xfull, n,
+        weight,
+        Bm, C,
+        C_bias,
+        glob_mean, biasB,
+        k, k_sec, k_main,
+        w_user,
+        lam, lam_unique, exact,
+        precomputedTransBtBinvBt,
+        precomputedBtB,
+        Bm_plus_bias,
+        nthreads
+    );
+
+    if (retval == 1)
+        goto throw_oom;
+    else if (retval != 0)
+        goto cleanup;
+
+    retval = predict_X_old_offsets_explicit(
+        row, col, predicted, n_predict,
+        Am, biasA,
+        Bm, biasB,
+        glob_mean,
+        k, k_sec, k_main,
+        nthreads
+    );
+
+    cleanup:
+        free(Am);
+        free(biasA);
+        return retval;
+    throw_oom:
+    {
+        retval = 1;
+        goto cleanup;
+    }
+}
+
+int predict_X_new_offsets_implicit
+(
+    /* inputs for predictions */
+    int m_new,
+    int row[], int col[], FPnum *restrict predicted, size_t n_predict,
+    int nthreads,
+    /* inputs for factors */
+    FPnum *restrict U, int p,
+    int U_row[], int U_col[], FPnum *restrict U_sp, size_t nnz_U,
+    size_t U_csr_p[], int U_csr_i[], FPnum *restrict U_csr,
+    FPnum *restrict X, int ixA[], int ixB[], size_t nnz,
+    size_t *restrict Xcsr_p, int *restrict Xcsr_i, FPnum *restrict Xcsr,
+    FPnum *restrict Bm, FPnum *restrict C,
+    FPnum *restrict C_bias,
+    int k,
+    FPnum lam, FPnum alpha,
+    FPnum *restrict precomputedBtB
+)
+{
+    int retval = 0;
+    FPnum *restrict Am = (FPnum*)malloc((size_t)m_new * (size_t)k
+                                         * sizeof(FPnum));
+    if (Am == NULL) goto throw_oom;
+
+
+    retval = factors_offsets_implicit_multiple(
+        Am, m_new,
+        (FPnum*)NULL,
+        U, p,
+        U_row, U_col, U_sp, nnz_U,
+        U_csr_p, U_csr_i, U_csr,
+        X, ixA, ixB, nnz,
+        Xcsr_p, Xcsr_i, Xcsr,
+        Bm, C,
+        C_bias,
+        k,
+        lam, alpha,
+        precomputedBtB,
+        nthreads
+    );
+
+    if (retval == 1)
+        goto throw_oom;
+    else if (retval != 0)
+        goto cleanup;
+
+    retval = predict_X_old_offsets_implicit(
+        row, col, predicted, n_predict,
         Am,
-        n_new, k_sec,
+        Bm,
+        k,
+        nthreads
+    );
+
+    cleanup:
+        free(Am);
+        return retval;
+    throw_oom:
+    {
+        retval = 1;
+        goto cleanup;
+    }
+}
+
+
+int fit_content_based_lbfgs
+(
+    FPnum *restrict biasA, FPnum *restrict biasB,
+    FPnum *restrict C, FPnum *restrict C_bias,
+    FPnum *restrict D, FPnum *restrict D_bias,
+    bool start_with_ALS, bool reset_values, int seed,
+    FPnum *restrict glob_mean,
+    int m, int n, int k,
+    int ixA[], int ixB[], FPnum *restrict X, size_t nnz,
+    FPnum *restrict Xfull,
+    FPnum *restrict weight,
+    bool user_bias, bool item_bias,
+    bool add_intercepts,
+    FPnum lam, FPnum *restrict lam_unique,
+    FPnum *restrict U, int p,
+    FPnum *restrict II, int q,
+    int U_row[], int U_col[], FPnum *restrict U_sp, size_t nnz_U,
+    int I_row[], int I_col[], FPnum *restrict I_sp, size_t nnz_I,
+    int n_corr_pairs, size_t maxiter,
+    int nthreads, bool prefer_onepass,
+    bool verbose, int print_every, bool handle_interrupt,
+    int *restrict niter, int *restrict nfev,
+    FPnum *restrict Am, FPnum *restrict Bm
+)
+{
+    int retval = 0;
+    FPnum *restrict tempA = NULL;
+    FPnum *restrict tempB = NULL;
+    FPnum *values = NULL;
+    size_t edge = 0;
+    /* If the values are all in contiguous order, can avoid allocating and
+       copying them before and after. */
+    bool free_values = false;
+    if (add_intercepts && C_bias != C + (size_t)p*(size_t)k)
+        free_values = true;
+    if (add_intercepts && D_bias != D + (size_t)q*(size_t)k)
+        free_values = true;
+    if (D != C + (size_t)(p+add_intercepts)*(size_t)k)
+        free_values =  true;
+    if (item_bias && C != biasB + n)
+        free_values = true;
+    if (user_bias && item_bias && biasB != biasA + m)
+        free_values = true;
+    else if (user_bias && !item_bias && C != biasA + m)
+        free_values = true;
+
+    if (start_with_ALS)
+    {
+        tempA = (FPnum*)malloc((size_t)m*(size_t)k*sizeof(FPnum));
+        tempB = (FPnum*)malloc((size_t)n*(size_t)k*sizeof(FPnum));
+        if (tempA == NULL || tempB == NULL) goto throw_oom;
+
+        retval = fit_offsets_explicit_als(
+            biasA, biasB,
+            tempA, tempB,
+            C, C_bias,
+            D, D_bias,
+            true, 123,
+            glob_mean,
+            m, n, k,
+            ixA, ixB, X, nnz,
+            Xfull,
+            weight,
+            user_bias, item_bias, add_intercepts,
+            lam,
+            U, p,
+            II, q,
+            false,
+            6,
+            nthreads, true,
+            3, false,
+            verbose, handle_interrupt,
+            false,
+            (FPnum*)NULL, (FPnum*)NULL,
+            (FPnum*)NULL,
+            (FPnum*)NULL,
+            (FPnum*)NULL
+        );
+        if (retval == 1)
+            goto throw_oom;
+        else if (retval != 0)
+            goto cleanup;
+
+        free(tempA); tempA = NULL;
+        free(tempB); tempB = NULL;
+    }
+
+    if (free_values)
+    {
+        values = (FPnum*)malloc( ((size_t)p+(size_t)q+(size_t)add_intercepts)
+                                 * (size_t)k
+                                 * sizeof(FPnum));
+        if (values == NULL) goto throw_oom;
+
+        if (!reset_values  || start_with_ALS)
+        {
+            edge = 0;
+            if (user_bias) {
+                copy_arr(biasA, values + edge, m, 1);
+                edge += m;
+            }
+            if (item_bias) {
+                copy_arr(biasB, values + edge, n, 1);
+                edge += n;
+            }
+            copy_arr(C, values + edge, (size_t)p*(size_t)k, nthreads);
+            edge += (size_t)p*(size_t)k;
+            if (add_intercepts) {
+                copy_arr(C_bias, values + edge, k, 1);
+                edge += k;
+            }
+            copy_arr(D, values + edge, (size_t)q*(size_t)k, nthreads);
+            edge += (size_t)q*(size_t)k;
+            if (add_intercepts) {
+                copy_arr(D_bias, values + edge, k, 1);
+                edge += k;
+            }
+        }
+    } else {
+        values = user_bias? biasA : (item_bias? biasB : C);
+    }
+
+    retval = fit_offsets_explicit_lbfgs(
+        values, reset_values,
+        glob_mean,
+        m, n, 0,
+        ixA, ixB, X, nnz,
+        Xfull,
+        weight,
+        user_bias, item_bias,
+        add_intercepts,
+        lam, lam_unique,
+        U, p,
+        II, q,
+        U_row, U_col, U_sp, nnz_U,
+        I_row, I_col, I_sp, nnz_I,
+        0, k,
+        1., 1.,
+        n_corr_pairs, maxiter, seed,
+        nthreads, prefer_onepass,
+        verbose, print_every, handle_interrupt,
+        niter, nfev,
+        Am, Bm,
+        (FPnum*)NULL
+    );
+    if (retval == 1)
+        goto throw_oom;
+    else if (retval != 0)
+        goto cleanup;
+
+    if (free_values)
+    {
+        edge = 0;
+        if (user_bias) {
+            copy_arr(values + edge, biasA, m, 1);
+            edge += m;
+        }
+        if (item_bias) {
+            copy_arr(values + edge, biasB, n, 1);
+            edge += n;
+        }
+        copy_arr(values + edge, C, (size_t)p*(size_t)k, nthreads);
+        edge += (size_t)p*(size_t)k;
+        if (add_intercepts) {
+            copy_arr(values + edge, C_bias, k, 1);
+            edge += k;
+        }
+        copy_arr(values + edge, D, (size_t)q*(size_t)k, nthreads);
+        edge += (size_t)q*(size_t)k;
+        if (add_intercepts) {
+            copy_arr(values + edge, D_bias, k, 1);
+            edge += k;
+        }
+    }
+
+    cleanup:
+        if (free_values)
+            free(values);
+        free(tempA);
+        free(tempB);
+        return retval;
+    throw_oom:
+    {
+        retval = 1;
+        goto cleanup;
+    }
+}
+
+int factors_content_based_single
+(
+    FPnum *restrict a_vec, int k,
+    FPnum *restrict u_vec, int p,
+    FPnum *restrict u_vec_sp, int u_vec_ixB[], size_t nnz_u_vec,
+    FPnum *restrict C, FPnum *restrict C_bias
+)
+{
+    if (a_vec != NULL)
+    {
+        cblas_tgemv(CblasRowMajor, CblasTrans,
+                    p, k,
+                    1., C, k,
+                    u_vec, 1,
+                    0., a_vec, 1);
+    }
+
+    else
+    {
+        set_to_zero(a_vec, k, 1);
+        tgemv_dense_sp(
+            p, k,
+            1., C, (size_t)k,
+            u_vec_ixB, u_vec_sp, nnz_u_vec,
+            a_vec
+        );
+    }
+
+    if (C_bias != NULL)
+        cblas_taxpy(k, 1., C_bias, 1, a_vec, 1);
+
+    return 0;
+}
+
+int factors_content_based_mutliple
+(
+    FPnum *restrict Am, int m_new, int k,
+    FPnum *restrict C, FPnum *restrict C_bias,
+    FPnum *restrict U, int p,
+    int U_row[], int U_col[], FPnum *restrict U_sp, size_t nnz_U,
+    size_t U_csr_p[], int U_csr_i[], FPnum *restrict U_csr,
+    int nthreads
+)
+{
+    return matrix_content_based(
+        Am,
+        m_new, k,
         U, p,
         U_row, U_col, U_sp, nnz_U,
         U_csr_p, U_csr_i, U_csr,
         C, C_bias,
         nthreads
     );
-    if (retval == 1) goto cleanup;
-
-    #pragma omp parallel for schedule(static) num_threads(nthreads) \
-            shared(n_new, scores_new, k_sec, Am, Bm, ixB, biasB, glob_mean)
-    for (ix = 0; ix < n_new; ix++)
-        scores_new[ix] = cblas_tdot(k_sec, Am + (size_t)ix*(size_t)k_sec, 1,
-                                    Bm + (size_t)ixB[ix]*(size_t)k_sec, 1)
-                          + ((biasB != NULL)? biasB[ixB[ix]] : 0.)
-                          + glob_mean;
-
-    cleanup:
-        free(Am);
-    return retval;
 }
 
-int rank_content_based_new
+int topN_old_content_based
 (
-    FPnum *restrict scores_new, int *restrict rank_new,
-    int n_new, int k_sec, int n_top,
+    FPnum *restrict a_vec, FPnum a_bias,
+    FPnum *restrict Am, FPnum *restrict biasA, int row_index,
+    FPnum *restrict Bm,
+    FPnum *restrict biasB,
+    FPnum glob_mean,
+    int k,
+    int *restrict include_ix, int n_include,
+    int *restrict exclude_ix, int n_exclude,
+    int *restrict outp_ix, FPnum *restrict outp_score,
+    int n_top, int n, int nthreads
+)
+{
+    return topN_old_collective_explicit(
+        a_vec, a_bias,
+        Am, biasA, row_index,
+        Bm,
+        biasB,
+        glob_mean,
+        k, 0, 0, 0,
+        include_ix, n_include,
+        exclude_ix, n_exclude,
+        outp_ix, outp_score,
+        n_top, n, nthreads
+    );
+}
+
+int topN_new_content_based
+(
+    /* inputs for the factors */
+    int k, int n_new,
     FPnum *restrict u_vec, int p,
     FPnum *restrict u_vec_sp, int u_vec_ixB[], size_t nnz_u_vec,
     FPnum *restrict II, int q,
@@ -1942,18 +3040,20 @@ int rank_content_based_new
     FPnum *restrict C, FPnum *restrict C_bias,
     FPnum *restrict D, FPnum *restrict D_bias,
     FPnum glob_mean,
-    int nthreads
+    /* inputs for topN */
+    int *restrict outp_ix, FPnum *restrict outp_score,
+    int n_top, int nthreads
 )
 {
     int retval = 0;
-    FPnum *restrict a_vec = (FPnum*)malloc((size_t)k_sec*sizeof(FPnum));
-    FPnum *restrict Bm = (FPnum*)malloc((size_t)n_new * (size_t)k_sec
+    FPnum *restrict a_vec = (FPnum*)malloc((size_t)k*sizeof(FPnum));
+    FPnum *restrict Bm = (FPnum*)malloc((size_t)n_new * (size_t)k
                                                       * sizeof(FPnum));
     FPnum *restrict scores_copy = (FPnum*)malloc((size_t)n_new*sizeof(FPnum));
     
     int *restrict buffer_ix = NULL;
     if (n_top == 0 || n_top == n_new)
-        buffer_ix = rank_new;
+        buffer_ix = outp_ix;
     else
         buffer_ix = (int*)malloc((size_t)n_new*sizeof(int));
 
@@ -1965,27 +3065,28 @@ int rank_content_based_new
 
     if (n_top == 0) n_top = n_new;
 
-    factors_content_based(
-        a_vec, k_sec,
+    retval = factors_content_based_single(
+        a_vec, k,
         u_vec, p,
         u_vec_sp, u_vec_ixB, nnz_u_vec,
         C, C_bias
     );
+    if (retval != 0) goto cleanup;
 
     retval = matrix_content_based(
         Bm,
-        n_new, k_sec,
+        n_new, k,
         II, q,
         I_row, I_col, I_sp, nnz_I,
         I_csr_p, I_csr_i, I_csr,
         D, D_bias,
         nthreads
     );
-    if (retval == 1) goto cleanup;
+    if (retval != 0) goto cleanup;
 
     cblas_tgemv(CblasRowMajor, CblasNoTrans,
-                n_new, k_sec,
-                1., Bm, k_sec,
+                n_new, k,
+                1., Bm, k,
                 a_vec, 1,
                 0., scores_copy, 1);
 
@@ -2004,117 +3105,101 @@ int rank_content_based_new
         qsort(buffer_ix, n_top, sizeof(int), cmp_argsort);
     }
 
-    if (buffer_ix != rank_new)
-        memcpy(rank_new, buffer_ix, (size_t)n_top*sizeof(int));
+    if (buffer_ix != outp_ix)
+        memcpy(outp_ix, buffer_ix, (size_t)n_top*sizeof(int));
 
-    if (scores_new != NULL)
+    if (outp_score != NULL)
         for (int ix = 0; ix < n_top; ix++)
-            scores_new[ix] = scores_copy[buffer_ix[ix]] + glob_mean;
+            outp_score[ix] = scores_copy[buffer_ix[ix]] + glob_mean;
 
     cleanup:
         free(a_vec);
         free(Bm);
         free(scores_copy);
-        if (buffer_ix != rank_new)
+        if (buffer_ix != outp_ix)
             free(buffer_ix);
     return retval;
 }
 
-int offsets_factors_cold_multiple
+int predict_X_old_content_based
 (
-    FPnum *restrict A, int m,
+    FPnum *restrict predicted, size_t n_predict,
+    int m_new, int k,
+    int row[], /* <- optional */
+    int col[],
     FPnum *restrict U, int p,
     int U_row[], int U_col[], FPnum *restrict U_sp, size_t nnz_U,
     size_t U_csr_p[], int U_csr_i[], FPnum *restrict U_csr,
     FPnum *restrict C, FPnum *restrict C_bias,
-    int k, int k_sec, int k_main,
-    FPnum w_user,
+    FPnum *restrict Bm, FPnum *restrict biasB,
+    FPnum glob_mean,
     int nthreads
 )
 {
-    nthreads = cap_to_4(nthreads);
     #if defined(_OPENMP) && \
                 ( (_OPENMP < 200801)  /* OpenMP < 3.0 */ \
                   || defined(_WIN32) || defined(_WIN64) \
                 )
-    long long row;
+    long long ix;
     #endif
-
-    size_t k_totA = k_sec+k+k_main;
-    set_to_zero(A, (size_t)m*k_totA, nthreads);
-
-    size_t *restrict U_csr_p_use = NULL;
-    int *restrict U_csr_i_use = NULL;
-    FPnum *restrict U_csr_use = NULL;
+    FPnum *restrict Am = (FPnum*)malloc((size_t)n_predict *
+                                        (size_t)k *
+                                        sizeof(FPnum));
     int retval = 0;
-
-    if (U != NULL)
+    if (Am == NULL)
     {
-        cblas_tgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,
-                    m, k_sec+k, p,
-                    w_user, U, p, C, k_sec+k,
-                    0., A, k_sec+k+k_main);
+        retval = 1;
+        goto cleanup;
     }
 
+    retval = matrix_content_based(
+        Am,
+        m_new, k,
+        U, p,
+        U_row, U_col, U_sp, nnz_U,
+        U_csr_p, U_csr_i, U_csr,
+        C, C_bias,
+        nthreads
+    );
+    if (retval == 1) goto cleanup;
+
+    if (row == NULL)
+        #pragma omp parallel for schedule(static) num_threads(nthreads) \
+                shared(predicted, n_predict, col, k, Am, Bm, biasB, glob_mean)
+        for (size_t_for ix = 0; ix < n_predict; ix++)
+            predicted[ix] = cblas_tdot(k, Am + ix*(size_t)k, 1,
+                                          Bm + (size_t)col[ix]*(size_t)k, 1)
+                             + ((biasB != NULL)? biasB[col[ix]] : 0.)
+                             + glob_mean;
     else
-    {
-        if (nnz_U && U_csr == NULL) {
-            retval = coo_to_csr_plus_alloc(
-                        U_row, U_col, U_sp, (FPnum*)NULL,
-                        m, p, nnz_U,
-                        &U_csr_p_use, &U_csr_i_use, &U_csr_use, (FPnum**)NULL
-                    );
-            if (retval != 0) goto cleanup;
-        }
-        else {
-            U_csr_p_use = U_csr_p;
-            U_csr_i_use = U_csr_i;
-            U_csr_use = U_csr;
-        }
-
-        tgemm_sp_dense(
-            m, k_sec+k, w_user,
-            U_csr_p_use, U_csr_i_use, U_csr_use,
-            C, (size_t)(k_sec+k),
-            A, (size_t)(k_sec+k+k_main),
-            nthreads
-        );
-    }
-
-    if (C_bias != NULL)
-        mat_plus_colvec(A, C_bias, w_user, m, k_sec+k, k_totA, nthreads);
+        #pragma omp parallel for schedule(static) num_threads(nthreads) \
+                shared(predicted, n_predict, row, col, k, Am, Bm, \
+                       biasB, glob_mean)
+        for (size_t_for ix = 0; ix < n_predict; ix++)
+            predicted[ix] = cblas_tdot(k, Am + row[ix]*(size_t)k, 1,
+                                          Bm + (size_t)col[ix]*(size_t)k, 1)
+                             + ((biasB != NULL)? biasB[col[ix]] : 0.)
+                             + glob_mean;
 
     cleanup:
-        if (U_csr_p_use != U_csr_p)
-            free(U_csr_p_use);
-        if (U_csr_i_use != U_csr_i)
-            free(U_csr_i_use);
-        if (U_csr_use != U_csr)
-            free(U_csr_use);
+        free(Am);
     return retval;
 }
 
-int offsets_factors_warm_multiple
+int predict_X_new_content_based
 (
-    FPnum *restrict A, FPnum *restrict biasA, int m,
+    FPnum *restrict predicted, size_t n_predict,
+    int m_new, int n_new, int k,
+    int row[], int col[], /* <- optional */
     FPnum *restrict U, int p,
     int U_row[], int U_col[], FPnum *restrict U_sp, size_t nnz_U,
     size_t U_csr_p[], int U_csr_i[], FPnum *restrict U_csr,
-    FPnum *restrict X, int ixA[], int ixB[], size_t nnz,
-    size_t *restrict Xcsr_p, int *restrict Xcsr_i, FPnum *restrict Xcsr,
-    FPnum *restrict Xfull, int n,
-    FPnum *restrict weight,
-    FPnum *restrict Bm, FPnum *restrict C,
-    FPnum *restrict C_bias,
-    FPnum glob_mean, FPnum *restrict biasB,
-    int k, int k_sec, int k_main,
-    FPnum w_user,
-    FPnum lam, bool exact, FPnum lam_bias,
-    bool implicit, FPnum alpha,
-    FPnum *restrict precomputedTransBtBinvBt,
-    FPnum *restrict precomputedBtB,
-    FPnum *restrict Bm_plus_bias,
-    FPnum *restrict output_A,
+    FPnum *restrict II, int q,
+    int I_row[], int I_col[], FPnum *restrict I_sp, size_t nnz_I,
+    size_t I_csr_p[], int I_csr_i[], FPnum *restrict I_csr,
+    FPnum *restrict C, FPnum *restrict C_bias,
+    FPnum *restrict D, FPnum *restrict D_bias,
+    FPnum glob_mean,
     int nthreads
 )
 {
@@ -2125,118 +3210,58 @@ int offsets_factors_warm_multiple
     long long ix;
     #endif
 
-    int k_totA = k_sec + k + k_main;
-
-    size_t *restrict Xcsr_p_use = NULL;
-    int *restrict Xcsr_i_use = NULL;
-    FPnum *restrict Xcsr_use = NULL;
-    FPnum *restrict weightR = NULL;
-
-    size_t *restrict U_csr_p_use = NULL;
-    int *restrict U_csr_i_use = NULL;
-    FPnum *restrict U_csr_use = NULL;
-
+    FPnum *restrict Am = (FPnum*)malloc((size_t)n_new *
+                                        (size_t)k *
+                                        sizeof(FPnum));
+    FPnum *restrict Bm = (FPnum*)malloc((size_t)n_new *
+                                        (size_t)k *
+                                        sizeof(FPnum));
     int retval = 0;
-    int *ret = (int*)malloc((size_t)m*sizeof(int));
-    if (ret == NULL) { retval = 1; goto cleanup; }
-
-    if (X != NULL && Xfull == NULL) {
-        retval = coo_to_csr_plus_alloc(
-                    ixA, ixB, X, weight,
-                    m, n, nnz,
-                    &Xcsr_p_use, &Xcsr_i_use, &Xcsr_use, &weightR
-                );
-        if (retval != 0) goto cleanup;
-    }
-    else if (Xcsr != NULL) {
-        Xcsr_p_use = Xcsr_p;
-        Xcsr_i_use = Xcsr_i;
-        Xcsr_use = Xcsr;
-        weightR = weight;
+    if (Am == NULL || Bm == NULL)
+    {
+        retval = 1;
+        goto cleanup;
     }
 
-    /* this should NOT be reached */
-    if (implicit && alpha != 1.) {
-        if (Xcsr_use != NULL)
-            tscal_large(Xcsr_use, alpha, nnz, nthreads);
-        else
-            cblas_tscal(n, alpha, X, 1);
-    }
+    retval = matrix_content_based(
+        Am,
+        m_new, k,
+        U, p,
+        U_row, U_col, U_sp, nnz_U,
+        U_csr_p, U_csr_i, U_csr,
+        C, C_bias,
+        nthreads
+    );
+    if (retval == 1) goto cleanup;
 
-    if (U == NULL && nnz_U && U_csr == NULL) {
-        retval = coo_to_csr_plus_alloc(
-                    U_row, U_col, U_sp, (FPnum*)NULL,
-                    m, p, nnz_U,
-                    &U_csr_p_use, &U_csr_i_use, &U_csr_use, (FPnum**)NULL
-                );
-        if (retval != 0) goto cleanup;
-    }
-    else {
-        U_csr_p_use = U_csr_p;
-        U_csr_i_use = U_csr_i;
-        U_csr_use = U_csr;
-    }
+    retval = matrix_content_based(
+        Bm,
+        n_new, k,
+        II, q,
+        I_row, I_col, I_sp, nnz_I,
+        I_csr_p, I_csr_i, I_csr,
+        D, D_bias,
+        nthreads
+    );
+    if (retval == 1) goto cleanup;
 
-    #pragma omp parallel for schedule(static) num_threads(nthreads) \
-            shared(A, biasA, Bm, biasB, C, C_bias, m, n, k_totA, U, p, \
-                   U_csr_p_use, U_csr_i_use, U_csr_use, \
-                   Xcsr_p_use, Xcsr_i_use, Xcsr_use, Xfull, weight, weightR, \
-                   Bm_plus_bias, output_A, glob_mean, k, k_sec, k_main, \
-                   w_user, lam, exact, lam_bias, \
-                   implicit, precomputedBtB, precomputedTransBtBinvBt)
-    for (size_t_for ix = 0; ix < (size_t)m; ix++)
-        ret[ix] = offsets_factors_warm(
-                    A + ix*(size_t)k_totA,
-                    (biasA != NULL)? (biasA + ix) : ((FPnum*)NULL),
-                    (U == NULL)?
-                      ((FPnum*)NULL)
-                      : (U + ix*(size_t)p),
-                    (U_csr_i_use == NULL)?
-                      ((int*)NULL)
-                      : (U_csr_i_use + U_csr_p_use[ix]),
-                    (U_csr_use == NULL)?
-                      ((FPnum*)NULL)
-                      : (U_csr_use + U_csr_p_use[ix]),
-                    (U_csr_p_use == NULL)?
-                      ((size_t)0):(U_csr_p_use[ix+(size_t)1] - U_csr_p_use[ix]),
-                    (Xcsr_i_use == NULL)?
-                      ((int*)NULL)
-                      : (Xcsr_i_use + Xcsr_p_use[ix]),
-                    (Xcsr_use == NULL)?
-                      ((FPnum*)NULL)
-                      : (Xcsr_use + Xcsr_p_use[ix]),
-                    (Xcsr_p_use == NULL)?
-                      ((size_t)0) : (Xcsr_p_use[ix+(size_t)1] - Xcsr_p_use[ix]),
-                    (Xfull == NULL)? ((FPnum*)NULL) : (Xfull + ix*(size_t)n),
-                    n,
-                    (weight == NULL)?
-                      ((FPnum*)NULL)
-                      : ( (weightR != NULL)?
-                            (weightR + Xcsr_p_use[ix])
-                            : (weight + ix*(size_t)n) ),
-                    Bm, C,
-                    C_bias,
-                    glob_mean, biasB,
-                    k, k_sec, k_main,
-                    p, w_user,
-                    lam, exact, lam_bias,
-                    implicit, 1.,
-                    precomputedTransBtBinvBt,
-                    precomputedBtB,
-                    (output_A == NULL)?
-                      ((FPnum*)NULL)
-                      : (output_A + ix*(size_t)(k+k_main)),
-                    Bm_plus_bias
-                );
+    if (row == NULL || col == NULL)
+        #pragma omp parallel for schedule(static) num_threads(nthreads) \
+                shared(predicted, n_predict, k, Am, Bm, glob_mean)
+        for (size_t_for ix = 0; ix < n_predict; ix++)
+            predicted[ix] = cblas_tdot(k, Am + ix*(size_t)k, 1,
+                                          Bm + ix*(size_t)k, 1)
+                             + glob_mean;
+    else
+        #pragma omp parallel for schedule(static) num_threads(nthreads) \
+                shared(predicted, n_predict, row, col, k, Am, Bm, glob_mean)
+        for (size_t_for ix = 0; ix < n_predict; ix++)
+            predicted[ix] = cblas_tdot(k, Am + (size_t)row[ix]*(size_t)k, 1,
+                                          Bm + (size_t)col[ix]*(size_t)k, 1)
+                             + glob_mean;
 
     cleanup:
-        free(ret);
-        if (weightR != weight) free(weightR);
-        if (Xcsr_p_use != Xcsr_p) free(Xcsr_p_use);
-        if (Xcsr_i_use != Xcsr_i) free(Xcsr_i_use);
-        if (Xcsr_use != Xcsr) free(Xcsr_use);
-        if (U_csr_p_use != U_csr_p) free(U_csr_p_use);
-        if (U_csr_i_use != U_csr_i) free(U_csr_i_use);
-        if (U_csr_use != U_csr) free(U_csr_use);
+        free(Am);
+        free(Bm);
     return retval;
 }

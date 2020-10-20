@@ -449,6 +449,7 @@ void tscal_large(FPnum *restrict arr, FPnum alpha, size_t n, int nthreads)
 
 int rnorm(FPnum *restrict arr, size_t n, int seed, int nthreads)
 {
+    #ifndef _FOR_R
     int three = 3;
     int seed_arr[4] = {seed, seed, seed, seed};
     process_seed_for_larnv(seed_arr);
@@ -487,11 +488,18 @@ int rnorm(FPnum *restrict arr, size_t n, int seed, int nthreads)
             tlarnv_(&three, seed_arr, &remainder, arr + (size_t)INT_MAX * chunks);
         free(mt_seed_arr);
     }
+    #else
+    GetRNGstate();
+    for (size_t ix = 0; ix < n; ix++)
+        arr[ix] = norm_rand();
+    PutRNGstate();
+    #endif
     return 0;
 }
 
 void rnorm_preserve_seed(FPnum *restrict arr, size_t n, int seed_arr[4])
 {
+    #ifndef _FOR_R
     process_seed_for_larnv(seed_arr);
     int three = 3;
 
@@ -514,6 +522,12 @@ void rnorm_preserve_seed(FPnum *restrict arr, size_t n, int seed_arr[4])
             arr += size_chunk;
         }
     }
+    #else
+    GetRNGstate();
+    for (size_t ix = 0; ix < n; ix++)
+        arr[ix] = norm_rand();
+    PutRNGstate();
+    #endif
 }
 
 void process_seed_for_larnv(int seed_arr[4])

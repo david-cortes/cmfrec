@@ -496,7 +496,7 @@ void nvars_collective_fun_grad
     size_t nnz, size_t nnz_U, size_t nnz_I,
     size_t k, size_t k_main, size_t k_user, size_t k_item,
     bool user_bias, bool item_bias, size_t nthreads,
-    FPnum *X, FPnum *Xfull, FPnum *Xcsr,
+    FPnum *X, FPnum *Xfull,
     FPnum *U, FPnum *Ub, FPnum *II, FPnum *Ib,
     FPnum *U_sp, FPnum *U_csr, FPnum *I_sp, FPnum *I_csr,
     size_t *nvars, size_t *nbuffer, size_t *nbuffer_mt
@@ -582,7 +582,7 @@ FPnum collective_fun_grad
         nnz, nnz_U, nnz_I,
         (size_t)k, (size_t)k_main, (size_t)k_user, (size_t)k_item,
         user_bias, item_bias, (size_t)nthreads,
-        X, Xfull, Xcsr,
+        X, Xfull,
         U, Ub, II, Ib,
         U_sp, U_csr, I_sp, I_csr,
         &nvars, &ignored, &mtvars
@@ -1833,6 +1833,18 @@ void collective_block_cg
     FPnum r_new, r_old;
     FPnum a, coef, w_this;
 
+    if (u_vec != NULL && cnt_NA_u == p) {
+        u_vec = NULL;
+        nnz_u_vec = 0;
+        NA_as_zero_U = false;
+    }
+
+    if (Xa_dense != NULL && cnt_NA_x == n) {
+        Xa_dense = NULL;
+        nnz = 0;
+        NA_as_zero_X = false;
+    }
+
     bool prefer_BtB = max2((size_t)cnt_NA_x, nnz) < (size_t)(2*(k+k_main));
     bool prefer_CtC = max2((size_t)cnt_NA_u,nnz_u_vec) < (size_t)(2*(k+k_user));
     if (precomputedBtB == NULL)
@@ -2387,6 +2399,12 @@ void collective_block_cg_implicit
     bool prefer_CtC = max2((size_t)cnt_NA_u,nnz_u_vec) < (size_t)(2*(k+k_user));
     if (precomputedCtC == NULL)
         prefer_CtC = false;
+
+    if (u_vec != NULL && cnt_NA_u == p) {
+        u_vec = NULL;
+        nnz_u_vec = 0;
+        NA_as_zero_U = false;
+    }
 
     /* t(B)*t(X) - t(B)*B*a */
     cblas_tsymv(CblasRowMajor, CblasUpper, k+k_main,
@@ -4597,7 +4615,7 @@ lbfgsFPnumval_t wrapper_collective_fun_grad
         );
 }
 
-int fit_collective_explicit_lbfgs
+int fit_collective_explicit_lbfgs_internal
 (
     FPnum *restrict values, bool reset_values,
     FPnum *restrict glob_mean,
@@ -4634,7 +4652,7 @@ int fit_collective_explicit_lbfgs
         nnz, nnz_U, nnz_I,
         k, k_main, k_user, k_item,
         user_bias, item_bias, nthreads,
-        X, Xfull, X,
+        X, Xfull,
         U, Ub, II, Ib,
         U_sp, U_sp, I_sp, I_sp,
         &nvars, &size_buffer, &size_mt
@@ -4917,6 +4935,192 @@ int fit_collective_explicit_lbfgs
     }
 
     return 0;
+}
+
+int fit_collective_explicit_lbfgs
+(
+    FPnum *restrict biasA, FPnum *restrict biasB,
+    FPnum *restrict A, FPnum *restrict B,
+    FPnum *restrict C, FPnum *restrict Cb,
+    FPnum *restrict D, FPnum *restrict Db,
+    bool reset_values, int seed,
+    FPnum *restrict glob_mean,
+    FPnum *restrict U_colmeans, FPnum *restrict I_colmeans,
+    int m, int n, int k,
+    int ixA[], int ixB[], FPnum *restrict X, size_t nnz,
+    FPnum *restrict Xfull,
+    FPnum *restrict weight,
+    bool user_bias, bool item_bias,
+    FPnum lam, FPnum *restrict lam_unique,
+    FPnum *restrict U, int m_u, int p,
+    FPnum *restrict II, int n_i, int q,
+    FPnum *restrict Ub, int m_ubin, int pbin,
+    FPnum *restrict Ib, int n_ibin, int qbin,
+    int U_row[], int U_col[], FPnum *restrict U_sp, size_t nnz_U,
+    int I_row[], int I_col[], FPnum *restrict I_sp, size_t nnz_I,
+    int k_main, int k_user, int k_item,
+    FPnum w_main, FPnum w_user, FPnum w_item,
+    int n_corr_pairs, size_t maxiter,
+    int nthreads, bool prefer_onepass,
+    bool verbose, int print_every, bool handle_interrupt,
+    int *restrict niter, int *restrict nfev,
+    bool precompute_for_predictions,
+    FPnum *restrict B_plus_bias,
+    FPnum *restrict precomputedBtB,
+    FPnum *restrict precomputedTransBtBinvBt,
+    FPnum *restrict precomputedBeTBeChol,
+    FPnum *restrict precomputedTransCtCinvCt,
+    FPnum *restrict precomputedCtCw
+)
+{
+    int retval = 0;
+
+    int k_totA = k_user + k + k_main;
+    int k_totB = k_item + k + k_main;
+    int m_max = max2(max2(m, m_u), m_ubin);
+    int n_max = max2(max2(n, n_i), n_ibin);
+    size_t nvars, ignored, ignored2 = 0;
+    nvars_collective_fun_grad(
+        (size_t)m, (size_t)n, (size_t)m_u, (size_t)n_i,
+        (size_t)m_ubin, (size_t)n_ibin,
+        (size_t)p, (size_t)q, (size_t)pbin, (size_t)qbin,
+        nnz, nnz_U, nnz_I,
+        (size_t)k, (size_t)k_main, (size_t)k_user, (size_t)k_item,
+        user_bias, item_bias, (size_t)nthreads,
+        X, Xfull,
+        U, Ub, II, Ib,
+        U_sp, U_sp, I_sp, I_sp,
+        &nvars, &ignored, &ignored2
+    );
+    size_t edge = 0;
+    FPnum *restrict values = (FPnum*)malloc(nvars*sizeof(FPnum));
+    if (values == NULL) goto throw_oom;
+    if (!reset_values)
+    {
+        edge = 0;
+        if (user_bias) {
+            copy_arr(biasA, values + edge, m_max, 1);
+            edge += m_max;
+        }
+        if (item_bias) {
+            copy_arr(biasB, values + edge, n_max, 1);
+            edge += n_max;
+        }
+        copy_arr(A, values + edge, (size_t)m_max*(size_t)k_totA, nthreads);
+        edge += (size_t)m_max*(size_t)k_totA;
+        copy_arr(B, values + edge, (size_t)n_max*(size_t)k_totB, nthreads);
+        edge += (size_t)n_max*(size_t)k_totB;
+        if (p) {
+            copy_arr(C, values + edge, (size_t)p*(size_t)(k_user+k), nthreads);
+            edge += (size_t)p*(size_t)(k_user+k);
+        }
+        if (pbin) {
+            copy_arr(Cb, values+edge,(size_t)pbin*(size_t)(k_user+k),nthreads);
+            edge += (size_t)pbin*(size_t)(k_user+k);
+        }
+        if (q) {
+            copy_arr(D, values + edge, (size_t)q*(size_t)(k_item+k), nthreads);
+            edge += (size_t)q*(size_t)(k_item+k);
+        }
+        if (qbin) {
+            copy_arr(Db, values+edge,(size_t)qbin*(size_t)(k_item+k),nthreads);
+            edge += (size_t)qbin*(size_t)(k_item+k);
+        }
+    }
+
+    retval = fit_collective_explicit_lbfgs_internal(
+        values, reset_values,
+        glob_mean,
+        U_colmeans, I_colmeans,
+        m, n, k,
+        ixA, ixB, X, nnz,
+        Xfull,
+        weight,
+        user_bias, item_bias,
+        lam, lam_unique,
+        U, m_u, p,
+        II, n_i, q,
+        Ub, m_ubin, pbin,
+        Ib, n_ibin, qbin,
+        U_row, U_col, U_sp, nnz_U,
+        I_row, I_col, I_sp, nnz_I,
+        k_main, k_user, k_item,
+        w_main, w_user, w_item,
+        n_corr_pairs, maxiter, seed,
+        nthreads, prefer_onepass,
+        verbose, print_every, handle_interrupt,
+        niter, nfev,
+        B_plus_bias
+    );
+    if (retval != 0)
+        goto cleanup;
+
+
+    if (true)
+    {
+        edge = 0;
+        if (user_bias) {
+            copy_arr(values + edge, biasA, m_max, 1);
+            edge += m_max;
+        }
+        if (item_bias) {
+            copy_arr(values + edge, biasB, n_max, 1);
+            edge += n_max;
+        }
+        copy_arr(values + edge, A, (size_t)m_max*(size_t)k_totA, nthreads);
+        edge += (size_t)m_max*(size_t)k_totA;
+        copy_arr(values + edge, B, (size_t)n_max*(size_t)k_totB, nthreads);
+        edge += (size_t)n_max*(size_t)k_totB;
+        if (p) {
+            copy_arr(values + edge, C, (size_t)p*(size_t)(k_user+k), nthreads);
+            edge += (size_t)p*(size_t)(k_user+k);
+        }
+        if (pbin) {
+            copy_arr(values+edge,Cb, (size_t)pbin*(size_t)(k_user+k),nthreads);
+            edge += (size_t)pbin*(size_t)(k_user+k);
+        }
+        if (q) {
+            copy_arr(values + edge, D, (size_t)q*(size_t)(k_item+k), nthreads);
+            edge += (size_t)q*(size_t)(k_item+k);
+        }
+        if (qbin) {
+            copy_arr(values+edge,Db, (size_t)qbin*(size_t)(k_item+k),nthreads);
+            edge += (size_t)qbin*(size_t)(k_item+k);
+        }
+    }
+
+    if (precompute_for_predictions)
+    {
+        retval = precompute_collective_explicit(
+            B, n, n_i, n_ibin,
+            C, p,
+            k, k_user, k_item, k_main,
+            user_bias,
+            lam, lam_unique,
+            w_main, w_user,
+            B_plus_bias,
+            precomputedBtB,
+            precomputedTransBtBinvBt,
+            precomputedBeTBeChol,
+            precomputedTransCtCinvCt,
+            precomputedCtCw
+        );
+    }
+
+    cleanup:
+        free(values);
+        return retval;
+    throw_oom:
+    {
+        if (verbose) {
+            fprintf(stderr, "Error: could not allocate enough memory.\n");
+            #ifndef _FOR_R
+            fflush(stderr);
+            #endif
+        }
+        retval = 1;
+        goto cleanup;
+    }
 }
 
 /* TODO: it's no longer necessary or beneficial to have separate functions
@@ -6549,104 +6753,155 @@ int precompute_collective_implicit
     return 0;
 }
 
-int collective_factors_cold_multiple
+int factors_collective_explicit_single
 (
-    FPnum *restrict A, int m,
-    FPnum *restrict U, int m_u, int p,
-    int U_row[], int U_col[], FPnum *restrict U_sp, size_t nnz_U,
-    size_t U_csr_p[], int U_csr_i[], FPnum *restrict U_csr,
-    FPnum *restrict Ub, int m_ubin, int pbin,
+    FPnum *restrict a_vec, FPnum *restrict a_bias,
+    FPnum *restrict u_vec, int p,
+    FPnum *restrict u_vec_sp, int u_vec_ixB[], size_t nnz_u_vec,
+    FPnum *restrict u_bin_vec, int pbin,
+    bool NA_as_zero_U, bool NA_as_zero_X,
     FPnum *restrict C, FPnum *restrict Cb,
-    FPnum *restrict TransCtCinvCt,
-    FPnum *restrict CtCw,
+    FPnum glob_mean, FPnum *restrict biasB,
     FPnum *restrict col_means,
-    int k, int k_user, int k_main,
-    FPnum lam, FPnum w_main, FPnum w_user,
-    bool NA_as_zero_U,
-    int nthreads
+    FPnum *restrict Xa, int ixB[], size_t nnz,
+    FPnum *restrict Xa_dense, int n,
+    FPnum *restrict weight,
+    FPnum *restrict B,
+    int k, int k_user, int k_item, int k_main,
+    FPnum lam, FPnum *restrict lam_unique,
+    FPnum w_main, FPnum w_user,
+    FPnum *restrict TransBtBinvBt,
+    FPnum *restrict BtB,
+    FPnum *restrict BeTBeChol,
+    FPnum *restrict CtCw,
+    FPnum *restrict TransCtCinvCt,
+    FPnum *restrict B_plus_bias
 )
 {
-    #if defined(_OPENMP) && \
-                ( (_OPENMP < 200801)  /* OpenMP < 3.0 */ \
-                  || defined(_WIN32) || defined(_WIN64) \
-                )
-    long long ix;
-    #endif
-
-    size_t k_totA = k_user + k + k_main;
-    size_t *restrict U_csr_p_use = NULL;
-    int *restrict U_csr_i_use = NULL;
-    FPnum *restrict U_csr_use = NULL;
-
     int retval = 0;
-    int *ret = (int*)malloc((size_t)m*sizeof(int));
-    if (ret == NULL) { retval = 1; goto cleanup; }
-
-    if (U == NULL && nnz_U && U_csr == NULL) {
-        retval = coo_to_csr_plus_alloc(
-                    U_row, U_col, U_sp, (FPnum*)NULL,
-                    m_u, p, nnz_U,
-                    &U_csr_p_use, &U_csr_i_use, &U_csr_use, (FPnum**)NULL
-                );
-        if (retval != 0) goto cleanup;
-    }
-    else {
-        U_csr_p_use = U_csr_p;
-        U_csr_i_use = U_csr_i;
-        U_csr_use = U_csr;
+    FPnum lam_bias = lam;
+    if (lam_unique != NULL)
+    {
+        lam_bias = lam_unique[0];
+        lam = lam_unique[2];
     }
 
+    bool user_bias = (a_bias != NULL);
+    bool free_B_plus_bias = false;
+    if (user_bias && B_plus_bias == NULL)
+    {
+        free_B_plus_bias = true;
+        B_plus_bias = (FPnum*)malloc((size_t)n*(size_t)(k_item+k+k_main)
+                                      * sizeof(FPnum));
+        if (B_plus_bias == NULL) { retval = 1; goto cleanup; }
+        append_ones_last_col(
+            B, n, k_item+k+k_main,
+            B_plus_bias
+        );
+    }
 
-    #pragma omp parallel for schedule(static) num_threads(nthreads) \
-            shared(ret, m, m_u, m_ubin, A, k_totA, p, pbin, \
-                   U, Ub, U_csr_use, U_csr_i_use, U_csr_p_use, col_means, \
-                   k, k_user, k_main, lam, w_user, NA_as_zero_U, \
-                   C, Cb, TransCtCinvCt, CtCw)
-    for (size_t_for ix = 0; ix < (size_t)m; ix++)
-        ret[ix] = collective_factors_cold(
-                    A + ix*k_totA,
-                    (U == NULL || (int)ix >= m_u)?
-                      ((FPnum*)NULL)
-                      : (U + ix*(size_t)p),
-                    p,
-                    (U_csr_use == NULL || (int)ix >= m_u)?
-                      ((FPnum*)NULL)
-                      : (U_csr_use + U_csr_p_use[ix]),
-                    (U_csr_i_use == NULL || (int)ix >= m_u)?
-                      ((int*)NULL)
-                      : (U_csr_i_use + U_csr_p_use[ix]),
-                    (U_csr_p_use == NULL)?
-                      ((size_t)0):(U_csr_p_use[ix+(size_t)1] - U_csr_p_use[ix]),
-                    (Ub == NULL || (int)ix >= m_ubin)?
-                      ((FPnum*)NULL)
-                      : (Ub + ix*(size_t)pbin),
-                    pbin,
-                    C, Cb,
-                    TransCtCinvCt,
-                    CtCw,
-                    col_means,
-                    k, k_user, k_main,
-                    lam, w_main, w_user,
-                    NA_as_zero_U
-                );
+    if (!nnz && Xa_dense == NULL && !NA_as_zero_X)
+    {
+        if (a_bias != NULL)
+            *a_bias = 0.;
+        retval = collective_factors_cold(
+            a_vec,
+            u_vec, p,
+            u_vec_sp, u_vec_ixB, nnz_u_vec,
+            u_bin_vec, pbin,
+            C, Cb,
+            TransCtCinvCt,
+            CtCw,
+            col_means,
+            k, k_user, k_main,
+            lam, w_main, w_user,
+            NA_as_zero_U
+        );
+    }
+    else
+        retval = collective_factors_warm(
+            a_vec, a_bias,
+            u_vec, p,
+            u_vec_sp, u_vec_ixB, nnz_u_vec,
+            u_bin_vec, pbin,
+            C, Cb,
+            glob_mean, biasB,
+            col_means,
+            Xa, ixB, nnz,
+            Xa_dense, n,
+            weight,
+            B,
+            k, k_user, k_item, k_main,
+            lam, w_main, w_user, lam_bias,
+            TransBtBinvBt,
+            BtB,
+            BeTBeChol,
+            CtCw,
+            NA_as_zero_U, NA_as_zero_X,
+            B_plus_bias
+        );
 
-    for (int ix = 0; ix < m; ix++)
-        retval = (ret[ix] != 0)? 1 : retval;
     cleanup:
-        free(ret);
-        if (U_csr_p_use != U_csr_p)
-            free(U_csr_p_use);
-        if (U_csr_i_use != U_csr_i)
-            free(U_csr_i_use);
-        if (U_csr_use != U_csr)
-            free(U_csr_use);
+        if (free_B_plus_bias)
+            free(B_plus_bias);
     return retval;
 }
 
-int collective_factors_warm_multiple
+int factors_collective_implicit_single
 (
-    FPnum *restrict A, FPnum *restrict biasA, int m, int m_x,
+    FPnum *restrict a_vec,
+    FPnum *restrict u_vec, int p,
+    FPnum *restrict u_vec_sp, int u_vec_ixB[], size_t nnz_u_vec,
+    bool NA_as_zero_U,
+    FPnum *restrict col_means,
+    FPnum *restrict B, int n, FPnum *restrict C,
+    FPnum *restrict Xa, int ixB[], size_t nnz,
+    int k, int k_user, int k_item, int k_main,
+    FPnum lam, FPnum alpha, FPnum w_main, FPnum w_user,
+    FPnum w_main_multiplier,
+    FPnum *restrict BeTBe,
+    FPnum *restrict BtB,
+    FPnum *restrict BeTBeChol
+)
+{
+    if (nnz)
+        return collective_factors_warm_implicit(
+            a_vec,
+            u_vec, p,
+            u_vec_sp, u_vec_ixB, nnz_u_vec,
+            NA_as_zero_U,
+            col_means,
+            B, n, C,
+            Xa, ixB, nnz,
+            k, k_user, k_item, k_main,
+            lam, alpha, w_main, w_user,
+            w_main_multiplier,
+            BeTBe,
+            BtB,
+            BeTBeChol
+        );
+    else
+        return collective_factors_cold_implicit(
+            a_vec,
+            u_vec, p,
+            u_vec_sp, u_vec_ixB, nnz_u_vec,
+            B, n,
+            C,
+            BeTBe,
+            BtB,
+            BeTBeChol,
+            col_means,
+            k, k_user, k_item, k_main,
+            lam, w_main, w_user, w_main_multiplier,
+            NA_as_zero_U
+        );
+}
+
+int factors_collective_explicit_multiple
+(
+    FPnum *restrict A, FPnum *restrict biasA, int m,
     FPnum *restrict U, int m_u, int p,
+    bool NA_as_zero_U, bool NA_as_zero_X,
     int U_row[], int U_col[], FPnum *restrict U_sp, size_t nnz_U,
     size_t U_csr_p[], int U_csr_i[], FPnum *restrict U_csr,
     FPnum *restrict Ub, int m_ubin, int pbin,
@@ -6659,13 +6914,13 @@ int collective_factors_warm_multiple
     FPnum *restrict weight,
     FPnum *restrict B,
     int k, int k_user, int k_item, int k_main,
-    FPnum lam, FPnum w_main, FPnum w_user, FPnum lam_bias,
+    FPnum lam, FPnum *restrict lam_unique,
+    FPnum w_main, FPnum w_user,
     FPnum *restrict TransBtBinvBt,
     FPnum *restrict BtB,
     FPnum *restrict BeTBeChol,
     FPnum *restrict TransCtCinvCt,
     FPnum *restrict CtCw,
-    bool NA_as_zero_U, bool NA_as_zero_X,
     FPnum *restrict B_plus_bias,
     int nthreads
 )
@@ -6676,167 +6931,175 @@ int collective_factors_warm_multiple
                 )
     long long ix;
     #endif
-
-    size_t k_totA = k_user + k + k_main;
-    size_t *restrict Xcsr_p_use = NULL;
-    int *restrict Xcsr_i_use = NULL;
-    FPnum *restrict Xcsr_use = NULL;
-    FPnum *restrict weightR = NULL;
-
-    size_t *restrict U_csr_p_use = NULL;
-    int *restrict U_csr_i_use = NULL;
-    FPnum *restrict U_csr_use = NULL;
+    size_t lda = k_user+k+k_main;
 
     int retval = 0;
-    int *ret = (int*)malloc((size_t)m*sizeof(int));
-    if (ret == NULL) { retval = 1; goto cleanup; }
+    size_t m_max = max2(m, m_u);
+    if (NA_as_zero_U && U == NULL) m_u = m_max;
+    if (NA_as_zero_X && Xfull == NULL) m = m_max;
+    if (U == NULL && !nnz_U && !NA_as_zero_U) m_u = 0;
+    if (Xfull == NULL && !nnz && !NA_as_zero_X) m = 0;
+    bool user_bias = (biasA != NULL);
+    bool free_B_plus_bias = false;
 
-    
-    if (X != NULL && Xfull == NULL) {
-        retval = coo_to_csr_plus_alloc(
-                    ixA, ixB, X, weight,
-                    m_x, n, nnz,
-                    &Xcsr_p_use, &Xcsr_i_use, &Xcsr_use, &weightR
-                );
-        if (retval != 0) goto cleanup;
+    FPnum *restrict weightR = NULL;
+    bool free_U_csr = false;
+    bool free_X_csr = false;
+    int *restrict ret = (int*)malloc(m_max*sizeof(int));
+    if (ret == NULL) goto throw_oom;
+
+    if (user_bias && B_plus_bias == NULL)
+    {
+        free_B_plus_bias = true;
+        B_plus_bias = (FPnum*)malloc((size_t)n*(size_t)(k_item+k+k_main)
+                                      * sizeof(FPnum));
+        if (B_plus_bias == NULL) goto throw_oom;
+        append_ones_last_col(
+            B, n, k_item+k+k_main,
+            B_plus_bias
+        );
     }
-    else if (Xcsr != NULL) {
-        Xcsr_p_use = Xcsr_p;
-        Xcsr_i_use = Xcsr_i;
-        Xcsr_use = Xcsr;
+
+    if (Xfull == NULL && (nnz || NA_as_zero_X) && Xcsr_p == NULL)
+    {
+        free_X_csr = true;
+        Xcsr_p = (size_t*)malloc(((size_t)m + (size_t)1) * sizeof(size_t));
+        Xcsr_i = (int*)malloc(nnz*sizeof(int));
+        Xcsr = (FPnum*)malloc(nnz*sizeof(FPnum));
+        if (Xcsr_p == NULL || Xcsr_i == NULL || Xcsr == NULL)
+            goto throw_oom;
+        if (weight != NULL) {
+            weightR = (FPnum*)malloc(nnz*sizeof(FPnum));
+            if (weightR == NULL) goto throw_oom;
+        }
+        coo_to_csr(
+            ixA, ixB, X,
+            weight,
+            m, n, nnz,
+            Xcsr_p, Xcsr_i, Xcsr,
+            weightR
+        );
+    }
+
+    else if (Xfull == NULL && Xcsr_p != NULL && weight != NULL) {
         weightR = weight;
     }
 
-    if (U == NULL && nnz_U && U_csr == NULL) {
-        retval = coo_to_csr_plus_alloc(
-                    U_row, U_col, U_sp, (FPnum*)NULL,
-                    m_u, p, nnz_U,
-                    &U_csr_p_use, &U_csr_i_use, &U_csr_use, (FPnum**)NULL
-                );
-        if (retval != 0) goto cleanup;
-    }
-    else {
-        U_csr_p_use = U_csr_p;
-        U_csr_i_use = U_csr_i;
-        U_csr_use = U_csr;
+    if (U == NULL && (nnz_U || NA_as_zero_U) && U_csr_p == NULL)
+    {
+        free_U_csr = true;
+        U_csr_p = (size_t*)malloc(((size_t)m_u + (size_t)1) * sizeof(size_t));
+        U_csr_i = (int*)malloc(nnz_U*sizeof(int));
+        U_csr = (FPnum*)malloc(nnz_U*sizeof(FPnum));
+        if (U_csr_p == NULL || U_csr_i == NULL || U_csr == NULL)
+            goto throw_oom;
+        coo_to_csr(
+            U_row, U_col, U_sp,
+            (FPnum*)NULL,
+            m, p, nnz_U,
+            U_csr_p, U_csr_i, U_csr,
+            (FPnum*)NULL
+        );
     }
 
-    #pragma omp parallel for schedule(static) num_threads(nthreads) \
-            shared(A, biasA, k_totA, m, n, ret, m_u, m_x, m_ubin, p, pbin, \
-                   glob_mean, biasB, col_means, weight, weightR, \
-                   Xfull, Xcsr_p_use, Xcsr_i_use, Xcsr_use, X, \
-                   U, Ub, U_csr_use, U_csr_i_use, U_csr_p_use, \
-                   B, B_plus_bias, C, Cb, \
+    #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
+            shared(A, B, C, Cb, biasA, glob_mean, col_means, \
+                   Xfull, weight, Xcsr, Xcsr_p, Xcsr_i, weightR, m, n, \
+                   U, U_csr, U_csr_p, U_csr_i, p, Ub, pbin, m_u, m_ubin, \
+                   NA_as_zero_X, NA_as_zero_U, \
+                   lam, lam_unique, w_main, w_user, \
                    k, k_user, k_item, k_main, \
-                   lam, w_user, w_main, lam_bias, \
-                   TransBtBinvBt, BtB, BeTBeChol, CtCw, \
-                   NA_as_zero_U, NA_as_zero_X)
-    for (size_t_for ix = 0; ix < (size_t)m_x; ix++)
-        ret[ix] = collective_factors_warm(
-                    A + ix*k_totA,
-                    (biasA == NULL)? ((FPnum*)NULL) : (biasA + ix),
-                    (U == NULL || (int)ix >= m_u)?
-                      ((FPnum*)NULL)
-                      : (U + ix*(size_t)p),
-                    p,
-                    (U_csr_use == NULL || (int)ix >= m_u)?
-                      ((FPnum*)NULL)
-                      : (U_csr_use + U_csr_p_use[ix]),
-                    (U_csr_i_use == NULL || (int)ix >= m_u)?
-                      ((int*)NULL)
-                      : (U_csr_i_use + U_csr_p_use[ix]),
-                    (U_csr_p_use == NULL)?
-                      ((size_t)0) : (U_csr_p_use[ix+(size_t)1]-U_csr_p_use[ix]),
-                    (Ub == NULL || (int)ix >= m_ubin)?
-                      ((FPnum*)NULL)
-                      : (Ub + ix*(size_t)pbin),
-                    pbin,
-                    C, Cb,
-                    glob_mean, biasB,
-                    col_means,
-                    (Xcsr_use == NULL)?
-                      ((FPnum*)NULL)
-                      : (Xcsr_use + Xcsr_p_use[ix]),
-                    (Xcsr_i_use == NULL)?
-                      ((int*)NULL)
-                      : (Xcsr_i_use + Xcsr_p_use[ix]),
-                    (Xcsr_p_use == NULL)?
-                      ((size_t)0) : (Xcsr_p_use[ix+(size_t)1] - Xcsr_p_use[ix]),
-                    (Xfull != NULL)? (Xfull + ix*(size_t)n) : ((FPnum*)NULL),
-                    n,
-                    (Xfull != NULL)? weight : weightR,
-                    B,
-                    k, k_user, k_item, k_main,
-                    lam, w_user, w_main, lam_bias,
-                    TransBtBinvBt,
-                    BtB,
-                    BeTBeChol,
-                    CtCw,
-                    NA_as_zero_U, NA_as_zero_X,
-                    B_plus_bias
-                );
+                   TransBtBinvBt, BtB, BeTBeChol, CtCw, TransCtCinvCt, \
+                   B_plus_bias)
+    for (size_t_for ix = 0; ix < m_max; ix++)
+        ret[ix] = factors_collective_explicit_single(
+            A + ix*lda,
+            user_bias? (biasA + ix) : ((FPnum*)NULL),
+            (U == NULL || ix >= (size_t)m_u)?
+                ((FPnum*)NULL) : (U + ix*(size_t)p),
+            (ix < (size_t)m_u)? p : 0,
+            (ix < (size_t)m_u && U_csr_p != NULL)?
+                (U_csr + U_csr_p[ix]) : ((FPnum*)NULL),
+            (ix < (size_t)m_u && U_csr_p != NULL)?
+                (U_csr_i + U_csr_p[ix]) : ((int*)NULL),
+            (ix < (size_t)m_u && U_csr_p != NULL)?
+                (U_csr_p[ix+1] - U_csr_p[ix]) : ((size_t)0),
+            (Ub == NULL || ix >= (size_t)m_ubin)?
+                ((FPnum*)NULL) : (Ub + ix*(size_t)pbin),
+            (ix < (size_t)m_ubin)? pbin : 0,
+            NA_as_zero_U, NA_as_zero_X,
+            C, Cb,
+            glob_mean, biasB,
+            col_means,
+            (ix < (size_t)m && Xcsr_p != NULL)?
+                (Xcsr + Xcsr_p[ix]) : ((FPnum*)NULL),
+            (ix < (size_t)m && Xcsr_p != NULL)?
+                (Xcsr_i + Xcsr_p[ix]) : ((int*)NULL),
+            (ix < (size_t)m && Xcsr_p != NULL)?
+                (Xcsr_p[ix+1] - Xcsr_p[ix]) : ((size_t)0),
+            (Xfull == NULL || ix >= (size_t)m)?
+                ((FPnum*)NULL) : (Xfull + ix*(size_t)n),
+            (ix < (size_t)m)? n : 0,
+            (weight == NULL || ix >= (size_t)m)?
+                ((FPnum*)NULL)
+                    :
+                ((Xfull != NULL)?
+                    (weight + ix*(size_t)n) : (weightR + Xcsr_p[ix])),
+            B,
+            k, k_user, k_item, k_main,
+            lam, lam_unique,
+            w_main, w_user,
+            TransBtBinvBt,
+            BtB,
+            BeTBeChol,
+            CtCw,
+            TransCtCinvCt,
+            B_plus_bias
+        );
 
-    #pragma omp parallel for schedule(static) num_threads(nthreads) \
-            shared(ret, m, m_u, m_ubin, A, k_totA, p, pbin, \
-                   U, Ub, U_csr_use, U_csr_i_use, U_csr_p_use, col_means, \
-                   k, k_user, k_main, lam, w_user, NA_as_zero_U, \
-                   C, Cb, TransCtCinvCt, CtCw)
-    for (size_t_for ix = m_x; ix < (size_t)m; ix++) {
-        ret[ix] = collective_factors_cold(
-                    A + ix*k_totA,
-                    (U == NULL || (int)ix >= m_u)?
-                      ((FPnum*)NULL)
-                      : (U + ix*(size_t)p),
-                    p,
-                    (U_csr_use == NULL || (int)ix >= m_u)?
-                      ((FPnum*)NULL)
-                      : (U_csr_use + U_csr_p_use[ix]),
-                    (U_csr_i_use == NULL || (int)ix >= m_u)?
-                      ((int*)NULL)
-                      : (U_csr_i_use + U_csr_p_use[ix]),
-                    (U_csr_p_use == NULL)?
-                      ((size_t)0) : (U_csr_p_use[ix+(size_t)1]-U_csr_p_use[ix]),
-                    (Ub == NULL || (int)ix >= m_ubin)?
-                      ((FPnum*)NULL)
-                      : (Ub + ix*(size_t)pbin),
-                    pbin,
-                    C, Cb,
-                    TransCtCinvCt,
-                    CtCw,
-                    col_means,
-                    k, k_user, k_main,
-                    lam, w_main, w_user,
-                    NA_as_zero_U
-                );
-        if (biasA != NULL) biasA[ix] = 0;
-    }
+    for (size_t ix = 0; ix < m_max; ix++)
+        retval = max2(retval, ret[ix]);
+    if (retval == 1)
+        goto throw_oom;
+    else if (retval != 0)
+        goto cleanup;
 
-
-    for (int ix = 0; ix < m; ix++)
-        retval = (ret[ix] != 0)? 1 : retval;
     cleanup:
+        if (free_U_csr) {
+            free(U_csr);
+            free(U_csr_i);
+            free(U_csr_p);
+        }
+        if (free_X_csr) {
+            free(Xcsr);
+            free(Xcsr_p);
+            free(Xcsr_i);
+            free(weightR);
+        }
+        if (free_B_plus_bias)
+            free(B_plus_bias);
         free(ret);
-        if (weightR != weight) free(weightR);
-        if (Xcsr_p_use != Xcsr_p) free(Xcsr_p_use);
-        if (Xcsr_i_use != Xcsr_i) free(Xcsr_i_use);
-        if (Xcsr_use != Xcsr) free(Xcsr_use);
-        if (U_csr_p_use != U_csr_p) free(U_csr_p_use);
-        if (U_csr_i_use != U_csr_i) free(U_csr_i_use);
-        if (U_csr_use != U_csr) free(U_csr_use);
-    return retval;
+        return retval;
+
+    throw_oom:
+    {
+        retval = 1;
+        goto cleanup;
+    }
 }
 
-int collective_factors_warm_implicit_multiple
+int factors_collective_implicit_multiple
 (
     FPnum *restrict A, int m,
     FPnum *restrict U, int m_u, int p,
+    bool NA_as_zero_U,
     int U_row[], int U_col[], FPnum *restrict U_sp, size_t nnz_U,
     size_t U_csr_p[], int U_csr_i[], FPnum *restrict U_csr,
-    bool NA_as_zero_U,
-    FPnum *restrict col_means,
-    FPnum *restrict B, int n, FPnum *restrict C,
     FPnum *restrict X, int ixA[], int ixB[], size_t nnz,
     size_t *restrict Xcsr_p, int *restrict Xcsr_i, FPnum *restrict Xcsr,
+    FPnum *restrict B, int n,
+    FPnum *restrict C,
+    FPnum *restrict col_means,
     int k, int k_user, int k_item, int k_main,
     FPnum lam, FPnum alpha, FPnum w_main, FPnum w_user,
     FPnum w_main_multiplier,
@@ -6852,155 +7115,136 @@ int collective_factors_warm_implicit_multiple
                 )
     long long ix;
     #endif
-
-    size_t k_totA = k_user + k + k_main;
-    size_t *restrict Xcsr_p_use = NULL;
-    int *restrict Xcsr_i_use = NULL;
-    FPnum *restrict Xcsr_use = NULL;
-
-    size_t *restrict U_csr_p_use = NULL;
-    int *restrict U_csr_i_use = NULL;
-    FPnum *restrict U_csr_use = NULL;
+    size_t lda = k_user+k+k_main;
 
     int retval = 0;
-    int *ret = (int*)malloc((size_t)m*sizeof(int));
-    if (ret == NULL) { retval = 1; goto cleanup; }
-
-    size_t m_x = m;
-    size_t m_lim  = (m > m_u && !NA_as_zero_U)? m_u : m;
     m = max2(m, m_u);
+    if (NA_as_zero_U && U == NULL) m_u = m;
+    if (U == NULL && !nnz_U && !NA_as_zero_U) m_u = 0;
+
     
-    if (Xcsr == NULL) {
-        retval = coo_to_csr_plus_alloc(
-                    ixA, ixB, X, (FPnum*)NULL,
-                    m, n, nnz,
-                    &Xcsr_p_use, &Xcsr_i_use, &Xcsr_use, (FPnum**)NULL
-                );
-        if (retval != 0) goto cleanup;
-    }
-    else {
-        Xcsr_p_use = Xcsr_p;
-        Xcsr_i_use = Xcsr_i;
-        Xcsr_use = Xcsr;
+    bool free_U_csr = false;
+    bool free_X_csr = false;
+    int *restrict ret = (int*)malloc(m*sizeof(int));
+    if (ret == NULL) goto throw_oom;
+
+    if (Xcsr == NULL)
+    {
+        free_X_csr = true;
+        Xcsr_p = (size_t*)malloc(((size_t)m + (size_t)1) * sizeof(size_t));
+        Xcsr_i = (int*)malloc(nnz*sizeof(int));
+        Xcsr = (FPnum*)malloc(nnz*sizeof(FPnum));
+        if (Xcsr_p == NULL || Xcsr_i == NULL || Xcsr == NULL)
+            goto throw_oom;
+        coo_to_csr(
+            ixA, ixB, X,
+            (FPnum*)NULL,
+            m, n, nnz,
+            Xcsr_p, Xcsr_i, Xcsr,
+            (FPnum*)NULL
+        );
     }
 
-    if (alpha != 1.)
-        tscal_large(Xcsr_use, alpha, nnz, nthreads);
-
-    if (U == NULL && nnz_U && U_csr == NULL) {
-        if (NA_as_zero_U)
-            m_u = max2(m_u, m);
-
-        retval = coo_to_csr_plus_alloc(
-                    U_row, U_col, U_sp, (FPnum*)NULL,
-                    m_u, p, nnz_U,
-                    &U_csr_p_use, &U_csr_i_use, &U_csr_use, (FPnum**)NULL
-                );
-        if (retval != 0) goto cleanup;
+    if (U == NULL && (nnz_U || NA_as_zero_U) && U_csr_p == NULL)
+    {
+        free_U_csr = true;
+        U_csr_p = (size_t*)malloc(((size_t)m_u + (size_t)1) * sizeof(size_t));
+        U_csr_i = (int*)malloc(nnz_U*sizeof(int));
+        U_csr = (FPnum*)malloc(nnz_U*sizeof(FPnum));
+        if (U_csr_p == NULL || U_csr_i == NULL || U_csr == NULL)
+            goto throw_oom;
+        coo_to_csr(
+            U_row, U_col, U_sp,
+            (FPnum*)NULL,
+            m, p, nnz_U,
+            U_csr_p, U_csr_i, U_csr,
+            (FPnum*)NULL
+        );
     }
-    else {
-        U_csr_p_use = U_csr_p;
-        U_csr_i_use = U_csr_i;
-        U_csr_use = U_csr;
-    }
+
 
     #pragma omp parallel for schedule(static) num_threads(nthreads) \
-            shared(ret, A, B, C, m, m_x, m_u, n, p, \
-                   U, U_csr_p_use, U_csr_i_use, U_csr_use, \
-                   Xcsr_p_use, Xcsr_i_use, Xcsr_use, \
-                   col_means, NA_as_zero_U, \
-                   k, k_user, k_item, k_main, lam, w_user, w_main, \
-                   w_main_multiplier, \
-                   BeTBe, BtB, BeTBeChol)
-    for (size_t_for ix = 0; ix < m_x; ix++)
-        ret[ix] = collective_factors_warm_implicit(
-                    A + ix*k_totA,
-                    (U == NULL || (int)ix >= m_u)?
-                      ((FPnum*)NULL)
-                      : (U + ix*(size_t)p),
-                    p,
-                    (U_csr_use == NULL || (int)ix >= m_u)?
-                      ((FPnum*)NULL)
-                      : (U_csr_use + U_csr_p_use[ix]),
-                    (U_csr_i_use == NULL || (int)ix >= m_u)?
-                      ((int*)NULL)
-                      : (U_csr_i_use + U_csr_p_use[ix]),
-                    (U_csr_p_use == NULL)?
-                      ((size_t)0) : (U_csr_p_use[ix+(size_t)1]-U_csr_p_use[ix]),
-                    NA_as_zero_U,
-                    col_means,
-                    B, n, C,
-                    Xcsr_use + Xcsr_p_use[ix],
-                    Xcsr_i_use + Xcsr_p_use[ix],
-                    Xcsr_p_use[ix+(size_t)1] - Xcsr_p_use[ix],
-                    k, k_user, k_item, k_main,
-                    lam, alpha, w_main, w_user,
-                    w_main_multiplier,
-                    BeTBe,
-                    BtB,
-                    BeTBeChol
-                );
+            shared(A, B, C, m, m_u, col_means, n, \
+                   U, U_csr, U_csr_i, U_csr_p, NA_as_zero_U, \
+                   Xcsr, Xcsr_i, Xcsr_p, \
+                   lam, alpha, w_main, w_user, w_main_multiplier, \
+                   k, k_user, k_item, k_main, \
+                   BtB, BeTBe, BeTBeChol)
+    for (size_t_for ix = 0; ix < (size_t)m; ix++)
+        ret[ix] = factors_collective_implicit_single(
+            A + ix*lda,
+            (U == NULL || ix >= (size_t)m_u)?
+                ((FPnum*)NULL) : (U + ix*(size_t)p),
+            (ix < (size_t)m_u)? p : 0,
+            (ix < (size_t)m_u && U_csr_p != NULL)?
+                (U_csr + U_csr_p[ix]) : ((FPnum*)NULL),
+            (ix < (size_t)m_u && U_csr_p != NULL)?
+                (U_csr_i + U_csr_p[ix]) : ((int*)NULL),
+            (ix < (size_t)m_u && U_csr_p != NULL)?
+                (U_csr_p[ix+1] - U_csr_p[ix]) : ((size_t)0),
+            NA_as_zero_U,
+            col_means,
+            B, n, C,
+            Xcsr + Xcsr_p[ix],
+            Xcsr_i + Xcsr_p[ix],
+            Xcsr_p[ix+1] - Xcsr_p[ix],
+            k, k_user, k_item, k_main,
+            lam, alpha, w_main, w_user,
+            w_main_multiplier,
+            BeTBe,
+            BtB,
+            BeTBeChol
+        );
 
-    #pragma omp parallel for schedule(static) num_threads(nthreads) \
-            shared(ret, A, C, m, m_lim, p, \
-                   U, U_csr_p_use, U_csr_i_use, U_csr_use, \
-                   col_means, NA_as_zero_U, \
-                   k, k_user, k_main, lam, w_user, \
-                   BeTBe, BtB, BeTBeChol)
-    for (size_t_for ix = m_lim; ix < (size_t)m; ix++)
-        ret[ix] = collective_factors_cold_implicit(
-                    A + ix*k_totA,
-                    (U == NULL)?
-                      ((FPnum*)NULL)
-                      : (U + ix*(size_t)p),
-                    p,
-                    (U_csr_use == NULL)?
-                      ((FPnum*)NULL)
-                      : (U_csr_use + U_csr_p_use[ix]),
-                    (U_csr_i_use == NULL)?
-                      ((int*)NULL)
-                      : (U_csr_i_use + U_csr_p_use[ix]),
-                    (U_csr_p_use == NULL)?
-                      ((size_t)0) : (U_csr_p_use[ix+(size_t)1]-U_csr_p_use[ix]),
-                    B, n,
-                    C,
-                    BeTBe,
-                    BtB,
-                    BeTBeChol,
-                    col_means,
-                    k, k_user, k_item, k_main,
-                    lam, w_main, w_user, w_main_multiplier,
-                    NA_as_zero_U
-                );
 
-    for (int ix = 0; ix < m; ix++)
-        retval = (ret[ix] != 0)? 1 : retval;
+    for (size_t ix = 0; ix < (size_t)m; ix++)
+        retval = max2(retval, ret[ix]);
+    if (retval == 1) goto throw_oom;
+
     cleanup:
+        if (free_U_csr) {
+            free(U_csr);
+            free(U_csr_i);
+            free(U_csr_p);
+        }
+        if (free_X_csr) {
+            free(Xcsr);
+            free(Xcsr_p);
+            free(Xcsr_i);
+        }
         free(ret);
-        if (Xcsr_p_use != Xcsr_p) free(Xcsr_p_use);
-        if (Xcsr_i_use != Xcsr_i) free(Xcsr_i_use);
-        if (Xcsr_use != Xcsr) free(Xcsr_use);
-        if (U_csr_p_use != U_csr_p) free(U_csr_p_use);
-        if (U_csr_i_use != U_csr_i) free(U_csr_i_use);
-        if (U_csr_use != U_csr) free(U_csr_use);
-    return retval;
+        return retval;
+
+    throw_oom:
+    {
+        retval = 1;
+        goto cleanup;
+    }
 }
 
-int collective_factors_cold_implicit_multiple
+int impute_X_collective_explicit
 (
-    FPnum *restrict A, int m,
+    int m, bool user_bias,
     FPnum *restrict U, int m_u, int p,
+    bool NA_as_zero_U,
     int U_row[], int U_col[], FPnum *restrict U_sp, size_t nnz_U,
     size_t U_csr_p[], int U_csr_i[], FPnum *restrict U_csr,
-    FPnum *restrict B, int n,
-    FPnum *restrict C,
-    FPnum *restrict BeTBe,
+    FPnum *restrict Ub, int m_ubin, int pbin,
+    FPnum *restrict C, FPnum *restrict Cb,
+    FPnum glob_mean, FPnum *restrict biasB,
+    FPnum *restrict col_means,
+    FPnum *restrict Xfull, int n,
+    FPnum *restrict weight,
+    FPnum *restrict B,
+    int k, int k_user, int k_item, int k_main,
+    FPnum lam, FPnum *restrict lam_unique,
+    FPnum w_main, FPnum w_user,
+    FPnum *restrict TransBtBinvBt,
     FPnum *restrict BtB,
     FPnum *restrict BeTBeChol,
-    FPnum *restrict col_means,
-    int k, int k_user, int k_item, int k_main,
-    FPnum lam, FPnum w_main, FPnum w_user, FPnum w_main_multiplier,
-    bool NA_as_zero_U,
+    FPnum *restrict TransCtCinvCt,
+    FPnum *restrict CtCw,
+    FPnum *restrict B_plus_bias,
     int nthreads
 )
 {
@@ -7008,73 +7252,570 @@ int collective_factors_cold_implicit_multiple
                 ( (_OPENMP < 200801)  /* OpenMP < 3.0 */ \
                   || defined(_WIN32) || defined(_WIN64) \
                 )
-    long long ix;
+    long long row;
     #endif
 
-    size_t k_totA = k_user + k + k_main;
-    size_t *restrict U_csr_p_use = NULL;
-    int *restrict U_csr_i_use = NULL;
-    FPnum *restrict U_csr_use = NULL;
-
     int retval = 0;
-    int *ret = (int*)malloc((size_t)m*sizeof(int));
-    if (ret == NULL) { retval = 1; goto cleanup; }
+    size_t m_by_n = (size_t)m*(size_t)n;
+    size_t lda = k_user + k + k_main;
+    size_t ldb = k_item + k + k_main;
+    size_t cnt_NA = 0;
+    bool dont_produce_full_X = false;
+    FPnum *restrict Xpred = NULL;
+    FPnum *restrict A = (FPnum*)malloc(   (size_t)max2(m, m_u)
+                                        * (size_t)(k_user+k+k_main)
+                                        * sizeof(FPnum));
+    FPnum *restrict biasA = NULL;
+    if (user_bias) biasA = (FPnum*)malloc((size_t)m*sizeof(FPnum));
 
-    if (U == NULL && nnz_U && U_csr == NULL) {
-        retval = coo_to_csr_plus_alloc(
-                    U_row, U_col, U_sp, (FPnum*)NULL,
-                    m_u, p, nnz_U,
-                    &U_csr_p_use, &U_csr_i_use, &U_csr_use, (FPnum**)NULL
-                );
-        if (retval != 0) goto cleanup;
+    if (A == NULL || (biasA == NULL && user_bias))
+        goto throw_oom;
+
+    if (user_bias && B_plus_bias == NULL)
+    {
+        B_plus_bias = (FPnum*)malloc((size_t)n*(size_t)(k_item+k+k_main)
+                                      * sizeof(FPnum));
+        if (B_plus_bias == NULL) goto throw_oom;
+        append_ones_last_col(
+            B, n, k_item+k+k_main,
+            B_plus_bias
+        );
     }
+
+    for (size_t ix = 0; ix < m_by_n; ix++)
+        cnt_NA += isnan(Xfull[ix]);
+    dont_produce_full_X = (cnt_NA <= m_by_n / 10);
+    if (cnt_NA == 0) goto cleanup;
+
+    if (!dont_produce_full_X || biasB != NULL)
+    {
+        Xpred = (FPnum*)malloc(m_by_n*sizeof(FPnum));
+        if (Xpred == NULL) goto throw_oom;
+        copy_arr(Xfull, Xpred, m_by_n, nthreads);
+    }
+
     else {
-        U_csr_p_use = U_csr_p;
-        U_csr_i_use = U_csr_i;
-        U_csr_use = U_csr;
+        Xpred = Xfull;
     }
 
-    #pragma omp parallel for schedule(static) num_threads(nthreads) \
-            shared(A, B, C, m, m_u, k, k_user, k_main, k_totA, \
-                   U, p, U_csr_use, U_csr_p_use, U_csr_i_use, \
-                   BeTBe, BtB, BeTBeChol, col_means, \
-                   lam, w_main, w_user, w_main_multiplier)
-    for (size_t_for ix = 0; ix < (size_t)m; ix++)
-        ret[ix] = collective_factors_cold_implicit(
-                    A + ix*k_totA,
-                    (U == NULL || (int)ix >= m_u)?
-                      ((FPnum*)NULL)
-                      : (U + ix*(size_t)p),
-                    p,
-                    (U_csr_use == NULL || (int)ix >= m_u)?
-                      ((FPnum*)NULL)
-                      : (U_csr_use + U_csr_p_use[ix]),
-                    (U_csr_i_use == NULL || (int)ix >= m_u)?
-                      ((int*)NULL)
-                      : (U_csr_i_use + U_csr_p_use[ix]),
-                    (U_csr_p_use == NULL)?
-                      ((size_t)0) : (U_csr_p_use[ix+(size_t)1]-U_csr_p_use[ix]),
-                    B, n,
-                    C,
-                    BeTBe,
-                    BtB,
-                    BeTBeChol,
-                    col_means,
-                    k, k_user, k_item, k_main,
-                    lam, w_main, w_user, w_main_multiplier,
-                    NA_as_zero_U
-                );
+    retval = factors_collective_explicit_multiple(
+        A, biasA, m,
+        U, m_u, p,
+        NA_as_zero_U, false,
+        U_row, U_col, U_sp, nnz_U,
+        U_csr_p, U_csr_i, U_csr,
+        Ub, m_ubin, pbin,
+        C, Cb,
+        glob_mean, biasB,
+        col_means,
+        (FPnum*)NULL, (int*)NULL, (int*)NULL, (size_t)0,
+        (size_t*)NULL, (int*)NULL, (FPnum*)NULL,
+        Xpred, n,
+        weight,
+        B,
+        k, k_user, k_item, k_main,
+        lam, lam_unique,
+        w_main, w_user,
+        TransBtBinvBt,
+        BtB,
+        BeTBeChol,
+        TransCtCinvCt,
+        CtCw,
+        B_plus_bias,
+        nthreads
+    );
+    if (retval == 1)
+        goto throw_oom;
+    else if (retval != 0)
+        goto cleanup;
+
+    if (dont_produce_full_X)
+    {
+        for (size_t_for row = 0; row < (size_t)m; row++)
+            for (size_t col = 0; col < (size_t)n; col++)
+                Xfull[col + row*(size_t)n]
+                    =
+                (!isnan(Xfull[col + row*(size_t)n]))?
+                    (Xfull[col + row*(size_t)n])
+                        :
+                    (
+                        cblas_tdot(k+k_main,
+                                   A + row*lda + (size_t)k_main,1,
+                                   B + col*ldb + (size_t)k_item, 1)
+                        + (user_bias? biasA[row] : 0.)
+                        + ((biasB != NULL)? biasB[col] : 0.)
+                    );
+    }
+
+    else
+    {
+        cblas_tgemm(CblasRowMajor, CblasNoTrans, CblasTrans,
+                    m, n, k+k_main,
+                    1., A + k_user, lda, B_plus_bias + k_item,
+                    k_item+k+k_main+(int)user_bias,
+                    0., Xpred, n);
+        for (size_t_for row = 0; row < (size_t)m; row++)
+            for (size_t col = 0; col < (size_t)n; col++)
+                Xfull[col + row*(size_t)n]
+                    =
+                (!isnan(Xfull[col + row*(size_t)n]))?
+                    (Xfull[col + row*(size_t)n])
+                        :
+                    (Xpred[col + row*(size_t)n]
+                        + (user_bias? biasA[row] : 0.)
+                        + ((biasB != NULL)? biasB[col] : 0.));
+    }
 
 
-    for (int ix = 0; ix < m; ix++)
-        retval = (ret[ix] != 0)? 1 : retval;
     cleanup:
-        free(ret);
-        if (U_csr_p_use != U_csr_p)
-            free(U_csr_p_use);
-        if (U_csr_i_use != U_csr_i)
-            free(U_csr_i_use);
-        if (U_csr_use != U_csr)
-            free(U_csr_use);
-    return retval;
+        if (Xpred != Xfull)
+            free(Xpred);
+        free(A);
+        free(biasA);
+        if (B_plus_bias != B)
+            free(B_plus_bias);
+        return retval;
+    throw_oom:
+    {
+        retval = 1;
+        goto cleanup;
+    }
+}
+
+int topN_old_collective_explicit
+(
+    FPnum *restrict a_vec, FPnum a_bias,
+    FPnum *restrict A, FPnum *restrict biasA, int row_index,
+    FPnum *restrict B,
+    FPnum *restrict biasB,
+    FPnum glob_mean,
+    int k, int k_user, int k_item, int k_main,
+    int *restrict include_ix, int n_include,
+    int *restrict exclude_ix, int n_exclude,
+    int *restrict outp_ix, FPnum *restrict outp_score,
+    int n_top, int n, int nthreads
+)
+{
+    if (a_vec != NULL)
+        return topN(
+            a_vec, k_user,
+            B, k_item,
+            biasB,
+            glob_mean, a_bias,
+            k, k_main,
+            include_ix, n_include,
+            exclude_ix, n_exclude,
+            outp_ix, outp_score,
+            n_top, n, nthreads
+        );
+
+    else
+        return topN(
+            A + (size_t)row_index*(size_t)(k_user+k+k_main), k_user,
+            B, k_item,
+            biasB,
+            glob_mean, (biasA == NULL)? (0.) : (biasA[row_index]),
+            k, k_main,
+            include_ix, n_include,
+            exclude_ix, n_exclude,
+            outp_ix, outp_score,
+            n_top, n, nthreads
+        );
+}
+
+int topN_old_collective_implicit
+(
+    FPnum *restrict a_vec,
+    FPnum *restrict A, int row_index,
+    FPnum *restrict B,
+    int k, int k_user, int k_item, int k_main,
+    int *restrict include_ix, int n_include,
+    int *restrict exclude_ix, int n_exclude,
+    int *restrict outp_ix, FPnum *restrict outp_score,
+    int n_top, int n, int nthreads
+)
+{
+    return topN_old_collective_explicit(
+        a_vec, 0.,
+        A, (FPnum*)NULL, row_index,
+        B,
+        (FPnum*)NULL,
+        0.,
+        k, k_user, k_item, k_main,
+        include_ix, n_include,
+        exclude_ix, n_exclude,
+        outp_ix, outp_score,
+        n_top, n, nthreads
+    );
+}
+
+int topN_new_collective_explicit
+(
+    /* inputs for the factors */
+    bool user_bias, int n,
+    FPnum *restrict u_vec, int p,
+    FPnum *restrict u_vec_sp, int u_vec_ixB[], size_t nnz_u_vec,
+    FPnum *restrict u_bin_vec, int pbin,
+    bool NA_as_zero_U, bool NA_as_zero_X,
+    FPnum *restrict C, FPnum *restrict Cb,
+    FPnum glob_mean, FPnum *restrict biasB,
+    FPnum *restrict col_means,
+    FPnum *restrict Xa, int ixB[], size_t nnz,
+    FPnum *restrict Xa_dense,
+    FPnum *restrict weight,
+    FPnum *restrict B,
+    int k, int k_user, int k_item, int k_main,
+    FPnum lam, FPnum *restrict lam_unique,
+    FPnum w_main, FPnum w_user,
+    FPnum *restrict TransBtBinvBt,
+    FPnum *restrict BtB,
+    FPnum *restrict BeTBeChol,
+    FPnum *restrict CtCw,
+    FPnum *restrict TransCtCinvCt,
+    FPnum *restrict B_plus_bias,
+    /* inputs for topN */
+    int *restrict include_ix, int n_include,
+    int *restrict exclude_ix, int n_exclude,
+    int *restrict outp_ix, FPnum *restrict outp_score,
+    int n_top, int nthreads
+)
+{
+    int retval = 0;
+    FPnum *restrict a_vec = (FPnum*)malloc((size_t)(k_user+k+k_main)
+                                            * sizeof(FPnum));
+    FPnum a_bias = 0.;
+    if (a_vec == NULL) goto throw_oom;
+
+    retval = factors_collective_explicit_single(
+        a_vec, user_bias? &a_bias : (FPnum*)NULL,
+        u_vec, p,
+        u_vec_sp, u_vec_ixB, nnz_u_vec,
+        u_bin_vec, pbin,
+        NA_as_zero_U, NA_as_zero_X,
+        C, Cb,
+        glob_mean, biasB,
+        col_means,
+        Xa, ixB, nnz,
+        Xa_dense, n,
+        weight,
+        B,
+        k, k_user, k_item, k_main,
+        lam, lam_unique,
+        w_main, w_user,
+        TransBtBinvBt,
+        BtB,
+        BeTBeChol,
+        CtCw,
+        TransCtCinvCt,
+        B_plus_bias
+    );
+    if (retval == 1)
+        goto throw_oom;
+    else if (retval != 0)
+        goto cleanup;
+
+    retval = topN_old_collective_explicit(
+        a_vec, a_bias,
+        (FPnum*)NULL, (FPnum*)NULL, 0,
+        B,
+        biasB,
+        glob_mean,
+        k, k_user, k_item, k_main,
+        include_ix, n_include,
+        exclude_ix, n_exclude,
+        outp_ix, outp_score,
+        n_top, n, nthreads
+    );
+
+    cleanup:
+        free(a_vec);
+        return retval;
+    throw_oom:
+    {
+        retval = 1;
+        goto cleanup;
+    }
+}
+
+int topN_new_collective_implicit
+(
+    /* inputs for the factors */
+    int n,
+    FPnum *restrict u_vec, int p,
+    FPnum *restrict u_vec_sp, int u_vec_ixB[], size_t nnz_u_vec,
+    bool NA_as_zero_U,
+    FPnum *restrict col_means,
+    FPnum *restrict B, FPnum *restrict C,
+    FPnum *restrict Xa, int ixB[], size_t nnz,
+    int k, int k_user, int k_item, int k_main,
+    FPnum lam, FPnum alpha, FPnum w_main, FPnum w_user,
+    FPnum w_main_multiplier,
+    FPnum *restrict BeTBe,
+    FPnum *restrict BtB,
+    FPnum *restrict BeTBeChol,
+    /* inputs for topN */
+    int *restrict include_ix, int n_include,
+    int *restrict exclude_ix, int n_exclude,
+    int *restrict outp_ix, FPnum *restrict outp_score,
+    int n_top, int nthreads
+)
+{
+    int retval = 0;
+    FPnum *restrict a_vec = (FPnum*)malloc((size_t)(k_user+k+k_main)
+                                            * sizeof(FPnum));
+    if (a_vec == NULL) goto throw_oom;
+
+    retval = factors_collective_implicit_single(
+        a_vec,
+        u_vec, p,
+        u_vec_sp, u_vec_ixB, nnz_u_vec,
+        NA_as_zero_U,
+        col_means,
+        B, n, C,
+        Xa, ixB, nnz,
+        k, k_user, k_item, k_main,
+        lam, alpha, w_main, w_user,
+        w_main_multiplier,
+        BeTBe,
+        BtB,
+        BeTBeChol
+    );
+    if (retval == 1)
+        goto throw_oom;
+    else if (retval != 0)
+        goto cleanup;
+
+    retval = topN_old_collective_implicit(
+        a_vec,
+        (FPnum*)NULL, 0,
+        B,
+        k, k_user, k_item, k_main,
+        include_ix, n_include,
+        exclude_ix, n_exclude,
+        outp_ix, outp_score,
+        n_top, n, nthreads
+    );
+
+
+    cleanup:
+        free(a_vec);
+        return retval;
+    throw_oom:
+    {
+        retval = 1;
+        goto cleanup;
+    }
+}
+
+int predict_X_old_collective_explicit
+(
+    int row[], int col[], FPnum *restrict predicted, size_t n_predict,
+    FPnum *restrict A, FPnum *restrict biasA,
+    FPnum *restrict B, FPnum *restrict biasB,
+    FPnum glob_mean,
+    int k, int k_user, int k_item, int k_main,
+    int nthreads
+)
+{
+    predict_multiple(
+        A, k_user,
+        B, k_item,
+        biasA, biasB,
+        glob_mean,
+        k, k_main,
+        row, col, n_predict,
+        predicted,
+        nthreads
+    );
+    return 0;
+}
+
+int predict_X_old_collective_implicit
+(
+    int row[], int col[], FPnum *restrict predicted, size_t n_predict,
+    FPnum *restrict A,
+    FPnum *restrict B,
+    int k, int k_user, int k_item, int k_main,
+    int nthreads
+)
+{
+    predict_multiple(
+        A, k_user,
+        B, k_item,
+        (FPnum*)NULL, (FPnum*)NULL,
+        0.,
+        k, k_main,
+        row, col, n_predict,
+        predicted,
+        nthreads
+    );
+    return 0;
+}
+
+int predict_X_new_collective_explicit
+(
+    /* inputs for predictions */
+    int m_new,
+    int row[], int col[], FPnum *restrict predicted, size_t n_predict,
+    int nthreads,
+    /* inputs for factors */
+    bool user_bias,
+    FPnum *restrict U, int m_u, int p,
+    bool NA_as_zero_U, bool NA_as_zero_X,
+    int U_row[], int U_col[], FPnum *restrict U_sp, size_t nnz_U,
+    size_t U_csr_p[], int U_csr_i[], FPnum *restrict U_csr,
+    FPnum *restrict Ub, int m_ubin, int pbin,
+    FPnum *restrict C, FPnum *restrict Cb,
+    FPnum glob_mean, FPnum *restrict biasB,
+    FPnum *restrict col_means,
+    FPnum *restrict X, int ixA[], int ixB[], size_t nnz,
+    size_t *restrict Xcsr_p, int *restrict Xcsr_i, FPnum *restrict Xcsr,
+    FPnum *restrict Xfull, int n,
+    FPnum *restrict weight,
+    FPnum *restrict B,
+    int k, int k_user, int k_item, int k_main,
+    FPnum lam, FPnum *restrict lam_unique,
+    FPnum w_main, FPnum w_user,
+    FPnum *restrict TransBtBinvBt,
+    FPnum *restrict BtB,
+    FPnum *restrict BeTBeChol,
+    FPnum *restrict TransCtCinvCt,
+    FPnum *restrict CtCw,
+    FPnum *restrict B_plus_bias
+)
+{
+    int retval = 0;
+    size_t m_max = max2(m_new, m_u);
+    FPnum *restrict biasA = NULL;
+    FPnum *restrict A = (FPnum*)malloc(m_max * (size_t)(k_user+k+k_main)
+                                        * sizeof(FPnum));
+    if (A == NULL) goto throw_oom;
+    if (user_bias) {
+        biasA = (FPnum*)malloc(m_max * sizeof(FPnum));
+        if (biasA == NULL) goto throw_oom;
+    }
+
+    retval = factors_collective_explicit_multiple(
+        A, biasA, m_new,
+        U, m_u, p,
+        NA_as_zero_U, NA_as_zero_X,
+        U_row, U_col, U_sp, nnz_U,
+        U_csr_p, U_csr_i, U_csr,
+        Ub, m_ubin, pbin,
+        C, Cb,
+        glob_mean, biasB,
+        col_means,
+        X, ixA, ixB, nnz,
+        Xcsr_p, Xcsr_i, Xcsr,
+        Xfull, n,
+        weight,
+        B,
+        k, k_user, k_item, k_main,
+        lam, lam_unique,
+        w_main, w_user,
+        TransBtBinvBt,
+        BtB,
+        BeTBeChol,
+        TransCtCinvCt,
+        CtCw,
+        B_plus_bias,
+        nthreads
+    );
+
+    if (retval == 1)
+        goto throw_oom;
+    else if (retval != 0)
+        goto cleanup;
+
+    retval = predict_X_old_collective_explicit(
+        row, col, predicted, n_predict,
+        A, biasA,
+        B, biasB,
+        glob_mean,
+        k, k_user, k_item, k_main,
+        nthreads
+    );
+
+    cleanup:
+        free(A);
+        free(biasA);
+        return retval;
+    throw_oom:
+    {
+        retval = 1;
+        goto cleanup;
+    }
+}
+
+int predict_X_new_collective_implicit
+(
+    /* inputs for predictions */
+    int m_new,
+    int row[], int col[], FPnum *restrict predicted, size_t n_predict,
+    int nthreads,
+    /* inputs for factors */
+    FPnum *restrict U, int m_u, int p,
+    bool NA_as_zero_U,
+    int U_row[], int U_col[], FPnum *restrict U_sp, size_t nnz_U,
+    size_t U_csr_p[], int U_csr_i[], FPnum *restrict U_csr,
+    FPnum *restrict X, int ixA[], int ixB[], size_t nnz,
+    size_t *restrict Xcsr_p, int *restrict Xcsr_i, FPnum *restrict Xcsr,
+    FPnum *restrict B, int n,
+    FPnum *restrict C,
+    FPnum *restrict col_means,
+    int k, int k_user, int k_item, int k_main,
+    FPnum lam, FPnum alpha, FPnum w_main, FPnum w_user,
+    FPnum w_main_multiplier,
+    FPnum *restrict BeTBe,
+    FPnum *restrict BtB,
+    FPnum *restrict BeTBeChol
+)
+{
+    int retval = 0;
+    size_t m_max = max2(m_new, m_u);
+    FPnum *restrict A = (FPnum*)malloc(m_max * (size_t)(k_user+k+k_main)
+                                        * sizeof(FPnum));
+    if (A == NULL) goto throw_oom;
+
+    retval = factors_collective_implicit_multiple(
+        A, m_new,
+        U, m_u, p,
+        NA_as_zero_U,
+        U_row, U_col, U_sp, nnz_U,
+        U_csr_p, U_csr_i, U_csr,
+        X, ixA, ixB, nnz,
+        Xcsr_p, Xcsr_i, Xcsr,
+        B, n,
+        C,
+        col_means,
+        k, k_user, k_item, k_main,
+        lam, alpha, w_main, w_user,
+        w_main_multiplier,
+        BeTBe,
+        BtB,
+        BeTBeChol,
+        nthreads
+    );
+
+    if (retval == 1)
+        goto throw_oom;
+    else if (retval != 0)
+        goto cleanup;
+
+    retval = predict_X_old_collective_implicit(
+        row, col, predicted, n_predict,
+        A,
+        B,
+        k, k_user, k_item, k_main,
+        nthreads
+    );
+
+    cleanup:
+        free(A);
+        return retval;
+    throw_oom:
+    {
+        retval = 1;
+        goto cleanup;
+    }
 }
