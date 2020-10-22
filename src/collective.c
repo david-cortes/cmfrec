@@ -2960,7 +2960,6 @@ int collective_factors_warm
     FPnum *restrict buffer_FPnum = NULL;
     size_t size_buffer;
     int retval = 0;
-    // int k_totB = k_item + k + k_main + (int)append_bias;
 
     FPnum *restrict a_plus_bias = NULL;
     if (append_bias) {
@@ -3886,8 +3885,12 @@ void optimizeA_collective
         FPnum *restrict bufferCtC = NULL;
         if (prefer_BtB)
         {
-            bufferBtB = buffer_FPnum;
-            buffer_FPnum += square(k+k_main);
+            if (precomputedBtB != NULL)
+                bufferBtB = precomputedBtB;
+            else {
+                bufferBtB = buffer_FPnum;
+                buffer_FPnum += square(k+k_main);
+            }
             
             if (prefer_CtC
                     &&
@@ -3897,14 +3900,22 @@ void optimizeA_collective
                 ((U != NULL && (near_dense_u || full_dense_u)) ||
                  (U == NULL && NA_as_zero_U)))
             {
-                bufferBeTBeChol = buffer_FPnum;
-                buffer_FPnum += square(k_user+k+k_main);
+                if (precomputedBeTBeChol != NULL)
+                    bufferBeTBeChol = precomputedBeTBeChol;
+                else {
+                    bufferBeTBeChol = buffer_FPnum;
+                    buffer_FPnum += square(k_user+k+k_main);
+                }
             }
         }
         if (prefer_CtC)
         {
-            bufferCtC = buffer_FPnum;
-            buffer_FPnum += square(k_user+k);
+            if (precomputedCtCw != NULL)
+                bufferCtC = precomputedCtCw;
+            else {
+                bufferCtC = buffer_FPnum;
+                buffer_FPnum += square(k_user+k);
+            }
         }
 
         FPnum *restrict bufferX = buffer_FPnum;
@@ -3931,6 +3942,8 @@ void optimizeA_collective
             (use_cg && NA_as_zero_X && Xfull == NULL && weight != NULL)?
                 ((FPnum*)NULL) : (NA_as_zero_X? (FPnum*)NULL : weight)
         );
+        if (bufferBtB == precomputedBtB) *filled_BtB = true;
+        if (bufferCtC == precomputedCtCw) *filled_CtCw = true;
 
         if (bufferBeTBeChol != NULL)
         {
@@ -3946,6 +3959,8 @@ void optimizeA_collective
                     bufferBeTBeChol + k_user + k_user*k_totA, k_totA);
             add_to_diag(bufferBeTBeChol, lam, k_totA);
             tpotrf_(&lo, &k_totA, bufferBeTBeChol, &k_totA, &ignore);
+            if (bufferBeTBeChol == precomputedBeTBeChol)
+                *filled_BeTBeChol = true;
         }
 
         if (use_cg) goto skip_chol_simplifications;
@@ -5252,6 +5267,15 @@ int fit_collective_explicit_als
     bool filled_CtCw = false;
     bool filled_BeTBeChol = false;
     bool ignore = false;
+    bool back_to_precompute = false;
+
+    bool finished_TransBtBinvBt = false;
+    bool finished_TransCtCinvCt = false;
+    char lo = 'L';
+    int ignore_int = 0;
+    int k_pred = 0;
+    bool free_arr_use = false;
+    FPnum *arr_use = NULL;
 
     int *restrict seed_arr = NULL;
     FPnum *restrict lam_unique_copy = NULL;
@@ -5958,61 +5982,227 @@ int fit_collective_explicit_als
         );
     }
 
+    precompute:
     if (precompute_for_predictions)
     {
-        /* TODO */
+        if (!filled_BtB)
+        {
+            cblas_tsyrk(CblasRowMajor, CblasUpper, CblasTrans,
+                        k + k_main + user_bias, n,
+                        1., B_bias + k_item, k_item+k+k_main+has_bias,
+                        0., precomputedBtB, k+k_main+user_bias);
+            filled_BtB = true;
+        }
+
+        if (precomputedTransBtBinvBt != NULL && !finished_TransBtBinvBt)
+        {
+            k_pred = k + k_main + (int)user_bias;
+            free_arr_use = false;
+
+             /* This is in case it needs an extra malloc, in which case will
+                first free up all the memory it allocated before, which is
+                no longer needed at this point. */
+            if (!back_to_precompute && buffer_FPnum != NULL)
+            {
+                if (precomputedBeTBeChol != NULL && !filled_BeTBeChol)
+                    arr_use = precomputedBeTBeChol;
+                else if (precomputedTransCtCinvCt != NULL &&
+                         (size_t)p*(size_t)(k_user+k) >= (size_t)square(k_pred))
+                    arr_use = precomputedTransCtCinvCt;
+                else if (precomputedCtCw != NULL && !filled_CtCw &&
+                         k_user >= k_main + user_bias)
+                    arr_use = precomputedCtCw;
+                else if (size_buffer >= (size_t)square(k_pred))
+                    arr_use = buffer_FPnum;
+                else {
+                    back_to_precompute = true;
+                    goto cleanup;
+                }
+            }
+
+            else
+            {
+                free_arr_use = true;
+                back_to_precompute = false;
+                arr_use = (FPnum*)malloc((size_t)square(k_pred)*sizeof(FPnum));
+                if (arr_use == NULL) goto throw_oom;
+            }
+
+            copy_mat(n, k+k_main+user_bias,
+                     B_bias + k_item, k_item+k+k_main+has_bias,
+                     precomputedTransBtBinvBt, k+k_main+user_bias);
+            copy_arr(precomputedBtB, arr_use, square(k_pred), nthreads);
+            add_to_diag(arr_use,
+                        (lam_unique == NULL)? (lam) : (lam_unique[2]),
+                        k_pred);
+            if (lam_unique != NULL && user_bias)
+                arr_use[square(k_pred)-1] += (lam_unique[0]-lam_unique[2]);
+            tposv_(&lo, &k_pred, &n,
+                   arr_use, &k_pred,
+                   precomputedTransBtBinvBt, &k_pred, &ignore_int);
+
+            if (free_arr_use) free(arr_use);
+            arr_use = NULL;
+            finished_TransBtBinvBt = true;
+        }
+
+        if (p > 0)
+        {
+            if (precomputedTransCtCinvCt != NULL && !finished_TransCtCinvCt)
+            {
+                k_pred = k_user + k;
+                free_arr_use = false;
+                arr_use = NULL;
+
+                if (!back_to_precompute && buffer_FPnum != NULL)
+                {
+                    if (precomputedBeTBeChol != NULL && !filled_BeTBeChol)
+                        arr_use = precomputedBeTBeChol;
+                    else if (size_buffer > (size_t)square(k_user+k))
+                        arr_use = buffer_FPnum;
+                    else {
+                        back_to_precompute = true;
+                        goto cleanup;
+                    }
+                }
+
+                else
+                {
+                    free_arr_use = true;
+                    back_to_precompute = false;
+                    arr_use = (FPnum*)malloc((size_t)square(k_pred)
+                                              * sizeof(FPnum));
+                    if (arr_use == NULL) goto throw_oom;
+                }
+
+                copy_arr(C, precomputedTransCtCinvCt,
+                         (size_t)p*(size_t)(k_user+k), nthreads);
+                if (!filled_CtCw) {
+                    cblas_tsyrk(CblasRowMajor, CblasUpper, CblasTrans,
+                                k_pred, p,
+                                1., C, k_pred,
+                                0., precomputedCtCw, k_pred);
+                    copy_arr(precomputedCtCw, arr_use, square(k_pred),nthreads);
+                    add_to_diag(arr_use,
+                                ((lam_unique == NULL)? (lam) : (lam_unique[2]))
+                                    / w_user,
+                                k_pred);
+                    if (w_user != 1.)
+                        cblas_tscal(square(k_pred), w_user, precomputedCtCw, 1);
+                    filled_CtCw = true;
+                }
+                else {
+                    copy_arr(precomputedCtCw, arr_use, square(k_pred),nthreads);
+                    if (w_user != 1. && !use_cg)
+                        cblas_tscal(square(k_pred), 1./w_user, arr_use, 1);
+                    add_to_diag(arr_use,
+                                ((lam_unique == NULL)? (lam) : (lam_unique[2]))
+                                    / w_user,
+                                k_pred);
+                }
+                tposv_(&lo, &k_pred, &n,
+                       arr_use, &k_pred,
+                       precomputedTransCtCinvCt, &k_pred, &ignore_int);
+
+                if (free_arr_use) free(arr_use);
+                arr_use = NULL;
+                finished_TransCtCinvCt = true;
+            }
+
+
+            if (precomputedCtCw != NULL && filled_CtCw && use_cg && w_user !=1.)
+                cblas_tscal(square(k_user+k), w_user, precomputedCtCw, 1);
+            else if (!filled_CtCw && precomputedCtCw != NULL) {
+                cblas_tsyrk(CblasRowMajor, CblasUpper, CblasTrans,
+                            k_user+k, p,
+                            w_user, C, k_user+k,
+                            0., precomputedCtCw, k_user+k);
+                filled_CtCw = true;
+            }
+
+            if (precomputedBeTBeChol != NULL && !filled_BeTBeChol)
+            {
+                k_pred = k_user + k + k_main + (int)user_bias;
+                set_to_zero(precomputedBeTBeChol, square(k_pred), 1);
+                
+                copy_mat(k+k_main+user_bias, k+k_main+user_bias,
+                         precomputedBtB, k+k_main+user_bias,
+                         precomputedBeTBeChol + k_user + k_user*k_pred, k_pred);
+                sum_mat(k_user+k, k_user+k,
+                        precomputedCtCw, k_user+k,
+                        precomputedBeTBeChol, k_pred);
+
+                add_to_diag(precomputedBeTBeChol,
+                            (lam_unique == NULL)? (lam) : (lam_unique[2]),
+                            k_user+k+k_main+user_bias);
+                if (lam_unique != NULL && user_bias)
+                    precomputedBeTBeChol[square(k_pred)-1]
+                        +=
+                    (lam_unique[0]-lam_unique[2]);
+
+                tpotrf_(&lo, &k_pred, precomputedBeTBeChol,&k_pred,&ignore_int);
+                filled_BeTBeChol = true;
+            }
+        }
+
+        back_to_precompute = false;
     }
 
     cleanup:
-        free(buffer_FPnum);
-        free(Xtrans);
-        free(Wtrans);
-        free(Xcsr_p);
-        free(Xcsr_i);
-        free(Xcsr);
-        free(weightR);
-        free(Xcsc_p);
-        free(Xcsc_i);
-        free(Xcsc);
-        free(weightC);
-        free(Utrans);
-        free(U_csr_p);
-        free(U_csr_i);
-        free(U_csr);
-        free(U_csc_p);
-        free(U_csc_i);
-        free(U_csc);
-        free(Itrans);
-        free(I_csr_p);
-        free(I_csr_i);
-        free(I_csr);
-        free(I_csc_p);
-        free(I_csc_i);
-        free(I_csc);
-        free(cnt_NA_byrow);
-        free(cnt_NA_bycol);
-        free(cnt_NA_u_byrow);
-        free(cnt_NA_u_bycol);
-        free(cnt_NA_i_byrow);
-        free(cnt_NA_i_bycol);
+        free(buffer_FPnum); buffer_FPnum = NULL;
+        free(Xtrans); Xtrans = NULL;
+        free(Wtrans); Wtrans = NULL;
+        free(Xcsr_p); Xcsr_p = NULL;
+        free(Xcsr_i); Xcsr_i = NULL;
+        free(Xcsr); Xcsr = NULL;
+        free(weightR); weightR = NULL;
+        free(Xcsc_p); Xcsc_p = NULL;
+        free(Xcsc_i); Xcsc_i = NULL;
+        free(Xcsc); Xcsc = NULL;
+        free(weightC); weightC = NULL;
+        free(Utrans); Utrans = NULL;
+        free(U_csr_p); U_csr_p = NULL;
+        free(U_csr_i); U_csr_i = NULL;
+        free(U_csr); U_csr = NULL;
+        free(U_csc_p); U_csc_p = NULL;
+        free(U_csc_i); U_csc_i = NULL;
+        free(U_csc); U_csc = NULL;
+        free(Itrans); Itrans = NULL;
+        free(I_csr_p); I_csr_p = NULL;
+        free(I_csr_i); I_csr_i = NULL;
+        free(I_csr); I_csr = NULL;
+        free(I_csc_p); I_csc_p = NULL;
+        free(I_csc_i); I_csc_i = NULL;
+        free(I_csc); I_csc = NULL;
+        free(cnt_NA_byrow); cnt_NA_byrow = NULL;
+        free(cnt_NA_bycol); cnt_NA_bycol = NULL;
+        free(cnt_NA_u_byrow); cnt_NA_u_byrow = NULL;
+        free(cnt_NA_u_bycol); cnt_NA_u_bycol = NULL;
+        free(cnt_NA_i_byrow); cnt_NA_i_byrow = NULL;
+        free(cnt_NA_i_bycol); cnt_NA_i_bycol = NULL;
         if (user_bias || item_bias) {
-            free(A_bias);
-            if (B_plus_bias != B_bias)
-                free(B_bias);
-            free(Xcsr_orig);
-            free(Xcsc_orig);
+            free(A_bias); A_bias = NULL;
+            if (B_plus_bias != B_bias) {
+                free(B_bias); B_bias = NULL;
+            }
+            free(Xcsr_orig); Xcsr_orig = NULL;
+            free(Xcsc_orig); Xcsc_orig = NULL;
         }
-        if (Xfull_orig != NULL)
-            free(Xfull_orig);
-        if (Xtrans_orig != NULL)
-            free(Xtrans_orig);
-        free(seed_arr);
-        free(lam_unique_copy);
+        if (Xfull_orig != NULL) {
+            free(Xfull_orig); Xfull_orig = NULL;
+        }
+        if (Xtrans_orig != NULL) {
+            free(Xtrans_orig); Xtrans_orig = NULL;
+        }
+        free(seed_arr); seed_arr = NULL;
+        if (back_to_precompute) goto precompute;
+        free(lam_unique_copy); lam_unique_copy = NULL;
     return retval;
 
     throw_oom:
     {
         retval = 1;
+        back_to_precompute = false;
         if (verbose)
             print_oom_message();
         goto cleanup;
@@ -6565,11 +6755,9 @@ int fit_collective_implicit_als
                 if (w_user == 1.)
                     cblas_tscal(square(k_user+k), w_user, precomputedCtC, 1);
 
-                copy_mat(
-                    k_user+k, k_user+k,
-                    precomputedBeTBe, k_totA,
-                    precomputedCtC, k_user+k
-                );
+                copy_mat(k_user+k, k_user+k,
+                         precomputedBeTBe, k_totA,
+                         precomputedCtC, k_user+k);
             }
 
             else
@@ -6790,9 +6978,9 @@ int precompute_collective_explicit
         
         if (CtCw != NULL)
         {
-            sum_mat(k+k_main, k+k_main,
-                    BtB, k+k_main,
-                    BeTBeChol + k_user + k_user*k_totA, k_totA);
+            copy_mat(k+k_main, k+k_main,
+                     BtB, k+k_main,
+                     BeTBeChol + k_user + k_user*k_totA, k_totA);
             sum_mat(k_user+k, k_user+k,
                     CtCw, k_user+k,
                     BeTBeChol, k_totA);

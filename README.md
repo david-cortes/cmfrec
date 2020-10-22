@@ -23,16 +23,16 @@ The new version is faster, multi-threaded, and has some new functionality, but i
 * Can fit factorization models with or without user and/or item side information.
 * Can fit the usual explicit-feedback model as well as the implicit-feedback model with weighted binary entries (see [3]).
 * Can be used for cold-start recommendations (when using side information).
-* Supports user and item biases in the explicit-feedback models.
+* Supports user and item biases in the explicit-feedback models (these are not just pre-estimated beforehand as in other software).
 * Provides an API for top-N recommended lists and for calculating latent factors from new data.
-* Can use either an alternating least-squares procedure (ALS) or a gradient-based procedure using an L-BFGS optimizer depending on the specific model (the package bundles a modified version of [Okazaki's C implementation](https://github.com/chokkan/liblbfgs)).
+* Can use either an alternating least-squares procedure (ALS) or a gradient-based procedure using an L-BFGS optimizer for the explicit-feedback models (the package bundles a modified version of [Okazaki's C implementation](https://github.com/chokkan/liblbfgs)).
 * For the ALS option, can use either the exact Cholesky method or the faster conjugate gradient method (see [4]).
 * Provides a content-based model and other models aimed at better cold-start recommendations.
-* Provides an intercepts-only "most-popular" model for non-personalized recommendations, which can be used as a benchmark as it takes similar hyperparameters as the other models.
+* Provides an intercepts-only "most-popular" model for non-personalized recommendations, which can be used as a benchmark as it uses the same hyperparameters as the other models.
 * Allows variations of the original collective factorization models such as setting some factors to be used only for one factorization, setting different weights for the errors on each matrix, or setting different regularization parameters for each matrix.
 * Can use sigmoid transformations for binary-distributed columns in the side info data.
-* Can work with both sparse and dense matrices for each input (e.g. can also be used as a general missing-value imputer for 2-d data).
-* Can produce factorizations for variations of the problem such as sparse inputs with non-present values as zeros instead of missing.
+* Can work with both sparse and dense matrices for each input (e.g. can also be used as a general missing-value imputer for 2-d data), and can work efficiently with a mix of dense and sparse inputs.
+* Can produce factorizations for variations of the problem such as sparse inputs with non-present values as zeros instead of missing (e.g. when used for dimensionality reduction).
 * Can work with large datasets (supports arrays/matrices larger than `INT_MAX`).
 * Supports observation weights (for the explicit-feedback models).
 
@@ -51,6 +51,8 @@ Sharing the same item/user-factor matrix used to factorize the ratings, or shari
 This also has the side effect of allowing recommendations for users and items for which there is side information but no ratings, although these predictions might not be as high quality.
 
 Alternatively, can produce factorizations in wich the factor matrices are determined from the attributes directly (e.g. `A = U * C`), with or without a free offset.
+
+While the method was initially devised for recommender systems, can also be used as a general technique for dimensionality reduction by taking the `A` matrix as low-dimensional factors, which can be calculated for new data too.
 
 ## Instalation
 
@@ -92,16 +94,16 @@ n_item_attr = 5
 k = 3
 np.random.seed(1)
 
-### 'X' matrix (note that you can also pass it as SciPy COO)
+### 'X' matrix (can also pass it as SciPy COO)
 ratings = pd.DataFrame({
     "UserId" : np.random.randint(n_users, size=n_ratings),
     "ItemId" : np.random.randint(n_items, size=n_ratings),
     "Rating" : np.random.normal(loc=3., size=n_ratings)
 })
-### 'U' matrix (can also pass them as NumPy if X is a SciPy COO)
+### 'U' matrix (can also pass it as NumPy if X is a SciPy COO)
 user_info = pd.DataFrame(np.random.normal(size = (n_users, n_user_attr)))
 user_info["UserId"] = np.arange(n_users)
-### 'I' matrix (can also pass them as NumPy if X is a SciPy COO)
+### 'I' matrix (can also pass it as NumPy if X is a SciPy COO)
 item_info = pd.DataFrame(np.random.normal(size = (n_items, n_item_attr)))
 item_info["ItemId"] = np.arange(n_items)
 
@@ -118,10 +120,16 @@ model.topN(user=3, n=5)
 ### Top-5 highest predicted for user 3, if it were a new user
 model.topN_warm(X_col=ratings.ItemId.loc[ratings.UserId == 3],
                 X_val=ratings.Rating.loc[ratings.UserId == 3],
+                U=user_info.iloc[[3]],
                 n=5)
 
 ### Top-5 highest predicted for user 3, based on side information
 model.topN_cold(U=user_info.iloc[[3]], n=5)
+
+### Calculating the latent factors
+model.factors_warm(X_col=ratings.ItemId.loc[ratings.UserId == 3],
+                   X_val=ratings.Rating.loc[ratings.UserId == 3],
+                   U=user_info.iloc[[3]])
 ```
 
 Users and items can be reindexed internally (if passing data frames), so you can use strings or non-consecutive numbers as IDs when passing data to the object's methods.
