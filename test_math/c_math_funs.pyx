@@ -144,6 +144,7 @@ cdef extern from "cmfrec.h":
         bint do_B, bint is_first_iter,
         int nthreads,
         bint use_cg, int max_cg_steps,
+        double *precomputedBtB, c_bool *filled_BtB,
         double *buffer_double
     )
 
@@ -174,6 +175,11 @@ cdef extern from "cmfrec.h":
         bint do_B,
         int nthreads,
         bint use_cg, int max_cg_steps, bint is_first_iter,
+        bint keep_precomputed,
+        double *precomputedBtB,
+        double *precomputedCtCw,
+        double *precomputedBeTBeChol,
+        c_bool *filled_BtB, c_bool *filled_CtCw, c_bool *filled_BeTBeChol,
         double* buffer_double
     )
 
@@ -975,6 +981,8 @@ def py_optimizeA(
 
     if w != 1.:
         lam /= w
+
+    cdef c_bool ignore = 0
     
     optimizeA(
         &A[0,0], lda,
@@ -987,6 +995,7 @@ def py_optimizeA(
         is_B, 1,
         nthreads,
         0, 0,
+        <double*>NULL, &ignore,
         &buffer_double[0]
     )
     return A
@@ -1064,6 +1073,8 @@ def py_optimizeA_collective(
         w_user /= w_main
         lam /= w_main
 
+    cdef c_bool ignore = 0
+
     optimizeA_collective(
         &A[0,0], A.shape[1], &B[0,0], B.shape[1], &C[0,0],
         m, m_u, n, p,
@@ -1078,6 +1089,8 @@ def py_optimizeA_collective(
         is_B,
         nthreads,
         0, 0, 1,
+        0, <double*>NULL, <double*>NULL, <double*>NULL,
+        &ignore, &ignore, &ignore,
         &buffer_double[0]
     )
     return A

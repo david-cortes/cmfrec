@@ -1006,6 +1006,8 @@ class _CMF:
                     if isinstance(out, np.ndarray):
                         out = out[0]
                     return out
+            ### TODO: This function no longer needs to know which which entries
+            #### will be nan, as it's now implemented in the C function
             else:
                 n_users = max(self._A_pred.shape[0], self.user_bias_.shape[0])
                 n_items = max(self._B_pred.shape[0], self.item_bias_.shape[0])

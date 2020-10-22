@@ -62,7 +62,7 @@ extern "C" {
 
 #ifndef CBLAS_H
 
-#ifdef USE_DOUBLE
+#if !defined(USE_FLOAT) || defined(USE_DOUBLE)
     #define tdot_ ddot_
     #define tcopy_ dcopy_
     #define taxpy_ daxpy_

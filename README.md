@@ -97,10 +97,10 @@ ratings = pd.DataFrame({
     "ItemId" : np.random.randint(n_items, size=n_ratings),
     "Rating" : np.random.normal(loc=3., size=n_ratings)
 })
-### 'U' matrix
+### 'U' matrix (can also pass them as NumPy if X is a SciPy COO)
 user_info = pd.DataFrame(np.random.normal(size = (n_users, n_user_attr)))
 user_info["UserId"] = np.arange(n_users)
-### 'I' matrix
+### 'I' matrix (can also pass them as NumPy if X is a SciPy COO)
 item_info = pd.DataFrame(np.random.normal(size = (n_items, n_item_attr)))
 item_info["ItemId"] = np.arange(n_items)
 

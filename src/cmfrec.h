@@ -87,7 +87,11 @@ extern "C" {
     #define FORCE_NO_NAN_PROPAGATION
     #define printf Rprintf
     #define fprintf(f, message) REprintf(message)
+#elif defined(MKL_ILP64)
+    #include "mkl.h"
 #endif
+/* Here one may also include the standard headers "cblas.h" and "lapack.h",
+   if one wants to use a non-standard version such as ILP64 (-DMKL_ILP64). */
 
 /* Aliasing for compiler optimizations */
 #ifdef __cplusplus
@@ -121,8 +125,14 @@ extern "C" {
         #define isnan(x) ( (x) != (x) )
     #endif
 #endif
+#ifdef _FOR_R
+    #define isnan(x) (ISNAN(x) || isnan(x))
+    #define NAN_ NA_REAL
+#else
+    #define NAN_ NAN
+#endif
 
-#ifdef USE_DOUBLE
+#if defined(USE_DOUBLE) || !defined(USE_FLOAT)
     #define LBFGS_FLOAT 64
     #define FPnum double
     #define exp_t exp
@@ -163,6 +173,7 @@ extern "C" {
     #define tpotrs_ spotrs_
     #define tgels_ sgels_
 #endif
+
 #if !defined(LAPACK_H) && !defined(_FOR_R)
 void tposv_(const char*, const int*, const int*, const FPnum*, const int*, const FPnum*, const int*, const int*);
 void tlacpy_(const char*, const int*, const int*, const FPnum*, const int*, const FPnum*, const int*);
@@ -364,6 +375,7 @@ void append_ones_last_col
     FPnum *restrict outp
 );
 void fill_lower_triangle(FPnum A[], size_t n, size_t lda);
+void print_oom_message(void);
 
 
 /* common.c */
@@ -546,6 +558,7 @@ void optimizeA
     bool do_B, bool is_first_iter,
     int nthreads,
     bool use_cg, int max_cg_steps,
+    FPnum *restrict precomputedBtB, bool *filled_BtB,
     FPnum *restrict buffer_FPnum
 );
 void optimizeA_implicit
@@ -590,6 +603,7 @@ void predict_multiple
     FPnum *restrict biasA, FPnum *restrict biasB,
     FPnum glob_mean,
     int k, int k_main,
+    int m, int n,
     int predA[], int predB[], size_t nnz,
     FPnum *restrict outp,
     int nthreads
@@ -644,7 +658,8 @@ int predict_X_old_most_popular
 (
     int row[], int col[], FPnum *restrict predicted, size_t n_predict,
     FPnum *restrict biasA, FPnum *restrict biasB,
-    FPnum glob_mean
+    FPnum glob_mean,
+    int m, int n
 );
 
 /* collective.c */
@@ -975,6 +990,11 @@ void optimizeA_collective
     bool do_B,
     int nthreads,
     bool use_cg, int max_cg_steps, bool is_first_iter,
+    bool keep_precomputed,
+    FPnum *restrict precomputedBtB,
+    FPnum *restrict precomputedCtCw,
+    FPnum *restrict precomputedBeTBeChol,
+    bool *filled_BtB, bool *filled_CtCw, bool *filled_BeTBeChol,
     FPnum *restrict buffer_FPnum
 );
 void build_BeTBe
@@ -1401,6 +1421,7 @@ int predict_X_old_collective_explicit
     FPnum *restrict B, FPnum *restrict biasB,
     FPnum glob_mean,
     int k, int k_user, int k_item, int k_main,
+    int m, int n,
     int nthreads
 );
 int predict_X_old_collective_implicit
@@ -1409,6 +1430,7 @@ int predict_X_old_collective_implicit
     FPnum *restrict A,
     FPnum *restrict B,
     int k, int k_user, int k_item, int k_main,
+    int m, int n,
     int nthreads
 );
 int predict_X_new_collective_explicit
@@ -1429,7 +1451,7 @@ int predict_X_new_collective_explicit
     FPnum *restrict col_means,
     FPnum *restrict X, int ixA[], int ixB[], size_t nnz,
     size_t *restrict Xcsr_p, int *restrict Xcsr_i, FPnum *restrict Xcsr,
-    FPnum *restrict Xfull, int n,
+    FPnum *restrict Xfull, int n, /* <- 'n' MUST be passed */
     FPnum *restrict weight,
     FPnum *restrict B,
     int k, int k_user, int k_item, int k_main,
@@ -1924,6 +1946,7 @@ int predict_X_old_offsets_explicit
     FPnum *restrict Bm, FPnum *restrict biasB,
     FPnum glob_mean,
     int k, int k_sec, int k_main,
+    int m, int n,
     int nthreads
 );
 int predict_X_old_offsets_implicit
@@ -1932,6 +1955,7 @@ int predict_X_old_offsets_implicit
     FPnum *restrict Am,
     FPnum *restrict Bm,
     int k,
+    int m, int n,
     int nthreads
 );
 int predict_X_new_offsets_explicit
@@ -1946,7 +1970,7 @@ int predict_X_new_offsets_explicit
     size_t U_csr_p[], int U_csr_i[], FPnum *restrict U_csr,
     FPnum *restrict X, int ixA[], int ixB[], size_t nnz,
     size_t *restrict Xcsr_p, int *restrict Xcsr_i, FPnum *restrict Xcsr,
-    FPnum *restrict Xfull, int n,
+    FPnum *restrict Xfull, int n, /* <- 'n' MUST be passed */
     FPnum *restrict weight,
     FPnum *restrict Bm, FPnum *restrict C,
     FPnum *restrict C_bias,
@@ -1963,6 +1987,7 @@ int predict_X_new_offsets_implicit
     /* inputs for predictions */
     int m_new,
     int row[], int col[], FPnum *restrict predicted, size_t n_predict,
+    int n_orig,
     int nthreads,
     /* inputs for factors */
     FPnum *restrict U, int p,
@@ -2051,6 +2076,7 @@ int predict_X_old_content_based
     int m_new, int k,
     int row[], /* <- optional */
     int col[],
+    int m_orig, int n_orig,
     FPnum *restrict U, int p,
     int U_row[], int U_col[], FPnum *restrict U_sp, size_t nnz_U,
     size_t U_csr_p[], int U_csr_i[], FPnum *restrict U_csr,

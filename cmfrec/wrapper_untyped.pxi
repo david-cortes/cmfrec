@@ -313,6 +313,7 @@ cdef extern from "cmfrec.h":
         FPnum *biasA, FPnum *biasB,
         FPnum glob_mean,
         int k, int k_main,
+        int m, int n,
         int predA[], int predB[], size_t nnz,
         FPnum *outp,
         int nthreads
@@ -388,6 +389,7 @@ cdef extern from "cmfrec.h":
         int m_new, int k,
         int row[],
         int col[],
+        int m_orig, int n_orig,
         FPnum *U, int p,
         int U_row[], int U_col[], FPnum *U_sp, size_t nnz_U,
         size_t U_csr_p[], int U_csr_i[], FPnum *U_csr,
@@ -1076,14 +1078,14 @@ def call_fit_collective_explicit_als(
 
     if precompute_for_predictions:
         if user_bias:
-            B_plus_bias = np.empty((B.shape[0],B.shape[1]), dtype=c_FPnum)
+            B_plus_bias = np.empty((B.shape[0],B.shape[1]+1), dtype=c_FPnum)
             ptr_B_plus_bias = &B_plus_bias[0,0]
-        BtB = np.empty((k+k_main, k+k_main), dtype=c_FPnum)
+        BtB = np.empty((k+k_main+user_bias, k+k_main+user_bias), dtype=c_FPnum)
         ptr_BtB = &BtB[0,0]
-        TransBtBinvBt = np.empty((B.shape[0], k+k_main), dtype=c_FPnum)
+        TransBtBinvBt = np.empty((B.shape[0], k+k_main+user_bias), dtype=c_FPnum)
         ptr_TransBtBinvBt = &TransBtBinvBt[0,0]
         if p:
-            BeTBeChol = np.empty((B.shape[1], B.shape[1]), dtype=c_FPnum)
+            BeTBeChol = np.empty((k_user+k+k_main+user_bias, k_user+k+k_main+user_bias), dtype=c_FPnum)
             ptr_BeTBeChol = &BeTBeChol[0,0]
             CtCw = np.empty((k_user+k, k_user+k), dtype=c_FPnum)
             if CtCw.shape[0]:
@@ -1423,9 +1425,9 @@ def call_fit_offsets_explicit_als(
     cdef FPnum *ptr_BtB = NULL
     cdef FPnum *ptr_TransBtBinvBt = NULL
     if precompute_for_predictions:
-        BtB = np.empty((k,k), dtype=c_FPnum)
+        BtB = np.empty((k+user_bias,k+user_bias), dtype=c_FPnum)
         ptr_BtB = &BtB[0,0]
-        TransBtBinvBt = np.empty((n,k), dtype=c_FPnum)
+        TransBtBinvBt = np.empty((n,k+user_bias), dtype=c_FPnum)
         ptr_TransBtBinvBt = &TransBtBinvBt[0,0]
 
     cdef FPnum glob_mean = 0
@@ -1611,8 +1613,8 @@ def precompute_matrices_collective_explicit(
     cdef FPnum *ptr_TransCtCinvCt = NULL
     cdef FPnum *ptr_CtCw = NULL
 
-    BtB = np.empty((k+k_main, k+k_main), dtype=c_FPnum)
-    TransBtBinvBt = np.empty((B.shape[0], k+k_main), dtype=c_FPnum)
+    BtB = np.empty((k+k_main+user_bias, k+k_main+user_bias), dtype=c_FPnum)
+    TransBtBinvBt = np.empty((B.shape[0], k+k_main+user_bias), dtype=c_FPnum)
     ptr_BtB = &BtB[0,0]
     ptr_TransBtBinvBt = &TransBtBinvBt[0,0]
     if user_bias:
@@ -1621,7 +1623,7 @@ def precompute_matrices_collective_explicit(
     else:
         B_plus_bias = B
     if p > 0:
-        BeTBeChol = np.empty((k_user+k+k_main, k_user+k+k_main), dtype=c_FPnum)
+        BeTBeChol = np.empty((k_user+k+k_main+user_bias, k_user+k+k_main+user_bias), dtype=c_FPnum)
         TransCtCinvCt = np.empty((C.shape[0], k_user+k), dtype=c_FPnum)
         CtCw = np.empty((k_user+k, k_user+k), dtype=c_FPnum)
         ptr_BeTBeChol = &BeTBeChol[0,0]
@@ -2292,6 +2294,7 @@ def call_predict_multiple(
         ptr_biasA, ptr_biasB,
         glob_mean,
         k, k_main,
+        A.shape[0], B.shape[0],
         &predA[0], &predB[0], predA.shape[0],
         &outp[0],
         nthreads
@@ -2397,6 +2400,7 @@ def call_predict_X_old_content_based(
     cdef int retval = predict_X_old_content_based(
         &scores_new[0], n_new, n_new, k,
         <int*>NULL, &ixB[0],
+        0, Bm.shape[0],
         ptr_U, C.shape[0],
         ptr_U_row, ptr_U_col, ptr_U_sp, nnz_U,
         ptr_U_csr_p, ptr_U_csr_i, ptr_U_csr,

@@ -1126,3 +1126,11 @@ void fill_lower_triangle(FPnum A[], size_t n, size_t lda)
         for (size_t col = 0; col < row; col++)
             A[col + row*lda] = A[row + col*lda];
 }
+
+void print_oom_message(void)
+{
+    fprintf(stderr, "Error: could not allocate enough memory.\n");
+    #ifndef _FOR_R
+    fflush(stderr);
+    #endif
+}

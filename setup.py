@@ -101,7 +101,7 @@ setup(
                    "src/offsets.c", "src/helpers.c", "src/lbfgs.c",
                    "src/cblas_wrappers.c"],
           include_dirs=[np.get_include(), "src"],
-          define_macros = [("_FOR_PYTHON", None)]
+          define_macros = [("_FOR_PYTHON", None), ("USE_FLOAT", None)]
           ),
         ]
     )

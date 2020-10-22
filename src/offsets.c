@@ -927,6 +927,7 @@ int precompute_offsets_both
     throw_oom:
     {
         retval = 1;
+        print_oom_message();
         goto cleanup;
     }
 }
@@ -1398,15 +1399,10 @@ int fit_offsets_explicit_lbfgs_internal
         free(I_csc);
     if (retval == 1)
     {
-        if (verbose) {
-            fprintf(stderr, "Error: could not allocate enough memory.\n");
-            #ifndef _FOR_R
-            fflush(stderr);
-            #endif
-        }
-        return 1;
+        if (verbose)
+            print_oom_message();
     }
-    return 0;
+    return retval;
 }
 
 int fit_offsets_explicit_lbfgs
@@ -1584,12 +1580,8 @@ int fit_offsets_explicit_lbfgs
         return retval;
     throw_oom:
     {
-        if (verbose) {
-            fprintf(stderr, "Error: could not allocate enough memory.\n");
-            #ifndef _FOR_R
-            fflush(stderr);
-            #endif
-        }
+        if (verbose)
+            print_oom_message();
         retval = 1;
         goto cleanup;
     }
@@ -1890,12 +1882,8 @@ int fit_offsets_als
 
     throw_oom:
     {
-        if (verbose) {
-            fprintf(stderr, "Error: could not allocate enough memory.\n");
-            #ifndef _FOR_R
-            fflush(stderr);
-            #endif
-        }
+        if (verbose)
+            print_oom_message();
         retval = 1;
         goto cleanup;
     }
@@ -2755,6 +2743,7 @@ int predict_X_old_offsets_explicit
     FPnum *restrict Bm, FPnum *restrict biasB,
     FPnum glob_mean,
     int k, int k_sec, int k_main,
+    int m, int n,
     int nthreads
 )
 {
@@ -2764,6 +2753,7 @@ int predict_X_old_offsets_explicit
         biasA, biasB,
         glob_mean,
         k_sec+k+k_main, 0,
+        m, n,
         row, col, n_predict,
         predicted,
         nthreads
@@ -2778,6 +2768,7 @@ int predict_X_old_offsets_implicit
     FPnum *restrict Am,
     FPnum *restrict Bm,
     int k,
+    int m, int n,
     int nthreads
 )
 {
@@ -2787,6 +2778,7 @@ int predict_X_old_offsets_implicit
         (FPnum*)NULL, (FPnum*)NULL,
         0.,
         k, 0,
+        m, n,
         row, col, n_predict,
         predicted,
         nthreads
@@ -2807,7 +2799,7 @@ int predict_X_new_offsets_explicit
     size_t U_csr_p[], int U_csr_i[], FPnum *restrict U_csr,
     FPnum *restrict X, int ixA[], int ixB[], size_t nnz,
     size_t *restrict Xcsr_p, int *restrict Xcsr_i, FPnum *restrict Xcsr,
-    FPnum *restrict Xfull, int n,
+    FPnum *restrict Xfull, int n, /* <- 'n' MUST be passed */
     FPnum *restrict weight,
     FPnum *restrict Bm, FPnum *restrict C,
     FPnum *restrict C_bias,
@@ -2853,9 +2845,7 @@ int predict_X_new_offsets_explicit
         nthreads
     );
 
-    if (retval == 1)
-        goto throw_oom;
-    else if (retval != 0)
+    if (retval != 0)
         goto cleanup;
 
     retval = predict_X_old_offsets_explicit(
@@ -2864,6 +2854,7 @@ int predict_X_new_offsets_explicit
         Bm, biasB,
         glob_mean,
         k, k_sec, k_main,
+        m_new, n,
         nthreads
     );
 
@@ -2883,6 +2874,7 @@ int predict_X_new_offsets_implicit
     /* inputs for predictions */
     int m_new,
     int row[], int col[], FPnum *restrict predicted, size_t n_predict,
+    int n_orig,
     int nthreads,
     /* inputs for factors */
     FPnum *restrict U, int p,
@@ -2919,9 +2911,7 @@ int predict_X_new_offsets_implicit
         nthreads
     );
 
-    if (retval == 1)
-        goto throw_oom;
-    else if (retval != 0)
+    if (retval != 0)
         goto cleanup;
 
     retval = predict_X_old_offsets_implicit(
@@ -2929,6 +2919,7 @@ int predict_X_new_offsets_implicit
         Am,
         Bm,
         k,
+        m_new, n_orig,
         nthreads
     );
 
@@ -3021,9 +3012,7 @@ int fit_content_based_lbfgs
             (FPnum*)NULL,
             (FPnum*)NULL
         );
-        if (retval == 1)
-            goto throw_oom;
-        else if (retval != 0)
+        if (retval != 0)
             goto cleanup;
 
         free(tempA); tempA = NULL;
@@ -3124,12 +3113,8 @@ int fit_content_based_lbfgs
         return retval;
     throw_oom:
     {
-        if (verbose) {
-            fprintf(stderr, "Error: could not allocate enough memory.\n");
-            #ifndef _FOR_R
-            fflush(stderr);
-            #endif
-        }
+        if (verbose)
+            print_oom_message();
         retval = 1;
         goto cleanup;
     }
@@ -3317,6 +3302,7 @@ int predict_X_old_content_based
     int m_new, int k,
     int row[], /* <- optional */
     int col[],
+    int m_orig, int n_orig,
     FPnum *restrict U, int p,
     int U_row[], int U_col[], FPnum *restrict U_sp, size_t nnz_U,
     size_t U_csr_p[], int U_csr_i[], FPnum *restrict U_csr,
@@ -3332,15 +3318,13 @@ int predict_X_old_content_based
                 )
     long long ix;
     #endif
+    if (m_orig == 0) m_orig = INT_MAX;
+    if (n_orig == 0) n_orig = INT_MAX;
     FPnum *restrict Am = (FPnum*)malloc((size_t)n_predict *
                                         (size_t)k *
                                         sizeof(FPnum));
     int retval = 0;
-    if (Am == NULL)
-    {
-        retval = 1;
-        goto cleanup;
-    }
+    if (Am == NULL) goto throw_oom;
 
     retval = matrix_content_based(
         Am,
@@ -3351,29 +3335,41 @@ int predict_X_old_content_based
         C, C_bias,
         nthreads
     );
-    if (retval == 1) goto cleanup;
+    if (retval != 0) goto cleanup;
 
     if (row == NULL)
         #pragma omp parallel for schedule(static) num_threads(nthreads) \
                 shared(predicted, n_predict, col, k, Am, Bm, biasB, glob_mean)
         for (size_t_for ix = 0; ix < n_predict; ix++)
-            predicted[ix] = cblas_tdot(k, Am + ix*(size_t)k, 1,
-                                          Bm + (size_t)col[ix]*(size_t)k, 1)
-                             + ((biasB != NULL)? biasB[col[ix]] : 0.)
-                             + glob_mean;
+            predicted[ix] = (col[ix] >= n_orig || col[ix] < 0)?
+                                (NAN_)
+                                  :
+                                (cblas_tdot(k, Am + ix*(size_t)k, 1,
+                                               Bm + (size_t)col[ix]*(size_t)k,1)
+                                 + ((biasB != NULL)? biasB[col[ix]] : 0.)
+                                 + glob_mean);
     else
         #pragma omp parallel for schedule(static) num_threads(nthreads) \
                 shared(predicted, n_predict, row, col, k, Am, Bm, \
                        biasB, glob_mean)
         for (size_t_for ix = 0; ix < n_predict; ix++)
-            predicted[ix] = cblas_tdot(k, Am + row[ix]*(size_t)k, 1,
-                                          Bm + (size_t)col[ix]*(size_t)k, 1)
-                             + ((biasB != NULL)? biasB[col[ix]] : 0.)
-                             + glob_mean;
+            predicted[ix] = (row[ix] >= m_orig || row[ix] < 0 ||
+                             col[ix] >= n_orig || col[ix] < 0)?
+                                (NAN_)
+                                  :
+                                (cblas_tdot(k, Am + row[ix]*(size_t)k, 1,
+                                               Bm + (size_t)col[ix]*(size_t)k,1)
+                                 + ((biasB != NULL)? biasB[col[ix]] : 0.)
+                                 + glob_mean);
 
     cleanup:
         free(Am);
-    return retval;
+        return retval;
+    throw_oom:
+    {
+        retval = 1;
+        goto cleanup;
+    }
 }
 
 int predict_X_new_content_based
@@ -3407,11 +3403,7 @@ int predict_X_new_content_based
                                         (size_t)k *
                                         sizeof(FPnum));
     int retval = 0;
-    if (Am == NULL || Bm == NULL)
-    {
-        retval = 1;
-        goto cleanup;
-    }
+    if (Am == NULL || Bm == NULL) goto throw_oom;
 
     retval = matrix_content_based(
         Am,
@@ -3422,7 +3414,7 @@ int predict_X_new_content_based
         C, C_bias,
         nthreads
     );
-    if (retval == 1) goto cleanup;
+    if (retval != 0) goto cleanup;
 
     retval = matrix_content_based(
         Bm,
@@ -3433,7 +3425,7 @@ int predict_X_new_content_based
         D, D_bias,
         nthreads
     );
-    if (retval == 1) goto cleanup;
+    if (retval != 0) goto cleanup;
 
     if (row == NULL || col == NULL)
         #pragma omp parallel for schedule(static) num_threads(nthreads) \
@@ -3446,12 +3438,21 @@ int predict_X_new_content_based
         #pragma omp parallel for schedule(static) num_threads(nthreads) \
                 shared(predicted, n_predict, row, col, k, Am, Bm, glob_mean)
         for (size_t_for ix = 0; ix < n_predict; ix++)
-            predicted[ix] = cblas_tdot(k, Am + (size_t)row[ix]*(size_t)k, 1,
-                                          Bm + (size_t)col[ix]*(size_t)k, 1)
-                             + glob_mean;
+            predicted[ix] = (row[ix] >= m_new || row[ix] < 0 ||
+                             col[ix] >= n_new || col[ix] < 0)?
+                                (NAN_)
+                                  :
+                                (cblas_tdot(k,Am + (size_t)row[ix]*(size_t)k,1,
+                                              Bm + (size_t)col[ix]*(size_t)k, 1)
+                                 + glob_mean);
 
     cleanup:
         free(Am);
         free(Bm);
-    return retval;
+        return retval;
+    throw_oom:
+    {
+        retval = 1;
+        goto cleanup;
+    }
 }

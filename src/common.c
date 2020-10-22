@@ -1668,6 +1668,7 @@ void optimizeA
     bool do_B, bool is_first_iter,
     int nthreads,
     bool use_cg, int max_cg_steps,
+    FPnum *restrict precomputedBtB, bool *filled_BtB,
     FPnum *restrict buffer_FPnum
 )
 {
@@ -1681,6 +1682,7 @@ void optimizeA
     #endif
     char uplo = 'L';
     int ignore;
+    *filled_BtB = false;
 
     /* Case 1: X is full dense with few or no missing values.
        Here can apply the closed-form solution with only
@@ -2113,10 +2115,10 @@ int initialize_biases
     /* Now center X in-place */
     if (Xfull != NULL) {
         for (size_t_for ix = 0; ix < m_by_n; ix++)
-            Xfull[ix] = isnan(Xfull[ix])? (NAN) : (Xfull[ix] - *glob_mean);
+            Xfull[ix] = isnan(Xfull[ix])? (NAN_) : (Xfull[ix] - *glob_mean);
         if (Xtrans != NULL) {
             for (size_t_for ix = 0; ix < m_by_n; ix++)
-                Xtrans[ix] = isnan(Xtrans[ix])? (NAN):(Xtrans[ix] - *glob_mean);
+                Xtrans[ix] = isnan(Xtrans[ix])? (NAN_):(Xtrans[ix]-*glob_mean);
         }
     } else if (Xcsr != NULL) {
         for (size_t_for ix = 0; ix < nnz; ix++) {
@@ -2361,6 +2363,7 @@ void predict_multiple
     FPnum *restrict biasA, FPnum *restrict biasB,
     FPnum glob_mean,
     int k, int k_main,
+    int m, int n,
     int predA[], int predB[], size_t nnz,
     FPnum *restrict outp,
     int nthreads
@@ -2370,6 +2373,8 @@ void predict_multiple
     size_t ldb = (size_t)k_item + (size_t)k + (size_t)k_main;
     A += k_user;
     B += k_item;
+    if (m == 0) m = INT_MAX;
+    if (n == 0) n = INT_MAX;
     #if defined(_OPENMP) && \
                 ( (_OPENMP < 200801)  /* OpenMP < 3.0 */ \
                   || defined(_WIN32) || defined(_WIN64) \
@@ -2379,11 +2384,15 @@ void predict_multiple
     #pragma omp parallel for schedule(static) num_threads(nthreads) \
             shared(A, B, outp, nnz, predA, predB, lda, ldb, k)
     for (size_t_for ix = 0; ix < nnz; ix++)
-        outp[ix] = cblas_tdot(k, A + (size_t)predA[ix]*lda, 1,
-                              B + (size_t)predB[ix]*ldb, 1)
-                    + ((biasA != NULL)? biasA[predA[ix]] : 0.)
-                    + ((biasB != NULL)? biasB[predB[ix]] : 0.)
-                    + glob_mean;
+        outp[ix] = (predA[ix] >= m || predA[ix] < 0 ||
+                    predB[ix] >= n || predB[ix] < 0)?
+                        (NAN_)
+                        :
+                    (cblas_tdot(k, A + (size_t)predA[ix]*lda, 1,
+                                   B + (size_t)predB[ix]*ldb, 1)
+                     + ((biasA != NULL)? biasA[predA[ix]] : 0.)
+                     + ((biasB != NULL)? biasB[predB[ix]] : 0.)
+                     + glob_mean);
 }
 
 int cmp_int(const void *a, const void *b)
@@ -2941,13 +2950,20 @@ int predict_X_old_most_popular
 (
     int row[], int col[], FPnum *restrict predicted, size_t n_predict,
     FPnum *restrict biasA, FPnum *restrict biasB,
-    FPnum glob_mean
+    FPnum glob_mean,
+    int m, int n
 )
 {
+    if (m == 0) m = INT_MAX;
+    if (n == 0) n = INT_MAX;
     bool user_bias = biasA != NULL;
     for (size_t ix = 0; ix < n_predict; ix++)
-        predicted[ix] =   biasB[col[ix]]
-                        + (user_bias? biasA[row[ix]] : 0.)
-                        + glob_mean;
+        predicted[ix] =   (row[ix] >= m || row[ix] < 0 ||
+                           col[ix] >= n || col[ix] < 0)?
+                                (NAN_)
+                                  :
+                                (biasB[col[ix]]
+                                 + (user_bias? biasA[row[ix]] : 0.)
+                                 + glob_mean);
     return 0;
 }
