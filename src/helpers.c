@@ -168,7 +168,7 @@ void count_NAs_by_row
     {
         for (int ix = 0; ix < m; ix++)
             cnt_rows_w_NA += (cnt_NA[ix] > 0);
-        if ((m - cnt_rows_w_NA) >= (int)(0.7 * (double)m))
+        if ((m - cnt_rows_w_NA) >= (int)(0.75 * (double)m))
             *near_dense = true;
     }
 }
@@ -198,7 +198,7 @@ void count_NAs_by_col
     {
         for (int ix = 0; ix < n; ix++)
             cnt_rows_w_NA += (cnt_NA[ix] > 0);
-        if ((n - cnt_rows_w_NA) >= (int)(0.7 * (double)n))
+        if ((n - cnt_rows_w_NA) >= (int)(0.75 * (double)n))
             *near_dense = true;
     }
 }

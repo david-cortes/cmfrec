@@ -32,6 +32,7 @@ The new version is faster, multi-threaded, and has some new functionality, but i
 * Allows variations of the original collective factorization models such as setting some factors to be used only for one factorization, setting different weights for the errors on each matrix, or setting different regularization parameters for each matrix.
 * Can use sigmoid transformations for binary-distributed columns in the side info data.
 * Can work with both sparse and dense matrices for each input (e.g. can also be used as a general missing-value imputer for 2-d data).
+* Can produce factorizations for variations of the problem such as sparse inputs with non-present values as zeros instead of missing.
 * Can work with large datasets (supports arrays/matrices larger than `INT_MAX`).
 * Supports observation weights (for the explicit-feedback models).
 

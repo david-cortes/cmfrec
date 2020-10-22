@@ -531,14 +531,13 @@ FPnum wrapper_fun_grad_Bdense
     const size_t n,
     const lbfgsFPnumval_t step
 );
-void buffer_size_optimizeA
+size_t buffer_size_optimizeA
 (
-    size_t *buffer_size,
-    int m, int n, int k, int lda, int nthreads,
-    bool do_B, bool NA_as_zero,
-    bool use_cg, bool finalize_chol,
-    bool full_dense, bool near_dense,
-    bool has_dense, bool has_weight
+    int n, bool full_dense, bool near_dense, bool do_B,
+    bool has_dense, bool has_weights, bool NA_as_zero,
+    int k, int nthreads,
+    bool pass_allocated_BtB, bool keep_precomputedBtB,
+    bool use_cg, bool finalize_chol
 );
 size_t buffer_size_optimizeA_implicit
 (
@@ -558,6 +557,7 @@ void optimizeA
     bool do_B, bool is_first_iter,
     int nthreads,
     bool use_cg, int max_cg_steps,
+    bool keep_precomputedBtB,
     FPnum *restrict precomputedBtB, bool *filled_BtB,
     FPnum *restrict buffer_FPnum
 );

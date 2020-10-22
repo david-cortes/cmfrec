@@ -1553,78 +1553,115 @@ FPnum wrapper_fun_grad_Bdense
             );
 }
 
-void buffer_size_optimizeA
+size_t buffer_size_optimizeA
 (
-    size_t *buffer_size,
-    int m, int n, int k, int lda, int nthreads,
-    bool do_B, bool NA_as_zero,
-    bool use_cg, bool finalize_chol,
-    bool full_dense, bool near_dense,
-    bool has_dense, bool has_weight
+    int n, bool full_dense, bool near_dense, bool do_B,
+    bool has_dense, bool has_weights, bool NA_as_zero,
+    int k, int nthreads,
+    bool pass_allocated_BtB, bool keep_precomputedBtB,
+    bool use_cg, bool finalize_chol
 )
 {
     if (finalize_chol)
     {
-        size_t buffer_size_cg = 0;
-        size_t buffer_size_chol = 0;
-        buffer_size_optimizeA(
-            &buffer_size_chol,
-            m, n, k, lda, nthreads,
-            do_B, NA_as_zero,
-            true, false,
-            full_dense, near_dense,
-            has_dense, has_weight
+        return max2(
+                buffer_size_optimizeA(
+                        n, full_dense, near_dense, do_B,
+                        has_dense, has_weights, NA_as_zero,
+                        k, nthreads,
+                        pass_allocated_BtB, keep_precomputedBtB,
+                        true, false
+                ),
+                buffer_size_optimizeA(
+                    n, full_dense, near_dense, do_B,
+                    has_dense, has_weights, NA_as_zero,
+                    k, nthreads,
+                    pass_allocated_BtB, keep_precomputedBtB,
+                    false, false
+                )
         );
-        buffer_size_optimizeA(
-            &buffer_size_cg,
-            m, n, k, lda, nthreads,
-            do_B, NA_as_zero,
-            false, false,
-            full_dense, near_dense,
-            has_dense, has_weight
-        );
-
-        *buffer_size = max2(buffer_size_cg, buffer_size_chol);
-        return;
     }
 
-    if (has_dense && (full_dense || near_dense) && !has_weight)
-    {
-        *buffer_size = (size_t)2 * (size_t)square(k);
-        if (do_B) *buffer_size += (size_t)nthreads * (size_t)n;
-        if (!full_dense)
-        {
-            *buffer_size += (size_t)nthreads * max2(
-                                (size_t)square(k),
-                                (size_t)(use_cg? (3 * k) : 0)
-                            );
 
+    size_t buffer_size = 0;
+    if (has_dense && (full_dense || near_dense) && !has_weights)
+    {
+        if (near_dense)
+        {
+            if (pass_allocated_BtB && !keep_precomputedBtB)
+                buffer_size += 0;
+            else {
+                buffer_size += square(k);
+            }
         }
+        if (pass_allocated_BtB && !keep_precomputedBtB && !near_dense)
+            buffer_size += 0;
+        else {
+            buffer_size += square(k);
+        }
+        if (do_B)
+            buffer_size += (size_t)n*(size_t)nthreads;
+
+        if (near_dense)
+        {
+            size_t size_thread_buffer = square(k);
+            if (use_cg)
+                size_thread_buffer = max2(size_thread_buffer, (size_t)(3 * k));
+            buffer_size += (size_t)nthreads * size_thread_buffer;
+        }
+        return buffer_size;
     }
 
     else if (has_dense)
     {
-        *buffer_size = (size_t)m * (size_t)n;
-        *buffer_size += (size_t)13*((size_t)m * (size_t)lda - (size_t)(lda-k));
+        if (!has_weights) {
+            if (pass_allocated_BtB && !keep_precomputedBtB)
+                buffer_size += 0;
+            else {
+                buffer_size += square(k);
+            }
+        }
+        if (do_B) {
+            buffer_size += (size_t)n * (size_t)nthreads;
+        }
+        if (do_B && has_weights) {
+            buffer_size += (size_t)n * (size_t)nthreads;
+        }
+        size_t size_thread_buffer = (size_t)square(k) + (use_cg? (3*k) : 0);
+        return buffer_size + (size_t)nthreads * size_thread_buffer;
     }
 
-    else if (!has_dense && NA_as_zero && !has_weight)
+    else if (!has_dense && NA_as_zero && !has_weights)
     {
-        *buffer_size = square(k);
+        if (pass_allocated_BtB && !keep_precomputedBtB)
+            buffer_size += 0;
+        else
+            buffer_size += square(k);
+        return buffer_size;
     }
 
     else
     {
-        *buffer_size = square(k);
+        bool add_diag_to_BtB = !(use_cg && !has_dense && NA_as_zero);
+        if (!has_dense && NA_as_zero && (!use_cg || has_weights))
+        {
+            if (pass_allocated_BtB &&
+                (!keep_precomputedBtB || !add_diag_to_BtB))
+            {
+                buffer_size += 0;
+            }
+            else
+            {
+                buffer_size += square(k);
+            }
+        }
+
+        size_t size_thread_buffer = square(k);
         if (use_cg)
-            *buffer_size = max2(*buffer_size, (size_t)(3 * k));
+            size_thread_buffer = max2(size_thread_buffer, (size_t)(3 * k));
         if (use_cg && !has_dense)
-            *buffer_size = (size_t)(3 * k + (NA_as_zero? n : 0));
-        *buffer_size *= (size_t)nthreads;
-
-        if (!has_dense && NA_as_zero && !use_cg)
-            *buffer_size += square(k);
-
+            size_thread_buffer = (size_t)(3 * k) + (size_t)(NA_as_zero? n : 0);
+        return buffer_size + (size_t)nthreads * size_thread_buffer;
     }
 }
 
@@ -1668,6 +1705,7 @@ void optimizeA
     bool do_B, bool is_first_iter,
     int nthreads,
     bool use_cg, int max_cg_steps,
+    bool keep_precomputedBtB,
     FPnum *restrict precomputedBtB, bool *filled_BtB,
     FPnum *restrict buffer_FPnum
 )
@@ -1695,13 +1733,21 @@ void optimizeA
         FPnum *restrict bufferBtBcopy = NULL;
         if (near_dense)
         {
-            bufferBtBcopy = buffer_FPnum;
+            if (precomputedBtB != NULL && !keep_precomputedBtB)
+                bufferBtBcopy = precomputedBtB;
+            else {
+                bufferBtBcopy = buffer_FPnum;
+                buffer_FPnum += square(k);
+            }
+        }
+        FPnum *restrict bufferBtB = NULL;
+        if (precomputedBtB != NULL && !keep_precomputedBtB && !near_dense)
+            bufferBtB = precomputedBtB;
+        else {
+            bufferBtB = buffer_FPnum;
             buffer_FPnum += square(k);
         }
-        FPnum *restrict bufferBtB = buffer_FPnum; /* <- will get Cholesky */
-        // FPnum *restrict bufferBtBcopy = buffer_FPnum + square(k);
-        // FPnum *restrict bufferX = bufferBtBcopy + square(k);
-        FPnum *restrict bufferX = bufferBtB + square(k);
+        FPnum *restrict bufferX = buffer_FPnum;
         FPnum *restrict buffer_remainder = bufferX
                                             + (do_B?
                                                 ((size_t)n*(size_t)nthreads)
@@ -1712,6 +1758,10 @@ void optimizeA
                     k, n,
                     1., B, ldb,
                     0., bufferBtB, k);
+        if (precomputedBtB != NULL && keep_precomputedBtB) {
+            copy_arr(bufferBtB, precomputedBtB, square(k), nthreads);
+            *filled_BtB = true;
+        }
         add_to_diag(bufferBtB, lam, k);
         if (lam_last != lam) bufferBtB[square(k)-1] += (lam_last - lam);
         /* Here will also need t(B)*B + diag(lambda) alone (no Cholesky) */
@@ -1811,8 +1861,12 @@ void optimizeA
     {
         FPnum *restrict bufferBtB = NULL;
         if (weight == NULL) {
-            bufferBtB = buffer_FPnum;
-            buffer_FPnum += square(k);
+            if (precomputedBtB != NULL && !keep_precomputedBtB)
+                bufferBtB = precomputedBtB;
+            else {
+                bufferBtB = buffer_FPnum;
+                buffer_FPnum += square(k);
+            }
         }
         FPnum *restrict bufferX = NULL;
         if (do_B) {
@@ -1833,6 +1887,11 @@ void optimizeA
                         k, n,
                         1., B, ldb,
                         0., bufferBtB, k);
+            if (keep_precomputedBtB && precomputedBtB != NULL)
+            {
+                copy_arr(bufferBtB, precomputedBtB, square(k), nthreads);
+                *filled_BtB = true;
+            }
             add_to_diag(bufferBtB, lam, k);
             if (lam_last != lam) bufferBtB[square(k)-1] += (lam_last - lam);
         }
@@ -1889,11 +1948,21 @@ void optimizeA
        Here can also use one Cholesky for all rows at once. */
     else if (Xfull == NULL && NA_as_zero && weight == NULL)
     {
-        FPnum *restrict bufferBtB = buffer_FPnum;
+        FPnum *restrict bufferBtB = NULL;
+        if (precomputedBtB != NULL && !keep_precomputedBtB)
+            bufferBtB = precomputedBtB;
+        else
+            bufferBtB = buffer_FPnum;
+
         cblas_tsyrk(CblasRowMajor, CblasUpper, CblasTrans,
                     k, n,
                     1., B, ldb,
                     0., bufferBtB, k);
+        if (keep_precomputedBtB)
+        {
+            copy_arr(bufferBtB, precomputedBtB, square(k), nthreads);
+            *filled_BtB = true;
+        }
         add_to_diag(bufferBtB, lam, k);
         if (lam_last != lam) bufferBtB[square(k)-1] += (lam_last - lam);
         if (lda == k)
@@ -1920,18 +1989,30 @@ void optimizeA
     {
         /* When NAs are treated as zeros, can use a precomputed t(B)*B */
         FPnum *restrict bufferBtB = NULL;
+        bool add_diag_to_BtB = !(use_cg && Xfull == NULL && NA_as_zero);
         if (Xfull == NULL && NA_as_zero && (!use_cg || weight != NULL))
         {
-            bufferBtB = buffer_FPnum;
-            buffer_FPnum += square(k);
+            if (precomputedBtB != NULL &&
+                (!keep_precomputedBtB || !add_diag_to_BtB))
+            {
+                bufferBtB = precomputedBtB;
+            }
+            else
+            {
+                bufferBtB = buffer_FPnum;
+                buffer_FPnum += square(k);
+            }
             cblas_tsyrk(CblasRowMajor, CblasUpper, CblasTrans,
                         k, n,
                         1., B, ldb,
                         0., bufferBtB, k);
-            if (!(use_cg && Xfull == NULL && NA_as_zero))
+            if (add_diag_to_BtB)
             {
                 add_to_diag(bufferBtB, lam, k);
                 if (lam_last != lam) bufferBtB[square(k)-1] += (lam_last - lam);
+            }
+            else if (bufferBtB == precomputedBtB) {
+                *filled_BtB = true;
             }
         }
 
@@ -1958,7 +2039,7 @@ void optimizeA
                     lam, lam_last,
                     (FPnum*)NULL,
                     bufferBtB, 0, k,
-                    true, false, 1.,
+                    add_diag_to_BtB, false, 1.,
                     (FPnum*)NULL, NA_as_zero,
                     use_cg, max_cg_steps,
                     false
@@ -2423,33 +2504,22 @@ int topN
     int n_top, int n, int nthreads
 )
 {
+    int retval = 0;
     if (include_ix != NULL && exclude_ix != NULL) {
         fprintf(stderr, "Cannot pass both 'include_ix' and 'exclude_ix'.\n");
-        #ifndef _FOR_R
-        fflush(stderr);
-        #endif
-        return 2;
+        retval = 2;
     }
     if (n_top == 0) {
         fprintf(stderr, "'n_top' must be greater than zero.\n");
-        #ifndef _FOR_R
-        fflush(stderr);
-        #endif
-        return 2;
+        retval = 2;
     }
     if (n_exclude > n-n_top) {
         fprintf(stderr, "Number of rankeable entities is less than 'n_top'\n");
-        #ifndef _FOR_R
-        fflush(stderr);
-        #endif
-        return 2;
+        retval = 2;
     }
     if (n_include > n) {
         fprintf(stderr, "Number of entities to include is larger than 'n'.\n");
-        #ifndef _FOR_R
-        fflush(stderr);
-        #endif
-        return 2;
+        retval = 2;
     }
 
     if (include_ix != NULL)
@@ -2458,10 +2528,8 @@ int topN
             if (include_ix[ix] < 0 || include_ix[ix] >= n)
             {
                 fprintf(stderr, "'include_ix' contains invalid entries\n");
-                #ifndef _FOR_R
-                fflush(stderr);
-                #endif
-                return 2;
+                retval = 2;
+                break;
             }
     }
     if (exclude_ix != NULL)
@@ -2470,16 +2538,21 @@ int topN
             if (exclude_ix[ix] < 0 || exclude_ix[ix] >= n)
             {
                 fprintf(stderr, "'exclude_ix' contains invalid entries\n");
-                #ifndef _FOR_R
-                fflush(stderr);
-                #endif
-                return 2;
+                retval = 2;
+                break;
             }
+    }
+
+    if (retval == 2)
+    {
+        #ifndef _FOR_R
+        fflush(stderr);
+        #endif
+        return retval;
     }
 
     int ix = 0;
 
-    int retval = 0;
     int k_pred = k + k_main;
     int k_totB = k_item + k + k_main;
     size_t n_take = (include_ix != NULL)?

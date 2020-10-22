@@ -144,6 +144,7 @@ cdef extern from "cmfrec.h":
         bint do_B, bint is_first_iter,
         int nthreads,
         bint use_cg, int max_cg_steps,
+        bint keep_precomputedBtB,
         double *precomputedBtB, c_bool *filled_BtB,
         double *buffer_double
     )
@@ -995,6 +996,7 @@ def py_optimizeA(
         is_B, 1,
         nthreads,
         0, 0,
+        0,
         <double*>NULL, &ignore,
         &buffer_double[0]
     )
