@@ -2657,13 +2657,13 @@ int fit_most_popular
     int retval = 0;
     int *restrict cnt_by_col = NULL;
     int *restrict cnt_by_row = NULL;
-    float *restrict sum_by_col = NULL;
-    float *restrict sum_by_row = NULL;
+    FPnum *restrict sum_by_col = NULL;
+    FPnum *restrict sum_by_row = NULL;
 
     if (implicit)
     {
         cnt_by_col = (int*)calloc((size_t)n, sizeof(int));
-        sum_by_col = (float*)calloc((size_t)n, sizeof(float));
+        sum_by_col = (FPnum*)calloc((size_t)n, sizeof(FPnum));
         if (cnt_by_col == NULL || sum_by_col == NULL) goto throw_oom;
 
         if (Xfull != NULL)
@@ -2710,8 +2710,8 @@ int fit_most_popular
             cnt_by_row = (int*)calloc((size_t)m, sizeof(int));
         }
         else {
-            sum_by_col = (float*)calloc((size_t)n, sizeof(float));
-            sum_by_row = (float*)calloc((size_t)m, sizeof(float));
+            sum_by_col = (FPnum*)calloc((size_t)n, sizeof(FPnum));
+            sum_by_row = (FPnum*)calloc((size_t)m, sizeof(FPnum));
         }
 
         if ((cnt_by_col == NULL && sum_by_col == NULL) ||
@@ -2895,6 +2895,7 @@ int fit_most_popular
     throw_oom:
     {
         retval = 1;
+        print_oom_message();
         goto cleanup;
     }
 }

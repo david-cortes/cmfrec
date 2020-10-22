@@ -5280,23 +5280,46 @@ int fit_collective_explicit_als
     bool ignore = false;
 
     int *restrict seed_arr = NULL;
+    FPnum *restrict lam_unique_copy = NULL;
 
     if (Xfull != NULL || !NA_as_zero_X)
     {
-        retval = initialize_biases(
-            glob_mean, biasA, biasB,
-            user_bias, item_bias,
-            (lam_unique == NULL)? (lam) : (lam_unique[0]),
-            (lam_unique == NULL)? (lam) : (lam_unique[1]),
-            m, n,
-            m_max, n_max,
-            ixA, ixB, X, nnz,
-            Xfull, (FPnum*)NULL,
-            (size_t*)NULL, (int*)NULL, (FPnum*)NULL,
-            (size_t*)NULL, (int*)NULL, (FPnum*)NULL,
-            nthreads
-        );
-        if (retval != 0) goto throw_oom;
+        if (user_bias && item_bias)
+        {
+            retval = fit_most_popular(
+                biasA, biasB,
+                glob_mean,
+                (lam_unique == NULL)? (lam) : (lam_unique[0]),
+                (lam_unique == NULL)? (lam) : (lam_unique[1]),
+                1.,
+                m, n,
+                ixA, ixB, X, nnz,
+                Xfull,
+                weight,
+                false, false,
+                (FPnum*)NULL,
+                nthreads
+            );
+            if (retval != 0) goto cleanup;
+        }
+        
+        else
+        {
+            retval = initialize_biases(
+                glob_mean, biasA, biasB,
+                user_bias, item_bias,
+                (lam_unique == NULL)? (lam) : (lam_unique[0]),
+                (lam_unique == NULL)? (lam) : (lam_unique[1]),
+                m, n,
+                m_max, n_max,
+                ixA, ixB, X, nnz,
+                Xfull, (FPnum*)NULL,
+                (size_t*)NULL, (int*)NULL, (FPnum*)NULL,
+                (size_t*)NULL, (int*)NULL, (FPnum*)NULL,
+                nthreads
+            );
+            if (retval != 0) goto throw_oom;
+        }
     }
 
 
@@ -5562,8 +5585,13 @@ int fit_collective_explicit_als
         w_user /= w_main;
         w_item /= w_main;
         if (lam_unique != NULL)
+        {
+            lam_unique_copy = (FPnum*)malloc(6*sizeof(FPnum));
+            if (lam_unique_copy == NULL) goto throw_oom;
             for (int ix = 0; ix < 6; ix++)
-                lam_unique[ix] /= w_main;
+                lam_unique_copy[ix] = lam_unique[ix] / w_main;
+            lam_unique = lam_unique_copy;
+        }
         w_main = 1.;
     }
 
@@ -5980,6 +6008,7 @@ int fit_collective_explicit_als
         if (Xtrans_orig != NULL)
             free(Xtrans_orig);
         free(seed_arr);
+        free(lam_unique_copy);
     return retval;
 
     throw_oom:
@@ -6103,6 +6132,7 @@ int fit_collective_implicit_als
     FPnum *restrict precomputedCtC = NULL;
 
     int *restrict seed_arr = NULL;
+    FPnum *restrict lam_unique_copy = NULL;
 
     if (Xcsr_p == NULL || Xcsr_i == NULL || Xcsr == NULL ||
         Xcsc_p == NULL || Xcsc_i == NULL || Xcsc == NULL)
@@ -6259,8 +6289,14 @@ int fit_collective_implicit_als
         w_user /= w_main;
         w_item /= w_main;
         if (lam_unique != NULL)
-            for (int ix = 2; ix < 6; ix++)
-                lam_unique[ix] /= w_main;
+        {
+            lam_unique_copy = (FPnum*)malloc(6*sizeof(FPnum));
+            if (lam_unique_copy == NULL) goto throw_oom;
+            for (int ix = 2; ix < 6; ix++) {
+                lam_unique_copy[ix] = lam_unique[ix] / w_main;
+            }
+            lam_unique = lam_unique_copy;
+        }
         w_main = 1.;
     }
     
@@ -6594,6 +6630,7 @@ int fit_collective_implicit_als
             free(precomputedBtB);
         free(precomputedCtC);
         free(seed_arr);
+        free(lam_unique_copy);
     return retval;
 
     throw_oom:
