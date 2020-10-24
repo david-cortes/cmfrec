@@ -123,6 +123,7 @@ cdef extern from "cmfrec.h":
         int niter, int nthreads, bint verbose, bint handle_interrupt,
         bint use_cg, int max_cg_steps, bint finalize_chol,
         bint precompute_for_predictions,
+        bint include_all_X,
         FPnum *B_plus_bias,
         FPnum *precomputedBtB,
         FPnum *precomputedTransBtBinvBt,
@@ -185,7 +186,7 @@ cdef extern from "cmfrec.h":
     )
 
     int precompute_collective_explicit(
-        FPnum *B, int n, int n_i, int n_ibin,
+        FPnum *B, int n, int n_max, bint include_all_X,
         FPnum *C, int p,
         int k, int k_user, int k_item, int k_main,
         bint user_bias,
@@ -253,6 +254,7 @@ cdef extern from "cmfrec.h":
         FPnum *B,
         int k, int k_user, int k_item, int k_main,
         FPnum lam, FPnum w_main, FPnum w_user, FPnum lam_bias,
+        int n_max, bint include_all_X,
         FPnum *TransBtBinvBt,
         FPnum *BtB,
         FPnum *BeTBeChol,
@@ -375,6 +377,7 @@ cdef extern from "cmfrec.h":
         int k, int k_user, int k_item, int k_main,
         FPnum lam, FPnum *lam_unique,
         FPnum w_main, FPnum w_user,
+        int n_max, bint include_all_X,
         FPnum *TransBtBinvBt,
         FPnum *BtB,
         FPnum *BeTBeChol,
@@ -464,6 +467,7 @@ cdef extern from "cmfrec.h":
         int k, int k_user, int k_item, int k_main,
         FPnum lam, FPnum *lam_unique,
         FPnum w_main, FPnum w_user,
+        int n_max, bint include_all_X,
         FPnum *TransBtBinvBt,
         FPnum *BtB,
         FPnum *BeTBeChol,
@@ -525,7 +529,7 @@ cdef extern from "cmfrec.h":
         size_t *Xcsr_p, int *Xcsr_i, FPnum *Xcsr,
         FPnum *Bm, FPnum *C,
         FPnum *C_bias,
-        int k,
+        int k, int n,
         FPnum lam, FPnum alpha,
         FPnum *precomputedBtB,
         int nthreads
@@ -959,7 +963,8 @@ def call_fit_collective_explicit_als(
         bint use_cg = 0, int max_cg_steps=3,
         bint finalize_chol=0,
         int seed=1, int niter=5, bint handle_interrupt=1,
-        bint precompute_for_predictions = 1
+        bint precompute_for_predictions = 1,
+        bint include_all_X = 1
     ):
 
     cdef FPnum *ptr_Xfull = NULL
@@ -1122,6 +1127,7 @@ def call_fit_collective_explicit_als(
         niter, nthreads, verbose, handle_interrupt,
         use_cg, max_cg_steps, finalize_chol,
         precompute_for_predictions,
+        include_all_X,
         ptr_B_plus_bias,
         ptr_BtB,
         ptr_TransBtBinvBt,
@@ -1586,13 +1592,15 @@ def precompute_matrices_collective_explicit(
         np.ndarray[FPnum, ndim=2] B,
         np.ndarray[FPnum, ndim=2] C,
         bint user_bias,
+        int n_orig,
         int k, int k_user, int k_item, int k_main,
         FPnum lam, FPnum lam_bias, FPnum w_main, FPnum w_user,
+        bint include_all_X = 1
     ):
-    cdef int n = B.shape[0]
+    cdef int n_max = B.shape[0]
     cdef int p = C.shape[0]
 
-    if n == 0:
+    if n_max == 0:
         raise ValueError("'B' has no entries.")
 
     cdef FPnum *ptr_B = &B[0,0]
@@ -1638,7 +1646,7 @@ def precompute_matrices_collective_explicit(
         ptr_lam_unique = &lam_unique[0]
 
     cdef int retval = precompute_collective_explicit(
-        ptr_B, n, n, n,
+        ptr_B, n_orig, n_max, include_all_X,
         ptr_C, p,
         k, k_user, k_item, k_main,
         user_bias,
@@ -1853,11 +1861,13 @@ def call_factors_collective_warm_explicit(
         np.ndarray[FPnum, ndim=2] BeTBeChol,
         np.ndarray[FPnum, ndim=2] CtCw,
         FPnum glob_mean,
+        int n_orig,
         int k, int k_user = 0, int k_item = 0, int k_main = 0,
         FPnum lam = 1e2, FPnum lam_bias = 1e2,
         FPnum w_user = 1., FPnum w_main = 1.,
         bint user_bias = 1,
-        bint NA_as_zero_U = 0, bint NA_as_zero_X = 0
+        bint NA_as_zero_U = 0, bint NA_as_zero_X = 0,
+        bint include_all_X = 1
     ):
     
     cdef FPnum *ptr_Xa_dense = NULL
@@ -1924,6 +1934,11 @@ def call_factors_collective_warm_explicit(
     if B_plus_bias.shape[0]:
         ptr_B_plus_bias = &B_plus_bias[0,0]
 
+    cdef int n_max = B.shape[0]
+
+    if Xa_dense.shape[0] and (Xa_dense.shape[0] < n_orig):
+        n_orig = Xa_dense.shape[0]
+
     cdef np.ndarray[FPnum, ndim=1] A = np.empty(k_user+k+k_main, dtype=c_FPnum)
     cdef int retval = collective_factors_warm(
         &A[0], ptr_Amean,
@@ -1934,11 +1949,12 @@ def call_factors_collective_warm_explicit(
         glob_mean, ptr_biasB,
         ptr_U_colmeans,
         ptr_Xa, ptr_Xa_i, Xa.shape[0],
-        ptr_Xa_dense, B.shape[0],
+        ptr_Xa_dense, n_orig,
         ptr_weight,
         &B[0,0],
         k, k_user, k_item, k_main,
         lam, w_main, w_user, lam_bias,
+        n_max, include_all_X,
         ptr_TransBtBinvBt,
         ptr_BtB,
         ptr_BeTBeChol,
@@ -2830,11 +2846,13 @@ def call_factors_collective_explicit_multiple(
         np.ndarray[FPnum, ndim=2] CtCw,
         int n, int m_u, int m_x,
         FPnum glob_mean,
+        int n_orig,
         int k, int k_user = 0, int k_item = 0, int k_main = 0,
         FPnum lam = 1e2, FPnum lam_bias = 1e2,
         FPnum w_user = 1., FPnum w_main = 1.,
         bint user_bias = 1,
         bint NA_as_zero_U = 0, bint NA_as_zero_X = 0,
+        bint include_all_X = 1,
         int nthreads = 1
     ):
     cdef int m_ubin = Ub.shape[0]
@@ -2944,6 +2962,9 @@ def call_factors_collective_explicit_multiple(
         lam_unique[2] = lam
         ptr_lam_unique = &lam_unique[0]
 
+    if (Xfull.shape[1]) and (Xfull.shape[1] != n_orig):
+        n_orig = Xfull.shape[1]
+
     cdef int retval = factors_collective_explicit_multiple(
         &A[0,0], ptr_biasA, m,
         ptr_U, m_u, p,
@@ -2956,12 +2977,13 @@ def call_factors_collective_explicit_multiple(
         ptr_U_colmeans,
         ptr_X, ptr_ixA, ptr_ixB, nnz,
         ptr_Xcsr_p, ptr_Xcsr_i, ptr_Xcsr,
-        ptr_Xfull, n,
+        ptr_Xfull, n_orig,
         ptr_weight,
         &B[0,0],
         k, k_user, k_item, k_main,
         lam, ptr_lam_unique,
         w_main, w_user,
+        B.shape[0], include_all_X,
         ptr_TransBtBinvBt,
         ptr_BtB,
         ptr_BeTBeChol,
@@ -3341,7 +3363,7 @@ def call_factors_offsets_implicit_multiple(
         ptr_Xcsr_p, ptr_Xcsr_i, ptr_Xcsr,
         &Bm[0,0], ptr_C,
         ptr_C_bias,
-        k,
+        k, n,
         lam, alpha,
         ptr_BtB,
         nthreads
@@ -3375,19 +3397,21 @@ def call_impute_X_collective_explicit(
         np.ndarray[FPnum, ndim=2] CtCw,
         int m_u,
         FPnum glob_mean,
+        int n_orig,
         int k, int k_user = 0, int k_item = 0, int k_main = 0,
         FPnum lam = 1e2, FPnum lam_bias = 1e2,
         FPnum w_user = 1., FPnum w_main = 1.,
         bint user_bias = 1,
         bint NA_as_zero_U = 0,
+        bint include_all_X = 1,
         int nthreads = 1
     ):
     
-    cdef int n = B.shape[0]
+    cdef int n_max = B.shape[0]
     cdef int p = C.shape[0]
     cdef int pbin = C_bin.shape[0]
     cdef int m = Xfull.shape[0]
-    if min(m, n) <= 0:
+    if min(m, Xfull.shape[1]) <= 0:
         raise ValueError("Invalid input dimensions.")
     cdef np.ndarray[FPnum, ndim=1] lam_unique = np.zeros(6, dtype=c_FPnum)
     cdef FPnum *ptr_lam_unique = NULL
@@ -3462,6 +3486,9 @@ def call_impute_X_collective_explicit(
     if BeTBeChol.shape[0]:
         ptr_BeTBeChol = &BeTBeChol[0,0]
 
+    if (Xfull.shape[1]) and (Xfull.shape[1] != n_orig):
+        n_orig = Xfull.shape[1]
+
     cdef int retval = impute_X_collective_explicit(
         m, user_bias,
         ptr_U, m_u, p,
@@ -3472,12 +3499,13 @@ def call_impute_X_collective_explicit(
         ptr_C, ptr_C_bin,
         glob_mean, ptr_biasB,
         ptr_U_colmeans,
-        ptr_Xfull, n,
+        ptr_Xfull, n_orig,
         ptr_weight,
         ptr_B,
         k, k_user, k_item, k_main,
         lam, ptr_lam_unique,
         w_main, w_user,
+        n_max, include_all_X,
         ptr_TransBtBinvBt,
         ptr_BtB,
         ptr_BeTBeChol,

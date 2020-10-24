@@ -634,7 +634,7 @@ int offsets_factors_warm
                                     lam, lam,
                                     precomputedTransBtBinvBt,
                                     precomputedBtB, cnt_NA, k_sec+k+k_main,
-                                    false, false, 1.,
+                                    false, false, 1., n,
                                     (FPnum*)NULL, false,
                                     false, 0, false);
             else {
@@ -647,7 +647,7 @@ int offsets_factors_warm
                                     lam, lam_bias,
                                     precomputedTransBtBinvBt,
                                     precomputedBtB, cnt_NA, k_sec+k+k_main+1,
-                                    false, false, 1.,
+                                    false, false, 1., n,
                                     (FPnum*)NULL, false,
                                     false, 0, false);
                 memcpy(a_vec, a_plus_bias,
@@ -760,7 +760,7 @@ int offsets_factors_warm
                                     lam, lam,
                                     (FPnum*)NULL,
                                     (FPnum*)NULL, 0, 0,
-                                    false, false, 1.,
+                                    false, false, 1., n,
                                     (FPnum*)NULL, false,
                                     false, 0, false);
             else {
@@ -773,7 +773,7 @@ int offsets_factors_warm
                                     lam, lam_bias,
                                     (FPnum*)NULL,
                                     (FPnum*)NULL, 0, 0,
-                                    false, false, 1.,
+                                    false, false, 1., n,
                                     (FPnum*)NULL, false,
                                     false, 0, false);
                 memcpy(a_vec + k_sec, a_plus_bias + k_sec,
@@ -1683,6 +1683,7 @@ int fit_offsets_als
                     niter, nthreads, verbose, handle_interrupt,
                     use_cg, max_cg_steps, finalize_chol,
                     precompute_for_predictions,
+                    true,
                     Bm_plus_bias,
                     precomputedBtB,
                     precomputedTransBtBinvBt,
@@ -2091,6 +2092,18 @@ int factors_offsets_explicit_single
     }
     int retval = 0;
 
+    bool set_to_nan = check_sparse_indices(
+        n, p,
+        u_vec_sp, u_vec_ixB, nnz_u_vec,
+        Xa, ixB, nnz
+    );
+    if (set_to_nan) {
+        for (int ix = 0; ix < k_sec+k+k_main; ix++)
+            a_vec[ix] = NAN_;
+        if (a_bias != NULL) *a_bias = NAN_;
+        return 0;
+    }
+
     bool free_Bm_plus_bias = false;
     FPnum lam_bias = lam;
     if (lam_unique != NULL)
@@ -2171,12 +2184,23 @@ int factors_offsets_implicit_single
     FPnum *restrict Xa, int ixB[], size_t nnz,
     FPnum *restrict Bm, FPnum *restrict C,
     FPnum *restrict C_bias,
-    int k,
+    int k, int n,
     FPnum lam, FPnum alpha,
     FPnum *restrict precomputedBtB,
     FPnum *restrict output_a
 )
 {
+    bool set_to_nan = check_sparse_indices(
+        n, p,
+        u_vec_sp, u_vec_ixB, nnz_u_vec,
+        Xa, ixB, nnz
+    );
+    if (set_to_nan) {
+        for (int ix = 0; ix < k; ix++)
+            a_vec[ix] = NAN_;
+        return 0;
+    }
+
     if (!nnz)
         return offsets_factors_cold(
             a_vec,
@@ -2405,7 +2429,7 @@ int factors_offsets_implicit_multiple
     size_t *restrict Xcsr_p, int *restrict Xcsr_i, FPnum *restrict Xcsr,
     FPnum *restrict Bm, FPnum *restrict C,
     FPnum *restrict C_bias,
-    int k,
+    int k, int n,
     FPnum lam, FPnum alpha,
     FPnum *restrict precomputedBtB,
     int nthreads
@@ -2485,7 +2509,7 @@ int factors_offsets_implicit_multiple
             Xcsr_p[ix+1] - Xcsr_p[ix],
             Bm, C,
             C_bias,
-            k,
+            k, n,
             lam, alpha,
             precomputedBtB,
             (A == NULL)? ((FPnum*)NULL) : (A + ix*(size_t)k)
@@ -2704,7 +2728,7 @@ int topN_new_offsets_implicit
         Xa, ixB, nnz,
         Bm, C,
         C_bias,
-        k,
+        k, n,
         lam, alpha,
         precomputedBtB,
         (FPnum*)NULL
@@ -2905,7 +2929,7 @@ int predict_X_new_offsets_implicit
         Xcsr_p, Xcsr_i, Xcsr,
         Bm, C,
         C_bias,
-        k,
+        k, n_orig,
         lam, alpha,
         precomputedBtB,
         nthreads
@@ -3199,7 +3223,7 @@ int topN_old_content_based
         include_ix, n_include,
         exclude_ix, n_exclude,
         outp_ix, outp_score,
-        n_top, n, nthreads
+        n_top, n, n, false, nthreads
     );
 }
 

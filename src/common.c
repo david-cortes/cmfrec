@@ -619,10 +619,10 @@ void factors_closed_form
     FPnum *restrict buffer_FPnum,
     FPnum lam, FPnum lam_last,
     FPnum *restrict precomputedTransBtBinvBt,
-    FPnum *restrict precomputedBtBw, int cnt_NA, int ld_BtB,
-    bool BtB_has_diag, bool BtB_is_scaled, FPnum scale_BtB,
+    FPnum *restrict precomputedBtB, int cnt_NA, int ld_BtB,
+    bool BtB_has_diag, bool BtB_is_scaled, FPnum scale_BtB, int n_BtB,
     FPnum *restrict precomputedBtBchol, bool NA_as_zero,
-    bool use_cg, int max_cg_steps,
+    bool use_cg, int max_cg_steps, /* <- 'cg' should not be used for new data */
     bool force_add_diag
 )
 {
@@ -632,7 +632,10 @@ void factors_closed_form
     char lo = 'L';
     int one = 1;
     int ignore;
-    bool prefer_BtB = max2((size_t)cnt_NA, nnz) < (size_t)k;
+    if (n_BtB == 0) n_BtB = n;
+    bool prefer_BtB = max2((size_t)(cnt_NA + (n_BtB-n)), nnz) < (size_t)k;
+
+    /* Note: if passing 'NA_as_zero', 'n' and 'n_BtB' cannot be different */
 
     /* Potential bad inputs */
     if ((Xa_dense != NULL && cnt_NA == n) ||
@@ -647,7 +650,8 @@ void factors_closed_form
        for the collective model with no missing values, given that the
        C matrix is already fixed and is the same for all users. */
     if (precomputedTransBtBinvBt != NULL && weight == NULL &&
-        ((full_dense && Xa_dense != NULL) || (Xa_dense == NULL && NA_as_zero)))
+        ((full_dense && Xa_dense != NULL && n_BtB == n) ||
+         (Xa_dense == NULL && NA_as_zero)))
     {
         if (Xa_dense != NULL)
             cblas_tgemv(CblasRowMajor, CblasTrans,
@@ -659,7 +663,7 @@ void factors_closed_form
         {
             set_to_zero(a_vec, k, 1);
             tgemv_dense_sp(
-                n, k,
+                n, k, /* <- 'n' doesn't get used*/
                 1., precomputedTransBtBinvBt, k,
                 ixB, Xa, nnz,
                 a_vec
@@ -670,12 +674,12 @@ void factors_closed_form
 
     /* If t(B*w)*B + diag(lam) is given, and there are very few mising
        values, can still be used as a shortcut by substracting from it */
-    else if (Xa_dense != NULL && precomputedBtBw != NULL && weight == NULL &&
+    else if (Xa_dense != NULL && precomputedBtB != NULL && weight == NULL &&
              prefer_BtB)
     {
         add_diag = false;
         copy_mat(k, k,
-                 precomputedBtBw, ld_BtB,
+                 precomputedBtB, ld_BtB,
                  bufferBtB, k);
         if (BtB_is_scaled && scale_BtB != 1.)
             cblas_tscal(square(k), 1./scale_BtB, bufferBtB, 1);
@@ -691,6 +695,10 @@ void factors_closed_form
             else
                 cblas_taxpy(k, Xa_dense[ix], B + ix*(size_t)ldb, 1, a_vec, 1);
         }
+        for (size_t ix = (size_t)n; ix < (size_t)n_BtB; ix++)
+            cblas_tsyr(CblasRowMajor, CblasUpper, k,
+                       -1., B + ix*(size_t)ldb, 1,
+                       bufferBtB, k);
     }
 
     /* If the input is sparse and it's assumed that the non-present
@@ -722,14 +730,14 @@ void factors_closed_form
     else if (Xa_dense == NULL && NA_as_zero && !use_cg)
     {
         set_to_zero(a_vec, k, 1);
-        if (precomputedBtBw == NULL)
+        if (precomputedBtB == NULL)
             cblas_tsyrk(CblasRowMajor, CblasUpper, CblasTrans,
-                        k, n,
+                        k, max2(n, n_BtB),
                         1., B, ldb,
                         0., bufferBtB, k);
         else {
             copy_mat(k, k,
-                     precomputedBtBw, ld_BtB,
+                     precomputedBtB, ld_BtB,
                      bufferBtB, k);
             if (BtB_is_scaled && scale_BtB != 1.)
                 cblas_tscal(square(k), 1./scale_BtB, bufferBtB, 1);
@@ -771,7 +779,7 @@ void factors_closed_form
                 B, n, ldb,
                 Xa_dense, cnt_NA,
                 weight,
-                precomputedBtBw, ld_BtB,
+                precomputedBtB, ld_BtB,
                 buffer_FPnum,
                 lam, lam_last,
                 max_cg_steps
@@ -782,7 +790,7 @@ void factors_closed_form
                 B, n, ldb,
                 Xa, ixB, nnz,
                 weight,
-                precomputedBtBw, ld_BtB,
+                precomputedBtB, ld_BtB,
                 buffer_FPnum,
                 lam, lam_last,
                 max_cg_steps
@@ -826,6 +834,8 @@ void factors_closed_form
            avoid again a full matrix-vector multiply. Note that this is
            stored in 'a_vec', despite the name */
         set_to_zero(a_vec, k, 1);
+        /* Note: in theory, should pass max2(n, n_BtB) to these functions,
+           but 'n' is not used so it doesn't matter. */
         if (weight == NULL) {
             tgemv_dense_sp(n, k,
                            1., B, (size_t)ldb,
@@ -1747,6 +1757,8 @@ void optimizeA
             bufferBtB = buffer_FPnum;
             buffer_FPnum += square(k);
         }
+        /* TODO: this function should do away with 'bufferX', replace it instead
+           with an 'incX' parameter. */
         FPnum *restrict bufferX = buffer_FPnum;
         FPnum *restrict buffer_remainder = bufferX
                                             + (do_B?
@@ -1818,7 +1830,13 @@ void optimizeA
                            nthreads, use_cg) \
                     firstprivate(bufferX)
             for (size_t_for ix = 0; ix < (size_t)m; ix++)
-                if (cnt_NA[ix] > 0) {
+                if (cnt_NA[ix] > 0)
+                {
+                    if (cnt_NA[ix] == n) {
+                        set_to_zero(A + ix*(size_t)lda, k, 1);
+                        continue;
+                    }
+
                     if (!do_B)
                         bufferX = Xfull + ix*(size_t)n;
                     else
@@ -1843,7 +1861,7 @@ void optimizeA
                         lam, lam_last,
                         (FPnum*)NULL,
                         bufferBtBcopy, cnt_NA[ix], k,
-                        true, false, 1.,
+                        true, false, 1., n,
                         (FPnum*)NULL, false,
                         use_cg, k, /* <- A was reset to zero, need more steps */
                         false
@@ -1936,7 +1954,7 @@ void optimizeA
                 lam, lam_last,
                 (FPnum*)NULL,
                 bufferBtB, cnt_NA[ix], k,
-                true, false, 1.,
+                true, false, 1., n,
                 (FPnum*)NULL, false,
                 use_cg, max_cg_steps,
                 false
@@ -2039,7 +2057,7 @@ void optimizeA
                     lam, lam_last,
                     (FPnum*)NULL,
                     bufferBtB, 0, k,
-                    add_diag_to_BtB, false, 1.,
+                    add_diag_to_BtB, false, 1., n,
                     (FPnum*)NULL, NA_as_zero,
                     use_cg, max_cg_steps,
                     false
@@ -2437,6 +2455,31 @@ int center_by_cols
     return 0;
 }
 
+bool check_sparse_indices
+(
+    int n, int p,
+    FPnum *restrict u_vec_sp, int u_vec_ixB[], size_t nnz_u_vec,
+    FPnum *restrict Xa, int ixB[], size_t nnz
+)
+{
+    if (nnz) {
+        for (size_t ix = 0; ix < nnz; ix++) {
+            if (ixB[ix] < 0 || ixB[ix] >= ((n > 0)? n : INT_MAX)) {
+                return true;
+            }
+        }
+    }
+    if (nnz_u_vec) {
+        for (size_t ix = 0; ix < nnz_u_vec; ix++) {
+            if (u_vec_ixB[ix] < 0 || u_vec_ixB[ix] >= ((p > 0)? p : INT_MAX)) {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
 void predict_multiple
 (
     FPnum *restrict A, int k_user,
@@ -2541,6 +2584,18 @@ int topN
                 retval = 2;
                 break;
             }
+    }
+    for (int ix = 0; ix < k_user+k+k_main; ix++)
+    {
+        if (isnan(a_vec[ix])) {
+            fprintf(stderr, "The latent factors contain NAN values\n");
+            retval = 2;
+            break;
+        }
+    }
+    if (isnan(biasA)) {
+        fprintf(stderr, "The bias is a NAN value\n");
+        retval = 2;
     }
 
     if (retval == 2)

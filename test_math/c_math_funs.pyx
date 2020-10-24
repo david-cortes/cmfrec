@@ -16,7 +16,7 @@ cdef extern from "cmfrec.h":
         double lam, double lam_last,
         double *precomputedTransBtBinvBt,
         double *precomputedBtBw, int cnt_NA, int ld_BtB,
-        bint BtB_has_diag, bint BtB_is_scaled, double scale_BtB,
+        bint BtB_has_diag, bint BtB_is_scaled, double scale_BtB, int n_BtB,
         double *precomputedBtBchol, bint NA_as_zero,
         bint use_cg, int max_cg_steps,
         bint force_add_diag
@@ -107,6 +107,7 @@ cdef extern from "cmfrec.h":
         double *B,
         int k, int k_user, int k_item, int k_main,
         double lam, double w_main, double w_user, double lam_bias,
+        int n_max, bint include_all_X,
         double *TransBtBinvBt,
         double *BtB,
         double *BeTBeChol,
@@ -251,7 +252,7 @@ cdef extern from "cmfrec.h":
     )
 
     int precompute_collective_explicit(
-        double *B, int n, int n_i, int n_ibin,
+        double *B, int n, int n_max, bint include_all_X,
         double *C, int p,
         int k, int k_user, int k_item, int k_main,
         bint user_bias,
@@ -299,6 +300,7 @@ cdef extern from "cmfrec.h":
         int n_top, int n, int nthreads
     )
 
+### TODO: add tests for the precomputed matrices too
 import ctypes
 
 def py_factors_closed_form(
@@ -342,7 +344,7 @@ def py_factors_closed_form(
         TransBtBinvBt = np.empty((n, k))
         BtBchol = np.empty((k,k))
         precompute_collective_explicit(
-            &B[0,0], n, 0, 0,
+            &B[0,0], n, n, 0,
             <double*>NULL, 0,
             k, 0, 0, 0,
             0,
@@ -367,7 +369,7 @@ def py_factors_closed_form(
         lam, lam,
         ptr_TransBtBinvBt,
         ptr_BtBw, np.sum(np.isnan(Xa_dense)), k,
-        1, 0, 1.,
+        1, 0, 1., 0,
         ptr_BtBchol, 0,
         0, 0,
         0
@@ -504,7 +506,7 @@ def py_collective_factors(
             BeTBeChol = np.empty((k_user+k+k_main,k_user+k+k_main))
             ptr_BeTBeChol = &BeTBeChol[0,0]
         precompute_collective_explicit(
-            &B[0,0], B.shape[0], 0, 0,
+            &B[0,0], B.shape[0], B.shape[0], 0,
             ptr_C, p,
             k, k_user, k_item, k_main,
             0,
@@ -554,6 +556,7 @@ def py_collective_factors(
         &B[0,0],
         k, k_user, k_item, k_main,
         lam, w_main, w_user, lam,
+        B.shape[0], 0,
         ptr_TransBtBinvBt, ptr_BtB, ptr_BeTBeChol, ptr_CtCw,
         NA_as_zero_U, NA_as_zero_X,
         <double*>NULL

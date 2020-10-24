@@ -135,6 +135,7 @@ class _CMF:
         self.NA_as_zero_user = bool(NA_as_zero_user)
         self.NA_as_zero_item = bool(NA_as_zero_item)
         self.precompute_for_predictions = bool(precompute_for_predictions)
+        self.include_all_X = True
         self.use_float = bool(use_float)
         self.init = init
         self.verbose = bool(verbose)
@@ -615,6 +616,9 @@ class _CMF:
                 W_dense = np.ascontiguousarray(W).astype(self.dtype_)
         else:
             raise ValueError("'X' must be a SciPy CSR or COO matrix, or NumPy array.")
+
+        if n > self._n_orig:
+            raise ValueError("'X' has more columns than what was passed to 'fit'.")
 
         return Xarr, Xrow, Xcol, Xval, Xcsr_p, Xcsr_i, Xcsr, m, n, W_dense, W_sp
 
@@ -1284,11 +1288,13 @@ class _CMF:
                     self._BeTBeChol,
                     self._CtC,
                     self.glob_mean_,
+                    self._n_orig,
                     self.k, self.k_user, self.k_item, self.k_main,
                     lambda_, lambda_bias,
                     self.w_user, self.w_main,
                     self.user_bias,
-                    self.NA_as_zero_user, self.NA_as_zero
+                    self.NA_as_zero_user, self.NA_as_zero,
+                    self.include_all_X
                 )
         else:
             a_vec = c_funs.call_factors_collective_cold_implicit(
@@ -1350,7 +1356,7 @@ class _CMF:
             if len(X.shape) > 1:
                 warnings.warn("Passed a 2-d array for 'X' - method expects a single row.")
             X = np.array(X).reshape(-1).astype(self.dtype_)
-            if X.shape[0] != self.B_.shape[0]:
+            if X.shape[0] != self._n_orig:
                 raise ValueError("'X' must have the same columns as when passed to 'fit'.")
             if W is not None:
                 W_dense = np.array(W).reshape(-1).astype(self.dtype_)
@@ -1376,10 +1382,12 @@ class _CMF:
                 else:
                     X_col = np.array(X_col).reshape(-1).astype(ctypes.c_int)
                     imin, imax = np.min(X_col), np.max(X_col)
-                    if (imin < 0) or (imax >= self.B_.shape[0]) or np.isnan(imin) or np.isnan(imax):
+                    if (imin < 0) or (imax >= self._n_orig) or np.isnan(imin) or np.isnan(imax):
                         msg  = "Column indices ('X_col') must be within the range"
                         msg += " of the data that was pased to 'fit'."
                         raise ValueError(msg)
+                if X_col.max() >= self._n_orig:
+                    raise ValueError("'X' cannot contain new columns.")
 
             if X_val.shape[0] != X_col.shape[0]:
                 raise ValueError("'X_col' and 'X_val' must have the same number of entries.")
@@ -1581,11 +1589,13 @@ class _CMF:
                 self._CtC,
                 n, m_u, m_x,
                 self.glob_mean_,
+                self._n_orig,
                 self._k_pred, self.k_user, self.k_item, self._k_main_col,
                 lambda_, lambda_bias,
                 self.w_user, self.w_main,
                 self.user_bias,
                 self.NA_as_zero_user, self.NA_as_zero,
+                self.include_all_X,
                 self.nthreads
             )
 
@@ -1742,6 +1752,7 @@ class _CMF:
                 self._CtC if not is_I else empty_arr,
                 n, m_u, 0,
                 self.glob_mean_,
+                self._n_orig if not is_I else self.A_.shape[0],
                 self.k,
                 self.k_user if not is_I else self.k_item,
                 self.k_item if not is_I else self.k_user,
@@ -1751,6 +1762,7 @@ class _CMF:
                 self.user_bias if not is_I else self.item_bias,
                 self.NA_as_zero_user if not is_I else self.NA_as_zero_item,
                 self.NA_as_zero,
+                self.include_all_X if not is_I else True,
                 self.nthreads
             )
         else:
@@ -1954,6 +1966,14 @@ class CMF_explicit(_CMF):
         predictions or top-N lists, but will use less memory and will be faster
         to fit the model. If passing 'False', can be recomputed later on-demand
         through method 'force_precompute_for_predictions'.
+    include_all_X : bool
+        When passing an input "X" to ``fit`` which has less columns than rows in
+        "I", whether to still make calculations about the items which are in "I"
+        but not in "X". This has three effects: (a) the ``topN`` functionality may
+        recommend such items, (b) the precomptued matrices will be less usable as
+        they will include all such items, (c) it will be possible to pass "X" data
+        to the new factors or topN functions that include such columns (rows of "I").
+        This option is ignored when using ``NA_as_zero``.
     use_float : bool
         Whether to use C float type for the model parameters (typically this is
         ``np.float32``). If passing ``False``, will use C double (typically this
@@ -2063,7 +2083,8 @@ class CMF_explicit(_CMF):
                  maxiter=400, niter=10, parallelize="separate", corr_pairs=4,
                  max_cg_steps=3, finalize_chol=False,
                  NA_as_zero=False, NA_as_zero_user=False, NA_as_zero_item=False,
-                 precompute_for_predictions=True, use_float=False,
+                 precompute_for_predictions=True, include_all_X=True,
+                 use_float=False,
                  random_state=1, verbose=True, print_every=10,
                  handle_interrupt=True, produce_dicts=False,
                  copy_data=True, nthreads=-1):
@@ -2085,6 +2106,7 @@ class CMF_explicit(_CMF):
                           handle_interrupt=handle_interrupt,
                           produce_dicts=produce_dicts, copy_data=copy_data,
                           nthreads=nthreads)
+        self.include_all_X = bool(include_all_X)
 
     def __str__(self):
         msg  = "Collective matrix factorization model\n"
@@ -2127,6 +2149,8 @@ class CMF_explicit(_CMF):
         the rows/columns matters for speed, as it might run faster when the "U"/"I"
         inputs that do not have matching rows/columns in "X" have those unmatched
         rows/columns at the end (last rows/columns) and the "X" input is shorter.
+        See also the parameter ``include_all_X`` for info about predicting with
+        mismatched "X".
 
         Note
         ----
@@ -2228,6 +2252,9 @@ class CMF_explicit(_CMF):
                     pbin, qbin,
                     m_u, n_i, m_ub, n_ib
                 )
+            self._n_orig = self.B_.shape[0] if self.include_all_X else n
+            if self.precompute_for_predictions:
+                self.force_precompute_for_predictions()
         else:
             self.user_bias_, self.item_bias_, \
             self.A_, self.B_, self.C_, self.D_, \
@@ -2261,14 +2288,14 @@ class CMF_explicit(_CMF):
                     self.finalize_chol,
                     self.random_state, self.niter,
                     self.handle_interrupt,
-                    precompute_for_predictions=self.precompute_for_predictions
+                    precompute_for_predictions=self.precompute_for_predictions,
+                    include_all_X=self.include_all_X
                 )
+            self._n_orig = self.B_.shape[0] if (self.include_all_X or self.NA_as_zero) else n
 
         self._A_pred = self.A_
         self._B_pred = self.B_
         self.is_fitted_ = True
-        if self.precompute_for_predictions:
-            self.force_precompute_for_predictions()
         return self
 
     def predict_cold(self, items, U=None, U_bin=None, U_col=None, U_val=None):
@@ -2664,11 +2691,13 @@ class CMF_explicit(_CMF):
             self._BeTBeChol,
             self._CtC,
             self.glob_mean_,
+            self._n_orig,
             self.k, self.k_user, self.k_item, self.k_main,
             lambda_, lambda_bias,
             self.w_user, self.w_main,
             self.user_bias,
-            self.NA_as_zero_user, self.NA_as_zero
+            self.NA_as_zero_user, self.NA_as_zero,
+            self.include_all_X
         )
 
         if return_bias:
@@ -2878,11 +2907,13 @@ class CMF_explicit(_CMF):
                 self._CtC,
                 n, m_u, m_x,
                 self.glob_mean_,
+                self._n_orig,
                 self._k_pred, self.k_user, self.k_item, self._k_main_col,
                 lambda_, lambda_bias,
                 self.w_user, self.w_main,
                 self.user_bias,
                 self.NA_as_zero_user, self.NA_as_zero,
+                self.include_all_X,
                 self.nthreads
             )
         return self._predict_user_multiple(A, item, bias=A_bias)
@@ -3040,7 +3071,7 @@ class CMF_explicit(_CMF):
                                            replace_existing=replace_existing)
 
         if Xarr.shape[0] == 0:
-            Xarr = np.repeat(np.nan, self.B_.shape[0]*m_x).reshape((m_x, self.B_.shape[0]))
+            Xarr = np.repeat(np.nan, self._n_orig*m_x).reshape((m_x, self._n_orig))
 
         c_funs = wrapper_float if self.use_float else wrapper_double
         return c_funs.call_impute_X_collective_explicit(
@@ -3065,11 +3096,13 @@ class CMF_explicit(_CMF):
             self._CtC,
             m_u,
             self.glob_mean_,
+            self._n_orig,
             self.k, self.k_user, self.k_item, self.k_main,
             lambda_, lambda_bias,
             self.w_user, self.w_main,
             self.user_bias,
             self.NA_as_zero_user,
+            self.include_all_X,
             self.nthreads
         )
 
@@ -3103,8 +3136,10 @@ class CMF_explicit(_CMF):
                 self.B_,
                 self.C_,
                 self.user_bias,
+                self._n_orig,
                 self.k, self.k_user, self.k_item, self.k_main,
                 lambda_, lambda_bias, self.w_main, self.w_user,
+                self.include_all_X
             )
         return self
 
@@ -3479,6 +3514,7 @@ class CMF_implicit(_CMF):
 
         self._A_pred = self.A_
         self._B_pred = self.B_
+        self._n_orig = self.B_.shape[0]
         self.is_fitted_ = True
         return self
 
@@ -4878,9 +4914,11 @@ class OMF_explicit(_OMF):
                         self._B_pred,
                         np.empty((0,0), dtype=self.dtype_),
                         self.user_bias,
+                        self._B_pred.shape[0],
                         self.k_sec+self.k+self.k_main,
                         0, 0, 0,
                         lambda_, lambda_bias, 1., 1.,
+                        True
                     )
 
         else:
@@ -4910,6 +4948,7 @@ class OMF_explicit(_OMF):
                     precompute_for_predictions=self.precompute_for_predictions
                 )
         
+        self._n_orig = self._B_pred.shape[0]
         self.is_fitted_ = True
         return self
 
@@ -5643,6 +5682,7 @@ class OMF_implicit(_OMF):
                 self.random_state, self.niter,
                 self.handle_interrupt
             )
+        self._n_orig = self.B_.shape[0]
         self.is_fitted_ = True
         return self
 
@@ -6151,6 +6191,7 @@ class ContentBased(_OMF_Base):
                 start_with_ALS=self.start_with_ALS
         )
 
+        self._n_orig = 0
         self.is_fitted_ = True
         return self
 
@@ -6589,6 +6630,7 @@ class MostPopular(_CMF):
 
         self._A_pred = np.zeros((m,1), dtype=self.dtype_)
         self._B_pred = np.zeros((n,1), dtype=self.dtype_)
+        self._n_orig = n
         self.is_fitted_ = True
         return self
 

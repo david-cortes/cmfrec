@@ -407,10 +407,10 @@ void factors_closed_form
     FPnum *restrict buffer_FPnum,
     FPnum lam, FPnum lam_last,
     FPnum *restrict precomputedTransBtBinvBt,
-    FPnum *restrict precomputedBtBw, int cnt_NA, int ld_BtB,
-    bool BtB_has_diag, bool BtB_is_scaled, FPnum scale_BtB,
+    FPnum *restrict precomputedBtB, int cnt_NA, int ld_BtB,
+    bool BtB_has_diag, bool BtB_is_scaled, FPnum scale_BtB, int n_BtB,
     FPnum *restrict precomputedBtBchol, bool NA_as_zero,
-    bool use_cg, int max_cg_steps,
+    bool use_cg, int max_cg_steps, /* <- 'cg' should not be used for new data */
     bool force_add_diag
 );
 void factors_explicit_cg
@@ -596,6 +596,12 @@ int center_by_cols
     size_t Xcsc_p[], int Xcsc_i[], FPnum *restrict Xcsc,
     int nthreads
 );
+bool check_sparse_indices
+(
+    int n, int p,
+    FPnum *restrict u_vec_sp, int u_vec_ixB[], size_t nnz_u_vec,
+    FPnum *restrict Xa, int ixB[], size_t nnz
+);
 void predict_multiple
 (
     FPnum *restrict A, int k_user,
@@ -778,8 +784,9 @@ void collective_closed_form_block
     FPnum lam, FPnum w_user, FPnum lam_last,
     FPnum *restrict precomputedBtB, int cnt_NA_x,
     FPnum *restrict precomputedCtCw, int cnt_NA_u,
-    FPnum *restrict precomputedBeTBeChol,
-    bool add_X, bool add_U, bool use_cg, int max_cg_steps,
+    FPnum *restrict precomputedBeTBeChol, int n_BtB,
+    bool add_X, bool add_U,
+    bool use_cg, int max_cg_steps, /* <- 'cg' should not be used for new data */
     FPnum *restrict buffer_FPnum
 );
 void collective_closed_form_block_implicit
@@ -902,6 +909,7 @@ int collective_factors_warm
     FPnum *restrict B,
     int k, int k_user, int k_item, int k_main,
     FPnum lam, FPnum w_main, FPnum w_user, FPnum lam_bias,
+    int n_max, bool include_all_X,
     FPnum *restrict TransBtBinvBt,
     FPnum *restrict BtB,
     FPnum *restrict BeTBeChol,
@@ -1168,6 +1176,7 @@ int fit_collective_explicit_als
     int niter, int nthreads, bool verbose, bool handle_interrupt,
     bool use_cg, int max_cg_steps, bool finalize_chol,
     bool precompute_for_predictions,
+    bool include_all_X,
     FPnum *restrict B_plus_bias,
     FPnum *restrict precomputedBtB,
     FPnum *restrict precomputedTransBtBinvBt,
@@ -1202,7 +1211,7 @@ int fit_collective_implicit_als
 );
 int precompute_collective_explicit
 (
-    FPnum *restrict B, int n, int n_i, int n_ibin,
+    FPnum *restrict B, int n, int n_max, bool include_all_X,
     FPnum *restrict C, int p,
     int k, int k_user, int k_item, int k_main,
     bool user_bias,
@@ -1243,6 +1252,7 @@ int factors_collective_explicit_single
     int k, int k_user, int k_item, int k_main,
     FPnum lam, FPnum *restrict lam_unique,
     FPnum w_main, FPnum w_user,
+    int n_max, bool include_all_X,
     FPnum *restrict TransBtBinvBt,
     FPnum *restrict BtB,
     FPnum *restrict BeTBeChol,
@@ -1285,6 +1295,7 @@ int factors_collective_explicit_multiple
     int k, int k_user, int k_item, int k_main,
     FPnum lam, FPnum *restrict lam_unique,
     FPnum w_main, FPnum w_user,
+    int n_max, bool include_all_X,
     FPnum *restrict TransBtBinvBt,
     FPnum *restrict BtB,
     FPnum *restrict BeTBeChol,
@@ -1330,6 +1341,7 @@ int impute_X_collective_explicit
     int k, int k_user, int k_item, int k_main,
     FPnum lam, FPnum *restrict lam_unique,
     FPnum w_main, FPnum w_user,
+    int n_max, bool include_all_X,
     FPnum *restrict TransBtBinvBt,
     FPnum *restrict BtB,
     FPnum *restrict BeTBeChol,
@@ -1349,7 +1361,7 @@ int topN_old_collective_explicit
     int *restrict include_ix, int n_include,
     int *restrict exclude_ix, int n_exclude,
     int *restrict outp_ix, FPnum *restrict outp_score,
-    int n_top, int n, int nthreads
+    int n_top, int n, int n_max, bool include_all_X, int nthreads
 );
 int topN_old_collective_implicit
 (
@@ -1365,7 +1377,7 @@ int topN_old_collective_implicit
 int topN_new_collective_explicit
 (
     /* inputs for the factors */
-    bool user_bias, int n,
+    bool user_bias,
     FPnum *restrict u_vec, int p,
     FPnum *restrict u_vec_sp, int u_vec_ixB[], size_t nnz_u_vec,
     FPnum *restrict u_bin_vec, int pbin,
@@ -1374,12 +1386,13 @@ int topN_new_collective_explicit
     FPnum glob_mean, FPnum *restrict biasB,
     FPnum *restrict col_means,
     FPnum *restrict Xa, int ixB[], size_t nnz,
-    FPnum *restrict Xa_dense,
+    FPnum *restrict Xa_dense, int n,
     FPnum *restrict weight,
     FPnum *restrict B,
     int k, int k_user, int k_item, int k_main,
     FPnum lam, FPnum *restrict lam_unique,
     FPnum w_main, FPnum w_user,
+    int n_max, bool include_all_X,
     FPnum *restrict TransBtBinvBt,
     FPnum *restrict BtB,
     FPnum *restrict BeTBeChol,
@@ -1421,7 +1434,7 @@ int predict_X_old_collective_explicit
     FPnum *restrict B, FPnum *restrict biasB,
     FPnum glob_mean,
     int k, int k_user, int k_item, int k_main,
-    int m, int n,
+    int m, int n_max,
     int nthreads
 );
 int predict_X_old_collective_implicit
@@ -1451,12 +1464,13 @@ int predict_X_new_collective_explicit
     FPnum *restrict col_means,
     FPnum *restrict X, int ixA[], int ixB[], size_t nnz,
     size_t *restrict Xcsr_p, int *restrict Xcsr_i, FPnum *restrict Xcsr,
-    FPnum *restrict Xfull, int n, /* <- 'n' MUST be passed */
+    FPnum *restrict Xfull, int n,
     FPnum *restrict weight,
     FPnum *restrict B,
     int k, int k_user, int k_item, int k_main,
     FPnum lam, FPnum *restrict lam_unique,
     FPnum w_main, FPnum w_user,
+    int n_max, bool include_all_X,
     FPnum *restrict TransBtBinvBt,
     FPnum *restrict BtB,
     FPnum *restrict BeTBeChol,
@@ -1830,7 +1844,7 @@ int factors_offsets_implicit_single
     FPnum *restrict Xa, int ixB[], size_t nnz,
     FPnum *restrict Bm, FPnum *restrict C,
     FPnum *restrict C_bias,
-    int k,
+    int k, int n,
     FPnum lam, FPnum alpha,
     FPnum *restrict precomputedBtB,
     FPnum *restrict output_a
@@ -1868,7 +1882,7 @@ int factors_offsets_implicit_multiple
     size_t *restrict Xcsr_p, int *restrict Xcsr_i, FPnum *restrict Xcsr,
     FPnum *restrict Bm, FPnum *restrict C,
     FPnum *restrict C_bias,
-    int k,
+    int k, int n,
     FPnum lam, FPnum alpha,
     FPnum *restrict precomputedBtB,
     int nthreads
