@@ -7514,7 +7514,7 @@ int factors_collective_explicit_single
     if (user_bias && B_plus_bias == NULL)
     {
         free_B_plus_bias = true;
-        B_plus_bias = (FPnum*)malloc((size_t)n*(size_t)(k_item+k+k_main)
+        B_plus_bias = (FPnum*)malloc((size_t)n*(size_t)(k_item+k+k_main+1)
                                       * sizeof(FPnum));
         if (B_plus_bias == NULL) goto throw_oom;
         append_ones_last_col(
@@ -7697,7 +7697,7 @@ int factors_collective_explicit_multiple
     if (user_bias && B_plus_bias == NULL)
     {
         free_B_plus_bias = true;
-        B_plus_bias = (FPnum*)malloc((size_t)n*(size_t)(k_item+k+k_main)
+        B_plus_bias = (FPnum*)malloc((size_t)n*(size_t)(k_item+k+k_main+1)
                                       * sizeof(FPnum));
         if (B_plus_bias == NULL) goto throw_oom;
         append_ones_last_col(

@@ -203,7 +203,7 @@ class _CMF:
         assert isinstance(k_sec, int) and k_sec >= 0
         assert isinstance(k_main, int) and k_main >= 0
 
-        if ((max(k_sec, k_main) + k)**2 + 1) > np.iinfo(ctypes.c_int).max:
+        if ((max(k_sec, k_main) + self.k)**2 + 1) > np.iinfo(ctypes.c_int).max:
             raise ValueError("Number of factors is too large.")
 
         if self.method == "als":
@@ -1587,7 +1587,7 @@ class _CMF:
                 self._BeTBeChol,
                 self._TransCtCinvCt,
                 self._CtC,
-                n, m_u, m_x,
+                m_u, m_x,
                 self.glob_mean_,
                 self._n_orig,
                 self._k_pred, self.k_user, self.k_item, self._k_main_col,
@@ -1709,28 +1709,31 @@ class _CMF:
         if isinstance(self.lambda_, np.ndarray):
             if not is_I:
                 lambda_ = self.lambda_[2]
+                lambda_bias = self.lambda_[0]
             else:
                 lambda_ = self.lambda_[3]
+                lambda_bias = self.lambda_[1]
         else:
             lambda_ = self.lambda_
+            lambda_bias = self.lambda_
 
         Uarr, Urow, Ucol, Uval, Ucsr_p, Ucsr_i, Ucsr, m_u, p = \
             self._process_new_U_2d(U=U, is_I=is_I, allow_csr=True)
         Ub_arr, m_ub, pbin = self._process_new_Ub_2d(U_bin=U_bin, is_I=is_I)
 
-        empty_arr = np.empty((0,0), dtype=self.dtype_),
+        empty_arr = np.empty((0,0), dtype=self.dtype_)
 
         c_funs = wrapper_float if self.use_float else wrapper_double
 
         if (not self._implicit):
             A, _ = c_funs.call_factors_collective_explicit_multiple(
-                np.empty((0,0), dtype=ctypes.c_int),
-                np.empty((0,0), dtype=ctypes.c_int),
-                np.empty((0,0), dtype=self.dtype_),
-                np.empty((0,0), dtype=ctypes.c_size_t),
-                np.empty((0,0), dtype=ctypes.c_int),
-                np.empty((0,0), dtype=self.dtype_),
-                np.empty((0,0), dtype=self.dtype_),
+                np.empty(0, dtype=ctypes.c_int),
+                np.empty(0, dtype=ctypes.c_int),
+                np.empty(0, dtype=self.dtype_),
+                np.empty(0, dtype=ctypes.c_size_t),
+                np.empty(0, dtype=ctypes.c_int),
+                np.empty(0, dtype=self.dtype_),
+                np.empty(0, dtype=self.dtype_),
                 np.empty((0,0), dtype=self.dtype_),
                 np.empty((0,0), dtype=self.dtype_),
                 Uarr,
@@ -1750,7 +1753,7 @@ class _CMF:
                 self._BeTBeChol if not is_I else empty_arr,
                 self._TransCtCinvCt if not is_I else empty_arr,
                 self._CtC if not is_I else empty_arr,
-                n, m_u, 0,
+                m_u, 0,
                 self.glob_mean_,
                 self._n_orig if not is_I else self.A_.shape[0],
                 self.k,
@@ -1767,12 +1770,12 @@ class _CMF:
             )
         else:
             A = c_funs.call_factors_collective_implicit_multiple(
-                    np.empty((0,0), dtype=ctypes.c_int),
-                    np.empty((0,0), dtype=ctypes.c_int),
-                    np.empty((0,0), dtype=self.dtype_),
-                    np.empty((0,0), dtype=ctypes.c_size_t),
-                    np.empty((0,0), dtype=ctypes.c_int),
-                    np.empty((0,0), dtype=self.dtype_),
+                    np.empty(0, dtype=ctypes.c_int),
+                    np.empty(0, dtype=ctypes.c_int),
+                    np.empty(0, dtype=self.dtype_),
+                    np.empty(0, dtype=ctypes.c_size_t),
+                    np.empty(0, dtype=ctypes.c_int),
+                    np.empty(0, dtype=self.dtype_),
                     Uarr,
                     Urow,
                     Ucol,
@@ -2905,7 +2908,7 @@ class CMF_explicit(_CMF):
                 self._BeTBeChol,
                 self._TransCtCinvCt,
                 self._CtC,
-                n, m_u, m_x,
+                m_u, m_x,
                 self.glob_mean_,
                 self._n_orig,
                 self._k_pred, self.k_user, self.k_item, self._k_main_col,

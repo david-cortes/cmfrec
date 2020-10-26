@@ -1407,7 +1407,7 @@ def call_fit_offsets_explicit_als(
         if C.shape[0]:
             ptr_C = &C[0,0]
         if add_intercepts:
-            C_bias = np.empty(k, dtype=c_FPnum)
+            C_bias = np.zeros(k, dtype=c_FPnum)
             if C_bias.shape[0]:
                 ptr_C_bias = &C_bias[0]
     if q:
@@ -1415,7 +1415,7 @@ def call_fit_offsets_explicit_als(
         if D.shape[0]:
             ptr_D = &D[0,0]
         if add_intercepts:
-            D_bias = np.empty(k, dtype=c_FPnum)
+            D_bias = np.zeros(k, dtype=c_FPnum)
             if D_bias.shape[0]:
                 ptr_D_bias = &D_bias[0]
 
@@ -2770,6 +2770,8 @@ def call_fit_content_based_lbfgs(
     cdef FPnum *ptr_C_bias = NULL
     cdef FPnum *ptr_D_bias = NULL
     if add_intercepts:
+        C_bias = np.zeros(k, dtype=c_FPnum)
+        D_bias = np.zeros(k, dtype=c_FPnum)
         ptr_C_bias = &C_bias[0]
         ptr_D_bias = &D_bias[0]
 
@@ -2844,7 +2846,7 @@ def call_factors_collective_explicit_multiple(
         np.ndarray[FPnum, ndim=2] BeTBeChol,
         np.ndarray[FPnum, ndim=2] TransCtCinvCt,
         np.ndarray[FPnum, ndim=2] CtCw,
-        int n, int m_u, int m_x,
+        int m_u, int m_x,
         FPnum glob_mean,
         int n_orig,
         int k, int k_user = 0, int k_item = 0, int k_main = 0,

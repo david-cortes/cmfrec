@@ -1727,8 +1727,8 @@ int fit_offsets_als
         return retval;
     }
 
-    need_C_plus_bias = (U == NULL  || !add_intercepts);
-    need_D_plus_bias = (II == NULL || !add_intercepts);
+    need_C_plus_bias = !(U == NULL  || !add_intercepts);
+    need_D_plus_bias = !(II == NULL || !add_intercepts);
     if (need_C_plus_bias || need_D_plus_bias)
     {
         if (need_C_plus_bias && need_D_plus_bias)
@@ -1845,7 +1845,10 @@ int fit_offsets_als
         temp_intB = (int)temp;
 
         if (temp_intB > temp_intA)
+        {
             free(buffer_FPnum);
+            buffer_FPnum = NULL;
+        }
         if (buffer_FPnum == NULL)
             buffer_FPnum = (FPnum*)malloc((size_t)temp_intB*sizeof(FPnum));
         if (buffer_FPnum == NULL) goto throw_oom;
@@ -2117,7 +2120,7 @@ int factors_offsets_explicit_single
         if (a_bias != NULL)
         {
             free_Bm_plus_bias = true;
-            Bm_plus_bias = (FPnum*)malloc((size_t)n*(size_t)(k_sec+k+k_main)
+            Bm_plus_bias = (FPnum*)malloc((size_t)n*(size_t)(k_sec+k+k_main+1)
                                            * sizeof(FPnum));
             if (Bm_plus_bias == NULL) goto throw_oom;
             append_ones_last_col(
@@ -2278,7 +2281,7 @@ int factors_offsets_explicit_multiple
         if (biasA != NULL)
         {
             free_Bm_plus_bias = true;
-            Bm_plus_bias = (FPnum*)malloc((size_t)n*(size_t)(k_sec+k+k_main)
+            Bm_plus_bias = (FPnum*)malloc((size_t)n*(size_t)(k_sec+k+k_main+1)
                                            * sizeof(FPnum));
             if (Bm_plus_bias == NULL) goto throw_oom;
             append_ones_last_col(
@@ -3045,7 +3048,7 @@ int fit_content_based_lbfgs
 
     if (free_values)
     {
-        values = (FPnum*)malloc( ((size_t)p+(size_t)q+(size_t)add_intercepts)
+        values = (FPnum*)malloc(((size_t)p+(size_t)q+(size_t)(2*add_intercepts))
                                  * (size_t)k
                                  * sizeof(FPnum));
         if (values == NULL) goto throw_oom;
