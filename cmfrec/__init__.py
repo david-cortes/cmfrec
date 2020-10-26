@@ -783,7 +783,7 @@ class _CMF:
 
             assert "UserId" in X.columns.values
             assert "ItemId" in X.columns.values
-            if (self.implicit) and ("Rating" in X.columns.values) and ("Value" not in X.columns.values):
+            if (self._implicit) and ("Rating" in X.columns.values) and ("Value" not in X.columns.values):
                 X = X.rename(columns={"Rating":"Value"}, copy=False, inplace=False)
             if self._implicit:
                 assert "Value" in X.columns.values
@@ -1561,7 +1561,7 @@ class _CMF:
                           lambda_, lambda_bias):
         c_funs = wrapper_float if self.use_float else wrapper_double
         
-        if (not self.implicit):
+        if (not self._implicit):
             A, A_bias = c_funs.call_factors_collective_explicit_multiple(
                 Xrow,
                 Xcol,
@@ -1644,7 +1644,7 @@ class _CMF:
 
         c_funs = wrapper_float if self.use_float else wrapper_double
         
-        if (not self.implicit):
+        if (not self._implicit):
             b_vec = c_funs.call_factors_collective_cold(
                 I,
                 I_val,
@@ -1722,7 +1722,7 @@ class _CMF:
 
         c_funs = wrapper_float if self.use_float else wrapper_double
 
-        if (not self.implicit):
+        if (not self._implicit):
             A, _ = c_funs.call_factors_collective_explicit_multiple(
                 np.empty((0,0), dtype=ctypes.c_int),
                 np.empty((0,0), dtype=ctypes.c_int),
@@ -2077,11 +2077,11 @@ class CMF_explicit(_CMF):
            "Applications of the conjugate gradient method for implicit feedback collaborative filtering."
            Proceedings of the fifth ACM conference on Recommender systems. 2011.
     """
-    def __init__(self, k=50, lambda_=1e1, method="als", use_cg=False,
+    def __init__(self, k=50, lambda_=1e1, method="als", use_cg=True,
                  user_bias=True, item_bias=True, k_user=0, k_item=0, k_main=0,
                  w_main=1., w_user=1., w_item=1.,
                  maxiter=400, niter=10, parallelize="separate", corr_pairs=4,
-                 max_cg_steps=3, finalize_chol=False,
+                 max_cg_steps=3, finalize_chol=True,
                  NA_as_zero=False, NA_as_zero_user=False, NA_as_zero_item=False,
                  precompute_for_predictions=True, include_all_X=True,
                  use_float=False,
@@ -3372,12 +3372,12 @@ class CMF_implicit(_CMF):
            "Applications of the conjugate gradient method for implicit feedback collaborative filtering."
            Proceedings of the fifth ACM conference on Recommender systems. 2011.
     """
-    def __init__(self, k=50, lambda_=1e0, alpha=1., use_cg=False,
+    def __init__(self, k=50, lambda_=1e0, alpha=1., use_cg=True,
                  k_user=0, k_item=0, k_main=0,
                  w_main=1., w_user=10., w_item=10., downweight=False,
                  niter=10, NA_as_zero_user=False, NA_as_zero_item=False,
                  precompute_for_predictions=True, use_float=False,
-                 max_cg_steps=3, finalize_chol=False,
+                 max_cg_steps=3, finalize_chol=True,
                  random_state=1, init="normal", verbose=False,
                  produce_dicts=False, handle_interrupt=True,
                  copy_data=True, nthreads=-1):
@@ -4739,11 +4739,11 @@ class OMF_explicit(_OMF):
            "Cold-start recommendations in Collective Matrix Factorization."
            arXiv preprint arXiv:1809.00366 (2018).
     """
-    def __init__(self, k=50, lambda_=1e1, method="lbfgs", use_cg=False,
+    def __init__(self, k=50, lambda_=1e1, method="lbfgs", use_cg=True,
                  user_bias=True, item_bias=True, k_sec=0, k_main=0,
                  add_intercepts=True, w_user=1., w_item=1.,
                  maxiter=10000, niter=10, parallelize="separate", corr_pairs=7,
-                 max_cg_steps=3, finalize_chol=False,
+                 max_cg_steps=3, finalize_chol=True,
                  NA_as_zero=False, use_float=False,
                  random_state=1, verbose=True, print_every=100,
                  produce_dicts=False, handle_interrupt=True,
@@ -5568,9 +5568,9 @@ class OMF_implicit(_OMF):
            "Applications of the conjugate gradient method for implicit feedback collaborative filtering."
            Proceedings of the fifth ACM conference on Recommender systems. 2011.
     """
-    def __init__(self, k=50, lambda_=1e0, alpha=1., use_cg=False, downweight=False,
+    def __init__(self, k=50, lambda_=1e0, alpha=1., use_cg=True, downweight=False,
                  add_intercepts=True, niter=10, use_float=False,
-                 max_cg_steps=3, finalize_chol=False,
+                 max_cg_steps=3, finalize_chol=True,
                  random_state=1, verbose=False,
                  produce_dicts=False, handle_interrupt=True,
                  copy_data=True, nthreads=-1):

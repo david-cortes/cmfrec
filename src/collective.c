@@ -5482,6 +5482,15 @@ int fit_collective_explicit_als
         retval = 2;
     }
 
+    if ((Xfull != NULL && NA_as_zero_X) ||
+        (U != NULL && NA_as_zero_U) ||
+        (II != NULL && NA_as_zero_I))
+    {
+        if (verbose)
+            fprintf(stderr, "Cannot pass 'NA_as_zero' with dense data.\n");
+        retval = 2;
+    }
+
     if (retval == 2)
     {
         if (verbose)
@@ -5763,7 +5772,7 @@ int fit_collective_explicit_als
     /* Sizes of the temporary arrays */
     if (U != NULL || nnz_U)
         size_bufferC = buffer_size_optimizeA(
-            p, full_dense_u,
+            m_u, full_dense_u,
             near_dense_u_col,
             Utrans == NULL,
             U != NULL, false, NA_as_zero_U,
@@ -5779,7 +5788,7 @@ int fit_collective_explicit_als
         );
     if (II != NULL || nnz_I)
         size_bufferD = buffer_size_optimizeA(
-            p, full_dense_i,
+            n_i, full_dense_i,
             near_dense_i_col,
             Itrans == NULL,
             II != NULL, false, NA_as_zero_I,
@@ -6437,7 +6446,7 @@ int fit_collective_explicit_als
                                     / w_user,
                                 k_pred);
                 }
-                tposv_(&lo, &k_pred, &n,
+                tposv_(&lo, &k_pred, &p,
                        arr_use, &k_pred,
                        precomputedTransCtCinvCt, &k_pred, &ignore_int);
 
@@ -6594,6 +6603,14 @@ int fit_collective_implicit_als
         retval = 2;
     }
 
+    if ((U != NULL && NA_as_zero_U) ||
+        (II != NULL && NA_as_zero_I))
+    {
+        if (verbose)
+            fprintf(stderr, "Cannot pass 'NA_as_zero' with dense data.\n");
+        retval = 2;
+    }
+
     if (retval == 2)
     {
         if (verbose)
@@ -6711,7 +6728,7 @@ int fit_collective_implicit_als
     if (retval != 0) goto throw_oom;
     if (U != NULL || U_csr_p != NULL)
         size_bufferC = buffer_size_optimizeA(
-            p, full_dense_u,
+            m_u, full_dense_u,
             near_dense_u_col,
             Utrans == NULL,
             U != NULL, false, NA_as_zero_U,
@@ -6736,7 +6753,7 @@ int fit_collective_implicit_als
     if (retval != 0) goto throw_oom;
     if (II != NULL || I_csc_p != NULL)
         size_bufferD = buffer_size_optimizeA(
-            p, full_dense_i,
+            n_i, full_dense_i,
             near_dense_i_col,
             Itrans == NULL,
             II != NULL, false, NA_as_zero_I,

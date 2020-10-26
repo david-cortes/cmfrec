@@ -1597,17 +1597,23 @@ size_t buffer_size_optimizeA
         do_B = false;
 
     size_t buffer_size = 0;
+    bool assigned_to_BtB_copy = false;
+    /* case 1 */
     if (has_dense && (full_dense || near_dense) && !has_weights)
     {
         if (near_dense)
         {
             if (pass_allocated_BtB && !keep_precomputedBtB)
+            {
+                assigned_to_BtB_copy = true;
                 buffer_size += 0;
+            }
             else {
                 buffer_size += square(k);
             }
         }
-        if (pass_allocated_BtB && !keep_precomputedBtB && !near_dense)
+        if (pass_allocated_BtB && !keep_precomputedBtB && !near_dense &&
+            !assigned_to_BtB_copy)
             buffer_size += 0;
         else {
             buffer_size += square(k);
@@ -1615,7 +1621,7 @@ size_t buffer_size_optimizeA
         if (do_B)
             buffer_size += n*nthreads;
 
-        if (near_dense)
+        if (!full_dense)
         {
             size_t size_thread_buffer = square(k);
             if (use_cg)
@@ -1625,6 +1631,7 @@ size_t buffer_size_optimizeA
         return buffer_size;
     }
 
+    /* case 2 */
     else if (has_dense)
     {
         if (!has_weights) {
@@ -1644,6 +1651,7 @@ size_t buffer_size_optimizeA
         return buffer_size + nthreads * size_thread_buffer;
     }
 
+    /* case 3 */
     else if (!has_dense && NA_as_zero && !has_weights)
     {
         if (pass_allocated_BtB && !keep_precomputedBtB)
@@ -1653,6 +1661,7 @@ size_t buffer_size_optimizeA
         return buffer_size;
     }
 
+    /* case 4 */
     else
     {
         bool add_diag_to_BtB = !(use_cg && !has_dense && NA_as_zero);
@@ -1737,6 +1746,9 @@ void optimizeA
     *filled_BtB = false;
 
     if (Xfull == NULL) do_B = false;
+
+    /* TODO: in many cases here, it's possible to shrink the buffer
+       size for the threads when using 'use_cg'. */
 
     /* Case 1: X is full dense with few or no missing values.
        Here can apply the closed-form solution with only
@@ -1827,7 +1839,7 @@ void optimizeA
                &ignore);
         /* If there are some few rows with missing values, now do a
            post-hoc pass over them only */
-        if (near_dense)
+        if (!full_dense)
         {
             size_t size_buffer = square(k);
             if (use_cg)
@@ -1923,7 +1935,7 @@ void optimizeA
             if (lam_last != lam) bufferBtB[square(k)-1] += (lam_last - lam);
         }
 
-        size_t size_buffer = (size_t)square(k) + (use_cg? (3*k) : 0);
+        size_t size_buffer = (size_t)square(k) + (size_t)(use_cg? (3*k) : 0);
 
         #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
                 shared(Xfull, weight, do_B, m, n, k, A, lda, B, ldb, ldX, \
