@@ -3384,109 +3384,250 @@ FPnum wrapper_fun_grad_Adense_col
             );
 }
 
-void buffer_size_optimizeA_collective
+size_t buffer_size_optimizeA_collective
 (
-    size_t *buffer_size,
-    int m, int n, int k, int k_user, int k_main, int padding,
-    int m_u, int p, int nthreads,
-    bool do_B, bool NA_as_zero_X, bool NA_as_zero_U,
+    size_t m, size_t m_u, size_t n, size_t p,
+    size_t k, size_t k_main, size_t k_user,
+    bool full_dense, bool near_dense, bool do_B,
+    bool has_dense, bool has_sparse, bool has_weights, bool NA_as_zero_X,
+    bool has_dense_U, bool has_sparse_U,
+    bool full_dense_u, bool near_dense_u, bool NA_as_zero_U,
+    size_t nthreads,
     bool use_cg, bool finalize_chol,
-    bool full_dense, bool near_dense,
-    bool has_dense, bool has_weight,
-    bool full_dense_u, bool near_dense_u, bool has_dense_u
+    bool keep_precomputed,
+    bool pass_allocated_BtB,
+    bool pass_allocated_BeTBeChol,
+    bool pass_allocated_CtCw
 )
 {
-    if (finalize_chol)
+    if (finalize_chol && use_cg)
     {
-        size_t buffer_size_cg = 0;
-        size_t buffer_size_chol = 0;
-        buffer_size_optimizeA_collective(
-            &buffer_size_cg,
-            m, n, k, k_user, k_main, padding,
-            m_u, p, nthreads,
-            do_B, NA_as_zero_X, NA_as_zero_U,
-            true, false,
-            full_dense, near_dense,
-            has_dense, has_weight,
-            full_dense_u, near_dense_u, has_dense_u
+        return max2(
+            buffer_size_optimizeA_collective(
+                m, m_u, n, p,
+                k, k_main, k_user,
+                full_dense, near_dense, do_B,
+                has_dense, has_sparse, has_weights, NA_as_zero_X,
+                has_dense_U, has_sparse_U,
+                full_dense_u, near_dense_u, NA_as_zero_U,
+                nthreads,
+                true, false,
+                keep_precomputed,
+                pass_allocated_BtB,
+                pass_allocated_BeTBeChol,
+                pass_allocated_CtCw
+            ),
+            buffer_size_optimizeA_collective(
+                m, m_u, n, p,
+                k, k_main, k_user,
+                full_dense, near_dense, do_B,
+                has_dense, has_sparse, has_weights, NA_as_zero_X,
+                has_dense_U, has_sparse_U,
+                full_dense_u, near_dense_u, NA_as_zero_U,
+                nthreads,
+                false, false,
+                keep_precomputed,
+                pass_allocated_BtB,
+                pass_allocated_BeTBeChol,
+                pass_allocated_CtCw
+            )
         );
-        buffer_size_optimizeA_collective(
-            &buffer_size_chol,
-            m, n, k, k_user, k_main, padding,
-            m_u, p, nthreads,
-            do_B, NA_as_zero_X, NA_as_zero_U,
-            false, false,
-            full_dense, near_dense,
-            has_dense, has_weight,
-            full_dense_u, near_dense_u, has_dense_u
-        );
-
-        *buffer_size = max2(buffer_size_cg, buffer_size_chol);
-        return;
     }
 
-    if (has_dense && has_dense_u && !has_weight &&
-        (full_dense || near_dense) && (full_dense_u || near_dense_u))
-    {
-        *buffer_size = square(k_user+k+k_main);
-        if (!full_dense || !full_dense_u) {
-            *buffer_size += (size_t)square(k_user+k)
-                            + (size_t)square(k+k_main)
-                            + (size_t)nthreads
-                                        * ((size_t)square(k_user+k+k_main)
-                                            + (size_t)n*(size_t)(k+k_main)
-                                            + (size_t)p*(size_t)(k_user+k));
-            if (do_B) *buffer_size += (size_t)n*(size_t)nthreads;
 
+    size_t m_x = m;
+    size_t k_totA = k_user + k + k_main;
+    size_t size_optimizeA = 0;
+    size_t buffer_size = 0;
+    size_t buffer_thread = 0;
+    size_t size_alt = 0;
+    size_t min_size = 0;
+
+    bool will_use_BtB_here = false;
+    bool will_use_CtC_here = false;
+
+    if (!has_dense) do_B = false;
+
+    if (m_x > m_u)
+    {
+        if (
+                !has_weights &&
+                (   (has_dense && (full_dense || near_dense)) ||
+                    (!has_dense && has_sparse && NA_as_zero_X) ) &&
+                (   (has_dense_U && (full_dense_u || near_dense_u)) ||
+                    (!has_dense_U && has_sparse_U && NA_as_zero_U) )
+            )
+        {
+            will_use_BtB_here = true;
         }
+        else {
+            will_use_BtB_here = true;
+            if (!has_dense && has_sparse && !NA_as_zero_X)
+                will_use_BtB_here = false;
+            if (has_dense && has_weights)
+                will_use_BtB_here = false;
+        }
+
+        if (will_use_BtB_here && !pass_allocated_BtB)
+        {
+            min_size += square(k+k_main);
+            pass_allocated_BtB = true;
+        }
+
+        size_optimizeA = buffer_size_optimizeA(
+            n, full_dense, near_dense, do_B,
+            has_dense, has_weights, NA_as_zero_X,
+            k+k_main, nthreads,
+            pass_allocated_BtB, keep_precomputed || will_use_BtB_here,
+            use_cg, finalize_chol
+        );
     }
 
-    else if (((has_dense && ((!full_dense && !near_dense) || has_weight))
-                ||
-             (has_dense_u && !full_dense_u && !near_dense_u &&
-              p > n && (double)m_u >= .5 * (double)m))
-                &&
-             (has_dense || !NA_as_zero_X) && (has_dense_u || !NA_as_zero_U))
+    else if (m_u > m_x)
     {
-        *buffer_size = (size_t)min2(m, m_u) * (size_t)(k_user+k+k_main+padding);
-        *buffer_size *= (size_t)13;
-        *buffer_size += max2((has_dense?
-                                ((size_t)min2(m, m_u)*(size_t)n) : 0),
-                             (has_dense_u?
-                                ((size_t)min2(m, m_u)*(size_t)p) : 0));
+        if (
+                !has_weights &&
+                (   (has_dense && (full_dense || near_dense)) ||
+                    (!has_dense && has_sparse && NA_as_zero_X) ) &&
+                (   (has_dense_U && (full_dense_u || near_dense_u)) ||
+                    (!has_dense_U && has_sparse_U && NA_as_zero_U) )
+            )
+        {
+            will_use_CtC_here = true;
+        }
+        else {
+            will_use_CtC_here = true;
+            if (!has_dense_U && has_sparse_U && !NA_as_zero_U)
+                will_use_CtC_here = false;
+        }
+
+        if (will_use_CtC_here && !pass_allocated_CtCw) {
+            min_size += square(k_user+k);
+            pass_allocated_CtCw = true;
+        }
+
+        size_optimizeA = buffer_size_optimizeA(
+            p, full_dense_u, near_dense_u, false,
+            has_dense_U, false, NA_as_zero_U,
+            k_user+k, nthreads,
+            pass_allocated_CtCw, keep_precomputed || will_use_CtC_here,
+            use_cg, finalize_chol
+        );
     }
 
-    else if (!has_dense && !has_dense_u &&
-             NA_as_zero_X && NA_as_zero_U &&
-             !has_weight)
+
+    if (
+            !has_weights &&
+            (   (has_dense && (full_dense || near_dense)) ||
+                (!has_dense && has_sparse && NA_as_zero_X) ) &&
+            (   (has_dense_U && (full_dense_u || near_dense_u)) ||
+                (!has_dense_U && has_sparse_U && NA_as_zero_U) )
+        )
     {
-        *buffer_size = square(k_user+k+k_main);
+        /* TODO: here can decrease memory usage by determining when will
+           the BtB and CtC matrices be filled from 'optimizeA' */
+        // bool filled_BtB = false || will_use_BtB_here;
+        // bool filled_CtCw = false || will_use_CtC_here;
+        bool filled_BtB = true;
+        bool filled_CtCw = true;
+
+        if (    ((has_dense && full_dense) ||
+                 (!has_dense && NA_as_zero_X)) &&
+                ((has_dense_U && full_dense_u) ||
+                 (!has_dense_U && NA_as_zero_U)) &&
+                !(filled_BtB) && !(filled_CtCw) && !keep_precomputed    )
+        {
+            if (pass_allocated_BeTBeChol)
+                buffer_size += 0;
+            else
+                buffer_size += square(k_user+k+k_main);
+        }
+
+        else
+        {
+            if (pass_allocated_BtB)
+                buffer_size += 0;
+            else {
+               buffer_size += square(k+k_main);
+            }
+            if (pass_allocated_CtCw)
+                buffer_size += 0;
+            else {
+                buffer_size += square(k_user+k);
+            }
+
+            if (pass_allocated_BeTBeChol)
+                size_alt += 0;
+            else
+                size_alt += square(k_user+k+k_main);
+        }
+
+        if (do_B)
+            buffer_thread += n;
+        buffer_thread += use_cg? (3*k_totA) : (square(k_totA));
+        buffer_thread *= nthreads;
+        buffer_thread = max2(buffer_thread, size_alt);
+
+        buffer_size += buffer_thread;
     }
 
     else
     {
-        /* maybe should be like this? need to revisit */
-        // if (!use_cg) {
-        //     *buffer_size = square(k_user+k+k_main);
-        // } else {
-        //     *buffer_size = (size_t)3 * (size_t)(k_user+k+k_main);
-        // }
-        /* instead of this */
-        *buffer_size = square(k_user+k+k_main);
-        /* --end of comment-- */
-        if (has_dense && !has_weight)
-            *buffer_size += (size_t)n*(size_t)(k+k_main);
-        if (has_dense_u && !full_dense_u)
-            *buffer_size += (size_t)p*(size_t)(k_user+k);
-        *buffer_size *= (size_t)nthreads;
+        bool prefer_BtB = true;
+        bool prefer_CtC = true;
+        if (!has_dense && has_sparse && !NA_as_zero_X)
+            prefer_BtB = false;
+        if (has_dense && has_weights)
+            prefer_BtB = false;
+        if (!has_dense_U && has_sparse_U && !NA_as_zero_U)
+            prefer_CtC = false;
 
+        if (prefer_BtB)
+        {
+            if (pass_allocated_BtB)
+                buffer_size += 0;
+            else {
+                buffer_size += square(k+k_main);
+            }
+            
+            if (prefer_CtC
+                    &&
+                (NA_as_zero_X || ((has_dense && !has_weights) &&
+                                  (near_dense || full_dense))    )
+                    &&
+                ((has_dense_U && (near_dense_u || full_dense_u)) ||
+                 (!has_dense_U && NA_as_zero_U)))
+            {
+                if (pass_allocated_BeTBeChol)
+                    buffer_size += 0;
+                else {
+                    buffer_size += square(k_user+k+k_main);
+                }
+            }
+        }
+        if (prefer_CtC)
+        {
+            if (pass_allocated_CtCw)
+                buffer_size += 0;
+            else {
+                buffer_size += square(k_user+k);
+            }
+        }
 
-        /* continuation of comment: this one then should also sum k_item */
-        *buffer_size += square(k_user+k);
-        if (!has_weight) *buffer_size += square(k+k_main);
-        if (do_B) *buffer_size += (size_t)n*(size_t)nthreads;
-        if (do_B && has_weight) *buffer_size += (size_t)n*(size_t)(nthreads+1);
+        if (do_B)
+            buffer_size += n * nthreads;
+        if (do_B && has_weights)
+            buffer_size += n * (nthreads+1);
+
+        buffer_thread += use_cg? (3*k_totA) : (square(k_totA));
+        if (use_cg && !has_dense && NA_as_zero_X && has_weights)
+            buffer_thread += n;
+
+        buffer_size += buffer_thread * nthreads;
     }
+
+
+    return max2(buffer_size, size_optimizeA) + min_size;
 }
 
 size_t buffer_size_optimizeA_collective_implicit
@@ -3611,7 +3752,8 @@ void optimizeA_collective
     long long ix;
     #endif
     char lo = 'L';
-    int ignore;
+    int ignore = 0;
+    bool ignore_bool = false;
 
     #ifdef FORCE_CG
     use_cg = true;
@@ -3627,23 +3769,50 @@ void optimizeA_collective
     int k_totA = k_user + k + k_main;
     int k_totC = k_user + k;
     int k_pred = k_user + k + k_main;
-    #ifdef TEST_OPTIMIZE_A
-    int m_min = min2(m, m_u);
-    bool ignore_bool = 0;
-    #endif
     int m_x = m; /* 'm' will be overwritten later */
+    int ldX = m_x; /* <- only for 'do_B' */
+    if (Xfull == NULL) do_B = false;
     /* TODO: here should only need to set straight away the lower half,
        and only when there are un-even entries in each matrix */
     if (!use_cg || is_first_iter)
         set_to_zero(A, (size_t)max2(m, m_u)*(size_t)lda - (size_t)(lda-k_totA),
                     nthreads);
 
-    #ifdef TEST_OPTIMIZE_A
     /* If one of the matrices has more rows than the other, the rows
        for the larger matrix will be independent and can be obtained
-       from the single-matrix formula instead. */
-    /* Note: this will not work with 'do_B', nor with 'NA_as_zero_X'. */
-    if (m > m_u) {
+       from the single-matrix formula instead.
+    
+       Note: if using 'NA_as_zero_X', m_x >= m_u,
+       whereas if using 'NA_as_zero_U', m_x <= m_u,
+       and if using both, then m_x == m_u.  */
+    /* TODO: refactor this, maybe move it after the end */
+    if (m_x > m_u)
+    {
+        bool will_use_BtB_here = false;
+
+        if (
+                weight == NULL &&
+                (   (Xfull != NULL && (full_dense || near_dense)) ||
+                    (Xfull == NULL && Xcsr_p != NULL && NA_as_zero_X) ) &&
+                (   (U != NULL && (full_dense_u || near_dense_u)) ||
+                    (U == NULL && U_csr_p != NULL && NA_as_zero_U) )
+            )
+        {
+            will_use_BtB_here = true;
+        }
+        else {
+            will_use_BtB_here = true;
+            if (Xfull == NULL && Xcsr_p != NULL && !NA_as_zero_X)
+                will_use_BtB_here = false;
+            if (Xfull != NULL && weight != NULL)
+                will_use_BtB_here = false;
+        }
+
+        if (will_use_BtB_here && precomputedBtB == NULL)
+        {
+            precomputedBtB = buffer_FPnum;
+            buffer_FPnum += square(k+k_main);
+        }
 
         int m_diff = m - m_u;
         optimizeA(
@@ -3653,24 +3822,59 @@ void optimizeA_collective
             (Xfull != NULL)? ((size_t*)NULL) : (Xcsr_p + m_u),
             (Xfull != NULL)? ((int*)NULL) : Xcsr_i,
             (Xfull != NULL)? ((FPnum*)NULL) : Xcsr,
-            (Xfull == NULL)? ((FPnum*)NULL) : (Xfull + (size_t)m_u*(size_t)n),
+            (Xfull == NULL)?
+                ((FPnum*)NULL)
+                    :
+                (do_B? (Xfull + m_u) : (Xfull + (size_t)m_u*(size_t)n)),
+            do_B? m_x : n,
             full_dense, near_dense,
             (Xfull == NULL)? ((int*)NULL) : (cnt_NA_x + m_u),
             (weight == NULL)? ((FPnum*)NULL)
                             : ( (Xfull == NULL)?
-                                  (weight) : (weight + (size_t)m_u*(size_t)n) ),
+                                  (weight)
+                                    :
+                                (do_B?
+                                    (weight + m_u)
+                                        :
+                                    (weight + (size_t)m_u*(size_t)n)) ),
             NA_as_zero_X,
             lam, lam_last,
             false, false,
             nthreads,
             use_cg, max_cg_steps,
-            false,
-            (FPnum*)NULL, &ignore_bool,
+            keep_precomputed || will_use_BtB_here,
+            precomputedBtB,
+            (keep_precomputed || will_use_BtB_here)? filled_BtB : &ignore_bool,
             buffer_FPnum
         );
+
+        m_x = m_u;
     }
 
-    else if (m_u > m) {
+    else if (m_u > m_x)
+    {
+        bool will_use_CtC_here = false;
+
+        if (
+                weight == NULL &&
+                (   (Xfull != NULL && (full_dense || near_dense)) ||
+                    (Xfull == NULL && Xcsr_p != NULL && NA_as_zero_X) ) &&
+                (   (U != NULL && (full_dense_u || near_dense_u)) ||
+                    (U == NULL && U_csr_p != NULL && NA_as_zero_U) )
+            )
+        {
+            will_use_CtC_here = true;
+        }
+        else {
+            will_use_CtC_here = true;
+            if (U == NULL && U_csr_p != NULL && !NA_as_zero_U)
+                will_use_CtC_here = false;
+        }
+
+        if (will_use_CtC_here && precomputedCtCw == NULL) {
+            precomputedCtCw = buffer_FPnum;
+            buffer_FPnum += square(k_user+k);
+        }
 
         int m_diff = m_u - m;
         optimizeA(
@@ -3681,6 +3885,7 @@ void optimizeA_collective
             (U != NULL)? ((int*)NULL) : U_csr_i,
             (U != NULL)? ((FPnum*)NULL) : U_csr,
             (U == NULL)? ((FPnum*)NULL) : (U + (size_t)m*(size_t)p),
+            p,
             full_dense_u, near_dense_u,
             (U == NULL)? ((int*)NULL) : (cnt_NA_u + m),
             (FPnum*)NULL,
@@ -3689,16 +3894,16 @@ void optimizeA_collective
             false, false,
             nthreads,
             use_cg, max_cg_steps,
-            false,
-            (FPnum*)NULL, &ignore_bool,
+            keep_precomputed || will_use_CtC_here,
+            precomputedCtCw,
+            (keep_precomputed || will_use_CtC_here)? filled_CtCw : &ignore_bool,
             buffer_FPnum
         );
+
+        m_u = m_x;
     }
 
-    m = m_min;
-    #else
-    m = max2(m, m_u);
-    #endif
+    m = max2(m_x, m_u);
 
 
     /* Case 1: both matrices are either (a) dense with few missing values and
@@ -3714,18 +3919,89 @@ void optimizeA_collective
                 (U == NULL && U_csr_p != NULL && NA_as_zero_U) )
         )
     {
-        /* TODO: don't call 'build_BeTBe', can instead first get BtB so as
-           to avoid recomputing it later. */
-        FPnum *restrict bufferBeTBe = buffer_FPnum;
-        build_BeTBe(
-            bufferBeTBe,
-            B, ldb, C,
-            k, k_user, k_main, k_item,
-            n, p,
-            lam, w_user
-        );
-        if (lam_last != lam)
-            bufferBeTBe[square(k_user+k+k_main)-1] += (lam_last - lam);
+        FPnum *restrict bufferBtB = NULL;
+        FPnum *restrict bufferCtC = NULL;
+        FPnum *restrict bufferBeTBeChol = NULL;
+
+        if (    ((Xfull != NULL && full_dense) ||
+                 (Xfull == NULL && NA_as_zero_X)) &&
+                ((U != NULL && full_dense_u) ||
+                 (U == NULL && NA_as_zero_U)) &&
+                !(*filled_BtB) && !(*filled_CtCw) && !keep_precomputed    )
+        {
+            if (precomputedBeTBeChol != NULL)
+                bufferBeTBeChol = precomputedBeTBeChol;
+            else
+                bufferBeTBeChol = buffer_FPnum;
+            /* Note: buffer_FPnum won't be used any further if reaching here */
+            build_BeTBe(
+                bufferBeTBeChol,
+                B, ldb, C,
+                k, k_user, k_main, k_item,
+                n, p,
+                lam, w_user
+            );
+            if (lam_last != lam)
+                bufferBeTBeChol[square(k_totA)-1] += (lam_last - lam);
+        }
+
+        else
+        {
+            if (precomputedBtB != NULL)
+                bufferBtB = precomputedBtB;
+            else {
+               bufferBtB = buffer_FPnum;
+               buffer_FPnum += square(k+k_main);
+            }
+            if (precomputedCtCw != NULL)
+                bufferCtC = precomputedCtCw;
+            else {
+                bufferCtC = buffer_FPnum;
+                buffer_FPnum += square(k_user+k);
+            }
+
+            if (precomputedBeTBeChol != NULL)
+                bufferBeTBeChol = precomputedBeTBeChol;
+            else
+                bufferBeTBeChol = buffer_FPnum;
+            /* Note: the Cholesky won't not be needed any more after this, and
+               in such case the memory will get reused */
+            
+            build_BtB_CtC(
+                (*filled_BtB)? (FPnum*)NULL : bufferBtB,
+                (*filled_CtCw)? (FPnum*)NULL : bufferCtC,
+                B, n, ldb,
+                C, p,
+                k, k_user, k_main, k_item,
+                1.,
+                (FPnum*)NULL
+            );
+
+            if (k_user || k_main)
+                set_to_zero(bufferBeTBeChol, square(k_totA), nthreads);
+            copy_mat(k_totC, k_totC,
+                     bufferCtC, k_totC,
+                     bufferBeTBeChol, k_totA);
+            if (w_user != 1.)
+                cblas_tscal(square(k_totA) - k_main - k_main*k_totA, w_user,
+                            bufferBeTBeChol, 1);
+            sum_mat(k+k_main, k+k_main,
+                    bufferBtB, k+k_main,
+                    bufferBeTBeChol + k_user + k_user*k_totA, k_totA);
+
+            add_to_diag(bufferBeTBeChol, lam, k_totA);
+            if (lam_last != lam)
+                bufferBeTBeChol[square(k_totA)-1] += (lam_last - lam);
+
+            if (w_user != 1. && !use_cg &&
+                (keep_precomputed || ((Xfull != NULL && !full_dense) ||
+                                      (U != NULL && !full_dense_u))))
+                cblas_tscal(square(k_totC), w_user, bufferCtC, 1);
+
+            *filled_BtB = true;
+            *filled_CtCw = true;
+            *filled_BeTBeChol = true;
+        }
 
         /* Note: this messes up the current values when there are NAs and using
            conjugate gradient, so it will reset them later. Could alternaively
@@ -3736,13 +4012,13 @@ void optimizeA_collective
             build_XBw(
                 A + k_user, lda,
                 B + k_item, ldb,
-                Xfull,
-                m, n, k + k_main,
+                Xfull, ldX,
+                m_x, n, k + k_main,
                 do_B, true
             );
         else if (Xcsr != NULL)
             tgemm_sp_dense(
-                m, k+k_main, 1.,
+                m_x, k+k_main, 1.,
                 Xcsr_p, Xcsr_i, Xcsr,
                 B + k_item, (size_t)ldb,
                 A + k_user, (size_t)lda,
@@ -3751,12 +4027,12 @@ void optimizeA_collective
 
         if (U != NULL)
             cblas_tgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,
-                        m, k_user + k, p,
+                        m_u, k_user + k, p,
                         w_user, U, p, C, k_user + k,
                         1., A, lda);
         else if (U_csr != NULL)
             tgemm_sp_dense(
-                m, k_user+k, w_user,
+                m_u, k_user+k, w_user,
                 U_csr_p, U_csr_i, U_csr,
                 C, (size_t)k_totC,
                 A, (size_t)lda,
@@ -3775,50 +4051,34 @@ void optimizeA_collective
         #endif
 
         tposv_(&lo, &k_pred, &m,
-               bufferBeTBe, &k_pred,
+               bufferBeTBeChol, &k_pred,
                A, &lda,
                &ignore);
 
         if ((Xfull != NULL && !full_dense) || (U != NULL && !full_dense_u))
         {
-            FPnum *restrict bufferBtB = buffer_FPnum;
-            FPnum *restrict bufferCtC = bufferBtB + square(k+k_main);
-            buffer_FPnum += square(k+k_main);
-            buffer_FPnum += square(k_user+k);
-
-            /* The LHS matrices can be precomputed and then sum or subtract
-               from them as more efficient according to the number of NAs.
-               Can also be used in the CG method to shorten calculations. */
-            build_BtB_CtC(
-                bufferBtB, bufferCtC,
-                B, n, ldb,
-                C, p,
-                k, k_user, k_main, k_item,
-                use_cg? 1. : w_user,
-                (use_cg && NA_as_zero_X && Xfull == NULL && weight != NULL)?
-                    ((FPnum*)NULL) : (weight)
-            );
-
             /* When doing the B matrix, the X matrix will be transposed
                and need to make a copy of the column for each observation,
                whereas the U matrix will be in the right order. */
             if (Xfull == NULL)
                 do_B = false;
             /* TODO: do away with the 'bufferX', replace it instead with an
-               'incX' paramter */
+               'incX' parameter */
             FPnum *restrict bufferX = buffer_FPnum;
             FPnum *restrict buffer_remainder = bufferX
-                                                + (do_B? (n*nthreads) : (0));
+                                                + (do_B?
+                                                    ((size_t)n*(size_t)nthreads)
+                                                    : (0));
             size_t size_buffer = use_cg? (3*k_totA) : (square(k_totA));
 
             #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
                     shared(A, k_totA, B, C, k, k_user, k_item, k_main, \
-                           m, n, p, lda, ldb, lam, lam_last, w_user, \
+                           m, m_x, m_u, n, p, lda, ldb, lam, lam_last, w_user, \
                            Xfull, cnt_NA_x, full_dense, \
                            Xcsr, Xcsr_i, Xcsr_p, \
                            U, cnt_NA_u, full_dense_u, \
                            U_csr, U_csr_i, U_csr_p, \
-                           buffer_remainder, size_buffer, m_x, do_B, \
+                           buffer_remainder, size_buffer, do_B, \
                            bufferBtB, bufferCtC, nthreads, use_cg) \
                     firstprivate(bufferX)
             for (size_t_for ix = 0; ix < (size_t)m; ix++)
@@ -3831,7 +4091,7 @@ void optimizeA_collective
                         if (!do_B)
                             bufferX = Xfull + ix*(size_t)n;
                         else
-                            cblas_tcopy(n, Xfull + ix, m_x,
+                            cblas_tcopy(n, Xfull + ix, ldX,
                                         bufferX
                                         +(size_t)n*(size_t)omp_get_thread_num(),
                                         1);
@@ -3844,12 +4104,14 @@ void optimizeA_collective
                     collective_closed_form_block(
                         A + ix*(size_t)lda,
                         k, k_user, k_item, k_main,
-                        (Xfull == NULL)? ((FPnum*)NULL)
-                                 : (bufferX
-                                    + (do_B?
-                                        ((size_t)n*(size_t)omp_get_thread_num())
-                                            :
-                                        ((size_t)0))),
+                        (Xfull == NULL)?
+                            ((FPnum*)NULL)
+                                :
+                            (bufferX
+                                + (do_B?
+                                    ((size_t)n*(size_t)omp_get_thread_num())
+                                        :
+                                    ((size_t)0))),
                         (Xfull != NULL)? ((FPnum*)NULL) : (Xcsr + Xcsr_p[ix]),
                         (Xfull != NULL)? ((int*)NULL) : (Xcsr_i + Xcsr_p[ix]),
                         (Xfull != NULL)?
@@ -3864,8 +4126,10 @@ void optimizeA_collective
                         C, p,
                         (FPnum*)NULL,
                         lam, w_user, lam_last,
-                        bufferBtB, (Xfull != NULL)? cnt_NA_x[ix] : 0,
-                        bufferCtC, (U != NULL)? cnt_NA_u[ix] : 0,
+                        bufferBtB,
+                        (Xfull == NULL)? 0 : cnt_NA_x[ix],
+                        bufferCtC,
+                        (U == NULL)? 0 : cnt_NA_u[ix],
                         (FPnum*)NULL, n,
                         true, true,
                         use_cg, k_pred, /* <- more steps to reach optimum */
@@ -3944,8 +4208,12 @@ void optimizeA_collective
         bool add_X = true;
         bool add_U = true;
 
+        if (*filled_CtCw && w_user != 1. && !use_cg)
+            cblas_tscal(square(k_totC), w_user, bufferCtC, 1);
+
         build_BtB_CtC(
-            bufferBtB, bufferCtC,
+            *filled_BtB? ((FPnum*)NULL) : bufferBtB,
+            *filled_CtCw? ((FPnum*)NULL) : bufferCtC,
             B, n, ldb,
             C, p,
             k, k_user, k_main, k_item,
@@ -3958,10 +4226,11 @@ void optimizeA_collective
 
         if (bufferBeTBeChol != NULL)
         {
-            set_to_zero(bufferBeTBeChol, square(k_totA), nthreads);
-            sum_mat(k_user+k, k_user+k,
-                    bufferCtC, k_user+k,
-                    bufferBeTBeChol, k_totA);
+            if (k_user || k_main)
+                set_to_zero(bufferBeTBeChol, square(k_totA), nthreads);
+            copy_mat(k_user+k, k_user+k,
+                     bufferCtC, k_user+k,
+                     bufferBeTBeChol, k_totA);
             if (use_cg && w_user != 1.)
                 cblas_tscal(square(k_totA) - k_main - k_main*k_totA, w_user,
                             bufferBeTBeChol, 1);
@@ -3969,6 +4238,8 @@ void optimizeA_collective
                     bufferBtB, k+k_main,
                     bufferBeTBeChol + k_user + k_user*k_totA, k_totA);
             add_to_diag(bufferBeTBeChol, lam, k_totA);
+            if (lam_last != lam)
+                bufferBeTBeChol[square(k_totA)-1] += (lam_last - lam);
             tpotrf_(&lo, &k_totA, bufferBeTBeChol, &k_totA, &ignore);
             if (bufferBeTBeChol == precomputedBeTBeChol)
                 *filled_BeTBeChol = true;
@@ -3981,8 +4252,8 @@ void optimizeA_collective
             build_XBw(
                 A + k_user, lda,
                 B + k_item, ldb,
-                Xfull,
-                m, n, k + k_main,
+                Xfull, ldX,
+                m_x, n, k + k_main,
                 do_B, true
             );
 
@@ -3994,7 +4265,7 @@ void optimizeA_collective
         else if (Xfull == NULL && weight == NULL && NA_as_zero_X) {
             add_X = false;
             tgemm_sp_dense(
-                m, k+k_main, 1.,
+                m_x, k+k_main, 1.,
                 Xcsr_p, Xcsr_i, Xcsr,
                 B + k_item, (size_t)ldb,
                 A + k_user, (size_t)lda,
@@ -4005,7 +4276,7 @@ void optimizeA_collective
         else if (U != NULL && (full_dense_u || near_dense_u)) {
             add_U = false;
             cblas_tgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,
-                        m, k_user + k, p,
+                        m_u, k_user + k, p,
                         w_user, U, p, C, k_user + k,
                         0., A, lda);
         }
@@ -4013,7 +4284,7 @@ void optimizeA_collective
         else if (U == NULL && NA_as_zero_U) {
             add_U = false;
             tgemm_sp_dense(
-                m, k_user+k, w_user,
+                m_u, k_user+k, w_user,
                 U_csr_p, U_csr_i, U_csr,
                 C, (size_t)k_totC,
                 A, (size_t)lda,
@@ -4029,22 +4300,24 @@ void optimizeA_collective
 
         #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
                 shared(A, k_totA, B, C, k, k_user, k_item, k_main, \
-                       m, n, p, lam, lam_last, w_user, \
+                       m, m_x, m_u, n, p, lam, lam_last, w_user, \
                        NA_as_zero_X, NA_as_zero_U, add_X, add_U, weight, \
                        Xfull, Xcsr_p, Xcsr_i, Xcsr, cnt_NA_x, \
                        U, U_csr_p, U_csr_i, U_csr, cnt_NA_u, \
                        bufferBtB, bufferCtC, buffer_remainder, size_buffer, \
-                       m_x, do_B, nthreads, use_cg) \
+                       do_B, nthreads, use_cg) \
                 firstprivate(bufferX, bufferW)
         for (size_t_for ix = 0; ix < (size_t)m; ix++)
         {
+            /* TODO: do away with the 'bufferX', replace it instead with an
+               'incX' parameter */
             if (Xfull != NULL)
             {
                 if (!do_B)
                     bufferX = Xfull + ix*(size_t)n;
                 else if (add_X || cnt_NA_x[ix] || (U != NULL && cnt_NA_u[ix]))
                 {
-                    cblas_tcopy(n, Xfull + ix, m_x,
+                    cblas_tcopy(n, Xfull + ix, ldX,
                                 bufferX_orig
                                     + (size_t)n*(size_t)omp_get_thread_num(),1);
                     bufferX = bufferX_orig;
@@ -4056,7 +4329,7 @@ void optimizeA_collective
                     if (!do_B)
                         bufferW = weight + ix*(size_t)n;
                     else
-                        cblas_tcopy(n, weight + ix, m_x,
+                        cblas_tcopy(n, weight + ix, ldX,
                                     bufferW
                                     + (size_t)n*(size_t)omp_get_thread_num(),1);
                 }
@@ -4091,7 +4364,8 @@ void optimizeA_collective
                                       : (weight + Xcsr_p[ix]) ),
                 lam, w_user, lam_last,
                 bufferBtB, (Xfull != NULL)? cnt_NA_x[ix] : 0,
-                bufferCtC, (U != NULL)? cnt_NA_u[ix] : 0,
+                bufferCtC,
+                (U == NULL)? 0 : cnt_NA_u[ix],
                 bufferBeTBeChol, n,
                 (Xfull == NULL)? (add_X) : (add_X || cnt_NA_x[ix] > 0),
                 (U == NULL)? (add_U) : (add_U || cnt_NA_u[ix] > 0),
@@ -4393,7 +4667,7 @@ void build_XBw
 (
     FPnum *restrict A, int lda,
     FPnum *restrict B, int ldb,
-    FPnum *restrict Xfull,
+    FPnum *restrict Xfull, int ldX,
     int m, int n, int k,
     bool do_B, bool overwrite
 )
@@ -4406,7 +4680,7 @@ void build_XBw
     else
         cblas_tgemm(CblasRowMajor, CblasTrans, CblasNoTrans,
                     m, k, n,
-                    1., Xfull, m, B, ldb,
+                    1., Xfull, ldX, B, ldb,
                     overwrite? 0. : 1., A, lda);
 }
 
@@ -4716,6 +4990,14 @@ int fit_collective_explicit_lbfgs_internal
     size_t *I_csc_p = NULL;
     int *I_csc_i = NULL;
     FPnum *restrict I_csc = NULL;
+
+    #ifdef _FOR_R
+    if (Xfull != NULL) R_nan_to_C_nan(Xfull, (size_t)m*(size_t)n);
+    if (U != NULL) R_nan_to_C_nan(U, (size_t)m_u*(size_t)p);
+    if (II != NULL) R_nan_to_C_nan(II, (size_t)n_i*(size_t)q);
+    if (Ub != NULL) R_nan_to_C_nan(Ub, (size_t)m_ubin*(size_t)pbin);
+    if (Ib != NULL) R_nan_to_C_nan(Ib, (size_t)n_ibin*(size_t)qbin);
+    #endif
 
     #ifdef _OPENMP
     if (nthreads > 1 && (Xfull == NULL || U_sp != NULL || I_sp != NULL))
@@ -5218,8 +5500,6 @@ int fit_collective_explicit_als
 
     int k_totA = k_user + k + k_main;
     int k_totB = k_item + k + k_main;
-    int paddingA = (!user_bias  &&  item_bias);
-    int paddingB = ( user_bias  && !item_bias);
     int has_bias = user_bias || item_bias;
     int m_max = max2(m, m_u);
     int n_max = max2(n, n_i);
@@ -5294,6 +5574,14 @@ int fit_collective_explicit_als
 
     int *restrict seed_arr = NULL;
     FPnum *restrict lam_unique_copy = NULL;
+
+    if (!use_cg) finalize_chol = false;
+
+    #ifdef _FOR_R
+    if (Xfull != NULL) R_nan_to_C_nan(Xfull, (size_t)m*(size_t)n);
+    if (U != NULL) R_nan_to_C_nan(U, (size_t)m_u*(size_t)p);
+    if (II != NULL) R_nan_to_C_nan(II, (size_t)n_i*(size_t)q);
+    #endif
 
     if (Xfull != NULL || !NA_as_zero_X)
     {
@@ -5476,7 +5764,7 @@ int fit_collective_explicit_als
     if (U != NULL || nnz_U)
         size_bufferC = buffer_size_optimizeA(
             p, full_dense_u,
-            (Utrans != NULL)? near_dense_u_col : near_dense_u_row,
+            near_dense_u_col,
             Utrans == NULL,
             U != NULL, false, NA_as_zero_U,
             k_user+k, nthreads,
@@ -5492,7 +5780,7 @@ int fit_collective_explicit_als
     if (II != NULL || nnz_I)
         size_bufferD = buffer_size_optimizeA(
             p, full_dense_i,
-            (Itrans != NULL)? near_dense_i_col : near_dense_i_row,
+            near_dense_i_col,
             Itrans == NULL,
             II != NULL, false, NA_as_zero_I,
             k_item+k, nthreads,
@@ -5508,14 +5796,20 @@ int fit_collective_explicit_als
         );
 
     if (U != NULL || nnz_U)
-        buffer_size_optimizeA_collective(
-            &size_bufferA,
-            m, n, k, k_user, k_main+(int)user_bias, paddingA,
-            m_u, p, nthreads,
-            false, NA_as_zero_X, NA_as_zero_U, use_cg, finalize_chol,
-            full_dense, near_dense_row,
-            Xfull != NULL, weight != NULL,
-            full_dense_u, near_dense_u_row, U != NULL
+        size_bufferA = buffer_size_optimizeA_collective(
+            m, m_u, n, p,
+            k, k_main + (int)user_bias, k_user,
+            full_dense,
+            near_dense_row, false,
+            Xfull != NULL, Xcsr_p != NULL, weight != NULL, NA_as_zero_X,
+            U != NULL, U_csr_p != NULL,
+            full_dense_u, near_dense_u_row, NA_as_zero_U,
+            nthreads,
+            use_cg, finalize_chol,
+            true,
+            precomputedBtB != NULL,
+            precomputedBeTBeChol != NULL,
+            precomputedCtCw != NULL
         );
     else
         size_bufferA = buffer_size_optimizeA(
@@ -5527,15 +5821,24 @@ int fit_collective_explicit_als
         );
 
     if (II != NULL || nnz_I)
-        buffer_size_optimizeA_collective(
-            &size_bufferB,
-            n, m, k, k_item, k_main+(int)item_bias, paddingB,
-            n_i, q, nthreads,
-            (Xfull != NULL && Xtrans == NULL),
-            NA_as_zero_X, NA_as_zero_I, use_cg, finalize_chol,
-            full_dense, near_dense_col,
-            Xfull != NULL, weight != NULL,
-            full_dense_i, near_dense_i_row, II != NULL
+        size_bufferB = buffer_size_optimizeA_collective(
+            n, n_i, m, q,
+            k, k_main + (int)item_bias, k_item,
+            full_dense,
+            near_dense_col,
+            (Xtrans != NULL)? false : true,
+            Xfull != NULL, Xcsc_p != NULL, weight != NULL, NA_as_zero_X,
+            II != NULL, I_csr_p != NULL,
+            full_dense_i, near_dense_i_row, NA_as_zero_I,
+            nthreads,
+            use_cg, finalize_chol,
+            false,
+            (item_bias <= user_bias)?
+                (precomputedBtB != NULL) : (false),
+            (k_item + item_bias <= k_user + user_bias)?
+                (precomputedBeTBeChol != NULL) : (false),
+            (k_item + item_bias <= k_user + user_bias)?
+                (precomputedCtCw != NULL) : (false)
         );
     else
         size_bufferB = buffer_size_optimizeA(
@@ -5657,8 +5960,9 @@ int fit_collective_explicit_als
                 p, m_u, k_user+k,
                 U_csc_p, U_csc_i, U_csc,
                 (Utrans != NULL)? (Utrans) : (U),
+                (Utrans != NULL)? m_u : p,
                 full_dense_u,
-                (Utrans != NULL)? (near_dense_u_col) : (near_dense_u_row),
+                near_dense_u_col,
                 cnt_NA_u_bycol, (FPnum*)NULL, NA_as_zero_U,
                 (lam_unique == NULL)? (lam/w_user) : (lam_unique[4]/w_user),
                 (lam_unique == NULL)? (lam/w_user) : (lam_unique[4]/w_user),
@@ -5707,8 +6011,9 @@ int fit_collective_explicit_als
                 q, n_i, k_item+k,
                 I_csc_p, I_csc_i, I_csc,
                 (Itrans != NULL)? (Itrans) : (II),
+                (Itrans != NULL)? n_i : q,
                 full_dense_i,
-                (Itrans != NULL)? (near_dense_i_col) : (near_dense_i_row),
+                near_dense_i_col,
                 cnt_NA_i_bycol, (FPnum*)NULL, NA_as_zero_I,
                 (lam_unique == NULL)? (lam/w_item) : (lam_unique[5]/w_item),
                 (lam_unique == NULL)? (lam/w_item) : (lam_unique[5]/w_item),
@@ -5788,11 +6093,18 @@ int fit_collective_explicit_als
 
         if (k_item + item_bias <= k_user + user_bias)
         {
-            filled_BtB = false;
             filled_CtCw = false;
             filled_BeTBeChol = false;
         }
 
+        if (item_bias <= user_bias)
+        {
+            filled_BtB = false;
+            filled_BeTBeChol = false;
+        }
+
+        /* TODO: it's possible to use more buffers here for the
+           case of k_item > k_user, avoid extra memory usage */
         if (II != NULL || nnz_I)
             optimizeA_collective(
                 B_bias, k_totB + has_bias, A_bias, k_totA + has_bias, D,
@@ -5814,7 +6126,7 @@ int fit_collective_explicit_als
                 nthreads,
                 use_cg, max_cg_steps, iter == 0,
                 false,
-                (k_item + item_bias <= k_user + user_bias)?
+                (item_bias <= user_bias)?
                     (precomputedBtB) : ((FPnum*)NULL),
                 (k_item + item_bias <= k_user + user_bias)?
                     (precomputedCtCw) : ((FPnum*)NULL),
@@ -5830,6 +6142,7 @@ int fit_collective_explicit_als
                 n, m, k+k_main+(int)item_bias,
                 Xcsc_p, Xcsc_i, Xcsc,
                 (Xtrans != NULL)? (Xtrans) : (Xfull),
+                (Xtrans != NULL)? m : n,
                 full_dense, near_dense_col,
                 cnt_NA_bycol,
                 (Xtrans != NULL)? (Wtrans) : ((Xfull == NULL)? weight:weightC),
@@ -5845,7 +6158,7 @@ int fit_collective_explicit_als
                  (size_t)square(k+k_main+item_bias) )?
                     (precomputedTransBtBinvBt)
                         :
-                    ((k_item + item_bias <= k_user + user_bias)?
+                    ((item_bias <= k_user + user_bias)?
                         (precomputedBeTBeChol) : ((FPnum*)NULL)),
                 &ignore,
                 buffer_FPnum
@@ -5935,7 +6248,7 @@ int fit_collective_explicit_als
                 B_bias + k_item, k_item+k+k_main+(int)(user_bias||item_bias),
                 m, n, k+k_main+(int)user_bias,
                 Xcsr_p, Xcsr_i, Xcsr,
-                Xfull,
+                Xfull, n,
                 full_dense, near_dense_row,
                 cnt_NA_byrow,
                 (Xfull == NULL)? (weightR) : (weight),
@@ -6344,6 +6657,8 @@ int fit_collective_implicit_als
     int *restrict seed_arr = NULL;
     FPnum *restrict lam_unique_copy = NULL;
 
+    if (!use_cg) finalize_chol = false;
+
     if (Xcsr_p == NULL || Xcsr_i == NULL || Xcsr == NULL ||
         Xcsc_p == NULL || Xcsc_i == NULL || Xcsc == NULL)
     {
@@ -6364,6 +6679,11 @@ int fit_collective_implicit_als
         if (precomputedCtC == NULL) goto throw_oom;
         allocated_CtC = true;
     }
+
+    #ifdef _FOR_R
+    if (U != NULL) R_nan_to_C_nan(U, (size_t)m_u*(size_t)p);
+    if (II != NULL) R_nan_to_C_nan(II, (size_t)n_i*(size_t)q);
+    #endif
 
     if (alpha != 1.)
         tscal_large(X, alpha, nnz, nthreads);
@@ -6392,7 +6712,7 @@ int fit_collective_implicit_als
     if (U != NULL || U_csr_p != NULL)
         size_bufferC = buffer_size_optimizeA(
             p, full_dense_u,
-            (Utrans != NULL)? near_dense_u_col : near_dense_u_row,
+            near_dense_u_col,
             Utrans == NULL,
             U != NULL, false, NA_as_zero_U,
             k_user+k, nthreads,
@@ -6417,7 +6737,7 @@ int fit_collective_implicit_als
     if (II != NULL || I_csc_p != NULL)
         size_bufferD = buffer_size_optimizeA(
             p, full_dense_i,
-            (Itrans != NULL)? near_dense_i_col : near_dense_i_row,
+            near_dense_i_col,
             Itrans == NULL,
             II != NULL, false, NA_as_zero_I,
             k_item+k, nthreads,
@@ -6549,8 +6869,9 @@ int fit_collective_implicit_als
                 p, m_u, k_user+k,
                 U_csc_p, U_csc_i, U_csc,
                 (Utrans != NULL)? (Utrans) : (U),
+                (Utrans != NULL)? m_u : p,
                 full_dense_u,
-                (Utrans != NULL)? (near_dense_u_col) : (near_dense_u_row),
+                near_dense_u_col,
                 cnt_NA_u_bycol, (FPnum*)NULL, NA_as_zero_U,
                 (lam_unique == NULL)? (lam/w_user) : (lam_unique[4]/w_user),
                 (lam_unique == NULL)? (lam/w_user) : (lam_unique[4]/w_user),
@@ -6590,8 +6911,9 @@ int fit_collective_implicit_als
                 q, n_i, k_item+k,
                 I_csc_p, I_csc_i, I_csc,
                 (Itrans != NULL)? (Itrans) : (II),
+                (Itrans != NULL)? n_i : q,
                 full_dense_i,
-                (Itrans != NULL)? (near_dense_i_col) : (near_dense_i_row),
+                near_dense_i_col,
                 cnt_NA_i_bycol, (FPnum*)NULL, NA_as_zero_I,
                 (lam_unique == NULL)? (lam/w_item) : (lam_unique[5]/w_item),
                 (lam_unique == NULL)? (lam/w_item) : (lam_unique[5]/w_item),
@@ -6879,6 +7201,7 @@ int precompute_collective_explicit
     int retval = 0;
     char lo = 'L';
     int ignore = 0;
+    if (n_max == 0) n_max = n;
     if (include_all_X) n = n_max;
     int k_pred = 0;
     FPnum lam_last = lam;
@@ -7164,6 +7487,11 @@ int factors_collective_explicit_single
         return 0;
     }
 
+    #ifdef _FOR_R
+    if (u_vec != NULL) R_nan_to_C_nan(u_vec, p);
+    if (Xa_dense != NULL) R_nan_to_C_nan(Xa_dense, n);
+    #endif
+
     bool user_bias = (a_bias != NULL);
     bool free_B_plus_bias = false;
     if (user_bias && B_plus_bias == NULL)
@@ -7259,6 +7587,10 @@ int factors_collective_implicit_single
         return 0;
     }
 
+    #ifdef _FOR_R
+    if (u_vec != NULL) R_nan_to_C_nan(u_vec, p);
+    #endif
+
     if (nnz)
         return collective_factors_warm_implicit(
             a_vec,
@@ -7292,6 +7624,7 @@ int factors_collective_implicit_single
         );
 }
 
+/* TODO: these functions should call 'optimizeA' instead */
 int factors_collective_explicit_multiple
 (
     FPnum *restrict A, FPnum *restrict biasA, int m,

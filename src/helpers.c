@@ -1134,3 +1134,11 @@ void print_oom_message(void)
     fflush(stderr);
     #endif
 }
+
+#ifdef _FOR_R
+void R_nan_to_C_nan(FPnum arr[], size_t n)
+{
+    for (size_t ix = 0; ix < n; ix++)
+        arr[ix] = ISNAN(arr[ix])? NAN : arr[ix];
+}
+#endif

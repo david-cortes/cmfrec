@@ -126,13 +126,12 @@ extern "C" {
     #endif
 #endif
 #ifdef _FOR_R
-    #define isnan(x) (ISNAN(x) || isnan(x))
     #define NAN_ NA_REAL
 #else
     #define NAN_ NAN
 #endif
 
-#if defined(USE_DOUBLE) || !defined(USE_FLOAT)
+#if !defined(USE_FLOAT)
     #define LBFGS_FLOAT 64
     #define FPnum double
     #define exp_t exp
@@ -376,6 +375,9 @@ void append_ones_last_col
 );
 void fill_lower_triangle(FPnum A[], size_t n, size_t lda);
 void print_oom_message(void);
+#ifdef _FOR_R
+void R_nan_to_C_nan(FPnum arr[], size_t n);
+#endif
 
 
 /* common.c */
@@ -533,15 +535,15 @@ FPnum wrapper_fun_grad_Bdense
 );
 size_t buffer_size_optimizeA
 (
-    int n, bool full_dense, bool near_dense, bool do_B,
+    size_t n, bool full_dense, bool near_dense, bool do_B,
     bool has_dense, bool has_weights, bool NA_as_zero,
-    int k, int nthreads,
+    size_t k, size_t nthreads,
     bool pass_allocated_BtB, bool keep_precomputedBtB,
     bool use_cg, bool finalize_chol
 );
 size_t buffer_size_optimizeA_implicit
 (
-    int k, int nthreads,
+    size_t k, size_t nthreads,
     bool pass_allocated_BtB,
     bool use_cg, bool finalize_chol
 );
@@ -551,7 +553,7 @@ void optimizeA
     FPnum *restrict B, int ldb,
     int m, int n, int k,
     size_t Xcsr_p[], int Xcsr_i[], FPnum *restrict Xcsr,
-    FPnum *restrict Xfull, bool full_dense, bool near_dense,
+    FPnum *restrict Xfull, int ldX, bool full_dense, bool near_dense,
     int cnt_NA[], FPnum *restrict weight, bool NA_as_zero,
     FPnum lam, FPnum lam_last,
     bool do_B, bool is_first_iter,
@@ -971,16 +973,34 @@ FPnum wrapper_fun_grad_Adense_col
     const size_t n,
     const lbfgsFPnumval_t step
 );
-void buffer_size_optimizeA_collective
+size_t buffer_size_optimizeA_collective
 (
-    size_t *buffer_size,
-    int m, int n, int k, int k_user, int k_main, int padding,
-    int m_u, int p, int nthreads,
-    bool do_B, bool NA_as_zero_X, bool NA_as_zero_U,
+    size_t m, size_t m_u, size_t n, size_t p,
+    size_t k, size_t k_main, size_t k_user,
+    bool full_dense, bool near_dense, bool do_B,
+    bool has_dense, bool has_sparse, bool has_weights, bool NA_as_zero_X,
+    bool has_dense_U, bool has_sparse_U,
+    bool full_dense_u, bool near_dense_u, bool NA_as_zero_U,
+    size_t nthreads,
     bool use_cg, bool finalize_chol,
-    bool full_dense, bool near_dense,
-    bool has_dense, bool has_weight,
-    bool full_dense_u, bool near_dense_u, bool has_dense_u
+    bool keep_precomputed,
+    bool pass_allocated_BtB,
+    bool pass_allocated_BeTBeChol,
+    bool pass_allocated_CtCw
+);
+size_t buffer_size_optimizeA_collective_implicit
+(
+    size_t m, size_t m_u, size_t p,
+    size_t k, size_t k_main, size_t k_user,
+    bool has_sparse_U,
+    bool NA_as_zero_U,
+    size_t nthreads,
+    bool use_cg,
+    bool pass_allocated_BtB,
+    bool pass_allocated_BeTBe,
+    bool pass_allocated_BeTBeChol,
+    bool pass_allocated_CtC,
+    bool finalize_chol
 );
 void optimizeA_collective
 (
@@ -1026,7 +1046,7 @@ void build_XBw
 (
     FPnum *restrict A, int lda,
     FPnum *restrict B, int ldb,
-    FPnum *restrict Xfull,
+    FPnum *restrict Xfull, int ldX,
     int m, int n, int k,
     bool do_B, bool overwrite
 );

@@ -139,7 +139,7 @@ cdef extern from "cmfrec.h":
         double *B, int ldb,
         int m, int n, int k,
         size_t Xcsr_p[], int Xcsr_i[], double *Xcsr,
-        double *Xfull, bint full_dense, bint near_dense,
+        double *Xfull, int ldX, bint full_dense, bint near_dense,
         int cnt_NA[], double *weight, bint NA_as_zero,
         double lam, double lam_last,
         bint do_B, bint is_first_iter,
@@ -299,6 +299,8 @@ cdef extern from "cmfrec.h":
         int *outp_ix, double *outp_score,
         int n_top, int n, int nthreads
     )
+
+    void fill_lower_triangle(double A[], size_t n, size_t lda)
 
 ### TODO: add tests for the precomputed matrices too
 import ctypes
@@ -993,7 +995,7 @@ def py_optimizeA(
         &B[0,0], ldb,
         m, n, k,
         ptr_indptr, ptr_indices, ptr_values,
-        ptr_Xfull, full_dense, as_near_dense,
+        ptr_Xfull, Xfull.shape[1], full_dense, as_near_dense,
         ptr_cnt_NA, ptr_weight, NA_as_zero,
         lam, lam,
         is_B, 1,
@@ -1078,7 +1080,9 @@ def py_optimizeA_collective(
         w_user /= w_main
         lam /= w_main
 
-    cdef c_bool ignore = 0
+    cdef c_bool ignore1 = 0
+    cdef c_bool ignore2 = 0
+    cdef c_bool ignore3 = 0
 
     optimizeA_collective(
         &A[0,0], A.shape[1], &B[0,0], B.shape[1], &C[0,0],
@@ -1095,7 +1099,7 @@ def py_optimizeA_collective(
         nthreads,
         0, 0, 1,
         0, <double*>NULL, <double*>NULL, <double*>NULL,
-        &ignore, &ignore, &ignore,
+        &ignore1, &ignore2, &ignore3,
         &buffer_double[0]
     )
     return A
@@ -1179,7 +1183,9 @@ def py_optimizeA_collective_implicit(
         ptr_Ucsr_i = &U_csr_i[0]
         ptr_Ucsr = &U_csr[0]
 
-    cdef c_bool ignore = 0
+    cdef c_bool ignore1 = 0
+    cdef c_bool ignore2 = 0
+    cdef c_bool ignore3 = 0
 
     optimizeA_collective_implicit(
         &A[0,0], &B[0,0], &C[0,0],
@@ -1197,9 +1203,9 @@ def py_optimizeA_collective_implicit(
         <double*>NULL,
         <double*>NULL,
         <double*>NULL,
-        &ignore,
-        &ignore,
-        &ignore,
+        &ignore1,
+        &ignore2,
+        &ignore3,
         &buffer_double[0]
     )
 

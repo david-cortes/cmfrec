@@ -626,6 +626,7 @@ void factors_closed_form
     bool force_add_diag
 )
 {
+    /* TODO: here should add a parameter 'incX' for dense vectors */
     FPnum *restrict bufferBtB = buffer_FPnum;
     if (ldb == 0) ldb = k;
     bool add_diag = true;
@@ -1565,14 +1566,14 @@ FPnum wrapper_fun_grad_Bdense
 
 size_t buffer_size_optimizeA
 (
-    int n, bool full_dense, bool near_dense, bool do_B,
+    size_t n, bool full_dense, bool near_dense, bool do_B,
     bool has_dense, bool has_weights, bool NA_as_zero,
-    int k, int nthreads,
+    size_t k, size_t nthreads,
     bool pass_allocated_BtB, bool keep_precomputedBtB,
     bool use_cg, bool finalize_chol
 )
 {
-    if (finalize_chol)
+    if (finalize_chol && use_cg)
     {
         return max2(
                 buffer_size_optimizeA(
@@ -1592,6 +1593,8 @@ size_t buffer_size_optimizeA
         );
     }
 
+    if (!has_dense)
+        do_B = false;
 
     size_t buffer_size = 0;
     if (has_dense && (full_dense || near_dense) && !has_weights)
@@ -1610,14 +1613,14 @@ size_t buffer_size_optimizeA
             buffer_size += square(k);
         }
         if (do_B)
-            buffer_size += (size_t)n*(size_t)nthreads;
+            buffer_size += n*nthreads;
 
         if (near_dense)
         {
             size_t size_thread_buffer = square(k);
             if (use_cg)
-                size_thread_buffer = max2(size_thread_buffer, (size_t)(3 * k));
-            buffer_size += (size_t)nthreads * size_thread_buffer;
+                size_thread_buffer = max2(size_thread_buffer, (3 * k));
+            buffer_size += nthreads * size_thread_buffer;
         }
         return buffer_size;
     }
@@ -1632,13 +1635,13 @@ size_t buffer_size_optimizeA
             }
         }
         if (do_B) {
-            buffer_size += (size_t)n * (size_t)nthreads;
+            buffer_size += n * nthreads;
         }
         if (do_B && has_weights) {
-            buffer_size += (size_t)n * (size_t)nthreads;
+            buffer_size += n * nthreads;
         }
-        size_t size_thread_buffer = (size_t)square(k) + (use_cg? (3*k) : 0);
-        return buffer_size + (size_t)nthreads * size_thread_buffer;
+        size_t size_thread_buffer = square(k) + (use_cg? (3*k) : 0);
+        return buffer_size + nthreads * size_thread_buffer;
     }
 
     else if (!has_dense && NA_as_zero && !has_weights)
@@ -1668,21 +1671,21 @@ size_t buffer_size_optimizeA
 
         size_t size_thread_buffer = square(k);
         if (use_cg)
-            size_thread_buffer = max2(size_thread_buffer, (size_t)(3 * k));
+            size_thread_buffer = max2(size_thread_buffer, (3 * k));
         if (use_cg && !has_dense)
-            size_thread_buffer = (size_t)(3 * k) + (size_t)(NA_as_zero? n : 0);
-        return buffer_size + (size_t)nthreads * size_thread_buffer;
+            size_thread_buffer = (3 * k) + (NA_as_zero? n : 0);
+        return buffer_size + nthreads * size_thread_buffer;
     }
 }
 
 size_t buffer_size_optimizeA_implicit
 (
-    int k, int nthreads,
+    size_t k, size_t nthreads,
     bool pass_allocated_BtB,
     bool use_cg, bool finalize_chol
 )
 {
-    if (finalize_chol)
+    if (finalize_chol && use_cg)
     {
         return max2(
             buffer_size_optimizeA_implicit(
@@ -1699,8 +1702,8 @@ size_t buffer_size_optimizeA_implicit
     }
 
     size_t size_thread_buffer = use_cg? (3 * k) : (square(k));
-    return (size_t)(pass_allocated_BtB? 0 : square(k))
-            + (size_t)nthreads * size_thread_buffer;
+    return (pass_allocated_BtB? (size_t)0 : square(k))
+            + nthreads * size_thread_buffer;
 }
 
 void optimizeA
@@ -1709,7 +1712,7 @@ void optimizeA
     FPnum *restrict B, int ldb,
     int m, int n, int k,
     size_t Xcsr_p[], int Xcsr_i[], FPnum *restrict Xcsr,
-    FPnum *restrict Xfull, bool full_dense, bool near_dense,
+    FPnum *restrict Xfull, int ldX, bool full_dense, bool near_dense,
     int cnt_NA[], FPnum *restrict weight, bool NA_as_zero,
     FPnum lam, FPnum lam_last,
     bool do_B, bool is_first_iter,
@@ -1720,7 +1723,8 @@ void optimizeA
     FPnum *restrict buffer_FPnum
 )
 {
-    /* Note: the BtB produced here has diagonal, the one from collective doesn't. */
+    /* Note: the BtB produced here has diagonal, the one from
+       collective doesn't. */
     /* TODO: handle case of all-missing when the values are not reset to zero */
     #if defined(_OPENMP) && \
                 ( (_OPENMP < 200801)  /* OpenMP < 3.0 */ \
@@ -1731,6 +1735,8 @@ void optimizeA
     char uplo = 'L';
     int ignore;
     *filled_BtB = false;
+
+    if (Xfull == NULL) do_B = false;
 
     /* Case 1: X is full dense with few or no missing values.
        Here can apply the closed-form solution with only
@@ -1751,8 +1757,11 @@ void optimizeA
             }
         }
         FPnum *restrict bufferBtB = NULL;
-        if (precomputedBtB != NULL && !keep_precomputedBtB && !near_dense)
+        if (precomputedBtB != NULL && !keep_precomputedBtB && !near_dense &&
+            bufferBtBcopy != precomputedBtB)
+        {
             bufferBtB = precomputedBtB;
+        }
         else {
             bufferBtB = buffer_FPnum;
             buffer_FPnum += square(k);
@@ -1795,7 +1804,7 @@ void optimizeA
         else
             cblas_tgemm(CblasRowMajor, CblasTrans, CblasNoTrans,
                         m, k, n,
-                        1., Xfull, m, B, ldb,
+                        1., Xfull, ldX, B, ldb,
                         0., A, lda);
 
         
@@ -1807,7 +1816,7 @@ void optimizeA
             for (size_t_for ix = 0;
                  ix < (size_t)m*(size_t)lda - (size_t)(lda-k);
                  ix++)
-                A[ix] = isnan(A[ix])? 0 : A[ix];
+                A[ix] = isnan(A[ix])? 0. : A[ix];
         #endif
         /* A = t( inv(t(B)*B + diag(lam)) * t(B)*t(X) )
            Note: don't try to flip the equation as the 'posv'
@@ -1825,7 +1834,7 @@ void optimizeA
                 size_buffer = max2(size_buffer, (size_t)(3 * k));
 
             #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
-                    shared(A, lda, B, ldb, m, n, k, lam, lam_last, weight, \
+                    shared(A, lda, B, ldb, ldX, m, n, k, lam, lam_last, weight,\
                            cnt_NA, Xfull, buffer_remainder, bufferBtBcopy, \
                            nthreads, use_cg) \
                     firstprivate(bufferX)
@@ -1840,7 +1849,7 @@ void optimizeA
                     if (!do_B)
                         bufferX = Xfull + ix*(size_t)n;
                     else
-                        cblas_tcopy(n, Xfull + ix, m,
+                        cblas_tcopy(n, Xfull + ix, ldX,
                                     bufferX
                             + ((size_t)n*(size_t)omp_get_thread_num()), 1);
 
@@ -1917,7 +1926,7 @@ void optimizeA
         size_t size_buffer = (size_t)square(k) + (use_cg? (3*k) : 0);
 
         #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
-                shared(Xfull, weight, do_B, m, n, k, A, lda, B, ldb, \
+                shared(Xfull, weight, do_B, m, n, k, A, lda, B, ldb, ldX, \
                        lam, lam_last, bufferBtB, cnt_NA, buffer_remainder, \
                        use_cg, max_cg_steps) \
                 firstprivate(bufferX, bufferW)
@@ -1929,11 +1938,11 @@ void optimizeA
                     bufferW = weight + ix*(size_t)n;
             }
             else {
-                cblas_tcopy(n, Xfull + ix, m,
+                cblas_tcopy(n, Xfull + ix, ldX,
                             bufferX
                                 + ((size_t)n*(size_t)omp_get_thread_num()), 1);
                 if (weight != NULL)
-                    cblas_tcopy(n, weight + ix, m,
+                    cblas_tcopy(n, weight + ix, ldX,
                                 bufferW
                             + ((size_t)n*(size_t)omp_get_thread_num()), 1);
             }
@@ -1976,7 +1985,7 @@ void optimizeA
                     k, n,
                     1., B, ldb,
                     0., bufferBtB, k);
-        if (keep_precomputedBtB)
+        if (keep_precomputedBtB && precomputedBtB != NULL)
         {
             copy_arr(bufferBtB, precomputedBtB, square(k), nthreads);
             *filled_BtB = true;
@@ -2024,14 +2033,18 @@ void optimizeA
                         k, n,
                         1., B, ldb,
                         0., bufferBtB, k);
+            if (precomputedBtB != NULL && keep_precomputedBtB &&
+                bufferBtB != precomputedBtB)
+            {
+                copy_arr(bufferBtB, precomputedBtB, square(k), nthreads);
+            }
             if (add_diag_to_BtB)
             {
                 add_to_diag(bufferBtB, lam, k);
                 if (lam_last != lam) bufferBtB[square(k)-1] += (lam_last - lam);
             }
-            else if (bufferBtB == precomputedBtB) {
+            if (precomputedBtB != NULL)
                 *filled_BtB = true;
-            }
         }
 
         size_t size_buffer = square(k);
