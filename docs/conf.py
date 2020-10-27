@@ -52,7 +52,6 @@ exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 # a list of builtin themes.
 #
 #html_theme = 'alabaster'
-
 html_theme_options = {
     'collapse_navigation': False,
     'sticky_navigation': False,
