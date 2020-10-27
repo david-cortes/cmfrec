@@ -34,29 +34,29 @@ extern "C" {
 #endif/*__cplusplus*/
 
 /*
- * The default precision of FPnuming point values is 64bit (double).
+ * The default precision of FPnuming point_t values is 64bit (double).
  */
 // #ifndef LBFGS_FLOAT
 // #define LBFGS_FLOAT     64
 // #endif/*LBFGS_FLOAT*/
 
 /*
- * Activate optimization routines for IEEE754 FPnuming point values.
+ * Activate optimization routines for IEEE754 FPnuming point_t values.
  */
 #ifndef LBFGS_IEEE_FLOAT
 #define LBFGS_IEEE_FLOAT    1
 #endif/*LBFGS_IEEE_FLOAT*/
 
-#if     LBFGS_FLOAT == 32
-typedef float lbfgsFPnumval_t;
+// #if     LBFGS_FLOAT == 32
+// typedef float real_t;
 
-#elif   LBFGS_FLOAT == 64
-typedef double lbfgsFPnumval_t;
+// #elif   LBFGS_FLOAT == 64
+// typedef double real_t;
 
-#else
-#error "libLBFGS supports single (float; LBFGS_FLOAT = 32) or double (double; LBFGS_FLOAT=64) precision only."
+// #else
+// #error "libLBFGS supports single (float; LBFGS_FLOAT = 32) or double (double; LBFGS_FLOAT=64) precision only."
 
-#endif
+// #endif
 
 
 /** 
@@ -160,7 +160,7 @@ enum {
      *  the sufficient decrease (Armijo) condition,
      *    - f(x + a * d) <= f(x) + lbfgs_parameter_t::ftol * a * g(x)^T d,
      *
-     *  where x is the current point, d is the current search direction, and
+     *  where x is the current point_t, d is the current search direction, and
      *  a is the step length.
      */
     LBFGS_LINESEARCH_BACKTRACKING_ARMIJO = 1,
@@ -173,7 +173,7 @@ enum {
      *  and the curvature condition,
      *    - g(x + a * d)^T d >= lbfgs_parameter_t::wolfe * g(x)^T d,
      *
-     *  where x is the current point, d is the current search direction, and
+     *  where x is the current point_t, d is the current search direction, and
      *  a is the step length.
      */
     LBFGS_LINESEARCH_BACKTRACKING_WOLFE = 2,
@@ -184,7 +184,7 @@ enum {
      *  and the following condition,
      *    - |g(x + a * d)^T d| <= lbfgs_parameter_t::wolfe * |g(x)^T d|,
      *
-     *  where x is the current point, d is the current search direction, and
+     *  where x is the current point_t, d is the current search direction, and
      *  a is the step length.
      */
     LBFGS_LINESEARCH_BACKTRACKING_STRONG_WOLFE = 3,
@@ -214,7 +214,7 @@ typedef struct {
      *  where ||.|| denotes the Euclidean (L2) norm. The default value is
      *  \c 1e-5.
      */
-    lbfgsFPnumval_t epsilon;
+    real_t epsilon;
 
     /**
      * Distance for delta-based convergence test.
@@ -235,7 +235,7 @@ typedef struct {
      *  the objective value of the current iteration.
      *  The default value is \c 1e-5.
      */
-    lbfgsFPnumval_t delta;
+    real_t delta;
 
     /**
      * The maximum number of iterations.
@@ -252,7 +252,7 @@ typedef struct {
      *  This parameter specifies a line search algorithm to be used by the
      *  L-BFGS routine.
      */
-    int             linesearch;
+    int_t             linesearch;
 
     /**
      * The maximum number of trials for the line search.
@@ -268,7 +268,7 @@ typedef struct {
      *  problem is extremely badly scaled (in which case the exponents should
      *  be increased).
      */
-    lbfgsFPnumval_t min_step;
+    real_t min_step;
 
     /**
      * The maximum step of the line search.
@@ -277,14 +277,14 @@ typedef struct {
      *  problem is extremely badly scaled (in which case the exponents should
      *  be increased).
      */
-    lbfgsFPnumval_t max_step;
+    real_t max_step;
 
     /**
      * A parameter to control the accuracy of the line search routine.
      *  The default value is \c 1e-4. This parameter should be greater
      *  than zero and smaller than \c 0.5.
      */
-    lbfgsFPnumval_t ftol;
+    real_t ftol;
 
     /**
      * A coefficient for the Wolfe condition.
@@ -295,7 +295,7 @@ typedef struct {
      *  The default value is \c 0.9. This parameter should be greater
      *  the \ref ftol parameter and smaller than \c 1.0.
      */
-    lbfgsFPnumval_t wolfe;
+    real_t wolfe;
 
     /**
      * A parameter to control the accuracy of the line search routine.
@@ -307,16 +307,16 @@ typedef struct {
      *  greater than the \ref ftol parameter (\c 1e-4) and smaller than
      *  \c 1.0.
      */
-    lbfgsFPnumval_t gtol;
+    real_t gtol;
 
     /**
-     * The machine precision for FPnuming-point values.
+     * The machine precision for FPnuming-point_t values.
      *  This parameter must be a positive value set by a client program to
      *  estimate the machine precision. The line search routine will terminate
      *  with the status code (::LBFGSERR_ROUNDING_ERROR) if the relative width
      *  of the interval of uncertainty is less than this parameter.
      */
-    lbfgsFPnumval_t xtol;
+    real_t xtol;
 
     /**
      * Coeefficient for the L1 norm of variables.
@@ -331,7 +331,7 @@ typedef struct {
      *  the function value F(x) and gradients G(x) as usual. The default value
      *  is zero.
      */
-    lbfgsFPnumval_t orthantwise_c;
+    real_t orthantwise_c;
 
     /**
      * Start index for computing L1 norm of the variables.
@@ -345,7 +345,7 @@ typedef struct {
      *  variables, x_1, ..., x_{b-1} (e.g., a bias term of logistic
      *  regression) from being regularized. The default value is zero.
      */
-    int             orthantwise_start;
+    int_t             orthantwise_start;
 
     /**
      * End index for computing L1 norm of the variables.
@@ -354,7 +354,7 @@ typedef struct {
      *  specifies the index number at which the library stops computing the
      *  L1 norm of the variables x,
      */
-    int             orthantwise_end;
+    int_t             orthantwise_end;
 } lbfgs_parameter_t;
 
 
@@ -372,15 +372,15 @@ typedef struct {
  *                      the gradient values for the current variables.
  *  @param  n           The number of variables.
  *  @param  step        The current step of the line search routine.
- *  @retval lbfgsFPnumval_t The value of the objective function for the current
+ *  @retval real_t The value of the objective function for the current
  *                          variables.
  */
-typedef lbfgsFPnumval_t (*lbfgs_evaluate_t)(
+typedef real_t (*lbfgs_evaluate_t)(
     void *instance,
-    lbfgsFPnumval_t *x,
-    lbfgsFPnumval_t *g,
+    real_t *x,
+    real_t *g,
     const size_t n,
-    const lbfgsFPnumval_t step
+    const real_t step
     );
 
 /**
@@ -400,27 +400,27 @@ typedef lbfgsFPnumval_t (*lbfgs_evaluate_t)(
  *  @param  n           The number of variables.
  *  @param  k           The iteration count.
  *  @param  ls          The number of evaluations called for this iteration.
- *  @retval int         Zero to continue the optimization process. Returning a
+ *  @retval int_t         Zero to continue the optimization process. Returning a
  *                      non-zero value will cancel the optimization process.
  */
-typedef int (*lbfgs_progress_t)(
+typedef int_t (*lbfgs_progress_t)(
     void *instance,
-    const lbfgsFPnumval_t *x,
-    const lbfgsFPnumval_t *g,
-    const lbfgsFPnumval_t fx,
-    const lbfgsFPnumval_t xnorm,
-    const lbfgsFPnumval_t gnorm,
-    const lbfgsFPnumval_t step,
+    const real_t *x,
+    const real_t *g,
+    const real_t fx,
+    const real_t xnorm,
+    const real_t gnorm,
+    const real_t step,
     size_t n,
-    int k,
-    int ls
+    int_t k,
+    int_t ls
     );
 
 struct tag_iteration_data {
-    lbfgsFPnumval_t alpha;
-    lbfgsFPnumval_t *s;     /* [n] */
-    lbfgsFPnumval_t *y;     /* [n] */
-    lbfgsFPnumval_t ys;     /* vecdot(y, s) */
+    real_t alpha;
+    real_t *s;     /* [n] */
+    real_t *y;     /* [n] */
+    real_t ys;     /* vecdot(y, s) */
 };
 typedef struct tag_iteration_data iteration_data_t;
 
@@ -479,19 +479,19 @@ In this formula, ||.|| denotes the Euclidean norm.
  *                      parameter to \c NULL to use the default parameters.
  *                      Call lbfgs_parameter_init() function to fill a
  *                      structure with the default values.
- *  @retval int         The status code. This function returns zero if the
+ *  @retval int_t         The status code. This function returns zero if the
  *                      minimization process terminates without an error. A
  *                      non-zero value indicates an error.
  */
-int lbfgs(
+int_t lbfgs(
     size_t n,
-    lbfgsFPnumval_t *x,
-    lbfgsFPnumval_t *ptr_fx,
+    real_t *x,
+    real_t *ptr_fx,
     lbfgs_evaluate_t proc_evaluate,
     lbfgs_progress_t proc_progress,
     void *instance,
     lbfgs_parameter_t *param,
-    lbfgsFPnumval_t *buffer_FPnum,
+    real_t *buffer_FPnum,
     iteration_data_t *buffer_iter
     );
 
@@ -516,7 +516,7 @@ void lbfgs_parameter_init(lbfgs_parameter_t *param);
  *  
  *  @param  n           The number of variables.
  */
-lbfgsFPnumval_t* lbfgs_malloc(size_t n);
+real_t* lbfgs_malloc(size_t n);
 
 /**
  * Free an array of variables.
@@ -524,14 +524,14 @@ lbfgsFPnumval_t* lbfgs_malloc(size_t n);
  *  @param  x           The array of variables allocated by ::lbfgs_malloc
  *                      function.
  */
-void lbfgs_free(lbfgsFPnumval_t *x);
+void lbfgs_free(real_t *x);
 
 /**
  * Get string description of an lbfgs() return code.
  *
  *  @param err          A value returned by lbfgs().
  */
-const char* lbfgs_strerror(int err);
+const char* lbfgs_strerror(int_t err);
 
 /** @} */
 

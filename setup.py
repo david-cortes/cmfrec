@@ -101,12 +101,12 @@ setup(
             define_macros = [("_FOR_PYTHON", None), ("USE_DOUBLE", None)]
             ),
         Extension("cmfrec.wrapper_float",
-          sources=["cmfrec/cfuns_float.pyx", "src/collective.c", "src/common.c",
-                   "src/offsets.c", "src/helpers.c", "src/lbfgs.c",
-                   "src/cblas_wrappers.c"],
-          include_dirs=[np.get_include(), "src"],
-          define_macros = [("_FOR_PYTHON", None), ("USE_FLOAT", None)]
-          ),
+            sources=["cmfrec/cfuns_float.pyx", "src/collective.c", "src/common.c",
+                     "src/offsets.c", "src/helpers.c", "src/lbfgs.c",
+                     "src/cblas_wrappers.c"],
+            include_dirs=[np.get_include(), "src"],
+            define_macros = [("_FOR_PYTHON", None), ("USE_FLOAT", None)]
+            ),
         ]
     )
 

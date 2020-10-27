@@ -9,7 +9,7 @@
     The reference papers are:
         (a) Cortes, David.
             "Cold-start recommendations in Collective Matrix Factorization."
-            arXiv preprint arXiv:1809.00366 (2018).
+            arXiv preprint_t arXiv:1809.00366 (2018).
         (b) Singh, Ajit P., and Geoffrey J. Gordon.
             "Relational learning via collective matrix factorization."
             Proceedings of the 14th ACM SIGKDD international conference on
@@ -166,7 +166,7 @@
         be passed in 'weight'. Pass NULL if not used.
     scaling
         Scaling to add to the objective function. Pass '1' for no scaling.
-    buffer_FPnum[m*n]
+    buffer_real_t[m*n]
         If passing a dense matrix, temporary array which will be overwritten.
         Not required for sparse matrices.
     buffer_mt[nthreads * k * (m+n+1)]
@@ -191,23 +191,23 @@
 
 *******************************************************************************/
 
-FPnum fun_grad_cannonical_form
+real_t fun_grad_cannonical_form
 (
-    FPnum *restrict A, int lda, FPnum *restrict B, int ldb,
-    FPnum *restrict g_A, FPnum *restrict g_B,
-    int m, int n, int k,
-    int ixA[], int ixB[], FPnum *restrict X, size_t nnz,
-    FPnum *restrict Xfull, bool full_dense,
-    size_t Xcsr_p[], int Xcsr_i[], FPnum *restrict Xcsr,
-    size_t Xcsc_p[], int Xcsc_i[], FPnum *restrict Xcsc,
+    real_t *restrict A, int_t lda, real_t *restrict B, int_t ldb,
+    real_t *restrict g_A, real_t *restrict g_B,
+    int_t m, int_t n, int_t k,
+    int_t ixA[], int_t ixB[], real_t *restrict X, size_t nnz,
+    real_t *restrict Xfull, bool full_dense,
+    size_t Xcsr_p[], int_t Xcsr_i[], real_t *restrict Xcsr,
+    size_t Xcsc_p[], int_t Xcsc_i[], real_t *restrict Xcsc,
     bool user_bias, bool item_bias,
-    FPnum *restrict biasA, FPnum *restrict biasB,
-    FPnum *restrict g_biasA, FPnum *restrict g_biasB,
-    FPnum *restrict weight, FPnum *restrict weightR, FPnum *restrict weightC,
-    FPnum scaling,
-    FPnum *restrict buffer_FPnum,
-    FPnum *restrict buffer_mt,
-    int nthreads
+    real_t *restrict biasA, real_t *restrict biasB,
+    real_t *restrict g_biasA, real_t *restrict g_biasB,
+    real_t *restrict weight, real_t *restrict weightR, real_t *restrict weightC,
+    real_t scaling,
+    real_t *restrict buffer_real_t,
+    real_t *restrict buffer_mt,
+    int_t nthreads
 )
 {
     #if defined(_OPENMP) && \
@@ -246,7 +246,7 @@ FPnum fun_grad_cannonical_form
             g_biasB = g_B;
     }
 
-    FPnum err;
+    real_t err;
     size_t m_by_n = (size_t)m * (size_t)n;
 
     bool parallel_onepass = (Xfull == NULL && nthreads > 1 &&
@@ -306,10 +306,10 @@ FPnum fun_grad_cannonical_form
         {
             size_t thr_szA = (size_t)m*(size_t)k;
             size_t thr_szB = (size_t)n*(size_t)k;
-            FPnum *restrict g_A_t = buffer_mt;
-            FPnum *restrict g_B_t = g_A_t + (size_t)nthreads*thr_szA;
-            FPnum *restrict g_biasA_t = g_B_t + (size_t)nthreads*thr_szB;
-            FPnum *restrict g_biasB_t = g_biasA_t
+            real_t *restrict g_A_t = buffer_mt;
+            real_t *restrict g_B_t = g_A_t + (size_t)nthreads*thr_szA;
+            real_t *restrict g_biasA_t = g_B_t + (size_t)nthreads*thr_szB;
+            real_t *restrict g_biasB_t = g_biasA_t
                                          + (user_bias?
                                             ((size_t)nthreads * (size_t)m)
                                             : (0));
@@ -467,44 +467,44 @@ FPnum fun_grad_cannonical_form
     else /* dense input - this is usually not optimal, but still supported */
     {
         /* Buffer = X */
-        copy_arr(Xfull, buffer_FPnum, m_by_n, nthreads);
+        copy_arr(Xfull, buffer_real_t, m_by_n, nthreads);
         /* Buffer = A*t(B) - Buffer */
         cblas_tgemm(CblasRowMajor, CblasNoTrans, CblasTrans,
                     m, n, k,
                     1., A, lda, B, ldb,
-                    -1., buffer_FPnum, n);
+                    -1., buffer_real_t, n);
         /* Buffer += biasA[m,1] + biasB[1,n] */
         if (user_bias)
-            mat_plus_rowvec(buffer_FPnum, biasA, m, n, nthreads);
+            mat_plus_rowvec(buffer_real_t, biasA, m, n, nthreads);
         if (item_bias)
-            mat_plus_colvec(buffer_FPnum, biasB, 1., m, n, (size_t)n, nthreads);
+            mat_plus_colvec(buffer_real_t, biasB, 1., m, n, (size_t)n,nthreads);
 
         /* Buffer *= W  (Now buffer becomes E without the scaling) */
         if (full_dense) {
             if (weight != NULL)
-                mult_elemwise(buffer_FPnum, weight, m_by_n, nthreads);
+                mult_elemwise(buffer_real_t, weight, m_by_n, nthreads);
         } else {
             if (weight == NULL)
-                nan_to_zero(buffer_FPnum, Xfull, m_by_n, nthreads);
+                nan_to_zero(buffer_real_t, Xfull, m_by_n, nthreads);
             else
-                mult_if_non_nan(buffer_FPnum, Xfull, weight, m_by_n, nthreads);
+                mult_if_non_nan(buffer_real_t, Xfull, weight, m_by_n, nthreads);
         }
 
         /* f = ||E||^2 */
         if (weight == NULL)
-            f = sum_squares(buffer_FPnum, m_by_n, nthreads);
+            f = sum_squares(buffer_real_t, m_by_n, nthreads);
         else
-            f = sum_sq_div_w(buffer_FPnum, weight, m_by_n, true, nthreads);
+            f = sum_sq_div_w(buffer_real_t, weight, m_by_n, true, nthreads);
 
         /* grad(bias1) = scaling * sum_rows(E) */
         if (user_bias) {
-            sum_by_rows(buffer_FPnum, g_biasA, m, n, nthreads);
+            sum_by_rows(buffer_real_t, g_biasA, m, n, nthreads);
             if (scaling != 1)
                 cblas_tscal(m, scaling, g_biasA, 1);
         }
         /* grad(bias2) = scaling * sum_cols(E) */
         if (item_bias) {
-            sum_by_cols(buffer_FPnum, g_biasB, m, n, (size_t)n, nthreads);
+            sum_by_cols(buffer_real_t, g_biasB, m, n, (size_t)n, nthreads);
             if (scaling != 1)
                 cblas_tscal(n, scaling, g_biasB, 1);
         }
@@ -512,18 +512,18 @@ FPnum fun_grad_cannonical_form
         /* grad(A) =  scaling * E * B */
         cblas_tgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,
                     m, k, n,
-                    scaling, buffer_FPnum, n, B, ldb,
+                    scaling, buffer_real_t, n, B, ldb,
                     0., g_A, lda);
         /* grad(B) = scaling * t(E) * A */
         cblas_tgemm(CblasRowMajor, CblasTrans, CblasNoTrans,
                     n, k, m,
-                    scaling, buffer_FPnum, n, A, lda,
+                    scaling, buffer_real_t, n, A, lda,
                     0., g_B, ldb);
         /* Note: don't apply the scaling earlier as otherwise it
            loses precision, even if it manages to save some operations */
     }
 
-    return (FPnum)((scaling / 2.) * f);
+    return (real_t)((scaling / 2.) * f);
 }
 
 /*******************************************************************************
@@ -580,7 +580,7 @@ FPnum fun_grad_cannonical_form
         shape of X passed - that is, if Xa_dense is passed, must have lenght
         'n', if Xa is passed, must have length 'nnz'. Pass NULL if the weights
         are uniform.
-    buffer_FPnum[k^2 or k^2 + n*k]
+    buffer_real_t[k^2 or k^2 + n*k]
         Array in which to write temporary values. For sparse X and dense X
         with full_dense=true, must have space for k^2 elements. For dense X
         with full_dense=false, must have space for k^2 + n*k elements.
@@ -611,28 +611,28 @@ FPnum fun_grad_cannonical_form
 *******************************************************************************/
 void factors_closed_form
 (
-    FPnum *restrict a_vec, int k,
-    FPnum *restrict B, int n, int ldb,
-    FPnum *restrict Xa_dense, bool full_dense,
-    FPnum *restrict Xa, int ixB[], size_t nnz,
-    FPnum *restrict weight,
-    FPnum *restrict buffer_FPnum,
-    FPnum lam, FPnum lam_last,
-    FPnum *restrict precomputedTransBtBinvBt,
-    FPnum *restrict precomputedBtB, int cnt_NA, int ld_BtB,
-    bool BtB_has_diag, bool BtB_is_scaled, FPnum scale_BtB, int n_BtB,
-    FPnum *restrict precomputedBtBchol, bool NA_as_zero,
-    bool use_cg, int max_cg_steps, /* <- 'cg' should not be used for new data */
+    real_t *restrict a_vec, int_t k,
+    real_t *restrict B, int_t n, int_t ldb,
+    real_t *restrict Xa_dense, bool full_dense,
+    real_t *restrict Xa, int_t ixB[], size_t nnz,
+    real_t *restrict weight,
+    real_t *restrict buffer_real_t,
+    real_t lam, real_t lam_last,
+    real_t *restrict precomputedTransBtBinvBt,
+    real_t *restrict precomputedBtB, int_t cnt_NA, int_t ld_BtB,
+    bool BtB_has_diag, bool BtB_is_scaled, real_t scale_BtB, int_t n_BtB,
+    real_t *restrict precomputedBtBchol, bool NA_as_zero,
+    bool use_cg, int_t max_cg_steps,/* <- 'cg' should not be used for new data*/
     bool force_add_diag
 )
 {
     /* TODO: here should add a parameter 'incX' for dense vectors */
-    FPnum *restrict bufferBtB = buffer_FPnum;
+    real_t *restrict bufferBtB = buffer_real_t;
     if (ldb == 0) ldb = k;
     bool add_diag = true;
     char lo = 'L';
-    int one = 1;
-    int ignore;
+    int_t one = 1;
+    int_t ignore;
     if (n_BtB == 0) n_BtB = n;
     bool prefer_BtB = max2((size_t)(cnt_NA + (n_BtB-n)), nnz) < (size_t)k;
 
@@ -781,7 +781,7 @@ void factors_closed_form
                 Xa_dense, cnt_NA,
                 weight,
                 precomputedBtB, ld_BtB,
-                buffer_FPnum,
+                buffer_real_t,
                 lam, lam_last,
                 max_cg_steps
             );
@@ -792,7 +792,7 @@ void factors_closed_form
                 Xa, ixB, nnz,
                 weight,
                 precomputedBtB, ld_BtB,
-                buffer_FPnum,
+                buffer_real_t,
                 lam, lam_last,
                 max_cg_steps
             );
@@ -802,7 +802,7 @@ void factors_closed_form
                 B, n, ldb,
                 Xa, ixB, nnz,
                 weight,
-                buffer_FPnum,
+                buffer_real_t,
                 lam, lam_last,
                 max_cg_steps
             );
@@ -915,22 +915,22 @@ void factors_closed_form
 /* https://en.wikipedia.org/wiki/Conjugate_gradient_method */
 void factors_explicit_cg
 (
-    FPnum *restrict a_vec, int k,
-    FPnum *restrict B, int n, int ldb,
-    FPnum *restrict Xa, int ixB[], size_t nnz,
-    FPnum *restrict weight,
-    FPnum *restrict buffer_FPnum,
-    FPnum lam, FPnum lam_last,
-    int max_cg_steps
+    real_t *restrict a_vec, int_t k,
+    real_t *restrict B, int_t n, int_t ldb,
+    real_t *restrict Xa, int_t ixB[], size_t nnz,
+    real_t *restrict weight,
+    real_t *restrict buffer_real_t,
+    real_t lam, real_t lam_last,
+    int_t max_cg_steps
 )
 {
-    FPnum *restrict Ap = buffer_FPnum;
-    FPnum *restrict p  = Ap + k;
-    FPnum *restrict r  = p  + k;
+    real_t *restrict Ap = buffer_real_t;
+    real_t *restrict p  = Ap + k;
+    real_t *restrict r  = p  + k;
     set_to_zero(r, k, 1);
-    FPnum coef;
-    FPnum a;
-    FPnum r_old, r_new;
+    real_t coef;
+    real_t a;
+    real_t r_old, r_new;
 
     if (weight == NULL)
         tgemv_dense_sp(n, k,
@@ -963,7 +963,7 @@ void factors_explicit_cg
         return;
     #endif
 
-    for (int cg_step = 0; cg_step < max_cg_steps; cg_step++)
+    for (int_t cg_step = 0; cg_step < max_cg_steps; cg_step++)
     {
         set_to_zero(Ap, k, 1);
         for (size_t ix = 0; ix < nnz; ix++) {
@@ -996,24 +996,24 @@ void factors_explicit_cg
 
 void factors_explicit_cg_NA_as_zero_weighted
 (
-    FPnum *restrict a_vec, int k,
-    FPnum *restrict B, int n, int ldb,
-    FPnum *restrict Xa, int ixB[], size_t nnz,
-    FPnum *restrict weight,
-    FPnum *restrict precomputedBtB,
-    int ld_BtB,
-    FPnum *restrict buffer_FPnum,
-    FPnum lam, FPnum lam_last,
-    int max_cg_steps
+    real_t *restrict a_vec, int_t k,
+    real_t *restrict B, int_t n, int_t ldb,
+    real_t *restrict Xa, int_t ixB[], size_t nnz,
+    real_t *restrict weight,
+    real_t *restrict precomputedBtB,
+    int_t ld_BtB,
+    real_t *restrict buffer_real_t,
+    real_t lam, real_t lam_last,
+    int_t max_cg_steps
 )
 {
-    FPnum *restrict Ap = buffer_FPnum;
-    FPnum *restrict p  = Ap + k;
-    FPnum *restrict r  = p  + k;
-    FPnum *restrict wr = r  + k; /* length is 'n' */
+    real_t *restrict Ap = buffer_real_t;
+    real_t *restrict p  = Ap + k;
+    real_t *restrict r  = p  + k;
+    real_t *restrict wr = r  + k; /* length is 'n' */
     set_to_zero(r, k, 1);
-    FPnum a;
-    FPnum r_old, r_new, coef;
+    real_t a;
+    real_t r_old, r_new, coef;
 
     bool prefer_BtB = nnz < (size_t)(2*k);
 
@@ -1070,7 +1070,7 @@ void factors_explicit_cg_NA_as_zero_weighted
         return;
     #endif
 
-    for (int cg_step = 0; cg_step < max_cg_steps; cg_step++)
+    for (int_t cg_step = 0; cg_step < max_cg_steps; cg_step++)
     {
         if (precomputedBtB != NULL && prefer_BtB)
         {
@@ -1129,22 +1129,22 @@ void factors_explicit_cg_NA_as_zero_weighted
 
 void factors_explicit_cg_dense
 (
-    FPnum *restrict a_vec, int k,
-    FPnum *restrict B, int n, int ldb,
-    FPnum *restrict Xa_dense, int cnt_NA,
-    FPnum *restrict weight,
-    FPnum *restrict precomputedBtB,
-    int ld_BtB,
-    FPnum *restrict buffer_FPnum,
-    FPnum lam, FPnum lam_last,
-    int max_cg_steps
+    real_t *restrict a_vec, int_t k,
+    real_t *restrict B, int_t n, int_t ldb,
+    real_t *restrict Xa_dense, int_t cnt_NA,
+    real_t *restrict weight,
+    real_t *restrict precomputedBtB,
+    int_t ld_BtB,
+    real_t *restrict buffer_real_t,
+    real_t lam, real_t lam_last,
+    int_t max_cg_steps
 )
 {
-    FPnum *restrict Ap = buffer_FPnum;
-    FPnum *restrict p  = Ap + k;
-    FPnum *restrict r  = p  + k;
-    FPnum r_new, r_old;
-    FPnum a, coef, w_this;
+    real_t *restrict Ap = buffer_real_t;
+    real_t *restrict p  = Ap + k;
+    real_t *restrict r  = p  + k;
+    real_t r_new, r_old;
+    real_t a, coef, w_this;
 
     bool prefer_BtB = cnt_NA < k && precomputedBtB != NULL && weight == NULL;
     if (!prefer_BtB)
@@ -1200,7 +1200,7 @@ void factors_explicit_cg_dense
         return;
     #endif
 
-    for (int cg_step = 0; cg_step < max_cg_steps; cg_step++)
+    for (int_t cg_step = 0; cg_step < max_cg_steps; cg_step++)
     {
         if (prefer_BtB)
         {
@@ -1255,21 +1255,21 @@ void factors_explicit_cg_dense
 /* https://www.benfrederickson.com/fast-implicit-matrix-factorization/ */
 void factors_implicit_cg
 (
-    FPnum *restrict a_vec, int k,
-    FPnum *restrict B, size_t ldb,
-    FPnum *restrict Xa, int ixB[], size_t nnz,
-    FPnum lam,
-    FPnum *restrict precomputedBtB, int ld_BtB,
-    int max_cg_steps,
-    FPnum *restrict buffer_FPnum
+    real_t *restrict a_vec, int_t k,
+    real_t *restrict B, size_t ldb,
+    real_t *restrict Xa, int_t ixB[], size_t nnz,
+    real_t lam,
+    real_t *restrict precomputedBtB, int_t ld_BtB,
+    int_t max_cg_steps,
+    real_t *restrict buffer_real_t
 )
 {
-    FPnum *restrict Ap = buffer_FPnum;
-    FPnum *restrict r  = Ap + k;
-    FPnum *restrict p  = r  + k;
-    FPnum coef;
-    FPnum r_old, r_new;
-    FPnum a;
+    real_t *restrict Ap = buffer_real_t;
+    real_t *restrict r  = Ap + k;
+    real_t *restrict p  = r  + k;
+    real_t coef;
+    real_t r_old, r_new;
+    real_t a;
 
     cblas_tsymv(CblasRowMajor, CblasUpper, k,
                 -1., precomputedBtB, ld_BtB,
@@ -1295,7 +1295,7 @@ void factors_implicit_cg
         return;
     #endif
 
-    for (int cg_step = 0; cg_step < max_cg_steps; cg_step++)
+    for (int_t cg_step = 0; cg_step < max_cg_steps; cg_step++)
     {
         cblas_tsymv(CblasRowMajor, CblasUpper, k,
                     1., precomputedBtB, ld_BtB,
@@ -1330,20 +1330,20 @@ void factors_implicit_cg
 
 void factors_implicit_chol
 (
-    FPnum *restrict a_vec, int k,
-    FPnum *restrict B, size_t ldb,
-    FPnum *restrict Xa, int ixB[], size_t nnz,
-    FPnum lam,
-    FPnum *restrict precomputedBtB, int ld_BtB,
+    real_t *restrict a_vec, int_t k,
+    real_t *restrict B, size_t ldb,
+    real_t *restrict Xa, int_t ixB[], size_t nnz,
+    real_t lam,
+    real_t *restrict precomputedBtB, int_t ld_BtB,
     bool zero_out,
-    FPnum *restrict buffer_FPnum,
+    real_t *restrict buffer_real_t,
     bool force_add_diag
 )
 {
     char lo = 'L';
-    int one = 1;
-    int ignore;
-    FPnum *restrict BtB = buffer_FPnum;
+    int_t one = 1;
+    int_t ignore;
+    real_t *restrict BtB = buffer_real_t;
     copy_mat(k, k,
              precomputedBtB, ld_BtB,
              BtB, k);
@@ -1370,13 +1370,13 @@ void factors_implicit_chol
 /* TODO: This is not used any longer, can delete it */
 void factors_implicit
 (
-    FPnum *restrict a_vec, int k,
-    FPnum *restrict B, size_t ldb,
-    FPnum *restrict Xa, int ixB[], size_t nnz,
-    FPnum lam,
-    FPnum *restrict precomputedBtB, int ld_BtB,
-    bool zero_out, bool use_cg, int max_cg_steps,
-    FPnum *restrict buffer_FPnum,
+    real_t *restrict a_vec, int_t k,
+    real_t *restrict B, size_t ldb,
+    real_t *restrict Xa, int_t ixB[], size_t nnz,
+    real_t lam,
+    real_t *restrict precomputedBtB, int_t ld_BtB,
+    bool zero_out, bool use_cg, int_t max_cg_steps,
+    real_t *restrict buffer_real_t,
     bool force_add_diag
 )
 {
@@ -1391,7 +1391,7 @@ void factors_implicit
             lam,
             precomputedBtB, ld_BtB,
             max_cg_steps,
-            buffer_FPnum
+            buffer_real_t
         );
     else
         factors_implicit_chol(
@@ -1401,24 +1401,24 @@ void factors_implicit
             lam,
             precomputedBtB, ld_BtB,
             zero_out,
-            buffer_FPnum,
+            buffer_real_t,
             force_add_diag
         );
 }
 
 /* TODO: these functions for Adense or Bdense are no longer used,
    should remove them. */
-FPnum fun_grad_Adense
+real_t fun_grad_Adense
 (
-    FPnum *restrict g_A,
-    FPnum *restrict A, int lda,
-    FPnum *restrict B, int ldb,
-    int m, int n, int k,
-    FPnum *restrict Xfull, FPnum *restrict weight,
-    FPnum lam, FPnum w, FPnum lam_last,
+    real_t *restrict g_A,
+    real_t *restrict A, int_t lda,
+    real_t *restrict B, int_t ldb,
+    int_t m, int_t n, int_t k,
+    real_t *restrict Xfull, real_t *restrict weight,
+    real_t lam, real_t w, real_t lam_last,
     bool do_B, bool reset_grad,
-    int nthreads,
-    FPnum *restrict buffer_FPnum
+    int_t nthreads,
+    real_t *restrict buffer_real_t
 )
 {
     #if defined(_OPENMP) && \
@@ -1427,38 +1427,38 @@ FPnum fun_grad_Adense
                 )
     long long ix;
     #endif
-    FPnum *g_B = NULL;
+    real_t *g_B = NULL;
     if (do_B) g_B = g_A;
-    FPnum f = 0.;
+    real_t f = 0.;
     size_t m_by_n = (size_t)m * (size_t)n;
 
-    copy_arr(Xfull, buffer_FPnum, m_by_n, nthreads);
+    copy_arr(Xfull, buffer_real_t, m_by_n, nthreads);
     cblas_tgemm(CblasRowMajor, CblasNoTrans, CblasTrans,
                 m, n, k,
                 1., A, lda, B, ldb,
-                -1., buffer_FPnum, n);
+                -1., buffer_real_t, n);
     if (weight == NULL) {
-        nan_to_zero(buffer_FPnum, Xfull, m_by_n, nthreads);
-        f = w * sum_squares(buffer_FPnum, m_by_n, nthreads);
+        nan_to_zero(buffer_real_t, Xfull, m_by_n, nthreads);
+        f = w * sum_squares(buffer_real_t, m_by_n, nthreads);
     }
     else {
         /* TODO: make it compensated summation */
         #pragma omp parallel for schedule(static) num_threads(nthreads) \
-                shared(buffer_FPnum, m, n, weight) reduction(+:f)
+                shared(buffer_real_t, m, n, weight) reduction(+:f)
         for (size_t_for ix = 0; ix < m_by_n; ix++)
-            f += (!isnan(buffer_FPnum[ix]))?
-                  (square(buffer_FPnum[ix]) * w*weight[ix]) : (0);
-        mult_if_non_nan(buffer_FPnum, Xfull, weight, m_by_n, nthreads);
+            f += (!isnan(buffer_real_t[ix]))?
+                  (square(buffer_real_t[ix]) * w*weight[ix]) : (0);
+        mult_if_non_nan(buffer_real_t, Xfull, weight, m_by_n, nthreads);
     }
     if (!do_B)
         cblas_tgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,
                     m, k, n,
-                    w, buffer_FPnum, n, B, ldb,
+                    w, buffer_real_t, n, B, ldb,
                     reset_grad? 0. : 1., g_A, lda);
     else
         cblas_tgemm(CblasRowMajor, CblasTrans, CblasNoTrans,
                     n, k, m,
-                    w, buffer_FPnum, n, A, lda,
+                    w, buffer_real_t, n, A, lda,
                     reset_grad? 0. : 1., g_B, ldb);
     if (lam != 0)
     {
@@ -1482,11 +1482,11 @@ FPnum fun_grad_Adense
 
 void add_lam_to_grad_and_fun
 (
-    FPnum *restrict fun,
-    FPnum *restrict grad,
-    FPnum *restrict A,
-    int m, int k, int lda,
-    FPnum lam, int nthreads
+    real_t *restrict fun,
+    real_t *restrict grad,
+    real_t *restrict A,
+    int_t m, int_t k, int_t lda,
+    real_t lam, int_t nthreads
 )
 {
     #if defined(_OPENMP) && \
@@ -1508,7 +1508,7 @@ void add_lam_to_grad_and_fun
         for (size_t_for row = 0; row < (size_t)m; row++)
             for (size_t col = 0; col < (size_t)k; col++)
                 grad[col + row*lda] += lam * A[col + row*lda];
-        FPnum reg = 0;
+        real_t reg = 0;
         #pragma omp parallel for schedule(static) num_threads(nthreads) \
                 shared(m, k, A, lda) reduction(+:reg)
         for (size_t_for row = 0; row < (size_t)m; row++)
@@ -1518,13 +1518,13 @@ void add_lam_to_grad_and_fun
     }
 }
 
-FPnum wrapper_fun_grad_Adense
+real_t wrapper_fun_grad_Adense
 (
     void *instance,
-    lbfgsFPnumval_t *x,
-    lbfgsFPnumval_t *g,
+    real_t *x,
+    real_t *g,
     const size_t n,
-    const lbfgsFPnumval_t step
+    const real_t step
 )
 {
     data_fun_grad_Adense *data = (data_fun_grad_Adense*)instance;
@@ -1537,17 +1537,17 @@ FPnum wrapper_fun_grad_Adense
                 data->lam, data->w, data->lam_last,
                 false, true,
                 data->nthreads,
-                data->buffer_FPnum
+                data->buffer_real_t
             );
 }
 
-FPnum wrapper_fun_grad_Bdense
+real_t wrapper_fun_grad_Bdense
 (
     void *instance,
-    lbfgsFPnumval_t *x,
-    lbfgsFPnumval_t *g,
+    real_t *x,
+    real_t *g,
     const size_t n,
-    const lbfgsFPnumval_t step
+    const real_t step
 )
 {
     data_fun_grad_Bdense *data = (data_fun_grad_Bdense*)instance;
@@ -1560,7 +1560,7 @@ FPnum wrapper_fun_grad_Bdense
                 data->lam, data->w, data->lam_last,
                 true, true,
                 data->nthreads,
-                data->buffer_FPnum
+                data->buffer_real_t
             );
 }
 
@@ -1717,19 +1717,19 @@ size_t buffer_size_optimizeA_implicit
 
 void optimizeA
 (
-    FPnum *restrict A, int lda,
-    FPnum *restrict B, int ldb,
-    int m, int n, int k,
-    size_t Xcsr_p[], int Xcsr_i[], FPnum *restrict Xcsr,
-    FPnum *restrict Xfull, int ldX, bool full_dense, bool near_dense,
-    int cnt_NA[], FPnum *restrict weight, bool NA_as_zero,
-    FPnum lam, FPnum lam_last,
+    real_t *restrict A, int_t lda,
+    real_t *restrict B, int_t ldb,
+    int_t m, int_t n, int_t k,
+    size_t Xcsr_p[], int_t Xcsr_i[], real_t *restrict Xcsr,
+    real_t *restrict Xfull, int_t ldX, bool full_dense, bool near_dense,
+    int_t cnt_NA[], real_t *restrict weight, bool NA_as_zero,
+    real_t lam, real_t lam_last,
     bool do_B, bool is_first_iter,
-    int nthreads,
-    bool use_cg, int max_cg_steps,
+    int_t nthreads,
+    bool use_cg, int_t max_cg_steps,
     bool keep_precomputedBtB,
-    FPnum *restrict precomputedBtB, bool *filled_BtB,
-    FPnum *restrict buffer_FPnum
+    real_t *restrict precomputedBtB, bool *filled_BtB,
+    real_t *restrict buffer_real_t
 )
 {
     /* Note: the BtB produced here has diagonal, the one from
@@ -1742,7 +1742,7 @@ void optimizeA
     long long ix;
     #endif
     char uplo = 'L';
-    int ignore;
+    int_t ignore;
     *filled_BtB = false;
 
     if (Xfull == NULL) do_B = false;
@@ -1758,30 +1758,30 @@ void optimizeA
        solutions individually. */
     if (Xfull != NULL && (full_dense || near_dense) && weight == NULL)
     {
-        FPnum *restrict bufferBtBcopy = NULL;
+        real_t *restrict bufferBtBcopy = NULL;
         if (near_dense)
         {
             if (precomputedBtB != NULL && !keep_precomputedBtB)
                 bufferBtBcopy = precomputedBtB;
             else {
-                bufferBtBcopy = buffer_FPnum;
-                buffer_FPnum += square(k);
+                bufferBtBcopy = buffer_real_t;
+                buffer_real_t += square(k);
             }
         }
-        FPnum *restrict bufferBtB = NULL;
+        real_t *restrict bufferBtB = NULL;
         if (precomputedBtB != NULL && !keep_precomputedBtB && !near_dense &&
             bufferBtBcopy != precomputedBtB)
         {
             bufferBtB = precomputedBtB;
         }
         else {
-            bufferBtB = buffer_FPnum;
-            buffer_FPnum += square(k);
+            bufferBtB = buffer_real_t;
+            buffer_real_t += square(k);
         }
         /* TODO: this function should do away with 'bufferX', replace it instead
            with an 'incX' parameter. */
-        FPnum *restrict bufferX = buffer_FPnum;
-        FPnum *restrict buffer_remainder = bufferX
+        real_t *restrict bufferX = buffer_real_t;
+        real_t *restrict buffer_remainder = bufferX
                                             + (do_B?
                                                 ((size_t)n*(size_t)nthreads)
                                                     :
@@ -1799,7 +1799,7 @@ void optimizeA
         if (lam_last != lam) bufferBtB[square(k)-1] += (lam_last - lam);
         /* Here will also need t(B)*B + diag(lambda) alone (no Cholesky) */
         if (bufferBtBcopy != NULL)
-            memcpy(bufferBtBcopy, bufferBtB, (size_t)square(k)*sizeof(FPnum));
+            memcpy(bufferBtBcopy, bufferBtB, (size_t)square(k)*sizeof(real_t));
         
         /* t(B)*t(X)
            Note: this will be passed to LAPACK function which assumes
@@ -1875,15 +1875,15 @@ void optimizeA
                                     ((size_t)n*(size_t)omp_get_thread_num())
                                         :
                                     ((size_t)0)), false,
-                        (FPnum*)NULL, (int*)NULL, (size_t)0,
-                        (FPnum*)NULL,
+                        (real_t*)NULL, (int_t*)NULL, (size_t)0,
+                        (real_t*)NULL,
                         buffer_remainder
                          + size_buffer * (size_t)omp_get_thread_num(),
                         lam, lam_last,
-                        (FPnum*)NULL,
+                        (real_t*)NULL,
                         bufferBtBcopy, cnt_NA[ix], k,
                         true, false, 1., n,
-                        (FPnum*)NULL, false,
+                        (real_t*)NULL, false,
                         use_cg, k, /* <- A was reset to zero, need more steps */
                         false
                     );
@@ -1898,26 +1898,26 @@ void optimizeA
        in case some rows have few missing values. */
     else if (Xfull != NULL)
     {
-        FPnum *restrict bufferBtB = NULL;
+        real_t *restrict bufferBtB = NULL;
         if (weight == NULL) {
             if (precomputedBtB != NULL && !keep_precomputedBtB)
                 bufferBtB = precomputedBtB;
             else {
-                bufferBtB = buffer_FPnum;
-                buffer_FPnum += square(k);
+                bufferBtB = buffer_real_t;
+                buffer_real_t += square(k);
             }
         }
-        FPnum *restrict bufferX = NULL;
+        real_t *restrict bufferX = NULL;
         if (do_B) {
-            bufferX = buffer_FPnum;
-            buffer_FPnum += (size_t)n * (size_t)nthreads;
+            bufferX = buffer_real_t;
+            buffer_real_t += (size_t)n * (size_t)nthreads;
         }
-        FPnum *restrict bufferW = NULL;
+        real_t *restrict bufferW = NULL;
         if (do_B && weight != NULL) {
-            bufferW = buffer_FPnum;
-            buffer_FPnum += (size_t)n * (size_t)nthreads;
+            bufferW = buffer_real_t;
+            buffer_real_t += (size_t)n * (size_t)nthreads;
         }
-        FPnum *restrict buffer_remainder = buffer_FPnum;
+        real_t *restrict buffer_remainder = buffer_real_t;
 
 
         if (bufferBtB != NULL)
@@ -1965,18 +1965,18 @@ void optimizeA
                 bufferX + (do_B? ((size_t)n*(size_t)omp_get_thread_num())
                                     : ((size_t)0)),
                 cnt_NA[ix] == 0,
-                (FPnum*)NULL, (int*)NULL, (size_t)0,
+                (real_t*)NULL, (int_t*)NULL, (size_t)0,
                 (weight != NULL)?
                     (bufferW + (do_B? ((size_t)n*(size_t)omp_get_thread_num())
                                         : ((size_t)0)))
                       :
-                    ((FPnum*)NULL),
+                    ((real_t*)NULL),
                 buffer_remainder + size_buffer*(size_t)omp_get_thread_num(),
                 lam, lam_last,
-                (FPnum*)NULL,
+                (real_t*)NULL,
                 bufferBtB, cnt_NA[ix], k,
                 true, false, 1., n,
-                (FPnum*)NULL, false,
+                (real_t*)NULL, false,
                 use_cg, max_cg_steps,
                 false
             );
@@ -1987,11 +1987,11 @@ void optimizeA
        Here can also use one Cholesky for all rows at once. */
     else if (Xfull == NULL && NA_as_zero && weight == NULL)
     {
-        FPnum *restrict bufferBtB = NULL;
+        real_t *restrict bufferBtB = NULL;
         if (precomputedBtB != NULL && !keep_precomputedBtB)
             bufferBtB = precomputedBtB;
         else
-            bufferBtB = buffer_FPnum;
+            bufferBtB = buffer_real_t;
 
         cblas_tsyrk(CblasRowMajor, CblasUpper, CblasTrans,
                     k, n,
@@ -2008,7 +2008,7 @@ void optimizeA
             set_to_zero(A, (size_t)m*(size_t)k, 1);
         else
             for (size_t row = 0; row < (size_t)m; row++)
-                memset(A + row*(size_t)lda, 0, (size_t)k*sizeof(FPnum));
+                memset(A + row*(size_t)lda, 0, (size_t)k*sizeof(real_t));
         tgemm_sp_dense(
             m, k, 1.,
             Xcsr_p, Xcsr_i, Xcsr,
@@ -2027,7 +2027,7 @@ void optimizeA
     else
     {
         /* When NAs are treated as zeros, can use a precomputed t(B)*B */
-        FPnum *restrict bufferBtB = NULL;
+        real_t *restrict bufferBtB = NULL;
         bool add_diag_to_BtB = !(use_cg && Xfull == NULL && NA_as_zero);
         if (Xfull == NULL && NA_as_zero && (!use_cg || weight != NULL))
         {
@@ -2038,8 +2038,8 @@ void optimizeA
             }
             else
             {
-                bufferBtB = buffer_FPnum;
-                buffer_FPnum += square(k);
+                bufferBtB = buffer_real_t;
+                buffer_real_t += square(k);
             }
             cblas_tsyrk(CblasRowMajor, CblasUpper, CblasTrans,
                         k, n,
@@ -2067,23 +2067,23 @@ void optimizeA
 
         #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
                 shared(A, lda, B, ldb, m, n, k, lam, lam_last, weight, cnt_NA, \
-                       Xcsr_p, Xcsr_i, Xcsr, buffer_FPnum, NA_as_zero, \
+                       Xcsr_p, Xcsr_i, Xcsr, buffer_real_t, NA_as_zero, \
                        bufferBtB, size_buffer, use_cg)
         for (size_t_for ix = 0; ix < (size_t)m; ix++)
             if (Xcsr_p[ix+(size_t)1] > Xcsr_p[ix])
                 factors_closed_form(
                     A + ix*(size_t)lda, k,
                     B, n, ldb,
-                    (FPnum*)NULL, false,
+                    (real_t*)NULL, false,
                     Xcsr +  Xcsr_p[ix], Xcsr_i +  Xcsr_p[ix],
                     Xcsr_p[ix+(size_t)1] - Xcsr_p[ix],
-                    (weight == NULL)? ((FPnum*)NULL) : (weight + Xcsr_p[ix]),
-                    buffer_FPnum + ((size_t)omp_get_thread_num() * size_buffer),
+                    (weight == NULL)? ((real_t*)NULL) : (weight + Xcsr_p[ix]),
+                    buffer_real_t + ((size_t)omp_get_thread_num()*size_buffer),
                     lam, lam_last,
-                    (FPnum*)NULL,
+                    (real_t*)NULL,
                     bufferBtB, 0, k,
                     add_diag_to_BtB, false, 1., n,
-                    (FPnum*)NULL, NA_as_zero,
+                    (real_t*)NULL, NA_as_zero,
                     use_cg, max_cg_steps,
                     false
                 );
@@ -2092,23 +2092,23 @@ void optimizeA
 
 void optimizeA_implicit
 (
-    FPnum *restrict A, size_t lda,
-    FPnum *restrict B, size_t ldb,
-    int m, int n, int k,
-    size_t Xcsr_p[], int Xcsr_i[], FPnum *restrict Xcsr,
-    FPnum lam,
-    int nthreads,
-    bool use_cg, int max_cg_steps, bool force_set_to_zero,
+    real_t *restrict A, size_t lda,
+    real_t *restrict B, size_t ldb,
+    int_t m, int_t n, int_t k,
+    size_t Xcsr_p[], int_t Xcsr_i[], real_t *restrict Xcsr,
+    real_t lam,
+    int_t nthreads,
+    bool use_cg, int_t max_cg_steps, bool force_set_to_zero,
     bool keep_precomputedBtB,
-    FPnum *restrict precomputedBtB, /* <- will be calculated if not passed */
-    FPnum *restrict buffer_FPnum
+    real_t *restrict precomputedBtB, /* <- will be calculated if not passed */
+    real_t *restrict buffer_real_t
 )
 {
     bool compute_BtB = precomputedBtB == NULL || keep_precomputedBtB;
     if (precomputedBtB == NULL)
     {
-        precomputedBtB = buffer_FPnum;
-        buffer_FPnum += square(k);
+        precomputedBtB = buffer_real_t;
+        buffer_real_t += square(k);
     }
     if (compute_BtB)
     {
@@ -2123,12 +2123,12 @@ void optimizeA_implicit
         set_to_zero(A, (size_t)m*(size_t)k - (lda-(size_t)k), nthreads);
     size_t size_buffer = use_cg? (3 * k) : (square(k));
 
-    int ix = 0;
+    int_t ix = 0;
 
     if (use_cg)
         #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
                 shared(A, B, lda, ldb, m, n, k, lam, \
-                       Xcsr, Xcsr_i, Xcsr_p, precomputedBtB, buffer_FPnum, \
+                       Xcsr, Xcsr_i, Xcsr_p, precomputedBtB, buffer_real_t, \
                        max_cg_steps, size_buffer)
         for (ix = 0; ix < m; ix++)
             factors_implicit_cg(
@@ -2139,12 +2139,12 @@ void optimizeA_implicit
                 lam,
                 precomputedBtB, k,
                 max_cg_steps,
-                buffer_FPnum + ((size_t)omp_get_thread_num() * size_buffer)
+                buffer_real_t + ((size_t)omp_get_thread_num() * size_buffer)
             );
     else
         #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
                 shared(A, B, lda, ldb, m, n, k, lam, \
-                       Xcsr, Xcsr_i, Xcsr_p, precomputedBtB, buffer_FPnum, \
+                       Xcsr, Xcsr_i, Xcsr_p, precomputedBtB, buffer_real_t, \
                        size_buffer)
         for (ix = 0; ix < m; ix++)
             factors_implicit_chol(
@@ -2155,23 +2155,23 @@ void optimizeA_implicit
                 lam,
                 precomputedBtB, k,
                 false,
-                buffer_FPnum + ((size_t)omp_get_thread_num() * size_buffer),
+                buffer_real_t + ((size_t)omp_get_thread_num() * size_buffer),
                 false
             );
 }
 
-int initialize_biases
+int_t initialize_biases
 (
-    FPnum *restrict glob_mean, FPnum *restrict biasA, FPnum *restrict biasB,
+    real_t *restrict glob_mean, real_t *restrict biasA, real_t *restrict biasB,
     bool user_bias, bool item_bias,
-    FPnum lam_user, FPnum lam_item,
-    int m, int n,
-    int m_bias, int n_bias,
-    int ixA[], int ixB[], FPnum *restrict X, size_t nnz,
-    FPnum *restrict Xfull, FPnum *restrict Xtrans,
-    size_t Xcsr_p[], int Xcsr_i[], FPnum *restrict Xcsr,
-    size_t Xcsc_p[], int Xcsc_i[], FPnum *restrict Xcsc,
-    int nthreads
+    real_t lam_user, real_t lam_item,
+    int_t m, int_t n,
+    int_t m_bias, int_t n_bias,
+    int_t ixA[], int_t ixB[], real_t *restrict X, size_t nnz,
+    real_t *restrict Xfull, real_t *restrict Xtrans,
+    size_t Xcsr_p[], int_t Xcsr_i[], real_t *restrict Xcsr,
+    size_t Xcsc_p[], int_t Xcsc_i[], real_t *restrict Xcsc,
+    int_t nthreads
 )
 {
     size_t m_by_n = (size_t)m * (size_t)n;
@@ -2199,7 +2199,7 @@ int initialize_biases
                 xsum += (!isnan(Xfull[ix]))? (Xfull[ix]) : (0);
                 cnt += !isnan(Xfull[ix]);
             }
-            *glob_mean = (FPnum)(xsum / (double)cnt);
+            *glob_mean = (real_t)(xsum / (double)cnt);
         }
 
         else
@@ -2223,7 +2223,7 @@ int initialize_biases
                     reduction(+:xsum) shared(X, nnz)
             for (size_t_for ix = 0; ix < nnz; ix++)
                 xsum += X[ix];
-            *glob_mean = (FPnum)(xsum / (double)nnz);
+            *glob_mean = (real_t)(xsum / (double)nnz);
         }
 
         else
@@ -2309,10 +2309,10 @@ int initialize_biases
         }
 
         if (Xfull != NULL || Xcsc == NULL)
-            for (int ix = 0; ix < n; ix++)
+            for (int_t ix = 0; ix < n; ix++)
                 biasB[ix] /= ((double)buffer_cnt[ix] + lam_item);
 
-        for (int ix = 0; ix < n; ix++)
+        for (int_t ix = 0; ix < n; ix++)
             biasB[ix] = (!isnan(biasB[ix]))? biasB[ix] : 0.;
     }
 
@@ -2358,10 +2358,10 @@ int initialize_biases
         }
 
         if (Xfull != NULL || Xcsr == NULL)
-            for (int ix = 0; ix < m; ix++)
+            for (int_t ix = 0; ix < m; ix++)
                 biasA[ix] /= ((double)buffer_cnt[ix] + lam_user);
 
-        for (int ix = 0; ix < m; ix++)
+        for (int_t ix = 0; ix < m; ix++)
             biasA[ix] = (!isnan(biasA[ix]))? biasA[ix] : 0.;
     }
 
@@ -2369,14 +2369,14 @@ int initialize_biases
     return 0;
 }
 
-int center_by_cols
+int_t center_by_cols
 (
-    FPnum *restrict col_means,
-    FPnum *restrict Xfull, int m, int n,
-    int ixA[], int ixB[], FPnum *restrict X, size_t nnz,
-    size_t Xcsr_p[], int Xcsr_i[], FPnum *restrict Xcsr,
-    size_t Xcsc_p[], int Xcsc_i[], FPnum *restrict Xcsc,
-    int nthreads
+    real_t *restrict col_means,
+    real_t *restrict Xfull, int_t m, int_t n,
+    int_t ixA[], int_t ixB[], real_t *restrict X, size_t nnz,
+    size_t Xcsr_p[], int_t Xcsr_i[], real_t *restrict Xcsr,
+    size_t Xcsc_p[], int_t Xcsc_i[], real_t *restrict Xcsc,
+    int_t nthreads
 )
 {
     #if defined(_OPENMP) && \
@@ -2385,9 +2385,9 @@ int center_by_cols
                 )
     long long ix, ib;
     #endif
-    int *restrict cnt_by_col = NULL;
+    int_t *restrict cnt_by_col = NULL;
     if (Xfull != NULL || Xcsc == NULL) {
-        cnt_by_col = (int*)calloc(n, sizeof(int));
+        cnt_by_col = (int_t*)calloc(n, sizeof(int));
         if (cnt_by_col == NULL) return 1;
     }
     set_to_zero(col_means, n, 1);
@@ -2482,9 +2482,9 @@ int center_by_cols
 
 bool check_sparse_indices
 (
-    int n, int p,
-    FPnum *restrict u_vec_sp, int u_vec_ixB[], size_t nnz_u_vec,
-    FPnum *restrict Xa, int ixB[], size_t nnz
+    int_t n, int_t p,
+    real_t *restrict u_vec_sp, int_t u_vec_ixB[], size_t nnz_u_vec,
+    real_t *restrict Xa, int_t ixB[], size_t nnz
 )
 {
     if (nnz) {
@@ -2507,15 +2507,15 @@ bool check_sparse_indices
 
 void predict_multiple
 (
-    FPnum *restrict A, int k_user,
-    FPnum *restrict B, int k_item,
-    FPnum *restrict biasA, FPnum *restrict biasB,
-    FPnum glob_mean,
-    int k, int k_main,
-    int m, int n,
-    int predA[], int predB[], size_t nnz,
-    FPnum *restrict outp,
-    int nthreads
+    real_t *restrict A, int_t k_user,
+    real_t *restrict B, int_t k_item,
+    real_t *restrict biasA, real_t *restrict biasB,
+    real_t glob_mean,
+    int_t k, int_t k_main,
+    int_t m, int_t n,
+    int_t predA[], int_t predB[], size_t nnz,
+    real_t *restrict outp,
+    int_t nthreads
 )
 {
     size_t lda = (size_t)k_user + (size_t)k + (size_t)k_main;
@@ -2544,35 +2544,35 @@ void predict_multiple
                      + glob_mean);
 }
 
-int cmp_int(const void *a, const void *b)
+int_t cmp_int(const void *a, const void *b)
 {
-    return *((int*)a) - *((int*)b);
+    return *((int_t*)a) - *((int_t*)b);
 }
 
-FPnum *ptr_FPnum_glob = NULL;
-// #pragma omp threadprivate(ptr_FPnum_glob)
-// ptr_FPnum_glob = NULL;
-int cmp_argsort(const void *a, const void *b)
+real_t *ptr_real_t_glob = NULL;
+// #pragma omp threadprivate(ptr_real_t_glob)
+// ptr_real_t_glob = NULL;
+int_t cmp_argsort(const void *a, const void *b)
 {
-    FPnum v1 = ptr_FPnum_glob[*((int*)a)];
-    FPnum v2 = ptr_FPnum_glob[*((int*)b)];
+    real_t v1 = ptr_real_t_glob[*((int_t*)a)];
+    real_t v2 = ptr_real_t_glob[*((int_t*)b)];
     return (v1 == v2)? 0 : ((v1 < v2)? 1 : -1);
 }
 
-int topN
+int_t topN
 (
-    FPnum *restrict a_vec, int k_user,
-    FPnum *restrict B, int k_item,
-    FPnum *restrict biasB,
-    FPnum glob_mean, FPnum biasA,
-    int k, int k_main,
-    int *restrict include_ix, int n_include,
-    int *restrict exclude_ix, int n_exclude,
-    int *restrict outp_ix, FPnum *restrict outp_score,
-    int n_top, int n, int nthreads
+    real_t *restrict a_vec, int_t k_user,
+    real_t *restrict B, int_t k_item,
+    real_t *restrict biasB,
+    real_t glob_mean, real_t biasA,
+    int_t k, int_t k_main,
+    int_t *restrict include_ix, int_t n_include,
+    int_t *restrict exclude_ix, int_t n_exclude,
+    int_t *restrict outp_ix, real_t *restrict outp_score,
+    int_t n_top, int_t n, int_t nthreads
 )
 {
-    int retval = 0;
+    int_t retval = 0;
     if (include_ix != NULL && exclude_ix != NULL) {
         fprintf(stderr, "Cannot pass both 'include_ix' and 'exclude_ix'.\n");
         retval = 2;
@@ -2592,7 +2592,7 @@ int topN
 
     if (include_ix != NULL)
     {
-        for (int ix = 0; ix < n_include; ix++)
+        for (int_t ix = 0; ix < n_include; ix++)
             if (include_ix[ix] < 0 || include_ix[ix] >= n)
             {
                 fprintf(stderr, "'include_ix' contains invalid entries\n");
@@ -2602,7 +2602,7 @@ int topN
     }
     if (exclude_ix != NULL)
     {
-        for (int ix = 0; ix < n_exclude; ix++)
+        for (int_t ix = 0; ix < n_exclude; ix++)
             if (exclude_ix[ix] < 0 || exclude_ix[ix] >= n)
             {
                 fprintf(stderr, "'exclude_ix' contains invalid entries\n");
@@ -2610,7 +2610,7 @@ int topN
                 break;
             }
     }
-    for (int ix = 0; ix < k_user+k+k_main; ix++)
+    for (int_t ix = 0; ix < k_user+k+k_main; ix++)
     {
         if (isnan(a_vec[ix])) {
             fprintf(stderr, "The latent factors contain NAN values\n");
@@ -2631,17 +2631,17 @@ int topN
         return retval;
     }
 
-    int ix = 0;
+    int_t ix = 0;
 
-    int k_pred = k + k_main;
-    int k_totB = k_item + k + k_main;
+    int_t k_pred = k + k_main;
+    int_t k_totB = k_item + k + k_main;
     size_t n_take = (include_ix != NULL)?
                      (size_t)n_include :
                      ((exclude_ix == NULL)? (size_t)n : (size_t)(n-n_exclude) );
 
-    FPnum *restrict buffer_scores = NULL;
-    int *restrict buffer_ix = NULL;
-    int *restrict buffer_mask = NULL;
+    real_t *restrict buffer_scores = NULL;
+    int_t *restrict buffer_ix = NULL;
+    int_t *restrict buffer_mask = NULL;
     a_vec += k_user;
 
     if (include_ix != NULL) {
@@ -2649,19 +2649,19 @@ int topN
     }
 
     else {
-        buffer_ix = (int*)malloc((size_t)n*sizeof(int));
+        buffer_ix = (int_t*)malloc((size_t)n*sizeof(int));
         if (buffer_ix == NULL) goto throw_oom;
-        for (int ix = 0; ix < n; ix++) buffer_ix[ix] = ix;
+        for (int_t ix = 0; ix < n; ix++) buffer_ix[ix] = ix;
     }
 
     if (exclude_ix != NULL)
     {
-        int move_to = n-1;
-        int temp;
+        int_t move_to = n-1;
+        int_t temp;
         if (!check_is_sorted(exclude_ix, n_exclude))
             qsort(exclude_ix, n_exclude, sizeof(int), cmp_int);
 
-        for (int ix = n_exclude-1; ix >= 0; ix--) {
+        for (int_t ix = n_exclude-1; ix >= 0; ix--) {
             temp = buffer_ix[move_to];
             buffer_ix[move_to] = exclude_ix[ix];
             buffer_ix[exclude_ix[ix]] = temp;
@@ -2674,8 +2674,8 @@ int topN
        an argsort with doubly-masked indices. */
     if (include_ix != NULL)
     {
-        buffer_scores = (FPnum*)malloc((size_t)n_include*sizeof(FPnum));
-        buffer_mask = (int*)malloc((size_t)n_include*sizeof(int));
+        buffer_scores = (real_t*)malloc((size_t)n_include*sizeof(real_t));
+        buffer_mask = (int_t*)malloc((size_t)n_include*sizeof(int));
         if (buffer_scores == NULL || buffer_mask == NULL) goto throw_oom;
         #pragma omp parallel for schedule(static) num_threads(nthreads) \
                 shared(a_vec, B, k_pred, k_item, n_include, k_totB, \
@@ -2686,7 +2686,7 @@ int topN
                                                 * (size_t)k_totB, 1)
                                 + ((biasB != NULL)? biasB[include_ix[ix]] : 0.);
         }
-        for (int ix = 0; ix < n_include; ix++)
+        for (int_t ix = 0; ix < n_include; ix++)
             buffer_mask[ix] = ix;
     }
 
@@ -2695,8 +2695,8 @@ int topN
        and then make a full or partial argsort. */
     else if (exclude_ix != NULL && (double)n_exclude > (double)n/20)
     {
-        buffer_scores = (FPnum*)malloc(n_take*sizeof(FPnum));
-        buffer_mask = (int*)malloc(n_take*sizeof(int));
+        buffer_scores = (real_t*)malloc(n_take*sizeof(real_t));
+        buffer_mask = (int_t*)malloc(n_take*sizeof(int));
         if (buffer_scores == NULL || buffer_mask == NULL) goto throw_oom;
         #pragma omp parallel for schedule(static) num_threads(nthreads) \
                 shared(a_vec, B, k_pred, k_item, n_take, k_totB, \
@@ -2706,7 +2706,7 @@ int topN
                                            B + k_item + (size_t)buffer_ix[ix]
                                                 * (size_t)k_totB, 1)
                                 + ((biasB != NULL)? biasB[buffer_ix[ix]] : 0.);
-        for (int ix = 0; ix < (int)n_take; ix++)
+        for (int_t ix = 0; ix < (int)n_take; ix++)
             buffer_mask[ix] = ix;
     }
 
@@ -2715,7 +2715,7 @@ int topN
        optimized BLAS gemv, but it's not memory-efficient) */
     else
     {
-        buffer_scores = (FPnum*)malloc((size_t)n*sizeof(FPnum));
+        buffer_scores = (real_t*)malloc((size_t)n*sizeof(real_t));
         if (buffer_scores == NULL) goto throw_oom;
         cblas_tgemv(CblasRowMajor, CblasNoTrans,
                     n, k_pred,
@@ -2727,7 +2727,7 @@ int topN
     }
 
     /* If there is no double-mask for indices, do a partial argsort */
-    ptr_FPnum_glob = buffer_scores;
+    ptr_real_t_glob = buffer_scores;
     if (buffer_mask == NULL)
     {
         /* If the number of elements is very small, it's faster to
@@ -2761,20 +2761,20 @@ int topN
             qsort(buffer_mask, n_top, sizeof(int), cmp_argsort);
         }
 
-        for (int ix = 0; ix < n_top; ix++)
+        for (int_t ix = 0; ix < n_top; ix++)
                 outp_ix[ix] = buffer_ix[buffer_mask[ix]];
     }
-    ptr_FPnum_glob = NULL;
+    ptr_real_t_glob = NULL;
 
     /* If scores were requested, need to also output those */
     if (outp_score != NULL)
     {
         glob_mean += biasA;
         if (buffer_mask == NULL)
-            for (int ix = 0; ix < n_top; ix++)
+            for (int_t ix = 0; ix < n_top; ix++)
                 outp_score[ix] = buffer_scores[outp_ix[ix]] + glob_mean;
         else
-            for (int ix = 0; ix < n_top; ix++)
+            for (int_t ix = 0; ix < n_top; ix++)
                 outp_score[ix] = buffer_scores[buffer_mask[ix]] + glob_mean;
     }
 
@@ -2792,31 +2792,31 @@ int topN
     }
 }
 
-int fit_most_popular
+int_t fit_most_popular
 (
-    FPnum *restrict biasA, FPnum *restrict biasB,
-    FPnum *restrict glob_mean,
-    FPnum lam_user, FPnum lam_item,
-    FPnum alpha,
-    int m, int n,
-    int ixA[], int ixB[], FPnum *restrict X, size_t nnz,
-    FPnum *restrict Xfull,
-    FPnum *restrict weight,
+    real_t *restrict biasA, real_t *restrict biasB,
+    real_t *restrict glob_mean,
+    real_t lam_user, real_t lam_item,
+    real_t alpha,
+    int_t m, int_t n,
+    int_t ixA[], int_t ixB[], real_t *restrict X, size_t nnz,
+    real_t *restrict Xfull,
+    real_t *restrict weight,
     bool implicit, bool adjust_weight,
-    FPnum *restrict w_main_multiplier,
-    int nthreads
+    real_t *restrict w_main_multiplier,
+    int_t nthreads
 )
 {
-    int retval = 0;
-    int *restrict cnt_by_col = NULL;
-    int *restrict cnt_by_row = NULL;
-    FPnum *restrict sum_by_col = NULL;
-    FPnum *restrict sum_by_row = NULL;
+    int_t retval = 0;
+    int_t *restrict cnt_by_col = NULL;
+    int_t *restrict cnt_by_row = NULL;
+    real_t *restrict sum_by_col = NULL;
+    real_t *restrict sum_by_row = NULL;
 
     if (implicit)
     {
-        cnt_by_col = (int*)calloc((size_t)n, sizeof(int));
-        sum_by_col = (FPnum*)calloc((size_t)n, sizeof(FPnum));
+        cnt_by_col = (int_t*)calloc((size_t)n, sizeof(int));
+        sum_by_col = (real_t*)calloc((size_t)n, sizeof(real_t));
         if (cnt_by_col == NULL || sum_by_col == NULL) goto throw_oom;
 
         if (Xfull != NULL)
@@ -2840,13 +2840,13 @@ int fit_most_popular
 
         if (adjust_weight) {
             nnz = 0;
-            for (int ix = 0; ix < n; ix++)
+            for (int_t ix = 0; ix < n; ix++)
                 nnz += (size_t)cnt_by_col[ix];
             *w_main_multiplier = (double)nnz / ((double)m * (double)n);
             lam_item /= *w_main_multiplier;
         }
 
-        for (int ix = 0; ix < n; ix++)
+        for (int_t ix = 0; ix < n; ix++)
             biasB[ix] = alpha * sum_by_col[ix]
                                 / (alpha * sum_by_col[ix]
                                     + (double)(m - cnt_by_col[ix])
@@ -2859,12 +2859,12 @@ int fit_most_popular
     if (biasA != NULL) {
 
         if (weight == NULL) {
-            cnt_by_col = (int*)calloc((size_t)n, sizeof(int));
-            cnt_by_row = (int*)calloc((size_t)m, sizeof(int));
+            cnt_by_col = (int_t*)calloc((size_t)n, sizeof(int));
+            cnt_by_row = (int_t*)calloc((size_t)m, sizeof(int));
         }
         else {
-            sum_by_col = (FPnum*)calloc((size_t)n, sizeof(FPnum));
-            sum_by_row = (FPnum*)calloc((size_t)m, sizeof(FPnum));
+            sum_by_col = (real_t*)calloc((size_t)n, sizeof(real_t));
+            sum_by_row = (real_t*)calloc((size_t)m, sizeof(real_t));
         }
 
         if ((cnt_by_col == NULL && sum_by_col == NULL) ||
@@ -2881,9 +2881,9 @@ int fit_most_popular
         m, n,
         m, n,
         ixA, ixB, X, nnz,
-        Xfull, (FPnum*)NULL,
-        (size_t*)NULL, (int*)NULL, (FPnum*)NULL,
-        (size_t*)NULL, (int*)NULL, (FPnum*)NULL,
+        Xfull, (real_t*)NULL,
+        (size_t*)NULL, (int_t*)NULL, (real_t*)NULL,
+        (size_t*)NULL, (int_t*)NULL, (real_t*)NULL,
         nthreads
     );
     if (retval == 1) goto throw_oom;
@@ -2931,7 +2931,7 @@ int fit_most_popular
     set_to_zero(biasA, m, 1);
     set_to_zero(biasB, n, 1);
 
-    for (int iter = 0; iter <= 5; iter++)
+    for (int_t iter = 0; iter <= 5; iter++)
     {
         if (Xfull != NULL)
         {
@@ -2945,7 +2945,7 @@ int fit_most_popular
                         biasB[col] += (!isnan(Xfull[col + row*(size_t)n]))?
                                        (Xfull[col + row*(size_t)n] - biasA[row])
                                        : (0.);
-                for (int ix = 0; ix < n; ix++)
+                for (int_t ix = 0; ix < n; ix++)
                     biasB[ix] /= ((double)cnt_by_col[ix] + lam_item);
             }
 
@@ -2956,11 +2956,11 @@ int fit_most_popular
                         biasB[col] += (!isnan(Xfull[col + row*(size_t)n]))?
          weight[col + row*(size_t)n] * (Xfull[col + row*(size_t)n] - biasA[row])
                                        : (0.);
-                for (int ix = 0; ix < n; ix++)
+                for (int_t ix = 0; ix < n; ix++)
                     biasB[ix] /= (sum_by_col[ix] + lam_item);
             }
 
-            for (int ix = 0; ix < n; ix++)
+            for (int_t ix = 0; ix < n; ix++)
                 biasB[ix] = (!isnan(biasB[ix]))? biasB[ix] : 0.;
 
             set_to_zero(biasA, m, 1);
@@ -2972,7 +2972,7 @@ int fit_most_popular
                         biasA[row] += (!isnan(Xfull[col + row*(size_t)n]))?
                                        (Xfull[col + row*(size_t)n] - biasB[col])
                                        : (0.);
-                for (int ix = 0; ix < m; ix++)
+                for (int_t ix = 0; ix < m; ix++)
                     biasA[ix] /= ((double)cnt_by_row[ix] + lam_user);
             }
 
@@ -2983,11 +2983,11 @@ int fit_most_popular
                         biasA[row] += (!isnan(Xfull[col + row*(size_t)n]))?
          weight[col + row*(size_t)n] * (Xfull[col + row*(size_t)n] - biasB[col])
                                        : (0.);
-                for (int ix = 0; ix < m; ix++)
+                for (int_t ix = 0; ix < m; ix++)
                     biasA[ix] /= (sum_by_row[ix] + lam_user);
             }
 
-            for (int ix = 0; ix < m; ix++)
+            for (int_t ix = 0; ix < m; ix++)
                 biasA[ix] = (!isnan(biasA[ix]))? biasA[ix] : 0.;
         }
 
@@ -3000,7 +3000,7 @@ int fit_most_popular
             {
                 for (size_t ix = 0; ix < nnz; ix++)
                     biasB[ixB[ix]] += (X[ix] - biasA[ixA[ix]]);
-                for (int ix = 0; ix < n; ix++)
+                for (int_t ix = 0; ix < n; ix++)
                     biasB[ix] /= ((double)cnt_by_col[ix] + lam_item);
             }
 
@@ -3008,11 +3008,11 @@ int fit_most_popular
             {
                 for (size_t ix = 0; ix < nnz; ix++)
                     biasB[ixB[ix]] += weight[ix] * (X[ix] - biasA[ixA[ix]]);
-                for (int ix = 0; ix < n; ix++)
+                for (int_t ix = 0; ix < n; ix++)
                     biasB[ix] /= (sum_by_col[ix] + lam_item);
             }
 
-            for (int ix = 0; ix < n; ix++)
+            for (int_t ix = 0; ix < n; ix++)
                 biasB[ix] = (!isnan(biasB[ix]))? biasB[ix] : 0.;
 
             set_to_zero(biasA, m, 1);
@@ -3021,7 +3021,7 @@ int fit_most_popular
             {
                 for (size_t ix = 0; ix < nnz; ix++)
                     biasA[ixA[ix]] += (X[ix] - biasB[ixB[ix]]);
-                for (int ix = 0; ix < m; ix++)
+                for (int_t ix = 0; ix < m; ix++)
                     biasA[ix] /= ((double)cnt_by_row[ix] + lam_user);
             }
 
@@ -3029,11 +3029,11 @@ int fit_most_popular
             {
                 for (size_t ix = 0; ix < nnz; ix++)
                     biasA[ixA[ix]] += weight[ix] * (X[ix] - biasB[ixB[ix]]);
-                for (int ix = 0; ix < m; ix++)
+                for (int_t ix = 0; ix < m; ix++)
                     biasA[ix] /= (sum_by_row[ix] + lam_user);
             }
 
-            for (int ix = 0; ix < m; ix++)
+            for (int_t ix = 0; ix < m; ix++)
                 biasA[ix] = (!isnan(biasA[ix]))? biasA[ix] : 0.;
         }
     }
@@ -3053,25 +3053,25 @@ int fit_most_popular
     }
 }
 
-int topN_old_most_popular
+int_t topN_old_most_popular
 (
     bool user_bias,
-    FPnum a_bias,
-    FPnum *restrict biasA, int row_index,
-    FPnum *restrict B,
-    FPnum *restrict biasB,
-    FPnum glob_mean,
-    int *restrict include_ix, int n_include,
-    int *restrict exclude_ix, int n_exclude,
-    int *restrict outp_ix, FPnum *restrict outp_score,
-    int n_top, int n
+    real_t a_bias,
+    real_t *restrict biasA, int_t row_index,
+    real_t *restrict B,
+    real_t *restrict biasB,
+    real_t glob_mean,
+    int_t *restrict include_ix, int_t n_include,
+    int_t *restrict exclude_ix, int_t n_exclude,
+    int_t *restrict outp_ix, real_t *restrict outp_score,
+    int_t n_top, int_t n
 )
 {
-    int retval = 0;
-    FPnum one = 1.;
-    FPnum *restrict ones = (FPnum*)malloc((size_t)n*sizeof(FPnum));
+    int_t retval = 0;
+    real_t one = 1.;
+    real_t *restrict ones = (real_t*)malloc((size_t)n*sizeof(real_t));
     if (ones == NULL) goto throw_oom;
-    for (int ix = 0; ix < n; ix++)
+    for (int_t ix = 0; ix < n; ix++)
         ones[ix] = 1.;
     if (biasA != NULL && user_bias)
         a_bias = biasA[row_index];
@@ -3081,7 +3081,7 @@ int topN_old_most_popular
     retval = topN(
         &one, 0,
         biasB, 0,
-        (FPnum*)NULL,
+        (real_t*)NULL,
         glob_mean, a_bias,
         1, 0,
         include_ix, n_include,
@@ -3100,12 +3100,12 @@ int topN_old_most_popular
     }
 }
 
-int predict_X_old_most_popular
+int_t predict_X_old_most_popular
 (
-    int row[], int col[], FPnum *restrict predicted, size_t n_predict,
-    FPnum *restrict biasA, FPnum *restrict biasB,
-    FPnum glob_mean,
-    int m, int n
+    int_t row[], int_t col[], real_t *restrict predicted, size_t n_predict,
+    real_t *restrict biasA, real_t *restrict biasB,
+    real_t glob_mean,
+    int_t m, int_t n
 )
 {
     if (m == 0) m = INT_MAX;

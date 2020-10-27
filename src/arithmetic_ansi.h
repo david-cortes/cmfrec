@@ -50,7 +50,7 @@ inline static void vecfree(void *memblock)
     free(memblock);
 }
 
-inline static void vecset(lbfgsFPnumval_t *x, const lbfgsFPnumval_t c, const size_t n)
+inline static void vecset(real_t *x, const real_t c, const size_t n)
 {
     size_t i;
     for (i = 0;i < n;++i) {
@@ -58,12 +58,12 @@ inline static void vecset(lbfgsFPnumval_t *x, const lbfgsFPnumval_t c, const siz
     }
 }
 
-inline static void veccpy(lbfgsFPnumval_t *y, const lbfgsFPnumval_t *x, const size_t n)
+inline static void veccpy(real_t *y, const real_t *x, const size_t n)
 {
-    memcpy(y, x, n*sizeof(lbfgsFPnumval_t));
+    memcpy(y, x, n*sizeof(real_t));
 }
 
-inline static void vecncpy(lbfgsFPnumval_t *restrict y, const lbfgsFPnumval_t *restrict x, const size_t n)
+inline static void vecncpy(real_t *restrict y, const real_t *restrict x, const size_t n)
 {
     size_t i;
     for (i = 0;i < n;++i) {
@@ -71,7 +71,7 @@ inline static void vecncpy(lbfgsFPnumval_t *restrict y, const lbfgsFPnumval_t *r
     }
 }
 
-inline static void vecadd(lbfgsFPnumval_t *y, const lbfgsFPnumval_t *x, const lbfgsFPnumval_t c, const size_t n)
+inline static void vecadd(real_t *y, const real_t *x, const real_t c, const size_t n)
 {
     if (n < (size_t)INT_MAX)
         cblas_taxpy((int)n, c, x, 1, y, 1);
@@ -80,7 +80,7 @@ inline static void vecadd(lbfgsFPnumval_t *y, const lbfgsFPnumval_t *x, const lb
             y[ix] += c*x[ix];
 }
 
-inline static void vecdiff(lbfgsFPnumval_t *restrict z, const lbfgsFPnumval_t *restrict x, const lbfgsFPnumval_t *restrict y, const size_t n)
+inline static void vecdiff(real_t *restrict z, const real_t *restrict x, const real_t *restrict y, const size_t n)
 {
     size_t i;
     for (i = 0;i < n;++i) {
@@ -88,7 +88,7 @@ inline static void vecdiff(lbfgsFPnumval_t *restrict z, const lbfgsFPnumval_t *r
     }
 }
 
-inline static void vecscale(lbfgsFPnumval_t *y, const lbfgsFPnumval_t c, const size_t n)
+inline static void vecscale(real_t *y, const real_t c, const size_t n)
 {
     if (n < (size_t)INT_MAX)
         cblas_tscal((int)n, c, y, 1);
@@ -97,7 +97,7 @@ inline static void vecscale(lbfgsFPnumval_t *y, const lbfgsFPnumval_t c, const s
             y[ix] *= c;
 }
 
-inline static void vecmul(lbfgsFPnumval_t *restrict y, const lbfgsFPnumval_t *restrict x, const size_t n)
+inline static void vecmul(real_t *restrict y, const real_t *restrict x, const size_t n)
 {
     size_t i;
     for (i = 0;i < n;++i) {
@@ -105,7 +105,7 @@ inline static void vecmul(lbfgsFPnumval_t *restrict y, const lbfgsFPnumval_t *re
     }
 }
 
-inline static void vecdot(lbfgsFPnumval_t* s, const lbfgsFPnumval_t *x, const lbfgsFPnumval_t *y, const size_t n)
+inline static void vecdot(real_t* s, const real_t *x, const real_t *y, const size_t n)
 {
     if (n < (size_t)INT_MAX)
         *s = cblas_tdot((int)n, x, 1, y, 1);
@@ -113,11 +113,11 @@ inline static void vecdot(lbfgsFPnumval_t* s, const lbfgsFPnumval_t *x, const lb
         long double res = 0;
         for (size_t ix = 0; ix < n; ix++)
             res += x[ix]*y[ix];
-        *s = (lbfgsFPnumval_t)res;
+        *s = (real_t)res;
     }
 }
 
-inline static void vec2norm(lbfgsFPnumval_t* s, const lbfgsFPnumval_t *x, const size_t n)
+inline static void vec2norm(real_t* s, const real_t *x, const size_t n)
 {
     if (n < (size_t)INT_MAX)
         *s = cblas_tnrm2(n, x, 1);
@@ -125,12 +125,12 @@ inline static void vec2norm(lbfgsFPnumval_t* s, const lbfgsFPnumval_t *x, const 
         long double res = 0;
         for (size_t ix = 0; ix < n; ix++)
             res += square(x[ix]);
-        *s = (lbfgsFPnumval_t)sqrtl(res);
+        *s = (real_t)sqrtl(res);
     }
 }
 
-inline static void vec2norminv(lbfgsFPnumval_t* s, const lbfgsFPnumval_t *x, const size_t n)
+inline static void vec2norminv(real_t* s, const real_t *x, const size_t n)
 {
     vec2norm(s, x, n);
-    *s = (lbfgsFPnumval_t)(1.0 / *s);
+    *s = (real_t)(1.0 / *s);
 }
