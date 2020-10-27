@@ -38,7 +38,7 @@ About function descriptions:
  - 'new' -> the user/items was not present in the training data that was passed to 'fit'.
 
  Also be aware that many of the model attributes in fitted-model objects, such as the A and B matrices,
- have a name ending in underscore (e.g. *CMF_explicit.A_*), but the docs you are reading here might
+ have a name ending in underscore (e.g. *CMF.A_*), but the docs you are reading here might
  render them without that underscore in the generated HTML. See the docstrings in the source code
  to be sure.
 
@@ -52,10 +52,10 @@ About function descriptions:
 Models
 ======
 
-CMF_explicit
+CMF
 ------------
 
-.. autoclass:: cmfrec.CMF_explicit
+.. autoclass:: cmfrec.CMF
     :members:
     :undoc-members:
     :inherited-members:

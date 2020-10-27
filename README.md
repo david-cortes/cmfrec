@@ -83,7 +83,7 @@ pip install cmfrec
 
 ```python
 import numpy as np, pandas as pd
-from cmfrec import CMF_explicit
+from cmfrec import CMF
 
 ### Generate random data
 n_users = 4
@@ -108,7 +108,7 @@ item_info = pd.DataFrame(np.random.normal(size = (n_items, n_item_attr)))
 item_info["ItemId"] = np.arange(n_items)
 
 ### Fit the model
-model = CMF_explicit(method="als", k=k)
+model = CMF(method="als", k=k)
 model.fit(X=ratings, U=user_info, I=item_info)
 
 ### Predict rating that user 3 would give to items 2 and 4

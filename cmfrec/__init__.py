@@ -4,7 +4,7 @@ import multiprocessing
 import ctypes
 import warnings
 
-__all__ = ["CMF_explicit", "CMF_implicit",
+__all__ = ["CMF", "CMF_implicit",
            "OMF_explicit", "OMF_implicit",
            "MostPopular", "ContentBased"]
 
@@ -1802,16 +1802,18 @@ class _CMF:
         return A
 
 
-class CMF_explicit(_CMF):
+class CMF(_CMF):
     """
-    Collective model for explicit-feedback data
+    Collective or multi-view matrix factorization
 
     Tries to approximate the 'X' interactions matrix  by a formula as follows:
         X ~ A * t(B)
-    While at the same time also approximating the user side information
-    matrix 'U' and the item side information matrix 'I' as follows:
+    While at the same time also approximating the user/row side information
+    matrix 'U' and the item/column side information matrix 'I' as follows:
         U ~ A * t(C)
         I ~ B * t(D)
+    The matrices ("A", "B", "C", "D") are obtained by minimizing the error
+    with respect to the non-missing entries in the input data ("X", "U", "I").
     Might apply sigmoid transformations to binary columns in U and I too.
 
     This is the most flexible of the models available in this package, and
@@ -1864,10 +1866,12 @@ class CMF_explicit(_CMF):
         and will not use the conjugate gradient method on new data.
         Ignored when passing ``method="lbfgs"``.
     user_bias : bool
-        Whether to add user biases (intercepts) to the model.
+        Whether to add user/row biases (intercepts) to the model.
         Cannot be used together with ``NA_as_zero``.
+        If using it for purposes other than recommender systems, this is is
+        usually **not** suggested to include.
     item_bias : bool
-        Whether to add item biases (intercepts) to the model. Be aware that using
+        Whether to add item/column biases (intercepts) to the model. Be aware that using
         item biases with low regularization for them will tend to favor items
         with high average ratings regardless of the number of ratings the item
         has received.
@@ -6693,14 +6697,14 @@ class MostPopular(_CMF):
                               include=include, exclude=exclude,
                               output_score=output_score)
 
-class CMF_imputer(CMF_explicit):
+class CMF_imputer(CMF):
     """
-    A wrapper for CMF_explicit allowing argument 'y' in 'fit' and
+    A wrapper for CMF allowing argument 'y' in 'fit' and
     'transform' (used as a placeholder only, not used for anything),
     which can be used as part of SciKit-Learn pipelines due to having
     this extra parameter.
 
-    Everything else is exactly the same as for 'CMF_explicit'
+    Everything else is exactly the same as for 'CMF'
     """
     def fit(self, X, y=None, U=None, I=None, U_bin=None, I_bin=None, W=None):
         return super().fit(X=X, U=U, U_bin=U_bin, I=I, I_bin=I_bin, W=W)
