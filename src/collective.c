@@ -5497,10 +5497,11 @@ int_t fit_collective_explicit_als
 
     if (retval == 2)
     {
-        if (verbose)
+        if (verbose) {
             #ifndef _FOR_R
             fflush(stderr);
             #endif
+        }
         return retval;
     }
 
@@ -6619,10 +6620,11 @@ int_t fit_collective_implicit_als
 
     if (retval == 2)
     {
-        if (verbose)
+        if (verbose) {
             #ifndef _FOR_R
             fflush(stderr);
             #endif
+        }
         return retval;
     }
     

@@ -1641,9 +1641,11 @@ int_t fit_offsets_als
     }
 
     if (retval != 0) {
-        #ifndef _FOR_R
-        fflush(stderr);
-        #endif
+        if (verbose) {
+            #ifndef _FOR_R
+            fflush(stderr);
+            #endif
+        }
         return retval;
     }
 
