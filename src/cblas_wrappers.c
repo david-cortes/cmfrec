@@ -3,16 +3,16 @@
     -------------------------------
     
     This is a module for multi-way factorization of sparse and dense matrices
-    intended to be used for recommender system with explicit feedback data plus
+    int_tended to be used for recommender system with explicit feedback data plus
     side information about users and/or items.
 
     The reference papers are:
         (a) Cortes, David.
             "Cold-start recommendations in Collective Matrix Factorization."
-            arXiv preprint arXiv:1809.00366 (2018).
+            arXiv preprint_t arXiv:1809.00366 (2018).
         (b) Singh, Ajit P., and Geoffrey J. Gordon.
             "Relational learning via collective matrix factorization."
-            Proceedings of the 14th ACM SIGKDD international conference on
+            Proceedings of the 14th ACM SIGKDD int_ternational conference on
             Knowledge discovery and data mining. 2008.
         (c) Hu, Yifan, Yehuda Koren, and Chris Volinsky.
             "Collaborative filtering for implicit feedback datasets."
@@ -28,7 +28,7 @@
     the data, see the files 'collective.c' and 'offsets.c'.
 
     Written for C99 standard and OpenMP version 2.0 or higher, and aimed to be
-    used either as a stand-alone program, or wrapped into scripting languages
+    used either as a stand-alone program, or wrapped int_to scripting languages
     such as Python and R.
     <https://www.github.com/david-cortes/cmfrec>
 
@@ -92,36 +92,36 @@ extern "C" {
 #endif
 
 #ifndef _FOR_R
-FPnum tdot_(const int*, const FPnum*, const int*, const FPnum*, const int*);
-void tcopy_(const int*, const FPnum*, const int*, const FPnum*, const int*);
-void taxpy_(const int*, const FPnum*, const FPnum*, const int*, const FPnum*, const int*);
-void tscal_(const int*, const FPnum*, const FPnum*, const int*);
-void tsyr_(const char*, const int*, const FPnum*, const FPnum*, const int*, const FPnum*, const int*);
-void tsyrk_(const char*, const char*, const int*, const int*, const FPnum*, const FPnum*, const int*, const FPnum*, const FPnum*, const int*);
-FPnum tnrm2_(const int*, const FPnum*, const int*);
-void tgemm_(const char*, const char*, const int*, const int*, const int*, const FPnum*, const FPnum*, const int*, const FPnum*, const int*, const FPnum*, const FPnum*, const int*);
-void tgemv_(const char*, const int*, const int*, const FPnum*, const FPnum*, const int*, const FPnum*, const int*, const FPnum*, const FPnum*, const int*);
-void tsymv_(const char*, const int*, const FPnum*, const FPnum*, const int*, const FPnum*, const int*, const FPnum*, const FPnum*, const int*);
+real_t tdot_(const int_t*, const real_t*, const int_t*, const real_t*, const int_t*);
+void tcopy_(const int_t*, const real_t*, const int_t*, const real_t*, const int_t*);
+void taxpy_(const int_t*, const real_t*, const real_t*, const int_t*, const real_t*, const int_t*);
+void tscal_(const int_t*, const real_t*, const real_t*, const int_t*);
+void tsyr_(const char*, const int_t*, const real_t*, const real_t*, const int_t*, const real_t*, const int_t*);
+void tsyrk_(const char*, const char*, const int_t*, const int_t*, const real_t*, const real_t*, const int_t*, const real_t*, const real_t*, const int_t*);
+real_t tnrm2_(const int_t*, const real_t*, const int_t*);
+void tgemm_(const char*, const char*, const int_t*, const int_t*, const int_t*, const real_t*, const real_t*, const int_t*, const real_t*, const int_t*, const real_t*, const real_t*, const int_t*);
+void tgemv_(const char*, const int_t*, const int_t*, const real_t*, const real_t*, const int_t*, const real_t*, const int_t*, const real_t*, const real_t*, const int_t*);
+void tsymv_(const char*, const int_t*, const real_t*, const real_t*, const int_t*, const real_t*, const int_t*, const real_t*, const real_t*, const int_t*);
 #endif
 
 
-FPnum  cblas_tdot(const int n, const FPnum  *x, const int incx, const FPnum  *y, const int incy)
+real_t  cblas_tdot(const int_t n, const real_t  *x, const int_t incx, const real_t  *y, const int_t incy)
 {
     return tdot_(&n, x, &incx, y, &incy);
 }
-void cblas_tcopy(const int n, const FPnum *x, const int incx, FPnum *y, const int incy)
+void cblas_tcopy(const int_t n, const real_t *x, const int_t incx, real_t *y, const int_t incy)
 {
     tcopy_(&n, x, &incx, y, &incy);
 }
-void cblas_taxpy(const int n, const FPnum alpha, const FPnum *x, const int incx, FPnum *y, const int incy)
+void cblas_taxpy(const int_t n, const real_t alpha, const real_t *x, const int_t incx, real_t *y, const int_t incy)
 {
     taxpy_(&n, &alpha, x, &incx, y, &incy);
 }
-void cblas_tscal(const int N, const FPnum alpha, FPnum *X, const int incX)
+void cblas_tscal(const int_t N, const real_t alpha, real_t *X, const int_t incX)
 {
     tscal_(&N, &alpha, X, &incX);
 }
-void cblas_tsyr(const CBLAS_ORDER order, const CBLAS_UPLO Uplo, const int N, const FPnum alpha, const FPnum *X, const int incX, FPnum *A, const int lda)
+void cblas_tsyr(const CBLAS_ORDER order, const CBLAS_UPLO Uplo, const int_t N, const real_t alpha, const real_t *X, const int_t incX, real_t *A, const int_t lda)
 {
     char uplo = '\0';
     if (order == CblasColMajor)
@@ -142,7 +142,7 @@ void cblas_tsyr(const CBLAS_ORDER order, const CBLAS_UPLO Uplo, const int N, con
     tsyr_(&uplo, &N, &alpha, X, &incX, A, &lda);
 }
 void cblas_tsyrk(const CBLAS_ORDER Order, const CBLAS_UPLO Uplo, const CBLAS_TRANSPOSE Trans,
-         const int N, const int K, const FPnum alpha, const FPnum *A, const int lda, const FPnum beta, FPnum *C, const int ldc)
+         const int_t N, const int_t K, const real_t alpha, const real_t *A, const int_t lda, const real_t beta, real_t *C, const int_t ldc)
 {
     char uplo = '\0';
     char trans = '\0';
@@ -178,12 +178,12 @@ void cblas_tsyrk(const CBLAS_ORDER Order, const CBLAS_UPLO Uplo, const CBLAS_TRA
 
     tsyrk_(&uplo, &trans, &N, &K, &alpha, A, &lda, &beta, C, &ldc);
 }
-FPnum  cblas_tnrm2 (const int N, const FPnum  *X, const int incX)
+real_t  cblas_tnrm2 (const int_t N, const real_t  *X, const int_t incX)
 {
     return tnrm2_(&N, X, &incX);
 }
-void cblas_tgemm(const CBLAS_ORDER Order, const CBLAS_TRANSPOSE TransA, const CBLAS_TRANSPOSE TransB, const int M, const int N, const int K,
-         const FPnum alpha, const FPnum *A, const int lda, const FPnum *B, const int ldb, const FPnum beta, FPnum *C, const int ldc)
+void cblas_tgemm(const CBLAS_ORDER Order, const CBLAS_TRANSPOSE TransA, const CBLAS_TRANSPOSE TransB, const int_t M, const int_t N, const int_t K,
+         const real_t alpha, const real_t *A, const int_t lda, const real_t *B, const int_t ldb, const real_t beta, real_t *C, const int_t ldc)
 {
     char transA = '\0';
     char transB = '\0';
@@ -225,8 +225,8 @@ void cblas_tgemm(const CBLAS_ORDER Order, const CBLAS_TRANSPOSE TransA, const CB
         tgemm_(&transA, &transB, &N, &M, &K, &alpha, B, &ldb, A, &lda, &beta, C, &ldc);
     }
 }
-void cblas_tgemv(const CBLAS_ORDER order,  const CBLAS_TRANSPOSE TransA,  const int m, const int n,
-         const FPnum alpha, const FPnum  *a, const int lda,  const FPnum  *x, const int incx,  const FPnum beta,  FPnum  *y, const int incy)
+void cblas_tgemv(const CBLAS_ORDER order,  const CBLAS_TRANSPOSE TransA,  const int_t m, const int_t n,
+         const real_t alpha, const real_t  *a, const int_t lda,  const real_t  *x, const int_t incx,  const real_t beta,  real_t  *y, const int_t incy)
 {
     char trans = '\0';
     if (order == CblasColMajor)
@@ -253,8 +253,8 @@ void cblas_tgemv(const CBLAS_ORDER order,  const CBLAS_TRANSPOSE TransA,  const 
         tgemv_(&trans, &n, &m, &alpha, a, &lda, x, &incx, &beta, y, &incy);
     }
 }
-void cblas_tsymv(const CBLAS_ORDER order, const CBLAS_UPLO Uplo, const int N, const FPnum alpha, const FPnum *A,
-                 const int lda, const FPnum *X, const int incX, const FPnum beta, FPnum *Y, const int incY)
+void cblas_tsymv(const CBLAS_ORDER order, const CBLAS_UPLO Uplo, const int_t N, const real_t alpha, const real_t *A,
+                 const int_t lda, const real_t *X, const int_t incX, const real_t beta, real_t *Y, const int_t incY)
 {
     char uplo = '\0';
     if (order == CblasColMajor)
