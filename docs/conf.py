@@ -25,6 +25,7 @@ project = 'cmfrec'
 copyright = '2020, David Cortes'
 author = 'David Cortes'
 
+master_doc = 'index'
 
 # -- General configuration ---------------------------------------------------
 
