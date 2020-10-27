@@ -54,7 +54,6 @@ def py_eval(values):
         res += w_user * (errUb**2).sum()
     return res / 2
 
-buffer_int = np.empty(int(1e3), dtype=ctypes.c_int)
 buffer_double = np.empty(int(1e5), dtype=ctypes.c_double)
 empty_1d = np.empty(0, dtype=ctypes.c_double)
 empty_2d = np.empty((0,0), dtype=ctypes.c_double)

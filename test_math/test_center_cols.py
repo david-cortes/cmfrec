@@ -26,17 +26,17 @@ X_centered = X - colmeans.reshape((1,-1))
 empty_1d = np.empty(0, dtype=ctypes.c_double)
 empty_2d = np.empty((0,0), dtype=ctypes.c_double)
 empty_int = np.empty(0, dtype=ctypes.c_int)
-empty_long = np.empty(0, dtype=ctypes.c_long)
+empty_size_t = np.empty(0, dtype=ctypes.c_size_t)
 def get_colmeans():
     res = np.empty(n, dtype=ctypes.c_double)
     Xfull_pass = X.copy() if xtype=="dense" else empty_2d
     ixA_pass = Xcoo.row.astype(ctypes.c_int) if xtype!="dense" else empty_int
     ixB_pass = Xcoo.col.astype(ctypes.c_int) if xtype!="dense" else empty_int
     X_pass = Xcoo.data.astype(ctypes.c_double).copy() if xtype!="dense" else empty_1d
-    Xcsr_p_pass = Xcsr.indptr.astype(ctypes.c_long) if xtype=="csr" else empty_long
+    Xcsr_p_pass = Xcsr.indptr.astype(ctypes.c_size_t) if xtype=="csr" else empty_size_t
     Xcsr_i_pass = Xcsr.indices.astype(ctypes.c_int) if xtype=="csr" else empty_int
     Xcsr_pass = Xcsr.data.astype(ctypes.c_double).copy() if xtype=="csr" else empty_1d
-    Xcsc_p_pass = Xcsc.indptr.astype(ctypes.c_long) if xtype=="csr" else empty_long
+    Xcsc_p_pass = Xcsc.indptr.astype(ctypes.c_size_t) if xtype=="csr" else empty_size_t
     Xcsc_i_pass = Xcsc.indices.astype(ctypes.c_int) if xtype=="csr" else empty_int
     Xcsc_pass = Xcsc.data.astype(ctypes.c_double).copy() if xtype=="csr" else empty_1d
     

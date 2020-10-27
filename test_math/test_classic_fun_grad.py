@@ -18,7 +18,7 @@ X[np.random.randint(m, size=nz), np.random.randint(n, size=nz)] = np.nan
 empty_1d = np.empty(0, dtype=ctypes.c_double)
 empty_2d = np.empty((0,0), dtype=ctypes.c_double)
 empty_int = np.empty(0, dtype=ctypes.c_int)
-empty_long = np.empty(0, dtype=ctypes.c_long)
+empty_size_t = np.empty(0, dtype=ctypes.c_size_t)
 buffer_double = np.empty(int(1e6), dtype=ctypes.c_double)
 buffer_mt = np.empty(int(1e6), dtype=ctypes.c_double)
 
@@ -44,10 +44,10 @@ def classic_fun_grad(values):
         X_sp_col if xtype=="sparse" else empty_int,
         X_sp.copy() if xtype=="sparse" else empty_1d,
         X.copy() if xtype=="dense" else empty_2d,
-        Xcsr.indptr.astype(ctypes.c_long) if (xtype=="sparse" and not mt1p) else empty_long,
+        Xcsr.indptr.astype(ctypes.c_size_t) if (xtype=="sparse" and not mt1p) else empty_size_t,
         Xcsr.indices.astype(ctypes.c_int) if (xtype=="sparse" and not mt1p) else empty_int,
         Xcsr.data.astype(ctypes.c_double).copy() if (xtype=="sparse" and not mt1p) else empty_1d,
-        Xcsc.indptr.astype(ctypes.c_long) if (xtype=="sparse" and not mt1p) else empty_long,
+        Xcsc.indptr.astype(ctypes.c_size_t) if (xtype=="sparse" and not mt1p) else empty_size_t,
         Xcsc.indices.astype(ctypes.c_int) if (xtype=="sparse" and not mt1p) else empty_int,
         Xcsc.data.astype(ctypes.c_double).copy() if (xtype=="sparse" and not mt1p) else empty_1d,
         empty_1d if not wtype else (W.reshape(-1).copy() if xtype=="dense" else W_sp.copy()),

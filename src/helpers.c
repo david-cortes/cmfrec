@@ -9,7 +9,7 @@
     The reference papers are:
         (a) Cortes, David.
             "Cold-start recommendations in Collective Matrix Factorization."
-            arXiv preprint arXiv:1809.00366 (2018).
+            arXiv preprint_t arXiv:1809.00366 (2018).
         (b) Singh, Ajit P., and Geoffrey J. Gordon.
             "Relational learning via collective matrix factorization."
             Proceedings of the 14th ACM SIGKDD international conference on
@@ -18,6 +18,11 @@
             "Collaborative filtering for implicit feedback datasets."
             2008 Eighth IEEE International Conference on Data Mining.
             Ieee, 2008.
+        (d) Takacs, Gabor, Istvan Pilaszy, and Domonkos Tikk.
+            "Applications of the conjugate gradient method for
+            implicit feedback collaborative filtering."
+            Proceedings of the fifth ACM conference on
+            Recommender systems. 2011.
 
     For information about the models offered here and how they are fit to
     the data, see the files 'collective.c' and 'offsets.c'.
@@ -58,32 +63,32 @@
 
 /* Note: in x86_64 computers, there's hardly any speed up from having > 2
    threads zeroing out an array */
-void set_to_zero(FPnum *arr, size_t n, int nthreads)
+void set_to_zero(real_t *arr, size_t n, int_t nthreads)
 {
     if (n == 0) return;
     #if defined(_OPENMP)
     nthreads = (nthreads > 1)? 2 : 1;
     size_t chunk_size = n / (size_t)nthreads;
     size_t remainder = n % (size_t)nthreads;
-    int i = 0;
-    if (nthreads > 1)
+    int_t i = 0;
+    if (nthreads > 1 && n > (size_t)1e8)
     {
         #pragma omp parallel for schedule(static, 1) \
                 firstprivate(arr, chunk_size, nthreads) num_threads(nthreads)
         for (i = 0; i < nthreads; i++)
-            memset(arr + i * chunk_size, 0, chunk_size*sizeof(FPnum));
+            memset(arr + i * chunk_size, 0, chunk_size*sizeof(real_t));
         if (remainder > 0)
-            memset(arr + nthreads * chunk_size, 0, remainder*sizeof(FPnum));
+            memset(arr + nthreads * chunk_size, 0, remainder*sizeof(real_t));
     } else
     #endif
     {
-        memset(arr, 0, n*sizeof(FPnum));
+        memset(arr, 0, n*sizeof(real_t));
     }
 }
 
 /* Note: in x86_64 computers, there's hardly any speed up from having > 4
    threads copying arrays */
-void copy_arr(FPnum *restrict src, FPnum *restrict dest, size_t n, int nthreads)
+void copy_arr(real_t *restrict src, real_t *restrict dest, size_t n, int_t nthreads)
 {
     /* Note: don't use BLAS scopy as it's actually much slower */
     if (n == 0) return;
@@ -91,25 +96,25 @@ void copy_arr(FPnum *restrict src, FPnum *restrict dest, size_t n, int nthreads)
     nthreads = cap_to_4(nthreads);
     size_t chunk_size = n / (size_t)nthreads;
     size_t remainder = n % (size_t)nthreads;
-    int i = 0;
-    if (nthreads > 1)
+    int_t i = 0;
+    if (nthreads > 1 && n > (size_t)1e8)
     {
         #pragma omp parallel for schedule(static, 1) \
                 firstprivate(src, dest, chunk_size, nthreads) num_threads(nthreads)
         for (i = 0; i < nthreads; i++)
-            memcpy(dest + i * chunk_size, src + i * chunk_size, chunk_size*sizeof(FPnum));
+            memcpy(dest + i * chunk_size, src + i * chunk_size, chunk_size*sizeof(real_t));
         if (remainder > 0)
-            memcpy(dest + nthreads*chunk_size, src + nthreads*chunk_size, remainder*sizeof(FPnum));
+            memcpy(dest + nthreads*chunk_size, src + nthreads*chunk_size, remainder*sizeof(real_t));
     }  else 
     #endif
     {
-        memcpy(dest, src, n*sizeof(FPnum));
+        memcpy(dest, src, n*sizeof(real_t));
     }
 }
 
-int count_NAs(FPnum arr[], size_t n, int nthreads)
+int_t count_NAs(real_t arr[], size_t n, int_t nthreads)
 {
-    int cnt_NA = 0;
+    int_t cnt_NA = 0;
     nthreads = cap_to_4(nthreads);
 
     #if defined(_OPENMP) && \
@@ -128,8 +133,8 @@ int count_NAs(FPnum arr[], size_t n, int nthreads)
 
 void count_NAs_by_row
 (
-    FPnum *restrict arr, int m, int n,
-    int *restrict cnt_NA, int nthreads,
+    real_t *restrict arr, int_t m, int_t n,
+    int_t *restrict cnt_NA, int_t nthreads,
     bool *restrict full_dense, bool *restrict near_dense
 )
 {
@@ -146,7 +151,7 @@ void count_NAs_by_row
             cnt_NA[row] += isnan(arr[col + row*n]);
 
     *full_dense = true;
-    for (int ix = 0; ix < m; ix++) {
+    for (int_t ix = 0; ix < m; ix++) {
         if (cnt_NA[ix]) {
             *full_dense = false;
             break;
@@ -158,20 +163,20 @@ void count_NAs_by_row
        This is used later in order to decide whether to use a gradient-
        based approach or closed-form when optimizing a matrix in isolation */
     *near_dense = false;
-    int cnt_rows_w_NA = 0;
+    int_t cnt_rows_w_NA = 0;
     if (!full_dense)
     {
-        for (int ix = 0; ix < m; ix++)
+        for (int_t ix = 0; ix < m; ix++)
             cnt_rows_w_NA += (cnt_NA[ix] > 0);
-        if ((m - cnt_rows_w_NA) >= (int)(0.7 * (double)m))
+        if ((m - cnt_rows_w_NA) >= (int)(0.75 * (double)m))
             *near_dense = true;
     }
 }
 
 void count_NAs_by_col
 (
-    FPnum *restrict arr, int m, int n,
-    int *restrict cnt_NA,
+    real_t *restrict arr, int_t m, int_t n,
+    int_t *restrict cnt_NA,
     bool *restrict full_dense, bool *restrict near_dense
 )
 {
@@ -180,7 +185,7 @@ void count_NAs_by_col
             cnt_NA[col] += isnan(arr[col + row*n]);
 
     *full_dense = true;
-    for (int ix = 0; ix < n; ix++) {
+    for (int_t ix = 0; ix < n; ix++) {
         if (cnt_NA[ix]) {
             *full_dense = false;
             break;
@@ -188,17 +193,17 @@ void count_NAs_by_col
     }
 
     *near_dense = false;
-    int cnt_rows_w_NA = 0;
+    int_t cnt_rows_w_NA = 0;
     if (!full_dense)
     {
-        for (int ix = 0; ix < n; ix++)
+        for (int_t ix = 0; ix < n; ix++)
             cnt_rows_w_NA += (cnt_NA[ix] > 0);
-        if ((n - cnt_rows_w_NA) >= (int)(0.7 * (double)n))
+        if ((n - cnt_rows_w_NA) >= (int)(0.75 * (double)n))
             *near_dense = true;
     }
 }
 
-void sum_by_rows(FPnum *restrict A, FPnum *restrict outp, int m, int n, int nthreads)
+void sum_by_rows(real_t *restrict A, real_t *restrict outp, int_t m, int_t n, int_t nthreads)
 {
     nthreads = cap_to_4(nthreads);
     #if defined(_OPENMP) && \
@@ -214,12 +219,12 @@ void sum_by_rows(FPnum *restrict A, FPnum *restrict outp, int m, int n, int nthr
             outp[row] += A[col + row*(size_t)n];
 }
 
-void sum_by_cols(FPnum *restrict A, FPnum *restrict outp, int m, int n, size_t lda, int nthreads)
+void sum_by_cols(real_t *restrict A, real_t *restrict outp, int_t m, int_t n, size_t lda, int_t nthreads)
 {
     #ifdef _OPENMP
     /* Note: GCC and CLANG do a poor optimization when the array to sum has many
        rows and few columns, which is the most common use-case for this */
-    if ((FPnum)n > 1e3*(FPnum)m && nthreads > 4) /* this assumes there's many columns, in which case there's a speedup */
+    if ((real_t)n > 1e3*(real_t)m && nthreads > 4) /* this assumes there's many columns, in which case there's a speedup */
     {
         #if defined(_OPENMP) && \
                     ( (_OPENMP < 200801)  /* OpenMP < 3.0 */ \
@@ -243,7 +248,7 @@ void sum_by_cols(FPnum *restrict A, FPnum *restrict outp, int m, int n, size_t l
     }
 }
 
-void mat_plus_rowvec(FPnum *restrict A, FPnum *restrict b, int m, int n, int nthreads)
+void mat_plus_rowvec(real_t *restrict A, real_t *restrict b, int_t m, int_t n, int_t nthreads)
 {
     nthreads = cap_to_4(nthreads);
     #if defined(_OPENMP) && \
@@ -258,7 +263,7 @@ void mat_plus_rowvec(FPnum *restrict A, FPnum *restrict b, int m, int n, int nth
             A[col + (size_t)row*n] += b[row];
 }
 
-void mat_plus_colvec(FPnum *restrict A, FPnum *restrict b, FPnum alpha, int m, int n, size_t lda, int nthreads)
+void mat_plus_colvec(real_t *restrict A, real_t *restrict b, real_t alpha, int_t m, int_t n, size_t lda, int_t nthreads)
 {
     nthreads = cap_to_4(nthreads);
     #if defined(_OPENMP) && \
@@ -276,9 +281,9 @@ void mat_plus_colvec(FPnum *restrict A, FPnum *restrict b, FPnum alpha, int m, i
 
 void mat_minus_rowvec2
 (
-    FPnum *restrict Xfull,
-    int ixA[], int ixB[], FPnum *restrict X, size_t nnz,
-    FPnum *restrict b, int m, int n, int nthreads
+    real_t *restrict Xfull,
+    int_t ixA[], int_t ixB[], real_t *restrict X, size_t nnz,
+    real_t *restrict b, int_t m, int_t n, int_t nthreads
 )
 {
     nthreads = cap_to_4(nthreads);
@@ -309,9 +314,9 @@ void mat_minus_rowvec2
 
 void mat_minus_colvec2
 (
-    FPnum *restrict Xfull,
-    int ixA[], int ixB[], FPnum *restrict X, size_t nnz,
-    FPnum *restrict b, int m, int n, int nthreads
+    real_t *restrict Xfull,
+    int_t ixA[], int_t ixB[], real_t *restrict X, size_t nnz,
+    real_t *restrict b, int_t m, int_t n, int_t nthreads
 )
 {
     nthreads = cap_to_4(nthreads);
@@ -338,7 +343,7 @@ void mat_minus_colvec2
     }
 }
 
-void nan_to_zero(FPnum *restrict arr, FPnum *restrict comp, size_t n, int nthreads)
+void nan_to_zero(real_t *restrict arr, real_t *restrict comp, size_t n, int_t nthreads)
 {
     nthreads = cap_to_4(nthreads);
     #if defined(_OPENMP) && \
@@ -352,7 +357,7 @@ void nan_to_zero(FPnum *restrict arr, FPnum *restrict comp, size_t n, int nthrea
         arr[ix] = (!isnan(comp[ix]))? arr[ix] : 0;
 }
 
-void mult_if_non_nan(FPnum *restrict arr, FPnum *restrict comp, FPnum *restrict w, size_t n, int nthreads)
+void mult_if_non_nan(real_t *restrict arr, real_t *restrict comp, real_t *restrict w, size_t n, int_t nthreads)
 {
     nthreads = cap_to_4(nthreads);
     #if defined(_OPENMP) && \
@@ -366,7 +371,7 @@ void mult_if_non_nan(FPnum *restrict arr, FPnum *restrict comp, FPnum *restrict 
         arr[ix] = (!isnan(arr[ix]))? (w[ix] * arr[ix]) : (0);
 }
 
-void mult_elemwise(FPnum *restrict inout, FPnum *restrict other, size_t n, int nthreads)
+void mult_elemwise(real_t *restrict inout, real_t *restrict other, size_t n, int_t nthreads)
 {
     #if defined(_OPENMP) && \
                 ( (_OPENMP < 200801)  /* OpenMP < 3.0 */ \
@@ -379,7 +384,7 @@ void mult_elemwise(FPnum *restrict inout, FPnum *restrict other, size_t n, int n
         inout[ix] *= other[ix];
 }
 
-FPnum sum_squares(FPnum *restrict arr, size_t n, int nthreads)
+real_t sum_squares(real_t *restrict arr, size_t n, int_t nthreads)
 {
     double res = 0;
     if (n < (size_t)INT_MAX)
@@ -396,10 +401,10 @@ FPnum sum_squares(FPnum *restrict arr, size_t n, int nthreads)
         for (size_t_for ix = 0; ix < n; ix++)
             res += square(arr[ix]);
     }
-    return (FPnum)res;
+    return (real_t)res;
 }
 
-void saxpy_large(FPnum *restrict A, FPnum x, FPnum *restrict Y, size_t n, int nthreads)
+void taxpy_large(real_t *restrict A, real_t x, real_t *restrict Y, size_t n, int_t nthreads)
 {
     if (n < (size_t)INT_MAX)
         cblas_taxpy((int)n, x, A, 1, Y, 1);
@@ -411,14 +416,21 @@ void saxpy_large(FPnum *restrict A, FPnum x, FPnum *restrict Y, size_t n, int nt
                     )
         long long ix;
         #endif
-        #pragma omp parallel for schedule(static) num_threads(nthreads) shared(A, x, Y, n)
-        for (size_t_for ix = 0; ix < n; ix++)
-            Y[ix] += x*A[ix];
+        if (x == 1.)
+            #pragma omp parallel for schedule(static) num_threads(nthreads) shared(A, Y, n)
+            for (size_t_for ix = 0; ix < n; ix++)
+                Y[ix] += A[ix];
+        else
+            #pragma omp parallel for schedule(static) num_threads(nthreads) shared(A, x, Y, n)
+            for (size_t_for ix = 0; ix < n; ix++)
+                Y[ix] += x*A[ix];
     }
 }
 
-void sscal_large(FPnum *restrict arr, FPnum alpha, size_t n, int nthreads)
+void tscal_large(real_t *restrict arr, real_t alpha, size_t n, int_t nthreads)
 {
+    if (alpha == 1.)
+        return;
     if (n < (size_t)INT_MAX)
         cblas_tscal((int)n, alpha, arr, 1);
     else {
@@ -435,16 +447,16 @@ void sscal_large(FPnum *restrict arr, FPnum alpha, size_t n, int nthreads)
     }
 }
 
-int rnorm(FPnum *restrict arr, size_t n, int seed, int nthreads)
+int_t rnorm(real_t *restrict arr, size_t n, int_t seed, int_t nthreads)
 {
-    int three = 3;
-    seed = max2(seed, 4095);
-    seed = min2(seed, 0);
-    int seed_arr[4] = {seed, seed, seed, seed};
+    #ifndef _FOR_R
+    int_t three = 3;
+    int_t seed_arr[4] = {seed, seed, seed, seed};
+    process_seed_for_larnv(seed_arr);
     if (n < (size_t)INT_MAX)
     {
-        int n_int = (int)n;
-        tlarnv_(&three, seed_arr, &n_int, arr);
+        int_t n_int_t = (int)n;
+        tlarnv_(&three, seed_arr, &n_int_t, arr);
     }
 
     else
@@ -455,11 +467,11 @@ int rnorm(FPnum *restrict arr, size_t n, int seed, int nthreads)
                     )
         long long chunk;
         #endif
-        int chunk_size = (int)INT_MAX;
+        int_t chunk_size = (int)INT_MAX;
         size_t chunks = n / (size_t)INT_MAX;
-        int remainder = n - (size_t)INT_MAX * chunks;
-        int *restrict mt_seed_arr = (int*)malloc(4*nthreads*sizeof(int));
-        int *restrict thread_seed;
+        int_t remainder = n - (size_t)INT_MAX * chunks;
+        int_t *restrict mt_seed_arr = (int_t*)malloc(4*nthreads*sizeof(int));
+        int_t *restrict thread_seed;
         if (mt_seed_arr == NULL) return 1;
 
         #pragma omp parallel for schedule(static, 1) num_threads(nthreads) \
@@ -476,11 +488,68 @@ int rnorm(FPnum *restrict arr, size_t n, int seed, int nthreads)
             tlarnv_(&three, seed_arr, &remainder, arr + (size_t)INT_MAX * chunks);
         free(mt_seed_arr);
     }
+    #else
+    GetRNGstate();
+    for (size_t ix = 0; ix < n; ix++)
+        arr[ix] = norm_rand();
+    PutRNGstate();
+    #endif
     return 0;
 }
 
-void reduce_mat_sum(FPnum *restrict outp, size_t lda, FPnum *restrict inp,
-                    int m, int n, int nthreads)
+void rnorm_preserve_seed(real_t *restrict arr, size_t n, int_t seed_arr[4])
+{
+    #ifndef _FOR_R
+    process_seed_for_larnv(seed_arr);
+    int_t three = 3;
+
+    if (n < (size_t)INT_MAX){
+        int_t n_int_t = (int)n;
+        tlarnv_(&three, seed_arr, &n_int_t, arr);
+    }
+
+    else {
+        size_t remainder = n;
+        int_t size_chunk = 0;
+        while (remainder)
+        {
+            if (remainder >= (size_t)INT_MAX)
+                size_chunk = INT_MAX;
+            else
+                size_chunk = remainder;
+            remainder -= (size_t)size_chunk;
+            tlarnv_(&three, seed_arr, &size_chunk, arr);
+            arr += size_chunk;
+        }
+    }
+    #else
+    GetRNGstate();
+    for (size_t ix = 0; ix < n; ix++)
+        arr[ix] = norm_rand();
+    PutRNGstate();
+    #endif
+}
+
+void process_seed_for_larnv(int_t seed_arr[4])
+{
+    for (int_t ix = 0; ix < 4; ix++)
+    {
+        seed_arr[ix] = min2(seed_arr[ix], 4095);
+        seed_arr[ix] = max2(seed_arr[ix], 0);
+        if (ix == 3 && (seed_arr[ix] % 2) == 0)
+        {
+            if ((seed_arr[ix] + 1) <= 4095 && (seed_arr[ix] + 1) >= 0)
+                seed_arr[ix]++;
+            else if ((seed_arr[ix] - 1) <= 4095 && (seed_arr[ix] - 1) >= 0)
+                seed_arr[ix]--;
+            else
+                seed_arr[ix] = 1;
+        }
+    }
+}
+
+void reduce_mat_sum(real_t *restrict outp, size_t lda, real_t *restrict inp,
+                    int_t m, int_t n, int_t nthreads)
 {
     #if defined(_OPENMP) && \
                 ( (_OPENMP < 200801)  /* OpenMP < 3.0 */ \
@@ -489,7 +558,7 @@ void reduce_mat_sum(FPnum *restrict outp, size_t lda, FPnum *restrict inp,
     long long row;
     #endif
     size_t m_by_n = m * n;
-    if (n > 1 || lda > 1)
+    if (n > 1 || lda > 0)
         #pragma omp parallel for schedule(static) num_threads(nthreads) \
                 shared(outp, inp, m, n, nthreads)
         for (size_t_for row = 0; row < (size_t)m; row++)
@@ -502,7 +571,7 @@ void reduce_mat_sum(FPnum *restrict outp, size_t lda, FPnum *restrict inp,
                 outp[row] += inp[tid*m_by_n + row];
 }
 
-void exp_neg_x(FPnum *restrict arr, size_t n, int nthreads)
+void exp_neg_x(real_t *restrict arr, size_t n, int_t nthreads)
 {
     #if defined(_OPENMP) && \
                 ( (_OPENMP < 200801)  /* OpenMP < 3.0 */ \
@@ -515,15 +584,15 @@ void exp_neg_x(FPnum *restrict arr, size_t n, int nthreads)
         arr[ix] = exp_t(-arr[ix]);
 }
 
-void add_to_diag(FPnum *restrict A, FPnum val, int n)
+void add_to_diag(real_t *restrict A, real_t val, size_t n)
 {
-    for (int ix = 0; ix < n; ix++)
+    for (size_t ix = 0; ix < n; ix++)
         A[ix + ix*n] += val;
 }
 
-FPnum sum_sq_div_w(FPnum *restrict arr, FPnum *restrict w, size_t n, bool compensated, int nthreads)
+real_t sum_sq_div_w(real_t *restrict arr, real_t *restrict w, size_t n, bool compensated, int_t nthreads)
 {
-    FPnum res = 0;
+    real_t res = 0;
     #if defined(_OPENMP) && \
                 ( (_OPENMP < 200801)  /* OpenMP < 3.0 */ \
                   || defined(_WIN32) || defined(_WIN64) \
@@ -537,53 +606,69 @@ FPnum sum_sq_div_w(FPnum *restrict arr, FPnum *restrict w, size_t n, bool compen
 }
 
 /* X <- alpha*A*B + X | A(m,k) is sparse CSR, B(k,n) is dense */
-void sgemm_sp_dense
+void tgemm_sp_dense
 (
-    int m, int n, FPnum alpha,
-    long indptr[], int indices[], FPnum values[],
-    FPnum DenseMat[], size_t ldb,
-    FPnum OutputMat[], size_t ldc,
-    int nthreads
+    int_t m, int_t n, real_t alpha,
+    size_t indptr[], int_t indices[], real_t values[],
+    real_t DenseMat[], size_t ldb,
+    real_t OutputMat[], size_t ldc,
+    int_t nthreads
 )
 {
-    FPnum *ptr_col;
+    real_t *ptr_col;
     #if defined(_OPENMP) && \
                 ( (_OPENMP < 200801)  /* OpenMP < 3.0 */ \
                   || defined(_WIN32) || defined(_WIN64) \
                 )
     long long row;
     #endif
-    #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
-            shared(m, n, alpha, ldb, ldc, OutputMat, DenseMat, indptr, indices, values) \
-            private(ptr_col)
-    for (size_t_for row = 0; row < (size_t)m; row++) {
-        ptr_col = OutputMat + row*ldc;
-        for (int col = indptr[row]; col < indptr[row+1]; col++) {
-            cblas_taxpy(n, alpha*values[col], DenseMat + (size_t)indices[col]*ldb, 1, ptr_col, 1);
+
+    if (alpha != 1.)
+        #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
+                shared(m, n, alpha, ldb, ldc, OutputMat, DenseMat, indptr, indices, values) \
+                private(ptr_col)
+        for (size_t_for row = 0; row < (size_t)m; row++) {
+            ptr_col = OutputMat + row*ldc;
+            for (size_t col = indptr[row]; col < indptr[row+1]; col++) {
+                cblas_taxpy(n, alpha*values[col], DenseMat + (size_t)indices[col]*ldb, 1, ptr_col, 1);
+            }
         }
-    }
+    else
+        #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
+                shared(m, n, ldb, ldc, OutputMat, DenseMat, indptr, indices, values) \
+                private(ptr_col)
+        for (size_t_for row = 0; row < (size_t)m; row++) {
+            ptr_col = OutputMat + row*ldc;
+            for (size_t col = indptr[row]; col < indptr[row+1]; col++) {
+                cblas_taxpy(n, values[col], DenseMat + (size_t)indices[col]*ldb, 1, ptr_col, 1);
+            }
+        }
 }
 
 /* x <- alpha*t(A)*v + x | A[m,n] is dense, v[m] is sparse, x[n] is dense */
-void sgemv_dense_sp
+void tgemv_dense_sp
 (
-    int m, int n,
-    FPnum alpha, FPnum DenseMat[], size_t lda,
-    int ixB[], FPnum vec_sp[], size_t nnz,
-    FPnum OutputVec[]
+    int_t m, int_t n,
+    real_t alpha, real_t DenseMat[], size_t lda,
+    int_t ixB[], real_t vec_sp[], size_t nnz,
+    real_t OutputVec[]
 )
 {
-    for (size_t ix = 0; ix < nnz; ix++)
-        cblas_taxpy(n, alpha*vec_sp[ix], DenseMat + (size_t)ixB[ix]*lda, 1, OutputVec, 1);
+    if (alpha != 1.)
+        for (size_t ix = 0; ix < nnz; ix++)
+            cblas_taxpy(n, alpha*vec_sp[ix], DenseMat + (size_t)ixB[ix]*lda, 1, OutputVec, 1);
+    else
+        for (size_t ix = 0; ix < nnz; ix++)
+            cblas_taxpy(n, vec_sp[ix], DenseMat + (size_t)ixB[ix]*lda, 1, OutputVec, 1);
 }
 
 /* Same but with an array of weights */
-void sgemv_dense_sp_weighted
+void tgemv_dense_sp_weighted
 (
-    int m, int n,
-    FPnum alpha[], FPnum DenseMat[], size_t lda,
-    int ixB[], FPnum vec_sp[], size_t nnz,
-    FPnum OutputVec[]
+    int_t m, int_t n,
+    real_t alpha[], real_t DenseMat[], size_t lda,
+    int_t ixB[], real_t vec_sp[], size_t nnz,
+    real_t OutputVec[]
 )
 {
     for (size_t ix = 0; ix < nnz; ix++)
@@ -591,31 +676,45 @@ void sgemv_dense_sp_weighted
 }
 
 /* Same, but with both array of weights and scalar weight */
-void sgemv_dense_sp_weighted2
+void tgemv_dense_sp_weighted2
 (
-    int m, int n,
-    FPnum alpha[], FPnum alpha2, FPnum DenseMat[], size_t lda,
-    int ixB[], FPnum vec_sp[], size_t nnz,
-    FPnum OutputVec[]
+    int_t m, int_t n,
+    real_t alpha[], real_t alpha2, real_t DenseMat[], size_t lda,
+    int_t ixB[], real_t vec_sp[], size_t nnz,
+    real_t OutputVec[]
 )
 {
     for (size_t ix = 0; ix < nnz; ix++)
         cblas_taxpy(n, alpha2*alpha[ix]*vec_sp[ix], DenseMat + (size_t)ixB[ix]*lda, 1, OutputVec, 1);
 }
 
+void tgemv_dense_sp_notrans
+(
+    int_t m, int_t n,
+    real_t DenseMat[], int_t lda,
+    int_t ixB[], real_t vec_sp[], size_t nnz,
+    real_t OutputVec[]
+)
+{
+    for (size_t ix = 0; ix < nnz; ix++)
+        cblas_taxpy(m, vec_sp[ix],
+                    DenseMat + ixB[ix], lda,
+                    OutputVec, 1);
+}
+
 /* B[:m,:n] := A[:m,:n] */
 void copy_mat
 (
-    int m, int n,
-    FPnum *restrict A, int lda,
-    FPnum *restrict B, int ldb
+    int_t m, int_t n,
+    real_t *restrict A, int_t lda,
+    real_t *restrict B, int_t ldb
 )
 {
     char uplo = '?';
     if (m == 0 && n == 0) return;
 
     if (ldb == n && lda == n)
-        memcpy(B, A, (size_t)m*(size_t)n*sizeof(FPnum));
+        memcpy(B, A, (size_t)m*(size_t)n*sizeof(real_t));
     else
         tlacpy_(&uplo, &n, &m, A, &lda, B, &ldb);
 }
@@ -623,93 +722,63 @@ void copy_mat
 /* B[:m,:n] = A[:m,:n] + B[:m,:n] */
 void sum_mat
 (
-    int m, int n,
-    FPnum *restrict A, int lda,
-    FPnum *restrict B, int ldb
+    size_t m, size_t n,
+    real_t *restrict A, size_t lda,
+    real_t *restrict B, size_t ldb
 )
 {
+    int_t n_int_t = (int)n;
     if (lda == n && ldb == n)
-        saxpy_large(A, 1., B, (size_t)m*(size_t)n, 1);
+        taxpy_large(A, 1., B, m*n, 1);
     else
-        for (int row = 0; row < m; row++)
-            for (int col = 0; col < n; col++)
-                B[col + row*ldb] += A[col + row*lda];
-
+        for (size_t row = 0; row < m; row++)
+            cblas_taxpy(n_int_t, 1., A + row*lda, 1, B + row*ldb, 1);
 }
 
-/* B <- inv(t(A)*A + diag(lam/w))*t(A) | AtAw <- w* (t(A)*A + diag(lam)) */
-void AtAinvAt_plus_chol(FPnum *restrict A, int lda, int offset,
-                        FPnum *restrict AtAinvAt_out,
-                        FPnum *restrict AtAw_out,
-                        FPnum *restrict AtAchol_out,
-                        FPnum lam, FPnum lam_last, int m, int n, FPnum w,
-                        FPnum *restrict buffer_FPnum,
-                        bool no_reg_to_AtA)
+void transpose_mat(real_t *restrict A, size_t m, size_t n, real_t *restrict buffer_real_t)
 {
-    cblas_tsyrk(CblasRowMajor, CblasUpper, CblasTrans,
-                n, m,
-                w, A + offset, lda,
-                0., AtAchol_out, n);
-    if (AtAw_out != NULL && no_reg_to_AtA)
-        memcpy(AtAw_out, AtAchol_out, square(n)*sizeof(FPnum));
-    if (lam != 0.)
-        add_to_diag(AtAchol_out, lam, n);
-    if (lam_last != lam) AtAchol_out[square(n)-1] += (lam_last-lam);
-    if (AtAw_out != NULL && !no_reg_to_AtA)
-        memcpy(AtAw_out, AtAchol_out, square(n)*sizeof(FPnum));
-
-    char uplo = 'L';
-    int ignore;
-    if (AtAinvAt_out != NULL)
-    {
-        copy_mat(m, n, A + offset, lda, AtAinvAt_out, n);
-        if (w != 1.)
-            cblas_tscal(m*n, w, AtAinvAt_out, 1);
-        tposv_(&uplo, &n, &m,
-               AtAchol_out, &n,
-               AtAinvAt_out, &n,
-               &ignore);
-        transpose_mat(AtAinvAt_out, m, n, buffer_FPnum);
-    }
-
-    else if (AtAchol_out != NULL)
-    {
-        tpotrf_(&uplo, &n, AtAchol_out, &n, &ignore);
-    }
+    memcpy(buffer_real_t, A, m*n*sizeof(real_t));
+    for (size_t row = 0; row < m; row++)
+        for (size_t col = 0; col < n; col++)
+            A[row + col*m] = buffer_real_t[col + row*n];
 }
 
-void transpose_mat(FPnum *restrict A, int m, int n, FPnum *restrict buffer_FPnum)
+void transpose_mat2(real_t *restrict A, size_t m, size_t n, real_t *restrict outp)
 {
-    memcpy(buffer_FPnum, A, (size_t)m*(size_t)n*sizeof(FPnum));
-    for (int row = 0; row < m; row++)
-        for (int col = 0; col < n; col++)
-            A[row + col*m] = buffer_FPnum[col + row*n];
-}
-
-void transpose_mat2(FPnum *restrict A, int m, int n, FPnum *restrict outp)
-{
-    for (int row = 0; row < m; row++)
-        for (int col = 0; col < n; col++)
+    for (size_t row = 0; row < m; row++)
+        for (size_t col = 0; col < n; col++)
             outp[row + col*m] = A[col + row*n];
 }
 
-int coo_to_csr_plus_alloc
+void transpose_mat3
 (
-    int *restrict Xrow, int *restrict Xcol, FPnum *restrict Xval,
-    FPnum *restrict W,
-    int m, int n, size_t nnz,
-    long *restrict *csr_p, int *restrict *csr_i, FPnum *restrict *csr_v,
-    FPnum *restrict *csr_w
+    real_t *restrict A, size_t lda,
+    size_t m, size_t n,
+    real_t *restrict outp, size_t ldb
 )
 {
-    *csr_p = (long*)malloc((size_t)(m+1)*sizeof(long));
-    *csr_i = (int*)malloc(nnz*sizeof(int));
-    *csr_v = (FPnum*)malloc(nnz*sizeof(FPnum));
+    for (size_t row = 0; row < m; row++)
+        for (size_t col = 0; col < n; col++)
+            outp[row + col*ldb] = A[col + row*lda];
+}
+
+int_t coo_to_csr_plus_alloc
+(
+    int_t *restrict Xrow, int_t *restrict Xcol, real_t *restrict Xval,
+    real_t *restrict W,
+    int_t m, int_t n, size_t nnz,
+    size_t *restrict *csr_p, int_t *restrict *csr_i, real_t *restrict *csr_v,
+    real_t *restrict *csr_w
+)
+{
+    *csr_p = (size_t*)malloc(((size_t)m+(size_t)1)*sizeof(size_t));
+    *csr_i = (int_t*)malloc(nnz*sizeof(int));
+    *csr_v = (real_t*)malloc(nnz*sizeof(real_t));
     if (csr_p == NULL || csr_i == NULL || csr_v == NULL)
         return 1;
 
     if (W != NULL) {
-        *csr_w = (FPnum*)malloc(nnz*sizeof(FPnum));
+        *csr_w = (real_t*)malloc(nnz*sizeof(real_t));
         if (csr_w == NULL) return 1;
     }
 
@@ -718,35 +787,35 @@ int coo_to_csr_plus_alloc
         W,
         m, n, nnz,
         *csr_p, *csr_i, *csr_v,
-        (W == NULL)? ((FPnum*)NULL) : (*csr_w)
+        (W == NULL)? ((real_t*)NULL) : (*csr_w)
     );
     return 0;
 }
 
 void coo_to_csr
 (
-    int *restrict Xrow, int *restrict Xcol, FPnum *restrict Xval,
-    FPnum *restrict W,
-    int m, int n, size_t nnz,
-    long *restrict csr_p, int *restrict csr_i, FPnum *restrict csr_v,
-    FPnum *restrict csr_w
+    int_t *restrict Xrow, int_t *restrict Xcol, real_t *restrict Xval,
+    real_t *restrict W,
+    int_t m, int_t n, size_t nnz,
+    size_t *restrict csr_p, int_t *restrict csr_i, real_t *restrict csr_v,
+    real_t *restrict csr_w
 )
 {
     bool has_mem = true;
-    int *cnt_byrow = NULL;
+    int_t *cnt_byrow = NULL;
 
     produce_p:
     {
-        memset(csr_p, 0, (m+1)*sizeof(long));
+        memset(csr_p, 0, ((size_t)m+(size_t)1)*sizeof(size_t));
         for (size_t ix = 0; ix < nnz; ix++)
-            csr_p[Xrow[ix]+1]++;
-        for (int row = 0; row < m; row++)
-            csr_p[row+1] += csr_p[row];
+            csr_p[Xrow[ix]+(size_t)1]++;
+        for (int_t row = 0; row < m; row++)
+            csr_p[row+(size_t)1] += csr_p[row];
     }
 
     if (!has_mem) goto cleanup;
 
-    cnt_byrow = (int*)calloc(m, sizeof(int));
+    cnt_byrow = (int_t*)calloc(m, sizeof(int));
 
     if (cnt_byrow != NULL)
     {
@@ -768,14 +837,14 @@ void coo_to_csr
     {
         if (W == NULL)
             for (size_t ix = 0; ix < nnz; ix++) {
-                csr_i[--csr_p[Xrow[ix]+1]] = Xcol[ix];
-                csr_v[csr_p[Xrow[ix]+1]] = Xval[ix];
+                csr_i[--csr_p[Xrow[ix]+(size_t)1]] = Xcol[ix];
+                csr_v[csr_p[Xrow[ix]+(size_t)1]] = Xval[ix];
             }
         else
             for (size_t ix = 0; ix < nnz; ix++) {
-                csr_i[--csr_p[Xrow[ix]+1]] = Xcol[ix];
-                csr_v[csr_p[Xrow[ix]+1]] = Xval[ix];
-                csr_w[csr_p[Xrow[ix]+1]] = W[ix];
+                csr_i[--csr_p[Xrow[ix]+(size_t)1]] = Xcol[ix];
+                csr_v[csr_p[Xrow[ix]+(size_t)1]] = Xval[ix];
+                csr_w[csr_p[Xrow[ix]+(size_t)1]] = W[ix];
             }
         has_mem = false;
         goto produce_p;
@@ -787,41 +856,41 @@ void coo_to_csr
 
 void coo_to_csr_and_csc
 (
-    int *restrict Xrow, int *restrict Xcol, FPnum *restrict Xval,
-    FPnum *restrict W, int m, int n, size_t nnz,
-    long *restrict csr_p, int *restrict csr_i, FPnum *restrict csr_v,
-    long *restrict csc_p, int *restrict csc_i, FPnum *restrict csc_v,
-    FPnum *restrict csr_w, FPnum *restrict csc_w,
-    int nthreads
+    int_t *restrict Xrow, int_t *restrict Xcol, real_t *restrict Xval,
+    real_t *restrict W, int_t m, int_t n, size_t nnz,
+    size_t *restrict csr_p, int_t *restrict csr_i, real_t *restrict csr_v,
+    size_t *restrict csc_p, int_t *restrict csc_i, real_t *restrict csc_v,
+    real_t *restrict csr_w, real_t *restrict csc_w,
+    int_t nthreads
 )
 {
     bool has_mem = true;
     nthreads = (nthreads > 2)? 2 : 1;
-    int *cnt_byrow = NULL;
-    int *cnt_bycol = NULL;
+    int_t *cnt_byrow = NULL;
+    int_t *cnt_bycol = NULL;
 
     produce_p:
     {
-        memset(csr_p, 0, (m+1)*sizeof(long));
-        memset(csc_p, 0, (n+1)*sizeof(long));
+        memset(csr_p, 0, ((size_t)m+(size_t)1)*sizeof(size_t));
+        memset(csc_p, 0, ((size_t)n+(size_t)1)*sizeof(size_t));
         for (size_t ix = 0; ix < nnz; ix++) {
-            csr_p[Xrow[ix]+1]++;
-            csc_p[Xcol[ix]+1]++;
+            csr_p[Xrow[ix]+(size_t)1]++;
+            csc_p[Xcol[ix]+(size_t)1]++;
         }
-        for (int row = 0; row < m; row++)
-            csr_p[row+1] += csr_p[row];
-        for (int col = 0; col < n; col++)
-            csc_p[col+1] += csc_p[col];
+        for (int_t row = 0; row < m; row++)
+            csr_p[row+(size_t)1] += csr_p[row];
+        for (int_t col = 0; col < n; col++)
+            csc_p[col+(size_t)1] += csc_p[col];
     }
 
 
     if (!has_mem) goto cleanup;
 
-    cnt_byrow = (int*)calloc(m, sizeof(int));
-    cnt_bycol = (int*)calloc(n, sizeof(int));
+    cnt_byrow = (int_t*)calloc(m, sizeof(int));
+    cnt_bycol = (int_t*)calloc(n, sizeof(int));
 
-    #ifdef _OPENMP
-    omp_set_nested(1);
+    #if defined(_OPENMP) && (_OPENMP > 201305) /* OpenMP >= 4.0 */
+    omp_set_max_active_levels(2);
     #endif
 
     if (cnt_byrow != NULL && cnt_bycol != NULL) {
@@ -868,14 +937,14 @@ void coo_to_csr_and_csc
             {
                 if (W == NULL)
                     for (size_t ix = 0; ix < nnz; ix++) {
-                        csr_i[--csr_p[Xrow[ix]+1]] = Xcol[ix];
-                        csr_v[csr_p[Xrow[ix]+1]] = Xval[ix];
+                        csr_i[--csr_p[Xrow[ix]+(size_t)1]] = Xcol[ix];
+                        csr_v[csr_p[Xrow[ix]+(size_t)1]] = Xval[ix];
                     }
                 else
                     for (size_t ix = 0; ix < nnz; ix++) {
-                        csr_i[--csr_p[Xrow[ix]+1]] = Xcol[ix];
-                        csr_v[csr_p[Xrow[ix]+1]] = Xval[ix];
-                        csr_w[csr_p[Xrow[ix]+1]] = W[ix];
+                        csr_i[--csr_p[Xrow[ix]+(size_t)1]] = Xcol[ix];
+                        csr_v[csr_p[Xrow[ix]+(size_t)1]] = Xval[ix];
+                        csr_w[csr_p[Xrow[ix]+(size_t)1]] = W[ix];
                     }
             }
 
@@ -883,14 +952,14 @@ void coo_to_csr_and_csc
             {
                 if (W == NULL)
                     for (size_t ix = 0; ix < nnz; ix++) {
-                        csc_i[--csc_p[Xcol[ix]+1]] = Xrow[ix];
-                        csc_v[csc_p[Xcol[ix]+1]] = Xval[ix];
+                        csc_i[--csc_p[Xcol[ix]+(size_t)1]] = Xrow[ix];
+                        csc_v[csc_p[Xcol[ix]+(size_t)1]] = Xval[ix];
                     }
                 else
                     for (size_t ix = 0; ix < nnz; ix++) {
-                        csc_i[--csc_p[Xcol[ix]+1]] = Xrow[ix];
-                        csc_v[csc_p[Xcol[ix]+1]] = Xval[ix];
-                        csc_w[csc_p[Xcol[ix]+1]] = W[ix];
+                        csc_i[--csc_p[Xcol[ix]+(size_t)1]] = Xrow[ix];
+                        csc_v[csc_p[Xcol[ix]+(size_t)1]] = Xval[ix];
+                        csc_w[csc_p[Xcol[ix]+(size_t)1]] = W[ix];
                     }
             }
         }
@@ -903,52 +972,58 @@ void coo_to_csr_and_csc
         free(cnt_bycol);
 }
 
-void row_means_csr(long indptr[], FPnum *restrict values,
-                   FPnum *restrict output, int m, int nthreads)
+void row_means_csr(size_t indptr[], real_t *restrict values,
+                   real_t *restrict output, int_t m, int_t nthreads)
 {
-    int row = 0;
+    int_t row = 0;
     set_to_zero(values, m, nthreads);
     #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
             shared(indptr, values, output, m)
     for (row = 0; row < m; row++)
-        for (int ix = indptr[row]; ix < indptr[row+1]; ix++)
+        for (size_t ix = indptr[row]; ix < indptr[row+(size_t)1]; ix++)
             output[row] += values[ix];
     nthreads = cap_to_4(nthreads);
     #pragma omp parallel for schedule(static) num_threads(nthreads) \
             shared(indptr, output, m)
     for (row = 0; row < m; row++)
-        output[row] /= (FPnum)(indptr[row+1] - indptr[row]);
+        output[row] /= (real_t)(indptr[row+(size_t)1] - indptr[row]);
 }
 
 bool should_stop_procedure = false;
-void set_interrup_global_variable(int s)
+void set_interrup_global_variable(int_t s)
 {
     fprintf(stderr, "Error: procedure was interrupted\n");
+    #if !defined(_FOR_R)
+    fflush(stderr);
+    #endif
     should_stop_procedure = true;
 }
 
-int lbfgs_printer_collective
+int_t lbfgs_printer_collective
 (
     void *instance,
-    const lbfgsFPnumval_t *x,
-    const lbfgsFPnumval_t *g,
-    const lbfgsFPnumval_t fx,
-    const lbfgsFPnumval_t xnorm,
-    const lbfgsFPnumval_t gnorm,
-    const lbfgsFPnumval_t step,
+    const real_t *x,
+    const real_t *g,
+    const real_t fx,
+    const real_t xnorm,
+    const real_t gnorm,
+    const real_t step,
     size_t n,
-    int k,
-    int ls
+    int_t k,
+    int_t ls
 )
 {
     ((data_collective_fun_grad*)instance)->niter = k;
-    int print_every = ((data_collective_fun_grad*)instance)->print_every;
+    int_t print_every = ((data_collective_fun_grad*)instance)->print_every;
     if ((k % print_every) == 0 && print_every > 0) {
         printf("Iteration %3d - f(x)=%7.03g - ||g(x)||=%5.03g - ls=%d\n",
                k, fx, gnorm, ls);
+        #if !defined(_FOR_R)
         fflush(stdout);
+        #endif
     }
-    signal(SIGINT, set_interrup_global_variable);
+    if (((data_collective_fun_grad*)instance)->handle_interrupt)
+        signal(SIGINT, set_interrup_global_variable);
     if (should_stop_procedure) {
         should_stop_procedure = false;
         return 1;
@@ -956,28 +1031,31 @@ int lbfgs_printer_collective
     return 0;
 }
 
-int lbfgs_printer_offsets
+int_t lbfgs_printer_offsets
 (
     void *instance,
-    const lbfgsFPnumval_t *x,
-    const lbfgsFPnumval_t *g,
-    const lbfgsFPnumval_t fx,
-    const lbfgsFPnumval_t xnorm,
-    const lbfgsFPnumval_t gnorm,
-    const lbfgsFPnumval_t step,
+    const real_t *x,
+    const real_t *g,
+    const real_t fx,
+    const real_t xnorm,
+    const real_t gnorm,
+    const real_t step,
     size_t n,
-    int k,
-    int ls
+    int_t k,
+    int_t ls
 )
 {
     ((data_offsets_fun_grad*)instance)->niter = k;
-    int print_every = ((data_offsets_fun_grad*)instance)->print_every;
+    int_t print_every = ((data_offsets_fun_grad*)instance)->print_every;
     if ((k % print_every) == 0 && print_every > 0) {
         printf("Iteration %3d - f(x)=%7.03g - ||g(x)||=%5.03g - ls=%d\n",
                k, fx, gnorm, ls);
+        #if !defined(_FOR_R)
         fflush(stdout);
+        #endif
     }
-    signal(SIGINT, set_interrup_global_variable);
+    if (((data_offsets_fun_grad*)instance)->handle_interrupt)
+        signal(SIGINT, set_interrup_global_variable);
     if (should_stop_procedure) {
         should_stop_procedure = false;
         return 1;
@@ -985,10 +1063,10 @@ int lbfgs_printer_offsets
     return 0;
 }
 
-bool check_is_sorted(int arr[], int n)
+bool check_is_sorted(int_t arr[], int_t n)
 {
     if (n <= 1) return true;
-    for (int ix = 0; ix < n-1; ix++)
+    for (int_t ix = 0; ix < n-1; ix++)
         if (arr[ix] > arr[ix+1]) return false;
     return true;
 }
@@ -997,10 +1075,10 @@ bool check_is_sorted(int arr[], int n)
 /* Some sample C code for the quickselect algorithm, 
    taken from Numerical Recipes in C. */
 #define SWAP(a,b) temp=(a);(a)=(b);(b)=temp;
-void qs_argpartition(int arr[], FPnum values[], int n, int k)
+void qs_argpartition(int_t arr[], real_t values[], int_t n, int_t k)
 {
-    int i,ir,j,l,mid;
-    int a,temp;
+    int_t i,ir,j,l,mid;
+    int_t a,temp;
 
     l=0;
     ir=n-1;
@@ -1040,57 +1118,39 @@ void qs_argpartition(int arr[], FPnum values[], int n, int k)
     }
 }
 
-void solve_conj_grad
-(
-    FPnum *restrict A, FPnum *restrict b, int m,
-    FPnum *restrict buffer_FPnum
-)
-{
-    FPnum tol = 1e-1;
-    FPnum *restrict residual = buffer_FPnum;
-    FPnum *restrict residual_prev = residual + m;
-    FPnum *restrict z = residual_prev + m;
-    FPnum *restrict z_prev = z + m;
-    FPnum *restrict Ap = z_prev + m;
-    FPnum *restrict p = Ap + m;
-
-    memcpy(residual, b, m*sizeof(FPnum));
-    set_to_zero(b, m, 1);
-    for (int ix = 0; ix < m; ix++) z[ix] = residual[ix] / A[ix + ix*m];
-    memcpy(p, z, m*sizeof(FPnum));
-
-    FPnum alpha = 0.;
-    FPnum beta  = 0.;
-
-    for (int iter = 0; iter < m; iter++)
-    {
-        cblas_tsymv(CblasRowMajor, CblasUpper, m,
-                    1., A, m, p, 1,
-                    0., Ap, 1);
-        alpha = cblas_tdot(m, residual, 1, z, 1) / cblas_tdot(m, Ap, 1, p, 1);
-        cblas_taxpy(m, alpha, p, 1, b, 1);
-        memcpy(residual_prev, residual, m*sizeof(FPnum));
-        cblas_taxpy(m, -alpha, Ap, 1, residual, 1);
-        if (cblas_tdot(m, residual, 1, residual, 1) < tol) {
-            break;
-        }
-        memcpy(z_prev, z, m*sizeof(FPnum));
-        for (int ix = 0; ix < m; ix++) z[ix] = residual[ix] / A[ix + ix*m];
-        beta = cblas_tdot(m, z, 1, residual, 1)
-                / cblas_tdot(m, z_prev, 1, residual_prev, 1);
-        for (int ix = 0; ix < m; ix++) p[ix] = beta*p[ix] + z[ix];
-    }
-}
 
 void append_ones_last_col
 (
-    FPnum *restrict orig, int m, int n,
-    FPnum *restrict outp
+    real_t *restrict orig, size_t m, size_t n,
+    real_t *restrict outp
 )
 {
     copy_mat(m, n,
              orig, n,
              outp, n+1);
-    for (size_t ix = 0; ix < (size_t)m; ix++)
-        outp[n + ix*(size_t)(n+1)] = 1.;
+    for (size_t ix = 0; ix < m; ix++)
+        outp[n + ix*(n+(size_t)1)] = 1.;
 }
+
+void fill_lower_triangle(real_t A[], size_t n, size_t lda)
+{
+    for (size_t row = 1; row < n; row++)
+        for (size_t col = 0; col < row; col++)
+            A[col + row*lda] = A[row + col*lda];
+}
+
+void print_oom_message(void)
+{
+    fprintf(stderr, "Error: could not allocate enough memory.\n");
+    #ifndef _FOR_R
+    fflush(stderr);
+    #endif
+}
+
+#ifdef _FOR_R
+void R_nan_to_C_nan(real_t arr[], size_t n)
+{
+    for (size_t ix = 0; ix < n; ix++)
+        arr[ix] = ISNAN(arr[ix])? NAN : arr[ix];
+}
+#endif

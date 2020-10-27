@@ -45,9 +45,8 @@ def gen_data():
 empty_1d = np.empty(0, dtype=ctypes.c_double)
 empty_2d = np.empty((0,0), dtype=ctypes.c_double)
 empty_int = np.empty(0, dtype=ctypes.c_int)
-empty_long = np.empty(0, dtype=ctypes.c_long)
+empty_size_t = np.empty(0, dtype=ctypes.c_size_t)
 buffer1 = np.empty(int(1e6), dtype=ctypes.c_double)
-buffer2 = np.empty(int(1e6), dtype=ctypes.c_double)
 def get_sol():
 #     A = np.empty((max(m,m_u), k_user+k+k_main))
     A = np.zeros((max(m,m_u), k_user+k+k_main), dtype=ctypes.c_double)
@@ -58,24 +57,26 @@ def get_sol():
         m, n,
         k, k_user, k_item, k_main,
         m_u, p,
-        Xcsr.indptr.astype(ctypes.c_long).copy(),
+        Xcsr.indptr.astype(ctypes.c_size_t).copy(),
         Xcsr.indices.astype(ctypes.c_int).copy(),
         Xcsr.data.astype(ctypes.c_double).copy(),
-        Ucsr.indptr.astype(ctypes.c_long).copy() if utype=="sparse" else empty_long,
+        Ucsr.indptr.astype(ctypes.c_size_t).copy() if utype=="sparse" else empty_size_t,
         Ucsr.indices.astype(ctypes.c_int).copy() if utype=="sparse" else empty_int,
         Ucsr.data.astype(ctypes.c_double).copy() if utype=="sparse" else empty_1d,
         U.copy() if utype=="dense" else empty_2d,
         lam, alpha, w_main, w_user,
         na_as_zero_u, as_near_dense_u,
         nthreads,
-        buffer1,
-        buffer2
+        buffer1
     )
 
 def py_eval(values):
     A = values.reshape((max(m,m_u),k_user+k+k_main))
     errX = X - A[:m,k_user:].dot(B[:,k_item:].T)
     res = w_main * (W*(errX**2)).sum() + lam*(A**2).sum()
+    if xlen == "smaller":
+        err_extra = A[m:,k_user:].dot(B[:,k_item:].T)
+        res += w_main * (err_extra**2).sum()
     predU = A[:m_u,:k_user+k].dot(C.T)
     if na_as_zero_u:
         U_use = U.copy()
@@ -133,9 +134,9 @@ for utype in utry:
                                 f2 = py_eval(res_module.reshape(-1))
 
                                 err = np.linalg.norm(res_scipy - res_module.reshape(-1))
-                                df = f2 - f1
+                                df = f2 / f1
                                 
-                                is_wrong = (err>1e1) or (f2/f1 > 1.05) or np.any(np.isnan(res_module))
+                                is_wrong = (f2/f1 > 1.05) or np.any(np.isnan(res_module))
                                 if is_wrong:
                                     print("\n\n\n****ERROR BELOW****")
 

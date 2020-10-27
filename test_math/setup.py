@@ -4,6 +4,7 @@ except:
     from distutils.core import setup
     from distutils.extension import Extension
 from findblas.distutils import build_ext_with_blas
+# from Cython.Distutils import build_ext; build_ext_with_blas=build_ext
 import numpy as np
 
 class build_ext_subclass( build_ext_with_blas ):
@@ -16,6 +17,8 @@ class build_ext_subclass( build_ext_with_blas ):
             for e in self.extensions:
                 e.extra_compile_args += ['-O2', '-fopenmp', '-march=native', '-std=c99', "-ggdb"]
                 e.extra_link_args += ['-fopenmp']
+                
+                # e.extra_compile_args += ['-O2', '-march=native', '-std=c99', "-ggdb"]
 
                 # e.extra_compile_args += ["-fsanitize=address", "-static-libasan"]
                 # e.extra_link_args += ["-fsanitize=address", "-static-libasan"]
@@ -30,8 +33,12 @@ setup(
         Extension("test_math",
           sources=["c_math_funs.pyx", "../src/collective.c", "../src/common.c",
                    "../src/offsets.c", "../src/helpers.c", "../src/lbfgs.c"],
+          # language="c++",
           include_dirs=[np.get_include(), "../src"],
-          define_macros = [("_FOR_PYTHON", None), ("USE_DOUBLE", None)]
+          define_macros = [("_FOR_PYTHON", None),
+                           ("USE_DOUBLE", None),
+                           # ("FORCE_CG", None)
+                          ]
           ),
         ]
     )

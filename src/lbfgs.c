@@ -104,10 +104,10 @@ struct tag_callback_data {
 typedef struct tag_callback_data callback_data_t;
 
 //struct tag_iteration_data {
-//    lbfgsFPnumval_t alpha;
-//    lbfgsFPnumval_t *s;     /* [n] */
-//    lbfgsFPnumval_t *y;     /* [n] */
-//    lbfgsFPnumval_t ys;     /* vecdot(y, s) */
+//    real_t alpha;
+//    real_t *s;     /* [n] */
+//    real_t *y;     /* [n] */
+//    real_t ys;     /* vecdot(y, s) */
 //};
 //typedef struct tag_iteration_data iteration_data_t;
 
@@ -120,98 +120,98 @@ static const lbfgs_parameter_t _defparam = {
 
 /* Forward function declarations. */
 
-typedef int (*line_search_proc)(
+typedef int_t (*line_search_proc)(
     size_t n,
-    lbfgsFPnumval_t *x,
-    lbfgsFPnumval_t *f,
-    lbfgsFPnumval_t *g,
-    lbfgsFPnumval_t *s,
-    lbfgsFPnumval_t *stp,
-    const lbfgsFPnumval_t* xp,
-    const lbfgsFPnumval_t* gp,
-    lbfgsFPnumval_t *wa,
+    real_t *x,
+    real_t *f,
+    real_t *g,
+    real_t *s,
+    real_t *stp,
+    const real_t* xp,
+    const real_t* gp,
+    real_t *wa,
     callback_data_t *cd,
     const lbfgs_parameter_t *param
     );
     
-static int line_search_backtracking(
+static int_t line_search_backtracking(
     size_t n,
-    lbfgsFPnumval_t *x,
-    lbfgsFPnumval_t *f,
-    lbfgsFPnumval_t *g,
-    lbfgsFPnumval_t *s,
-    lbfgsFPnumval_t *stp,
-    const lbfgsFPnumval_t* xp,
-    const lbfgsFPnumval_t* gp,
-    lbfgsFPnumval_t *wa,
+    real_t *x,
+    real_t *f,
+    real_t *g,
+    real_t *s,
+    real_t *stp,
+    const real_t* xp,
+    const real_t* gp,
+    real_t *wa,
     callback_data_t *cd,
     const lbfgs_parameter_t *param
     );
 
-static int line_search_backtracking_owlqn(
+static int_t line_search_backtracking_owlqn(
     size_t n,
-    lbfgsFPnumval_t *x,
-    lbfgsFPnumval_t *f,
-    lbfgsFPnumval_t *g,
-    lbfgsFPnumval_t *s,
-    lbfgsFPnumval_t *stp,
-    const lbfgsFPnumval_t* xp,
-    const lbfgsFPnumval_t* gp,
-    lbfgsFPnumval_t *wp,
+    real_t *x,
+    real_t *f,
+    real_t *g,
+    real_t *s,
+    real_t *stp,
+    const real_t* xp,
+    const real_t* gp,
+    real_t *wp,
     callback_data_t *cd,
     const lbfgs_parameter_t *param
     );
 
-static int line_search_morethuente(
+static int_t line_search_morethuente(
     size_t n,
-    lbfgsFPnumval_t *x,
-    lbfgsFPnumval_t *f,
-    lbfgsFPnumval_t *g,
-    lbfgsFPnumval_t *s,
-    lbfgsFPnumval_t *stp,
-    const lbfgsFPnumval_t* xp,
-    const lbfgsFPnumval_t* gp,
-    lbfgsFPnumval_t *wa,
+    real_t *x,
+    real_t *f,
+    real_t *g,
+    real_t *s,
+    real_t *stp,
+    const real_t* xp,
+    const real_t* gp,
+    real_t *wa,
     callback_data_t *cd,
     const lbfgs_parameter_t *param
     );
 
-static int update_trial_interval(
-    lbfgsFPnumval_t *x,
-    lbfgsFPnumval_t *fx,
-    lbfgsFPnumval_t *dx,
-    lbfgsFPnumval_t *y,
-    lbfgsFPnumval_t *fy,
-    lbfgsFPnumval_t *dy,
-    lbfgsFPnumval_t *t,
-    lbfgsFPnumval_t *ft,
-    lbfgsFPnumval_t *dt,
-    const lbfgsFPnumval_t tmin,
-    const lbfgsFPnumval_t tmax,
-    int *brackt
+static int_t update_trial_interval(
+    real_t *x,
+    real_t *fx,
+    real_t *dx,
+    real_t *y,
+    real_t *fy,
+    real_t *dy,
+    real_t *t,
+    real_t *ft,
+    real_t *dt,
+    const real_t tmin,
+    const real_t tmax,
+    int_t *brackt
     );
 
-static lbfgsFPnumval_t owlqn_x1norm(
-    const lbfgsFPnumval_t* x,
-    const int start,
-    const int n
+static real_t owlqn_x1norm(
+    const real_t* x,
+    const int_t start,
+    const int_t n
     );
 
 static void owlqn_pseudo_gradient(
-    lbfgsFPnumval_t* pg,
-    const lbfgsFPnumval_t* x,
-    const lbfgsFPnumval_t* g,
-    const int n,
-    const lbfgsFPnumval_t c,
-    const int start,
-    const int end
+    real_t* pg,
+    const real_t* x,
+    const real_t* g,
+    const int_t n,
+    const real_t c,
+    const int_t start,
+    const int_t end
     );
 
 static void owlqn_project(
-    lbfgsFPnumval_t* d,
-    const lbfgsFPnumval_t* sign,
-    const int start,
-    const int end
+    real_t* d,
+    const real_t* sign,
+    const int_t start,
+    const int_t end
     );
 
 
@@ -225,15 +225,15 @@ static size_t round_out_variables(size_t n)
 }
 #endif/*defined(USE_SSE)*/
 
-lbfgsFPnumval_t* lbfgs_malloc(size_t n)
+real_t* lbfgs_malloc(size_t n)
 {
 #if     defined(USE_SSE) && (defined(__SSE__) || defined(__SSE2__))
     n = round_out_variables(n);
 #endif/*defined(USE_SSE)*/
-    return (lbfgsFPnumval_t*)vecalloc(n, sizeof(lbfgsFPnumval_t));
+    return (real_t*)vecalloc(n, sizeof(real_t));
 }
 
-void lbfgs_free(lbfgsFPnumval_t *x)
+void lbfgs_free(real_t *x)
 {
     vecfree(x);
 }
@@ -243,23 +243,23 @@ void lbfgs_parameter_init(lbfgs_parameter_t *param)
     memcpy(param, &_defparam, sizeof(*param));
 }
 
-int lbfgs(
+int_t lbfgs(
     size_t n,
-    lbfgsFPnumval_t *x,
-    lbfgsFPnumval_t *ptr_fx,
+    real_t *x,
+    real_t *ptr_fx,
     lbfgs_evaluate_t proc_evaluate,
     lbfgs_progress_t proc_progress,
     void *instance,
     lbfgs_parameter_t *_param,
-    lbfgsFPnumval_t *buffer_FPnum,
+    real_t *buffer_FPnum,
     iteration_data_t *buffer_iter
     )
 {
-    int ret;
+    int_t ret;
     // size_t i, j, k, ls, end, bound;
     size_t i, j, k, end, bound;
-    int ls;
-    lbfgsFPnumval_t step;
+    int_t ls;
+    real_t step;
 
     /* Constant parameters and their default values. */
     lbfgs_parameter_t param = (_param != NULL) ? (*_param) : _defparam;
@@ -269,7 +269,7 @@ int lbfgs(
     bool free_buffer_iter = true;
     size_t size_buffer = 5*(size_t)n + 2*(size_t)m*(size_t)n + (size_t)param.past;
     if (buffer_FPnum == NULL)
-        buffer_FPnum = (lbfgsFPnumval_t*)calloc(size_buffer, sizeof(lbfgsFPnumval_t));
+        buffer_FPnum = (real_t*)calloc(size_buffer, sizeof(real_t));
     else {
         free_buffer_FPnum = false;
         set_to_zero(buffer_FPnum, size_buffer, 1);
@@ -281,14 +281,14 @@ int lbfgs(
         memset(buffer_iter, 0, m*sizeof(iteration_data_t));
     }
 
-    lbfgsFPnumval_t *xp = NULL;
-    lbfgsFPnumval_t *g = NULL, *gp = NULL, *pg = NULL;
-    lbfgsFPnumval_t *d = NULL, *w = NULL, *pf = NULL;
+    real_t *xp = NULL;
+    real_t *g = NULL, *gp = NULL, *pg = NULL;
+    real_t *d = NULL, *w = NULL, *pf = NULL;
     iteration_data_t *lm = NULL, *it = NULL;
-    lbfgsFPnumval_t ys, yy;
-    lbfgsFPnumval_t xnorm, gnorm, beta;
-    lbfgsFPnumval_t fx = 0.;
-    lbfgsFPnumval_t rate = 0.;
+    real_t ys, yy;
+    real_t xnorm, gnorm, beta;
+    real_t fx = 0.;
+    real_t rate = 0.;
     line_search_proc linesearch = line_search_morethuente;
 
     if (buffer_FPnum == NULL || buffer_iter == NULL) {
@@ -390,11 +390,11 @@ int lbfgs(
     }
 
     /* Allocate working space. */
-    // xp = (lbfgsFPnumval_t*)vecalloc(n, sizeof(lbfgsFPnumval_t));
-    // g = (lbfgsFPnumval_t*)vecalloc(n, sizeof(lbfgsFPnumval_t));
-    // gp = (lbfgsFPnumval_t*)vecalloc(n, sizeof(lbfgsFPnumval_t));
-    // d = (lbfgsFPnumval_t*)vecalloc(n, sizeof(lbfgsFPnumval_t));
-    // w = (lbfgsFPnumval_t*)vecalloc(n, sizeof(lbfgsFPnumval_t));
+    // xp = (real_t*)vecalloc(n, sizeof(real_t));
+    // g = (real_t*)vecalloc(n, sizeof(real_t));
+    // gp = (real_t*)vecalloc(n, sizeof(real_t));
+    // d = (real_t*)vecalloc(n, sizeof(real_t));
+    // w = (real_t*)vecalloc(n, sizeof(real_t));
     xp = buffer_FPnum;
     g = buffer_FPnum + (size_t)n;
     gp = buffer_FPnum + 2*(size_t)n;
@@ -407,7 +407,7 @@ int lbfgs(
 
     if (param.orthantwise_c != 0.) {
         /* Allocate working space for OW-LQN. */
-        pg = (lbfgsFPnumval_t*)vecalloc(n, sizeof(lbfgsFPnumval_t));
+        pg = (real_t*)vecalloc(n, sizeof(real_t));
         if (pg == NULL) {
             ret = LBFGSERR_OUTOFMEMORY;
             goto lbfgs_exit;
@@ -427,8 +427,8 @@ int lbfgs(
         it = &lm[i];
         it->alpha = 0;
         it->ys = 0;
-        // it->s = (lbfgsFPnumval_t*)vecalloc(n, sizeof(lbfgsFPnumval_t));
-        // it->y = (lbfgsFPnumval_t*)vecalloc(n, sizeof(lbfgsFPnumval_t));
+        // it->s = (real_t*)vecalloc(n, sizeof(real_t));
+        // it->y = (real_t*)vecalloc(n, sizeof(real_t));
         it->s = buffer_FPnum + (5*(size_t)n + 2*(size_t)i*(size_t)n);
         it->y = it->s + n;
         if (it->s == NULL || it->y == NULL) {
@@ -439,7 +439,7 @@ int lbfgs(
 
     /* Allocate an array for storing previous values of the objective function. */
     if (0 < param.past) {
-        // pf = (lbfgsFPnumval_t*)vecalloc(param.past, sizeof(lbfgsFPnumval_t));
+        // pf = (real_t*)vecalloc(param.past, sizeof(real_t));
         pf = buffer_FPnum + (5*(size_t)n + 2*(size_t)m*(size_t)n);
     }
 
@@ -637,7 +637,7 @@ int lbfgs(
             Constrain the search direction for orthant-wise updates.
          */
         if (param.orthantwise_c != 0.) {
-            for (int i = param.orthantwise_start;i < param.orthantwise_end;++i) {
+            for (int_t i = param.orthantwise_start;i < param.orthantwise_end;++i) {
                 if (d[i] * pg[i] >= 0) {
                     d[i] = 0;
                 }
@@ -682,7 +682,7 @@ lbfgs_exit:
     return ret;
 }
 
-const char* lbfgs_strerror(int err)
+const char* lbfgs_strerror(int_t err)
 {
     switch(err) {
         case LBFGS_SUCCESS:
@@ -797,24 +797,24 @@ const char* lbfgs_strerror(int err)
 }
 
 
-static int line_search_backtracking(
+static int_t line_search_backtracking(
     size_t n,
-    lbfgsFPnumval_t *x,
-    lbfgsFPnumval_t *f,
-    lbfgsFPnumval_t *g,
-    lbfgsFPnumval_t *s,
-    lbfgsFPnumval_t *stp,
-    const lbfgsFPnumval_t* xp,
-    const lbfgsFPnumval_t* gp,
-    lbfgsFPnumval_t *wp,
+    real_t *x,
+    real_t *f,
+    real_t *g,
+    real_t *s,
+    real_t *stp,
+    const real_t* xp,
+    const real_t* gp,
+    real_t *wp,
     callback_data_t *cd,
     const lbfgs_parameter_t *param
     )
 {
     size_t count = 0;
-    lbfgsFPnumval_t width, dg;
-    lbfgsFPnumval_t finit, dginit = 0., dgtest;
-    const lbfgsFPnumval_t dec = 0.5, inc = 2.1;
+    real_t width, dg;
+    real_t finit, dginit = 0., dgtest;
+    const real_t dec = 0.5, inc = 2.1;
 
     /* Check the input parameters for errors. */
     if (*stp <= 0.) {
@@ -890,23 +890,23 @@ static int line_search_backtracking(
 
 
 
-static int line_search_backtracking_owlqn(
+static int_t line_search_backtracking_owlqn(
     size_t n,
-    lbfgsFPnumval_t *x,
-    lbfgsFPnumval_t *f,
-    lbfgsFPnumval_t *g,
-    lbfgsFPnumval_t *s,
-    lbfgsFPnumval_t *stp,
-    const lbfgsFPnumval_t* xp,
-    const lbfgsFPnumval_t* gp,
-    lbfgsFPnumval_t *wp,
+    real_t *x,
+    real_t *f,
+    real_t *g,
+    real_t *s,
+    real_t *stp,
+    const real_t* xp,
+    const real_t* gp,
+    real_t *wp,
     callback_data_t *cd,
     const lbfgs_parameter_t *param
     )
 {
     size_t i, count = 0;
-    lbfgsFPnumval_t width = 0.5, norm = 0.;
-    lbfgsFPnumval_t finit = *f, dgtest;
+    real_t width = 0.5, norm = 0.;
+    real_t finit = *f, dgtest;
 
     /* Check the input parameters for errors. */
     if (*stp <= 0.) {
@@ -923,7 +923,7 @@ static int line_search_backtracking_owlqn(
         veccpy(x, xp, n);
         vecadd(x, s, *stp, n);
 
-        /* The current point is projected onto the orthant. */
+        /* The current point_t is projected onto the orthant. */
         owlqn_project(x, wp, param->orthantwise_start, param->orthantwise_end);
 
         /* Evaluate the function and gradient values. */
@@ -964,29 +964,29 @@ static int line_search_backtracking_owlqn(
 
 
 
-static int line_search_morethuente(
+static int_t line_search_morethuente(
     size_t n,
-    lbfgsFPnumval_t *x,
-    lbfgsFPnumval_t *f,
-    lbfgsFPnumval_t *g,
-    lbfgsFPnumval_t *s,
-    lbfgsFPnumval_t *stp,
-    const lbfgsFPnumval_t* xp,
-    const lbfgsFPnumval_t* gp,
-    lbfgsFPnumval_t *wa,
+    real_t *x,
+    real_t *f,
+    real_t *g,
+    real_t *s,
+    real_t *stp,
+    const real_t* xp,
+    const real_t* gp,
+    real_t *wa,
     callback_data_t *cd,
     const lbfgs_parameter_t *param
     )
 {
     size_t count = 0;
-    int brackt, stage1, uinfo = 0;
-    lbfgsFPnumval_t dg;
-    lbfgsFPnumval_t stx, fx, dgx;
-    lbfgsFPnumval_t sty, fy, dgy;
-    lbfgsFPnumval_t fxm, dgxm, fym, dgym, fm, dgm;
-    lbfgsFPnumval_t finit, ftest1, dginit, dgtest;
-    lbfgsFPnumval_t width, prev_width;
-    lbfgsFPnumval_t stmin, stmax;
+    int_t brackt, stage1, uinfo = 0;
+    real_t dg;
+    real_t stx, fx, dgx;
+    real_t sty, fy, dgy;
+    real_t fxm, dgxm, fym, dgym, fm, dgm;
+    real_t finit, ftest1, dginit, dgtest;
+    real_t width, prev_width;
+    real_t stmin, stmax;
 
     /* Check the input parameters for errors. */
     if (*stp <= 0.) {
@@ -1013,7 +1013,7 @@ static int line_search_morethuente(
         The variables stx, fx, dgx contain the values of the step,
         function, and directional derivative at the best step.
         The variables sty, fy, dgy contain the value of the step,
-        function, and derivative at the other endpoint of
+        function, and derivative at the other endpoint_t of
         the interval of uncertainty.
         The variables stp, f, dg contain the values of the step,
         function, and derivative at the current step.
@@ -1041,7 +1041,7 @@ static int line_search_morethuente(
 
         /*
             If an unusual termination is to occur then let
-            stp be the lowest point obtained so far.
+            stp be the lowest point_t obtained so far.
          */
         if ((brackt && ((*stp <= stmin || stmax <= *stp) || param->max_linesearch <= count + 1 || uinfo != 0)) || (brackt && (stmax - stmin <= param->xtol * stmax))) {
             *stp = stx;
@@ -1161,15 +1161,15 @@ static int line_search_morethuente(
  * Define the local variables for computing minimizers.
  */
 #define USES_MINIMIZER \
-    lbfgsFPnumval_t a, d, gamma, theta, p, q, r, s;
+    real_t a, d, gamma, theta, p, q, r, s;
 
 /**
  * Find a minimizer of an interpolated cubic function.
  *  @param  cm      The minimizer of the interpolated cubic.
- *  @param  u       The value of one point, u.
+ *  @param  u       The value of one point_t, u.
  *  @param  fu      The value of f(u).
  *  @param  du      The value of f'(u).
- *  @param  v       The value of another point, v.
+ *  @param  v       The value of another point_t, v.
  *  @param  fv      The value of f(v).
  *  @param  du      The value of f'(v).
  */
@@ -1192,10 +1192,10 @@ static int line_search_morethuente(
 /**
  * Find a minimizer of an interpolated cubic function.
  *  @param  cm      The minimizer of the interpolated cubic.
- *  @param  u       The value of one point, u.
+ *  @param  u       The value of one point_t, u.
  *  @param  fu      The value of f(u).
  *  @param  du      The value of f'(u).
- *  @param  v       The value of another point, v.
+ *  @param  v       The value of another point_t, v.
  *  @param  fv      The value of f(v).
  *  @param  du      The value of f'(v).
  *  @param  xmin    The maximum value.
@@ -1228,10 +1228,10 @@ static int line_search_morethuente(
 /**
  * Find a minimizer of an interpolated quadratic function.
  *  @param  qm      The minimizer of the interpolated quadratic.
- *  @param  u       The value of one point, u.
+ *  @param  u       The value of one point_t, u.
  *  @param  fu      The value of f(u).
  *  @param  du      The value of f'(u).
- *  @param  v       The value of another point, v.
+ *  @param  v       The value of another point_t, v.
  *  @param  fv      The value of f(v).
  */
 #define QUARD_MINIMIZER(qm, u, fu, du, v, fv) \
@@ -1241,9 +1241,9 @@ static int line_search_morethuente(
 /**
  * Find a minimizer of an interpolated quadratic function.
  *  @param  qm      The minimizer of the interpolated quadratic.
- *  @param  u       The value of one point, u.
+ *  @param  u       The value of one point_t, u.
  *  @param  du      The value of f'(u).
- *  @param  v       The value of another point, v.
+ *  @param  v       The value of another point_t, v.
  *  @param  dv      The value of f'(v).
  */
 #define QUARD_MINIMIZER2(qm, u, du, v, dv) \
@@ -1255,7 +1255,7 @@ static int line_search_morethuente(
  *
  *  The parameter x represents the step with the least function value.
  *  The parameter t represents the current step. This function assumes
- *  that the derivative at the point of x in the direction of the step.
+ *  that the derivative at the point_t of x in the direction of the step.
  *  If the bracket is set to true, the minimizer has been bracketed in
  *  an interval of uncertainty with endpoints between x and y.
  *
@@ -1272,33 +1272,33 @@ static int line_search_morethuente(
  *  @param  tmax    The maximum value for the trial value, t.
  *  @param  brackt  The pointer to the predicate if the trial value is
  *                  bracketed.
- *  @retval int     Status value. Zero indicates a normal termination.
+ *  @retval int_t     Status value. Zero indicates a normal termination.
  *  
  *  @see
  *      Jorge J. More and David J. Thuente. Line search algorithm with
  *      guaranteed sufficient decrease. ACM Transactions on Mathematical
  *      Software (TOMS), Vol 20, No 3, pp. 286-307, 1994.
  */
-static int update_trial_interval(
-    lbfgsFPnumval_t *x,
-    lbfgsFPnumval_t *fx,
-    lbfgsFPnumval_t *dx,
-    lbfgsFPnumval_t *y,
-    lbfgsFPnumval_t *fy,
-    lbfgsFPnumval_t *dy,
-    lbfgsFPnumval_t *t,
-    lbfgsFPnumval_t *ft,
-    lbfgsFPnumval_t *dt,
-    const lbfgsFPnumval_t tmin,
-    const lbfgsFPnumval_t tmax,
-    int *brackt
+static int_t update_trial_interval(
+    real_t *x,
+    real_t *fx,
+    real_t *dx,
+    real_t *y,
+    real_t *fy,
+    real_t *dy,
+    real_t *t,
+    real_t *ft,
+    real_t *dt,
+    const real_t tmin,
+    const real_t tmax,
+    int_t *brackt
     )
 {
-    int bound;
-    int dsign = fsigndiff(dt, dx);
-    lbfgsFPnumval_t mc; /* minimizer of an interpolated cubic. */
-    lbfgsFPnumval_t mq; /* minimizer of an interpolated quadratic. */
-    lbfgsFPnumval_t newt;   /* new trial value. */
+    int_t bound;
+    int_t dsign = fsigndiff(dt, dx);
+    real_t mc; /* minimizer of an interpolated cubic. */
+    real_t mq; /* minimizer of an interpolated quadratic. */
+    real_t newt;   /* new trial value. */
     USES_MINIMIZER;     /* for CUBIC_MINIMIZER and QUARD_MINIMIZER. */
 
     /* Check the input parameters for errors. */
@@ -1452,14 +1452,14 @@ static int update_trial_interval(
 
 
 
-static lbfgsFPnumval_t owlqn_x1norm(
-    const lbfgsFPnumval_t* x,
-    const int start,
-    const int n
+static real_t owlqn_x1norm(
+    const real_t* x,
+    const int_t start,
+    const int_t n
     )
 {
-    int i;
-    lbfgsFPnumval_t norm = 0.;
+    int_t i;
+    real_t norm = 0.;
 
     for (i = start;i < n;++i) {
         norm += fabs(x[i]);
@@ -1469,16 +1469,16 @@ static lbfgsFPnumval_t owlqn_x1norm(
 }
 
 static void owlqn_pseudo_gradient(
-    lbfgsFPnumval_t* pg,
-    const lbfgsFPnumval_t* x,
-    const lbfgsFPnumval_t* g,
-    const int n,
-    const lbfgsFPnumval_t c,
-    const int start,
-    const int end
+    real_t* pg,
+    const real_t* x,
+    const real_t* g,
+    const int_t n,
+    const real_t c,
+    const int_t start,
+    const int_t end
     )
 {
-    int i;
+    int_t i;
 
     /* Compute the negative of gradients. */
     for (i = 0;i < start;++i) {
@@ -1512,13 +1512,13 @@ static void owlqn_pseudo_gradient(
 }
 
 static void owlqn_project(
-    lbfgsFPnumval_t* d,
-    const lbfgsFPnumval_t* sign,
-    const int start,
-    const int end
+    real_t* d,
+    const real_t* sign,
+    const int_t start,
+    const int_t end
     )
 {
-    int i;
+    int_t i;
 
     for (i = start;i < end;++i) {
         if (d[i] * sign[i] <= 0) {

@@ -4,6 +4,13 @@ import multiprocessing
 import ctypes
 import warnings
 
+__all__ = ["CMF", "CMF_implicit",
+           "OMF_explicit", "OMF_implicit",
+           "MostPopular", "ContentBased"]
+
+### TODO: this module should move from doing operations in Python to
+### using the new designated C functions for each type of prediction.
+
 class _CMF:
     def __init__(self):
         pass
@@ -23,13 +30,15 @@ class _CMF:
         return self
 
     def _take_params(self, implicit=False, alpha=40., downweight=True,
-                     k=50, lambda_=1e2, method="als", use_cg=False,
+                     k=50, lambda_=1e2, method="als",
+                     use_cg=False, max_cg_steps=3, finalize_chol=False,
                      user_bias=True, item_bias=True, k_user=0, k_item=0, k_main=0,
                      w_main=1., w_user=1., w_item=1.,
                      maxiter=400, niter=10, parallelize="separate", corr_pairs=4,
                      NA_as_zero=False, NA_as_zero_user=False, NA_as_zero_item=False,
                      precompute_for_predictions=True, use_float=False,
-                     random_state=1, init="normal", verbose=True, print_every=10,
+                     random_state=1, init="normal", verbose=True,
+                     print_every=10, handle_interrupt=True,
                      produce_dicts=False, copy_data=True, nthreads=-1):
         assert method in ["als", "lbfgs"]
         assert parallelize in ["separate", "single"]
@@ -44,14 +53,17 @@ class _CMF:
         assert isinstance(k_item, int) and k_item >= 0
         assert isinstance(k_main, int) and k_main >= 0
 
+        if ((max(k_user, k_item) + k + k_main + max(user_bias, item_bias))**2) > np.iinfo(ctypes.c_int).max:
+            raise ValueError("Number of factors is too large.")
+
         lambda_ = float(lambda_) if isinstance(lambda_, int) else lambda_
         lambda_ = np.array(lambda_) if lambda_.__class__.__name__ in ["list", "Series", "tuple"] else lambda_
         if lambda_.__class__.__name__ == "ndarray":
             lambda_ = lambda_.reshape(-1)
             assert lambda_.shape[0] == 6
-            assert np.all(lambda_ >= 0)
+            assert np.all(lambda_ >= 0.)
         else:
-            assert isinstance(lambda_, float) and lambda_ >= 0
+            assert isinstance(lambda_, float) and lambda_ >= 0.
 
         
         niter = int(niter) if isinstance(niter, float) else niter
@@ -83,6 +95,9 @@ class _CMF:
         if (method == "lbfgs") and (NA_as_zero or NA_as_zero_user or NA_as_zero_item):
             raise ValueError("Option 'NA_as_zero' not supported with method='lbfgs'.")
 
+        if method == "als":
+            assert max_cg_steps > 0
+
         w_main = float(w_main) if isinstance(w_main, int) else w_main
         w_user = float(w_user) if isinstance(w_user, int) else w_user
         w_item = float(w_item) if isinstance(w_item, int) else w_item
@@ -111,6 +126,8 @@ class _CMF:
         self.item_bias = bool(item_bias)
         self.method = method
         self.use_cg = bool(use_cg)
+        self.max_cg_steps = int(max_cg_steps)
+        self.finalize_chol = bool(finalize_chol)
         self.maxiter = maxiter
         self.niter = niter
         self.parallelize = parallelize
@@ -118,6 +135,7 @@ class _CMF:
         self.NA_as_zero_user = bool(NA_as_zero_user)
         self.NA_as_zero_item = bool(NA_as_zero_item)
         self.precompute_for_predictions = bool(precompute_for_predictions)
+        self.include_all_X = True
         self.use_float = bool(use_float)
         self.init = init
         self.verbose = bool(verbose)
@@ -125,6 +143,7 @@ class _CMF:
         self.corr_pairs = corr_pairs
         self.random_state = int(random_state)
         self.produce_dicts = bool(produce_dicts)
+        self.handle_interrupt = bool(handle_interrupt)
         self.copy_data = bool(copy_data)
         self.nthreads = nthreads
 
@@ -149,15 +168,14 @@ class _CMF:
         self.D_bias_ = np.empty(0, dtype=self.dtype_)
         self.glob_mean_ = 0.
 
-        self._BtBinvBt = np.empty((0,0), dtype=self.dtype_)
+        self._TransBtBinvBt = np.empty((0,0), dtype=self.dtype_)
+        ## will have lambda added for implicit but not for explicit, dim is k+k_main
         self._BtB = np.empty((0,0), dtype=self.dtype_)
-        self._BtBchol = np.empty((0,0), dtype=self.dtype_)
-        self._CtCinvCt = np.empty((0,0), dtype=self.dtype_)
+        self._TransCtCinvCt = np.empty((0,0), dtype=self.dtype_)
+        ## will be multiplied by w_user already
         self._CtC = np.empty((0,0), dtype=self.dtype_)
-        self._CtCchol = np.empty((0,0), dtype=self.dtype_)
         self._BeTBe = np.empty((0,0), dtype=self.dtype_)
-        self._BtB_padded = np.empty((0,0), dtype=self.dtype_)
-        self._BtB_shrunk = np.empty((0,0), dtype=self.dtype_)
+        self._BeTBeChol = np.empty((0,0), dtype=self.dtype_)
 
         self._B_pred = np.empty((0,0), dtype=self.dtype_)
         self._B_plus_bias = np.empty((0,0), dtype=self.dtype_)
@@ -184,6 +202,9 @@ class _CMF:
         k_main = int(k_main) if isinstance(k_main, float) else k_main
         assert isinstance(k_sec, int) and k_sec >= 0
         assert isinstance(k_main, int) and k_main >= 0
+
+        if ((max(k_sec, k_main) + self.k)**2 + 1) > np.iinfo(ctypes.c_int).max:
+            raise ValueError("Number of factors is too large.")
 
         if self.method == "als":
             if self._implicit:
@@ -422,26 +443,32 @@ class _CMF:
             if Mat.shape[0] == 0:
                 raise ValueError("Model was not fit to %s data." % name)
             U_val = np.array(U_val).reshape(-1).astype(self.dtype_)
-            if self.reindex_:
-                if len(dct):
-                    try:
-                        U_col = np.array([dct[u] for u in U_col])
-                    except:
-                        raise ValueError("Sparse inputs cannot contain missing values.")
-                else:
-                    U_col = pd.Categorical(U_col, mapping).codes.astype(ctypes.c_int)
-                    if np.any(U_col < 0):
-                        raise ValueError("Sparse inputs cannot contain missing values.")
-                U_col = U_col.astype(ctypes.c_int)
+            if U_val.shape[0] == 0:
+                if np.array(U_col).shape[0] > 0:
+                    raise ValueError("'%s_col' and '%s_val' must have the same number of entries." % (letter, letter))
+                U_col = np.empty(0, dtype=ctypes.c_int)
+                U_val = np.empty(0, dtype=self.dtype_)
             else:
-                U_col = np.array(U_col).reshape(-1).astype(ctypes.c_int)
-                imin, imax = U_col.min(), U_col.max()
-                if np.isnan(imin) or np.isnan(imax):
-                    raise ValueError("Sparse inputs cannot contain missing values.")
-                if (imin < 0) or (imax >= Mat.shape[0]):
-                    msg  = "Column indices for user info must be within the range"
-                    msg += " of the data that was pased to 'fit'."
-                    raise ValueError(msg)
+                if self.reindex_:
+                    if len(dct):
+                        try:
+                            U_col = np.array([dct[u] for u in U_col])
+                        except:
+                            raise ValueError("Sparse inputs cannot contain missing values.")
+                    else:
+                        U_col = pd.Categorical(U_col, mapping).codes.astype(ctypes.c_int)
+                        if np.any(U_col < 0):
+                            raise ValueError("Sparse inputs cannot contain missing values.")
+                    U_col = U_col.astype(ctypes.c_int)
+                else:
+                    U_col = np.array(U_col).reshape(-1).astype(ctypes.c_int)
+                    imin, imax = U_col.min(), U_col.max()
+                    if np.isnan(imin) or np.isnan(imax):
+                        raise ValueError("Sparse inputs cannot contain missing values.")
+                    if (imin < 0) or (imax >= Mat.shape[0]):
+                        msg  = "Column indices for user info must be within the range"
+                        msg += " of the data that was pased to 'fit'."
+                        raise ValueError(msg)
             if U_val.shape[0] != U_col.shape[0]:
                 raise ValueError("'%s_col' and '%s_val' must have the same number of entries." % (letter, letter))
         else:
@@ -464,7 +491,7 @@ class _CMF:
         Urow = np.empty(0, dtype=ctypes.c_int)
         Ucol = np.empty(0, dtype=ctypes.c_int)
         Uval = np.empty(0, dtype=self.dtype_)
-        Ucsr_p = np.empty(0, dtype=ctypes.c_long)
+        Ucsr_p = np.empty(0, dtype=ctypes.c_size_t)
         Ucsr_i = np.empty(0, dtype=ctypes.c_int)
         Ucsr = np.empty(0, dtype=self.dtype_)
         m, p = U.shape if U is not None else (0,0)
@@ -488,7 +515,7 @@ class _CMF:
         elif U.__class__.__name__ == "csr_matrix":
             if not allow_csr:
                 raise ValueError("Sparse matrices only supported in COO format.")
-            Ucsr_p = U.indptr.astype(ctypes.c_long)
+            Ucsr_p = U.indptr.astype(ctypes.c_size_t)
             Ucsr_i = U.indices.astype(ctypes.c_int)
             Ucsr = U.data.astype(self.dtype_)
         elif U.__class__.__name__ == "ndarray":
@@ -513,6 +540,9 @@ class _CMF:
         Ub_arr = np.empty((0,0), dtype=self.dtype_)
 
         m_ub, pbin = U_bin.shape if U_bin is not None else (0,0)
+
+        if max(m_ub, pbin) and (not Mat.shape[0] or not Mat.shape[1]):
+            raise ValueError("Cannot pass binary data if model was not fit to binary side info.")
 
         if (pbin != Mat.shape[0]) and (Mat.shape[0] > 0) and (pbin > 0):
             msg  = "'%s_bin' must have the same columns "
@@ -547,7 +577,7 @@ class _CMF:
         Xrow = np.empty(0, dtype=ctypes.c_int)
         Xcol = np.empty(0, dtype=ctypes.c_int)
         Xval = np.empty(0, dtype=self.dtype_)
-        Xcsr_p = np.empty(0, dtype=ctypes.c_long)
+        Xcsr_p = np.empty(0, dtype=ctypes.c_size_t)
         Xcsr_i = np.empty(0, dtype=ctypes.c_int)
         Xcsr = np.empty(0, dtype=self.dtype_)
         W_dense = np.empty((0,0), dtype=self.dtype_)
@@ -569,7 +599,7 @@ class _CMF:
                     msg += "as 'X'."
                     raise ValueError(msg)
         elif X.__class__.__name__ == "csr_matrix":
-            Xcsr_p = X.indptr.astype(ctypes.c_long)
+            Xcsr_p = X.indptr.astype(ctypes.c_size_t)
             Xcsr_i = X.indices.astype(ctypes.c_int)
             Xcsr = X.data.astype(self.dtype_)
             if W is not None:
@@ -586,6 +616,9 @@ class _CMF:
                 W_dense = np.ascontiguousarray(W).astype(self.dtype_)
         else:
             raise ValueError("'X' must be a SciPy CSR or COO matrix, or NumPy array.")
+
+        if n > self._n_orig:
+            raise ValueError("'X' has more columns than what was passed to 'fit'.")
 
         return Xarr, Xrow, Xcol, Xval, Xcsr_p, Xcsr_i, Xcsr, m, n, W_dense, W_sp
 
@@ -750,6 +783,8 @@ class _CMF:
 
             assert "UserId" in X.columns.values
             assert "ItemId" in X.columns.values
+            if (self._implicit) and ("Rating" in X.columns.values) and ("Value" not in X.columns.values):
+                X = X.rename(columns={"Rating":"Value"}, copy=False, inplace=False)
             if self._implicit:
                 assert "Value" in X.columns.values
             else:
@@ -773,6 +808,8 @@ class _CMF:
                 Xval = X.Value.astype(self.dtype_).to_numpy()
             else:
                 Xval = X.Rating.astype(self.dtype_).to_numpy()
+            if Xval.shape[0] == 0:
+                raise ValueError("'X' contains no non-zero entries.")
             Xarr = np.empty((0,0), dtype=self.dtype_)
             W_sp = np.empty(0, dtype=self.dtype_)
             if "Weight" in X.columns.values:
@@ -852,6 +889,9 @@ class _CMF:
             _1, _2, _3, Ub_arr, self._Ub_cols, m_ub, pbin = self._process_U_arr(U_bin)
             _1, _2, _3, Ib_arr, self._Ib_cols, n_ib, qbin = self._process_U_arr(I_bin)
 
+            if (X.__class__.__name__ == "coo_matrix") and (Xval.shape[0] == 0):
+                raise ValueError("'X' contains no non-zero entries.")
+
             W_sp = np.empty(0, dtype=self.dtype_)
             W_dense = np.empty((0,0), dtype=self.dtype_)
             if W is not None:
@@ -871,14 +911,49 @@ class _CMF:
         else:
             m = int(Xrow.max() + 1)
             n = int(Xcol.max() + 1)
+            if X.__class__.__name__ == "coo_matrix":
+                m = max(m, X.shape[0])
+                n = max(n, X.shape[1])
+            if enforce_same_shape:
+                m = max(m, m_u, m_ub)
+                n = max(n, n_i, n_ib)
 
         if enforce_same_shape:
+            msg_err_rows = "'X' and 'U%s' must have the same rows."
+            msg_err_cols = "Columns of 'X' must match with rows of 'I%s'."
             if Uarr.shape[0]:
                 if Uarr.shape[0] != m:
-                    raise ValueError("'X' and 'U' must have the same rows.")
+                    raise ValueError(msg_err_rows % "")
             if Iarr.shape[0]:
                 if Iarr.shape[0] != n:
-                    raise ValueError("Columns of 'X' must match with rows of 'I'.")
+                    raise ValueError(msg_err_cols % "")
+            if Uval.shape[0]:
+                if m_u != m:
+                    raise ValueError(msg_err_rows % "")
+            if Ival.shape[0]:
+                if n_i != n:
+                    raise ValueError(msg_err_cols % "")
+            if Ub_arr.shape[0]:
+                if m_ub != m:
+                    raise ValueError(msg_err_rows % "_bin")
+            if Ib_arr.shape[0]:
+                if n_ib != n:
+                    raise ValueError(msg_err_rows % "_bin")
+
+        if max(m, n, m_u, n_i, p, q, m_ub, n_ib, pbin, qbin) > np.iinfo(ctypes.c_int).max:
+            msg  = "Error: dimensionality of the inputs is too high. "
+            msg += "Number of rows/columns cannot be more than INT_MAX."
+            raise ValueError(msg)
+
+        if (max(m_u, m_ub, p, pbin) == 0) and (self.k_user):
+            self.k_user = 0
+            warnings.warn("No user side info provided, will set 'k_user' to zero.")
+        if (max(n_i, n_ib, q, qbin) == 0) and (self.k_item):
+            self.k_item = 0
+            warnings.warn("No item side info provided, will set 'k_item' to zero.")
+        if (m == 0) or (n == 0):
+            raise ValueError("'X' must have at least one row and column.")
+
 
         return self._fit(Xrow, Xcol, Xval, W_sp, Xarr, W_dense,
                          Uarr, Urow, Ucol, Uval, Ub_arr,
@@ -935,6 +1010,8 @@ class _CMF:
                     if isinstance(out, np.ndarray):
                         out = out[0]
                     return out
+            ### TODO: This function no longer needs to know which which entries
+            #### will be nan, as it's now implemented in the C function
             else:
                 n_users = max(self._A_pred.shape[0], self.user_bias_.shape[0])
                 n_items = max(self._B_pred.shape[0], self.item_bias_.shape[0])
@@ -1172,28 +1249,80 @@ class _CMF:
         else:
             lambda_ = self.lambda_
         
-        a_vec = c_funs.call_factors_collective_cold(
-            U,
-            U_val,
-            U_col,
-            U_bin,
-            self.C_,
-            self.Cbin_,
-            self._CtCinvCt,
-            self._CtC,
-            self._CtCchol,
-            self._U_colmeans,
-            self.C_.shape[0], self.k,
-            self.k_user, self.k_main,
-            lambda_, self.w_user,
-            self.NA_as_zero_user
-        )
+        if not self._implicit:
+            if not self.NA_as_zero:
+                a_vec = c_funs.call_factors_collective_cold(
+                    U,
+                    U_val,
+                    U_col,
+                    U_bin,
+                    self.C_,
+                    self.Cbin_,
+                    self._TransCtCinvCt,
+                    self._CtC,
+                    self._U_colmeans,
+                    self.C_.shape[0], self.k,
+                    self.k_user, self.k_main,
+                    lambda_, self.w_main, self.w_user,
+                    self.NA_as_zero_user
+                )
+            else:
+                _, a_vec = c_funs.call_factors_collective_warm_explicit(
+                    np.empty(0, dtype=self.dtype_),
+                    np.empty(0, dtype=self.dtype_),
+                    np.empty(0, dtype=self.dtype_),
+                    np.empty(0, dtype=ctypes.c_int),
+                    np.empty(0, dtype=self.dtype_),
+                    U,
+                    U_val,
+                    U_col,
+                    U_bin,
+                    self._U_colmeans,
+                    self.item_bias_,
+                    self.B_,
+                    self._B_plus_bias,
+                    self.C_,
+                    self.Cbin_,
+                    self._TransBtBinvBt,
+                    self._BtB,
+                    self._BeTBeChol,
+                    self._CtC,
+                    self.glob_mean_,
+                    self._n_orig,
+                    self.k, self.k_user, self.k_item, self.k_main,
+                    lambda_, lambda_bias,
+                    self.w_user, self.w_main,
+                    self.user_bias,
+                    self.NA_as_zero_user, self.NA_as_zero,
+                    self.include_all_X
+                )
+        else:
+            a_vec = c_funs.call_factors_collective_cold_implicit(
+                U,
+                U_val,
+                U_col,
+                self.B_,
+                self.C_,
+                self._BeTBe,
+                self._BtB,
+                self._BeTBeChol,
+                self._U_colmeans,
+                self.C_.shape[0], self.k,
+                self.k_user, self.k_item, self.k_main,
+                lambda_,
+                self.w_main, self.w_user,
+                self._w_main_multiplier,
+                self.NA_as_zero_user
+            )
         return a_vec
 
     def _factors_warm_common(self, X=None, X_col=None, X_val=None, W=None,
                              U=None, U_bin=None, U_col=None, U_val=None,
                              return_bias=False):
         assert self.is_fitted_
+
+        if (return_bias) and (not self.user_bias):
+            raise ValueError("Cannot return bias with model that was fit without it.")
 
         if ((X_col is not None) and (X_val is None)) or ((X_col is None) and (X_val is  not None)):
             raise ValueError("Must pass 'X_col' and 'X_val' together.")
@@ -1227,7 +1356,7 @@ class _CMF:
             if len(X.shape) > 1:
                 warnings.warn("Passed a 2-d array for 'X' - method expects a single row.")
             X = np.array(X).reshape(-1).astype(self.dtype_)
-            if X.shape[0] != self.B_.shape[0]:
+            if X.shape[0] != self._n_orig:
                 raise ValueError("'X' must have the same columns as when passed to 'fit'.")
             if W is not None:
                 W_dense = np.array(W).reshape(-1).astype(self.dtype_)
@@ -1240,18 +1369,25 @@ class _CMF:
             W_dense = np.empty(0, dtype=self.dtype_)
             X_val = np.array(X_val).reshape(-1).astype(self.dtype_)
 
-            if self.reindex_:
-                X_col = np.array(X_col).reshape(-1)
-                X_col = pd.Categorical(X_col, self.item_mapping_).codes.astype(ctypes.c_int)
-                if np.any(X_col < 0):
-                    raise ValueError("'X_col' must have the same item/column entries as passed to 'fit'.")
-            else:
+            if X_val.shape[0] == 0:
                 X_col = np.array(X_col).reshape(-1).astype(ctypes.c_int)
-                imin, imax = np.min(X_col), np.max(X_col)
-                if (imin < 0) or (imax >= self.B_.shape[0]) or np.isnan(imin) or np.isnan(imax):
-                    msg  = "Column indices ('X_col') must be within the range"
-                    msg += " of the data that was pased to 'fit'."
-                    raise ValueError(msg)
+                if X_col.shape[0] > 0:
+                    raise ValueError("'X_col' and 'X_val' must have the same number of entries.")
+            else:
+                if self.reindex_:
+                    X_col = np.array(X_col).reshape(-1)
+                    X_col = pd.Categorical(X_col, self.item_mapping_).codes.astype(ctypes.c_int)
+                    if np.any(X_col < 0):
+                        raise ValueError("'X_col' must have the same item/column entries as passed to 'fit'.")
+                else:
+                    X_col = np.array(X_col).reshape(-1).astype(ctypes.c_int)
+                    imin, imax = np.min(X_col), np.max(X_col)
+                    if (imin < 0) or (imax >= self._n_orig) or np.isnan(imin) or np.isnan(imax):
+                        msg  = "Column indices ('X_col') must be within the range"
+                        msg += " of the data that was pased to 'fit'."
+                        raise ValueError(msg)
+                if X_col.max() >= self._n_orig:
+                    raise ValueError("'X' cannot contain new columns.")
 
             if X_val.shape[0] != X_col.shape[0]:
                 raise ValueError("'X_col' and 'X_val' must have the same number of entries.")
@@ -1269,8 +1405,11 @@ class _CMF:
                                   U, U_val, U_col, U_bin, return_bias)
 
     def _process_transform_inputs(self, X, U, U_bin, W, replace_existing):
-        if (X is None) and (U is None) and (U_bin):
-            raise ValueError("Must pass at least one of 'X', 'U', 'U_bin'.")
+        if (X is None) and (U is None) and (U_bin is None):
+            if (self.Cbin_.shape[0]) or (self.Dbin_.shape[0]):
+                raise ValueError("Must pass at least one of 'X', 'U', 'U_bin'.")
+            else:
+                raise ValueError("Must pass at least one of 'X', 'U'.")
         if (not replace_existing):
             if (X is None):
                 raise ValueError("Must pass 'X' if not passing 'replace_existing'.")
@@ -1297,9 +1436,29 @@ class _CMF:
         msg += "Non present values should be passed as np.nan for dense, "
         msg += "or missing with matching shapes for sparse."
         if (m_x > 0) and (m_u > 0) and (m_x != m_u):
-            raise ValueError(msg % "U")
+            if (min(m_x, m_u) == m_x) and (Xcsr_p.shape[0] or Xval.shape[0]):
+                if Xcsr_p.shape[0]:
+                    diff = m_u - m_x
+                    fill = Xcsr_p[-1]
+                    Xcsr_p = np.r_[Xcsr_p, np.repeat(fill, diff)]
+                else:
+                    m_x = m_u
+            elif (min(m_x, m_u) == m_u) and (Uval.shape[0] or Ucsr_p.shape[0]):
+                if Ucsr_p.shape[0]:
+                    diff = m_x - m_u
+                    fill = Ucsr_p[-1]
+                    Ucsr_p = np.r_[Ucsr_p, np.repeat(fill, diff)]
+                else:
+                    m_u = m_x
+            else:
+                raise ValueError(msg % "U")
         if (m_x > 0) and (m_ub > 0) and (m_x != m_ub):
-            raise ValueError(msg % "U_bin")
+            if (min(m_x, m_ub) == m_x) and (Xcsr_p.shape[0]):
+                diff = m_ub - m_x
+                fill = Xcsr_p[-1]
+                Xcsr_p = np.r_[Xcsr_p, np.repeat(fill, diff)]
+            else:
+                raise ValueError(msg % "U_bin")
 
         if isinstance(self.lambda_, np.ndarray):
             lambda_ = self.lambda_[2]
@@ -1334,6 +1493,142 @@ class _CMF:
 
         return outp
 
+    def _process_multiple_common(self, X, U, U_bin, W):
+        if (X is None) and (U is None) and (U_bin is None):
+            if (self.Cbin_.shape[0]) or (self.Dbin_.shape[0]):
+                raise ValueError("Must pass at least one of 'X', 'U', 'U_bin'.")
+            else:
+                raise ValueError("Must pass at least one of 'X', 'U'.")
+
+        Xarr, Xrow, Xcol, Xval, Xcsr_p, Xcsr_i, Xcsr, m_x, n, W_dense, W_sp = \
+            self._process_new_X_2d(X=X, W=W)
+        Uarr, Urow, Ucol, Uval, Ucsr_p, Ucsr_i, Ucsr, m_u, p = \
+            self._process_new_U_2d(U=U, is_I=False, allow_csr=True)
+        Ub_arr, m_ub, pbin = self._process_new_Ub_2d(U_bin=U_bin, is_I=False)
+
+        if (self.NA_as_zero) and (Xcsr_p.shape[0]) and (m_x < max(m_u, m_ub)):
+            diff = max(m_u, m_ub) - m_x
+            fill = Xcsr_p[-1]
+            Xcsr_p = np.r_[Xcsr_p, np.repeat(fill, diff)]
+            m_x = max(m_x, m_u, m_ub)
+
+        if (self.NA_as_zero_user) and (Xcsr_p.shape[0]) and (m_u < max(m_x, m_ub)):
+            diff = max(m_x, m_ub) - m_u
+            fill = Ucsr_p[-1]
+            Ucsr_p = np.r_[Ucsr_p, np.repeat(fill, diff)]
+            m_u = max(m_x, m_u, m_ub)
+
+        if isinstance(self.lambda_, np.ndarray):
+            lambda_ = self.lambda_[2]
+            lambda_bias = self.lambda_[0]
+        else:
+            lambda_ = self.lambda_
+            lambda_bias = self.lambda_
+
+        return Xrow, Xcol, Xval, W_sp, \
+               Xcsr_p, Xcsr_i, Xcsr, \
+               Xarr, W_dense, \
+               Uarr, Urow, Ucol, Uval, Ub_arr, \
+               Ucsr_p, Ucsr_i, Ucsr, \
+               n, m_u, m_x, p, pbin, \
+               lambda_, lambda_bias
+
+    def _factors_multiple_common(self, X, U, U_bin, W):
+        Xrow, Xcol, Xval, W_sp, \
+        Xcsr_p, Xcsr_i, Xcsr, \
+        Xarr, W_dense, \
+        Uarr, Urow, Ucol, Uval, Ub_arr, \
+        Ucsr_p, Ucsr_i, Ucsr, \
+        n, m_u, m_x, p, pbin, \
+        lambda_, lambda_bias = self._process_multiple_common(X, U, U_bin, W)
+        A, A_bias = self._factors_multiple(
+            Xrow, Xcol, Xval, W_sp,
+            Xcsr_p, Xcsr_i, Xcsr,
+            Xarr, W_dense,
+            Uarr, Urow, Ucol, Uval, Ub_arr,
+            Ucsr_p, Ucsr_i, Ucsr,
+            n, m_u, m_x, p, pbin,
+            lambda_, lambda_bias
+        )
+        return A, A_bias
+
+    def _factors_multiple(self,
+                          Xrow, Xcol, Xval, W_sp,
+                          Xcsr_p, Xcsr_i, Xcsr,
+                          Xarr, W_dense,
+                          Uarr, Urow, Ucol, Uval, Ub_arr,
+                          Ucsr_p, Ucsr_i, Ucsr,
+                          n, m_u, m_x, p, pbin,
+                          lambda_, lambda_bias):
+        c_funs = wrapper_float if self.use_float else wrapper_double
+        
+        if (not self._implicit):
+            A, A_bias = c_funs.call_factors_collective_explicit_multiple(
+                Xrow,
+                Xcol,
+                Xval,
+                Xcsr_p, Xcsr_i, Xcsr,
+                W_sp,
+                Xarr,
+                W_dense,
+                Uarr,
+                Urow,
+                Ucol,
+                Uval,
+                Ucsr_p, Ucsr_i, Ucsr,
+                Ub_arr,
+                self._U_colmeans,
+                self.item_bias_,
+                self._B_pred,
+                self._B_plus_bias,
+                self.C_,
+                self.Cbin_,
+                self._TransBtBinvBt,
+                self._BtB,
+                self._BeTBeChol,
+                self._TransCtCinvCt,
+                self._CtC,
+                m_u, m_x,
+                self.glob_mean_,
+                self._n_orig,
+                self._k_pred, self.k_user, self.k_item, self._k_main_col,
+                lambda_, lambda_bias,
+                self.w_user, self.w_main,
+                self.user_bias,
+                self.NA_as_zero_user, self.NA_as_zero,
+                self.include_all_X,
+                self.nthreads
+            )
+
+        else:
+            A_bias = np.zeros(0, dtype=self.dtype_)
+            A = c_funs.call_factors_collective_implicit_multiple(
+                Xrow,
+                Xcol,
+                Xval,
+                Xcsr_p, Xcsr_i, Xcsr,
+                Uarr,
+                Urow,
+                Ucol,
+                Uval,
+                Ucsr_p, Ucsr_i, Ucsr,
+                self._U_colmeans,
+                self.B_,
+                self.C_,
+                self._BeTBe,
+                self._BtB,
+                self._BeTBeChol,
+                n, m_u, m_x,
+                self.k, self.k_user, self.k_item, self.k_main,
+                lambda_, self.alpha,
+                self._w_main_multiplier,
+                self.w_user, self.w_main,
+                self.NA_as_zero_user,
+                self.nthreads
+            )
+
+        return A, A_bias
+
     def _item_factors_cold(self, I=None, I_bin=None, I_col=None, I_val=None):
         assert self.is_fitted_
         if (self.D_.shape[0] == 0) and (self.Dbin_.shape[0] == 0):
@@ -1349,23 +1644,41 @@ class _CMF:
         I, I_col, I_val, I_bin = self._process_new_U(U=I, U_col=I_col, U_val=I_val, U_bin=I_bin, is_I=True)
 
         c_funs = wrapper_float if self.use_float else wrapper_double
-
-        b_vec = c_funs.call_factors_collective_cold(
-            I,
-            I_val,
-            I_col,
-            I_bin,
-            self.D_,
-            self.Dbin_,
-            np.empty((0,0), dtype=self.dtype_),
-            np.empty((0,0), dtype=self.dtype_),
-            np.empty((0,0), dtype=self.dtype_),
-            self._I_colmeans,
-            self.D_.shape[0], self.k,
-            self.k_item, self.k_main,
-            lambda_, self.w_item,
-            self.NA_as_zero_item
-        )
+        
+        if (not self._implicit):
+            b_vec = c_funs.call_factors_collective_cold(
+                I,
+                I_val,
+                I_col,
+                I_bin,
+                self.D_,
+                self.Dbin_,
+                np.empty((0,0), dtype=self.dtype_),
+                np.empty((0,0), dtype=self.dtype_),
+                self._I_colmeans,
+                self.D_.shape[0], self.k,
+                self.k_item, self.k_main,
+                lambda_, self.w_main, self.w_item,
+                self.NA_as_zero_item
+            )
+        else:
+            b_vec = c_funs.call_factors_collective_cold_implicit(
+                I,
+                I_val,
+                I_col,
+                self.A_,
+                self.D_,
+                np.empty((0,0), dtype=self.dtype_),
+                np.empty((0,0), dtype=self.dtype_),
+                np.empty((0,0), dtype=self.dtype_),
+                self._I_colmeans,
+                self.D_.shape[0], self.k,
+                self.k_item, self.k_user, self.k_main,
+                lambda_,
+                self.w_main, self.w_item,
+                self._w_main_multiplier,
+                self.NA_as_zero_item
+            )
         return b_vec
 
     def _factors_cold_multiple(self, U=None, U_bin=None, is_I=False):
@@ -1397,50 +1710,123 @@ class _CMF:
         if isinstance(self.lambda_, np.ndarray):
             if not is_I:
                 lambda_ = self.lambda_[2]
+                lambda_bias = self.lambda_[0]
             else:
                 lambda_ = self.lambda_[3]
+                lambda_bias = self.lambda_[1]
         else:
             lambda_ = self.lambda_
+            lambda_bias = self.lambda_
 
         Uarr, Urow, Ucol, Uval, Ucsr_p, Ucsr_i, Ucsr, m_u, p = \
             self._process_new_U_2d(U=U, is_I=is_I, allow_csr=True)
         Ub_arr, m_ub, pbin = self._process_new_Ub_2d(U_bin=U_bin, is_I=is_I)
 
+        empty_arr = np.empty((0,0), dtype=self.dtype_)
+
         c_funs = wrapper_float if self.use_float else wrapper_double
 
-        A = c_funs.call_collective_factors_cold_multiple(
-            Uarr,
-            Urow,
-            Ucol,
-            Uval,
-            Ucsr_p, Ucsr_i, Ucsr,
-            Ub_arr,
-            Mat,
-            MatBin,
-            np.empty((0,0), dtype=self.dtype_),
-            np.empty((0,0), dtype=self.dtype_),
-            np.empty((0,0), dtype=self.dtype_),
-            self._U_colmeans if not is_I else self._I_colmeans,
-            m_u, m_ub,
-            self.k, self.k_user if not is_I else self.k_item, self.k_main,
-            lambda_, self.w_user if not is_I else self.w_item,
-            self.NA_as_zero_user if not is_I else self.NA_as_zero_item,
-            self.nthreads
-        )
+        if (not self._implicit):
+            A, _ = c_funs.call_factors_collective_explicit_multiple(
+                np.empty(0, dtype=ctypes.c_int),
+                np.empty(0, dtype=ctypes.c_int),
+                np.empty(0, dtype=self.dtype_),
+                np.empty(0, dtype=ctypes.c_size_t),
+                np.empty(0, dtype=ctypes.c_int),
+                np.empty(0, dtype=self.dtype_),
+                np.empty(0, dtype=self.dtype_),
+                np.empty((0,0), dtype=self.dtype_),
+                np.empty((0,0), dtype=self.dtype_),
+                Uarr,
+                Urow,
+                Ucol,
+                Uval,
+                Ucsr_p, Ucsr_i, Ucsr,
+                Ub_arr,
+                self._U_colmeans if not is_I else self._I_colmeans,
+                self.item_bias_,
+                self.B_ if not is_I else self.A_,
+                self._B_plus_bias if not is_I else empty_arr,
+                Mat,
+                MatBin,
+                self._TransBtBinvBt if not is_I else empty_arr,
+                self._BtB if not is_I else empty_arr,
+                self._BeTBeChol if not is_I else empty_arr,
+                self._TransCtCinvCt if not is_I else empty_arr,
+                self._CtC if not is_I else empty_arr,
+                m_u, 0,
+                self.glob_mean_,
+                self._n_orig if not is_I else self.A_.shape[0],
+                self.k,
+                self.k_user if not is_I else self.k_item,
+                self.k_item if not is_I else self.k_user,
+                self.k_main,
+                lambda_, lambda_bias,
+                self.w_user if not is_I else self.w_item, self.w_main,
+                self.user_bias if not is_I else self.item_bias,
+                self.NA_as_zero_user if not is_I else self.NA_as_zero_item,
+                self.NA_as_zero,
+                self.include_all_X if not is_I else True,
+                self.nthreads
+            )
+        else:
+            A = c_funs.call_factors_collective_implicit_multiple(
+                    np.empty(0, dtype=ctypes.c_int),
+                    np.empty(0, dtype=ctypes.c_int),
+                    np.empty(0, dtype=self.dtype_),
+                    np.empty(0, dtype=ctypes.c_size_t),
+                    np.empty(0, dtype=ctypes.c_int),
+                    np.empty(0, dtype=self.dtype_),
+                    Uarr,
+                    Urow,
+                    Ucol,
+                    Uval,
+                    Ucsr_p, Ucsr_i, Ucsr,
+                    self._U_colmeans if not is_I else self._I_colmeans,
+                    self.B_ if not is_I else self.A_,
+                    Mat,
+                    self._BeTBe if not is_I else empty_arr,
+                    self._BtB if not is_I else empty_arr,
+                    self._BeTBeChol if not is_I else empty_arr,
+                    n, m_u, 0,
+                    self.k,
+                    self.k_user if not is_I else self.k_item,
+                    self.k_item if not is_I else self.k_user,
+                    self.k_main,
+                    lambda_, self.alpha,
+                    self._w_main_multiplier,
+                    self.w_user if not is_I else self.w_item, self.w_main,
+                    self.NA_as_zero_user if not is_I else self.NA_as_zero_item,
+                    self.nthreads
+                )
         return A
 
 
-class CMF_explicit(_CMF):
+class CMF(_CMF):
     """
-    Collective model for explicit-feedback data
+    Collective or multi-view matrix factorization
 
     Tries to approximate the 'X' interactions matrix  by a formula as follows:
-    X ~ A * t(B)
-    While at the same time also approximating the user side information
-    matrix 'U' and the item side information matrix 'I' as follows:
-    U ~ A * t(C)
-    I ~ B * t(D)
+        X ~ A * t(B)
+    While at the same time also approximating the user/row side information
+    matrix 'U' and the item/column side information matrix 'I' as follows:
+        U ~ A * t(C)
+        I ~ B * t(D)
+    The matrices ("A", "B", "C", "D") are obtained by minimizing the error
+    with respect to the non-missing entries in the input data ("X", "U", "I").
     Might apply sigmoid transformations to binary columns in U and I too.
+
+    This is the most flexible of the models available in this package, and
+    can also mimic the implicit-feedback version through the option 'NA_as_zero'
+    plus an array of weights.
+
+    Note
+    ----
+    The default arguments are not geared towards speed.
+    For faster fitting, use ``method="als"``, ``use_cg=True``,
+    ``finalize_chol=False``, ``use_float=True``,
+    ``precompute_for_predictions=False``, ``produce_dicts=False``,
+    and pass COO matrices or NumPy arrays instead of DataFrames to ``fit``.
 
     Parameters
     ----------
@@ -1449,11 +1835,13 @@ class CMF_explicit(_CMF):
         factorization), which will be shared between the factorization of the
         'X' matrix and the side info matrices. Additional non-shared components
         can also be specified through ``k_user``, ``k_item``, and ``k_main``.
+        Typical values are 30 to 100.
     lambda_ : float or array(6,)
         Regularization parameter. Can also use different regularization for each
         matrix, in which case it should be an array with 6 entries, corresponding,
         in this order, to: user_bias, item_bias, A, B, C, D. Note that the default
         value for ``lambda_`` here is much higher than in other software.
+        Typical values are 10^-2 to 10^2.
     method : str, one of "lbfgs" or "als"
         Optimization method used to fit the model. If passing ``'lbfgs'``, will
         fit it through a gradient-based approach using an L-BFGS optimizer.
@@ -1461,13 +1849,33 @@ class CMF_explicit(_CMF):
         compared to ``'als'``, but tends to reach better local optima and allows
         some variations of the problem which ALS doesn't, such as applying sigmoid
         transformations for binary side information.
+    use_cg : bool
+        In the ALS method, whether to use a conjugate gradient method to solve
+        the closed-form least squares problems. This is a faster and more
+        memory-efficient alternative than the default Cholesky solver, but less
+        exact, less numerically stable, and will require slightly more ALS
+        iterations (``niter``) to reach a good optimum.
+        Note that, if using this method, calculations after fitting which involve
+        new data such as ``factors_warm``,  might produce slightly different
+        results from the factors obtained from calling ``fit`` with the same data,
+        due to differences in numerical precision. A workaround for this issue
+        (factors on new data that might differ slightly) is to use
+        ``finalize_chol=True``.
+        Even if passing "True" here, will use the Cholesky method in cases in which
+        it is faster (e.g. dense matrices with no missing values),
+        and will not use the conjugate gradient method on new data.
+        Ignored when passing ``method="lbfgs"``.
     user_bias : bool
-        Whether to add user biases (intercepts) to the model.
+        Whether to add user/row biases (intercepts) to the model.
+        Cannot be used together with ``NA_as_zero``.
+        If using it for purposes other than recommender systems, this is is
+        usually **not** suggested to include.
     item_bias : bool
-        Whether to add item biases (intercepts) to the model. Be aware that using
+        Whether to add item/column biases (intercepts) to the model. Be aware that using
         item biases with low regularization for them will tend to favor items
         with high average ratings regardless of the number of ratings the item
         has received.
+        Cannot be used together with ``NA_as_zero``.
     k_user : int
         Number of factors in the factorizing A and C matrices which will be used
         only for the 'U' and 'U_bin' matrices, while being ignored for the 'X' matrix.
@@ -1509,6 +1917,7 @@ class CMF_explicit(_CMF):
         Number of alternating least-squares iterations to perform. Note that
         one iteration denotes an update round for all the matrices rather than
         an update of a single matrix. Ignored when passing ``method='lbfgs'``.
+        Typical values are 6 to 20.
     parallelize : str, "separate" or "single"
         How to parallelize gradient calculations when using more than one
         thread with ``method='lbfgs'``. Passing ``'separate'`` will iterate
@@ -1525,34 +1934,59 @@ class CMF_explicit(_CMF):
         Recommended values are between 3 and 7. Note that higher values
         translate into higher memory requirements. Ignored when passing
         ``method='als'``.
+    max_cg_steps : int
+        Maximum number of conjugate gradient iterations to perform in an ALS round.
+        Ignored when passing ``use_cg=False`` or ``method="lbfgs"``.
+    finalize_chol : bool
+        When passing ``use_cg=True`` and ``method="als"``, whether to perform the last iteration with
+        the Cholesky solver. This will make it slower, but will avoid the issue
+        of potential mismatches between the result from ``fit`` and calls to
+        ``factors_warm`` or similar with the same data.
     NA_as_zero : bool
         Whether to take missing entries in the 'X' matrix as zeros (only
         when the 'X' matrix is passed as sparse COO matrix or DataFrame)
         instead of ignoring them. Note that this is a different model from the
         implicit-feedback version with weighted entries, and it's a much faster
         model to fit.
+        Note that passing "True" will affect the results of the functions named
+        "cold" (as it will assume zeros instead of missing).
+        It is possible to obtain equivalent results to the implicit-feedback
+        model if passing "True" here, and then passing an "X" to fit with
+        all values set to one and weights corresponding to the actual values
+        of "X" multiplied by alpha, plus 1 (W := 1 + alpha*X to imitate the
+        implicit-feedback model).
+        Cannot be used together with ``user_bias`` or ``item_bias``.
+        Can be changed after the model has already been fit to data.
     NA_as_zero_user : bool
         Whether to take missing entries in the 'U' matrix as zeros (only
         when the 'U' matrix is passed as sparse COO matrix) instead of ignoring them.
+        Note that passing "True" will affect the results of the functions named
+        "warm" if no data is passed there (as it will assume zeros instead of
+        missing). Can be changed after the model has already been fit to data,
+        **as long as the model is not fit to binary user side info 'U_bin'**.
     NA_as_zero_item : bool
         Whether to take missing entries in the 'I' matrix as zeros (only
         when the 'I' matrix is passed as sparse COO matrix) instead of ignoring them.
+        Can be changed after the model has already been fit to data.
     precompute_for_predictions : bool
         Whether to precompute some of the matrices that are used when making
         predictions from the model. If 'False', it will take longer to generate
         predictions or top-N lists, but will use less memory and will be faster
         to fit the model. If passing 'False', can be recomputed later on-demand
         through method 'force_precompute_for_predictions'.
+    include_all_X : bool
+        When passing an input "X" to ``fit`` which has less columns than rows in
+        "I", whether to still make calculations about the items which are in "I"
+        but not in "X". This has three effects: (a) the ``topN`` functionality may
+        recommend such items, (b) the precomptued matrices will be less usable as
+        they will include all such items, (c) it will be possible to pass "X" data
+        to the new factors or topN functions that include such columns (rows of "I").
+        This option is ignored when using ``NA_as_zero``.
     use_float : bool
         Whether to use C float type for the model parameters (typically this is
         ``np.float32``). If passing ``False``, will use C double (typically this
         is ``np.float64``). Using float types will speed up computations and
         use less memory, at the expense of reduced numerical precision.
-    use_cg : bool
-        Whether to use a conjugate gradient method to solve the closed-form
-        least squares problems. This was implemented for experimentation
-        purposes only - will not provide any advantage over the default
-        Cholesky solver. Ignored when passing ``method='lbfgs'``.
     random_state : int, RandomState, or Generator
         Seed used to initialize parameters at random. If passing a NumPy
         RandomState or Generator, will use it to draw a random integer. Note
@@ -1576,6 +2010,14 @@ class CMF_explicit(_CMF):
         but it will add some extra overhead at the time of fitting the model
         and extra memory usage. Ignored when passing the data as matrices
         and arrays instead of data frames.
+    handle_interrupt : bool
+        Whether to respond to interrupt signals in the optimization procedure.
+        If passing 'True', whenever it receives an interrupt signal during the
+        optimzation procedure, it will termnate earlier, taking the current values
+        of the variables without finishing, instead of raising an error.
+        If passing 'False', will raise an error when it is interrupted, which
+        will only be catched after the procedure is finished, and the obtained
+        object will not be usable.
     copy_data : bool
         Whether to make copies of the input data that is passed to this
         object's methods (``fit``, ``predict``, etc.), in order to avoid
@@ -1639,17 +2081,25 @@ class CMF_explicit(_CMF):
            "Relational learning via collective matrix factorization."
            Proceedings of the 14th ACM SIGKDD international conference on
            Knowledge discovery and data mining. 2008.
+    .. [4] Takacs, Gabor, Istvan Pilaszy, and Domonkos Tikk.
+           "Applications of the conjugate gradient method for implicit feedback collaborative filtering."
+           Proceedings of the fifth ACM conference on Recommender systems. 2011.
     """
-    def __init__(self, k=50, lambda_=1e1, method="als",
+    def __init__(self, k=50, lambda_=1e1, method="als", use_cg=True,
                  user_bias=True, item_bias=True, k_user=0, k_item=0, k_main=0,
                  w_main=1., w_user=1., w_item=1.,
                  maxiter=400, niter=10, parallelize="separate", corr_pairs=4,
+                 max_cg_steps=3, finalize_chol=True,
                  NA_as_zero=False, NA_as_zero_user=False, NA_as_zero_item=False,
-                 precompute_for_predictions=True, use_float=False, use_cg=False,
+                 precompute_for_predictions=True, include_all_X=True,
+                 use_float=False,
                  random_state=1, verbose=True, print_every=10,
-                 produce_dicts=False, copy_data=True, nthreads=-1):
+                 handle_interrupt=True, produce_dicts=False,
+                 copy_data=True, nthreads=-1):
         self._take_params(implicit=False, alpha=0., downweight=False,
-                          k=k, lambda_=lambda_, method=method, use_cg=use_cg,
+                          k=k, lambda_=lambda_, method=method,
+                          use_cg=use_cg, max_cg_steps=max_cg_steps,
+                          finalize_chol=finalize_chol,
                           user_bias=user_bias, item_bias=item_bias,
                           k_user=k_user, k_item=k_item, k_main=k_main,
                           w_main=w_main, w_user=w_user, w_item=w_item,
@@ -1661,8 +2111,10 @@ class CMF_explicit(_CMF):
                           use_float=use_float,
                           random_state=random_state, init="normal",
                           verbose=verbose, print_every=print_every,
+                          handle_interrupt=handle_interrupt,
                           produce_dicts=produce_dicts, copy_data=copy_data,
                           nthreads=nthreads)
+        self.include_all_X = bool(include_all_X)
 
     def __str__(self):
         msg  = "Collective matrix factorization model\n"
@@ -1696,14 +2148,24 @@ class CMF_explicit(_CMF):
         It's possible to pass partially disjoints sets of users/items between
         the different matrices (e.g. it's possible for both the 'X' and 'U'
         matrices to have rows that the other doesn't have).
-        In this case, the overlapping entries should come first in both
-        matrices. If there are entries in e.g. 'U' or 'I' which 'X' doesn't have,
-        and at the same time, entries in 'X' which 'U' or 'I' don't have,
-        one of the matrices should be appended missing entries (``np.nan`` for
-        dense arrays, shapes for COO matrices) - **if the data is passed as COO or
-        ``np.array`` and doesn't follow this order, the optimization procedure will
-        fail and might crash the Python process along with it**. This reordering is
-        done internally when passing data frames with 'UserId' and 'ItemId'.
+        The procedure supports missing values for all inputs (except for "W").
+        If any of the inputs has less rows/columns than the other(s) (e.g.
+        "U" has more rows than "X", or "I" has more rows than there are columns
+        in "X"), will assume that the rest of the rows/columns have only
+        missing values.
+        Note however that when having partially disjoint inputs, the order of
+        the rows/columns matters for speed, as it might run faster when the "U"/"I"
+        inputs that do not have matching rows/columns in "X" have those unmatched
+        rows/columns at the end (last rows/columns) and the "X" input is shorter.
+        See also the parameter ``include_all_X`` for info about predicting with
+        mismatched "X".
+
+        Note
+        ----
+        When passing NumPy arrays, missing (unobserved) entries should 
+        have value ``np.nan``. When passing sparse inputs, the zero-valued entries
+        will be considered as missing (unless using "NA_as_zero"), and it should
+        not contain "NaN" values among the non-zero entries.
 
         Parameters
         ----------
@@ -1712,8 +2174,6 @@ class CMF_explicit(_CMF):
             sparse COO matrix (recommended), as a dense NumPy array, or
             as a Pandas DataFrame, in which case it should contain the
             following columns: 'UserId', 'ItemId', and 'Rating'.
-            If passing a NumPy array, missing (unobserved) entries should 
-            have value ``np.nan``.
             Might additionally have a column 'Weight'. If passing a DataFrame,
             the IDs will be internally remapped.
             If passing sparse 'U' or sparse 'I', 'X' cannot be passed as
@@ -1722,26 +2182,22 @@ class CMF_explicit(_CMF):
             User attributes information. If 'X' is a DataFrame, should also
             be a DataFrame, containing column 'UserId'. If 'U' is sparse,
             'X' should be passed as a sparse COO matrix or as a dense NumPy array.
-            Might contain missing values.
         U_bin : array(m, p_bin), DataFrame(m, p_bin+1), or None
             User binary attributes information (all values should be zero, one,
             or missing). If 'X' is a DataFrame, should also
             be a DataFrame, containing column 'UserId'. Cannot be passed
             as a sparse matrix.
-            Might contain missing values.
             Note that 'U' and 'U_bin' are not mutually exclusive.
             Only supported with ``method='lbfgs'``.
         I : array(n, q), COO(n, q), DataFrame(n, q+1), or None
             Item attributes information. If 'X' is a DataFrame, should also
             be a DataFrame, containing column 'ItemId'. If 'I' is sparse,
             'X' should be passed as a sparse COO matrix or as a dense NumPy array.
-            Might contain missing values.
         I_bin : array(n, q_bin), DataFrame(n, q_bin+1), or None
             Item binary attributes information (all values should be zero, one,
             or missing). If 'X' is a DataFrame, should also
             be a DataFrame, containing column 'ItemId'. Cannot be passed
             as a sparse matrix.
-            Might contain missing values.
             Note that 'I' and 'I_bin' are not mutually exclusive.
             Only supported with ``method='lbfgs'``.
         W : None, array(nnz,), or array(m, n)
@@ -1749,6 +2205,7 @@ class CMF_explicit(_CMF):
             if 'X' is a sparse COO matrix, must be a 1-d array with the same
             number of non-zero entries as 'X.data', if 'X' is a 2-d array,
             'W' must also be a 2-d array.
+            Cannot have missing values.
 
         Returns
         -------
@@ -1791,7 +2248,8 @@ class CMF_explicit(_CMF):
                     self.verbose, self.print_every,
                     self.corr_pairs, self.maxiter,
                     self.nthreads, self.parallelize != "separate",
-                    self.random_state
+                    self.random_state,
+                    self.handle_interrupt
                 )
             self.user_bias_, self.item_bias_, self.A_, self.B_, self.C_, self.Cbin_, self.D_, self.Dbin_ = \
                 c_funs.unpack_values_lbfgs_collective(
@@ -1802,8 +2260,15 @@ class CMF_explicit(_CMF):
                     pbin, qbin,
                     m_u, n_i, m_ub, n_ib
                 )
+            self._n_orig = self.B_.shape[0] if self.include_all_X else n
+            if self.precompute_for_predictions:
+                self.force_precompute_for_predictions()
         else:
-            self.glob_mean_,  self._U_colmeans, self._I_colmeans, values, self._B_plus_bias = \
+            self.user_bias_, self.item_bias_, \
+            self.A_, self.B_, self.C_, self.D_, \
+            self.glob_mean_,  self._U_colmeans, self._I_colmeans, \
+            self._B_plus_bias, self._BtB, self._TransBtBinvBt, \
+            self._BeTBeChol, self._TransCtCinvCt, self._CtC = \
                 c_funs.call_fit_collective_explicit_als(
                     Xrow,
                     Xcol,
@@ -1826,28 +2291,29 @@ class CMF_explicit(_CMF):
                     self.user_bias, self.item_bias,
                     self.lambda_ if isinstance(self.lambda_, float) else 0.,
                     self.lambda_ if isinstance(self.lambda_, np.ndarray) else np.empty(0, dtype=self.dtype_),
-                    self.verbose, self.nthreads, self.use_cg,
-                    self.random_state, self.niter
+                    self.verbose, self.nthreads,
+                    self.use_cg, self.max_cg_steps,
+                    self.finalize_chol,
+                    self.random_state, self.niter,
+                    self.handle_interrupt,
+                    precompute_for_predictions=self.precompute_for_predictions,
+                    include_all_X=self.include_all_X
                 )
-            self.user_bias_, self.item_bias_, self.A_, self.B_, self.C_, self.D_ = \
-                c_funs.unpack_values_collective_als(
-                    values,
-                    self.user_bias, self.item_bias,
-                    self.k, self.k_user, self.k_item, self.k_main,
-                    m, n, p, q,
-                    m_u, n_i
-                )
+            self._n_orig = self.B_.shape[0] if (self.include_all_X or self.NA_as_zero) else n
 
         self._A_pred = self.A_
         self._B_pred = self.B_
         self.is_fitted_ = True
-        if self.precompute_for_predictions:
-            self.force_precompute_for_predictions()
         return self
 
     def predict_cold(self, items, U=None, U_bin=None, U_col=None, U_val=None):
         """
         Predict rating given by a new user to existing items, given U
+
+        Note
+        ----
+        If using ``NA_as_zero``, this function will assume that all
+        the 'X' values are zeros rather than being missing.
 
         Parameters
         ----------
@@ -1885,6 +2351,11 @@ class CMF_explicit(_CMF):
         """
         Predict rating given by new users to existing items, given U
 
+        Note
+        ----
+        If using ``NA_as_zero``, this function will assume that all
+        the 'X' values are zeros rather than being missing.
+
         Parameters
         ----------
         item : array-like(m,)
@@ -1895,12 +2366,12 @@ class CMF_explicit(_CMF):
             Attributes for the users for which to predict ratings/values.
             Data frames with 'UserId' column are not supported.
             Must have one row per entry
-            in ``item``. Might contain missing values.
+            in ``item``.
         U_bin : array(m, p_bin), or None
             Binary attributes for the users to predict ratings/values.
             Data frames with 'UserId'
             column are not supported. Must have one row per entry
-            in ``user``. Might contain missing values.
+            in ``user``.
             Only supported with ``method='lbfgs'``.
 
         Returns
@@ -1915,6 +2386,11 @@ class CMF_explicit(_CMF):
                   include=None, exclude=None, output_score=False):
         """
         Compute top-N highest-predicted items for a new user, given 'U'
+
+        Note
+        ----
+        If using ``NA_as_zero``, this function will assume that all
+        the 'X' values are zeros rather than being missing.
 
         Parameters
         ----------
@@ -1974,6 +2450,11 @@ class CMF_explicit(_CMF):
         """
         Determine user-factors from new data, given U
 
+        Note
+        ----
+        If using ``NA_as_zero``, this function will assume that all
+        the 'X' values are zeros rather than being missing.
+
         Parameters
         ----------
         U : array(p,), or None
@@ -2004,6 +2485,12 @@ class CMF_explicit(_CMF):
     def item_factors_cold(self, I=None, I_bin=None, I_col=None, I_val=None):
         """
         Determine item-factors from new data, given I
+
+        Note
+        ----
+        Calculating item factors might be a lot slower than user factors,
+        as the model does not keep precomputed matrices that might speed
+        up these factor calculations.
 
         Parameters
         ----------
@@ -2207,22 +2694,84 @@ class CMF_explicit(_CMF):
             self._B_plus_bias,
             self.C_,
             self.Cbin_,
-            self._BtBinvBt,
+            self._TransBtBinvBt,
             self._BtB,
-            self._BtBchol,
+            self._BeTBeChol,
             self._CtC,
             self.glob_mean_,
+            self._n_orig,
             self.k, self.k_user, self.k_item, self.k_main,
             lambda_, lambda_bias,
             self.w_user, self.w_main,
             self.user_bias,
-            self.NA_as_zero_user, self.NA_as_zero
+            self.NA_as_zero_user, self.NA_as_zero,
+            self.include_all_X
         )
 
         if return_bias:
             return a_vec, a_bias
         else:
             return a_vec
+
+    def factors_multiple(self, X=None, U=None, U_bin=None, W=None,
+                         return_bias=False):
+        """
+        Determine user latent factors based on new data (warm and cold)
+
+        Determines latent factors for multiple rows/users at once given new
+        data for them.
+
+        Note
+        ----
+        See the documentation of "fit" for details about handling of missing values.
+
+        Note
+        ----
+        If fitting the model to DataFrame inputs (instead of NumPy arrays and/or
+        SciPy sparse matrices), the IDs are reindexed internally,
+        and the inputs provided here should match with the numeration that was
+        produced by the model. The mappings in such case are available under
+        attributes ``self.user_mapping_`` and ``self.item_mapping_``.
+        
+        Parameters
+        ----------
+        X : array(m_x, n), CSR matrix(m_x, n), COO matrix(m_x, n), or None
+            New 'X' data.
+        U : array(m_u, p), CSR matrix(m_u, p), COO matrix(m_u, p), or None
+            User attributes information for rows in 'X'.
+        U_bin : array(m_ub, p_bin) or None
+            User binary attributes for each row in 'X'.
+            Only supported with ``method='lbfgs'``.
+        W : array(m_x, n), array(nnz,), or None
+            Observation weights. Must have the same shape as 'X' - that is,
+            if 'X' is a sparse COO matrix, must be a 1-d array with the same
+            number of non-zero entries as 'X.data', if 'X' is a 2-d array,
+            'W' must also be a 2-d array.
+        return_bias : bool
+            Whether to return also the user bias determined by the model
+            given the data in 'X'. If passing 'False', will return an array
+            with the factors. If passing 'True', will return a tuple in which
+            the first entry will be an array with the factors, and the second
+            entry will be the estimated bias.
+
+        Returns
+        -------
+        A : array(max(m_x,m_u,m_ub), k_user+k+k_main)
+            The new factors determined for all the rows given the new data.
+        bias : array(max(m_x,m_u,m_ub)) or None
+            The user bias given the new 'X' data. Only returned if passing
+            ``return_bias=True``.
+        """
+        if (X is None) and (U is None) and (U_bin is None):
+            raise ValueError("Must pass at least one of 'X', 'U', 'U_bin'.")
+        if (W is not None) and (X is None):
+            raise ValueError("Cannot pass 'W' without 'X'.")
+        
+        A, A_bias = self._factors_multiple_common(X, U, U_bin, W)
+        if return_bias:
+            return A, A_bias
+        else:
+            return A
 
 
     def predict_warm(self, items, X=None, X_col=None, X_val=None, W=None,
@@ -2297,12 +2846,14 @@ class CMF_explicit(_CMF):
         """
         Predict ratings for existing items, for new users, given 'X'
 
+        Note
+        ----
+        See the documentation of "fit" for details about handling of missing values.
+
         Parameters
         ----------
         X : array(m, n), CSR matrix(m, n) , or COO matrix(m, n)
             New 'X' data with potentially missing entries.
-            Missing entries should have value ``np.nan`` when passing a dense
-            array.
             Must have one row per entry of ``item``.
         item : array-like(m,)
             Items for whom ratings/values are to be predicted. If 'X' passed to
@@ -2312,11 +2863,8 @@ class CMF_explicit(_CMF):
             of ``X``.
         U : array(m, p), CSR matrix(m, p), COO matrix(m, p), or None
             User attributes information for each row in 'X'.
-            Missing entries should have value ``np.nan`` when passing a dense
-            array.
         U_bin : array(m, p_bin)
             User binary attributes for each row in 'X'.
-            Missing entries should have value ``np.nan``.
             Only supported with ``method='lbfgs'``.
         W : array(m, n), array(nnz,), or None
             Observation weights. Must have the same shape as 'X' - that is,
@@ -2340,7 +2888,7 @@ class CMF_explicit(_CMF):
         lambda_, lambda_bias = \
             self._process_transform_inputs(X=X, U=U, U_bin=U_bin, W=W,
                                            replace_existing=True)
-        A, A_bias = c_funs.call_collective_factors_warm_multiple(
+        A, A_bias = c_funs.call_factors_collective_explicit_multiple(
                 Xrow,
                 Xcol,
                 Xval,
@@ -2360,18 +2908,20 @@ class CMF_explicit(_CMF):
                 self._B_plus_bias,
                 self.C_,
                 self.Cbin_,
-                self._BtBinvBt,
+                self._TransBtBinvBt,
                 self._BtB,
-                self._CtCinvCt,
+                self._BeTBeChol,
+                self._TransCtCinvCt,
                 self._CtC,
-                self._CtCchol,
-                n, m_u, m_x,
+                m_u, m_x,
                 self.glob_mean_,
+                self._n_orig,
                 self._k_pred, self.k_user, self.k_item, self._k_main_col,
                 lambda_, lambda_bias,
                 self.w_user, self.w_main,
                 self.user_bias,
                 self.NA_as_zero_user, self.NA_as_zero,
+                self.include_all_X,
                 self.nthreads
             )
         return self._predict_user_multiple(A, item, bias=A_bias)
@@ -2469,11 +3019,11 @@ class CMF_explicit(_CMF):
     def transform(self, X=None, y=None, U=None, U_bin=None, W=None,
                   replace_existing=False):
         """
-        Reconstruct entries of the 'X' matrix
+        Reconstruct missing entries of the 'X' matrix
 
-        Will reconstruct all the entries in the 'X' matrix as determined
-        by the model. This method is intended to be used for imputing tabular
-        data, and can be used as part of SciKit-Learn pipelines.
+        Will reconstruct/impute all the missing entries in the 'X' matrix as
+        determined by the model. This method is intended to be used for imputing
+        tabular data, and can be used as part of SciKit-Learn pipelines.
 
         Note
         ----
@@ -2481,9 +3031,17 @@ class CMF_explicit(_CMF):
         alone, or with both 'X' and 'U'/'U_bin' together, in which case
         both matrices must have the same rows.
 
+        Note
+        ----
+        If fitting the model to DataFrame inputs (instead of NumPy arrays and/or
+        SciPy sparse matrices), the IDs are reindexed internally,
+        and the inputs provided here should match with the numeration that was
+        produced by the model. The mappings in such case are available under
+        attributes ``self.user_mapping_`` and ``self.item_mapping_``.
+
         Parameters
         ----------
-        X : array(m, n), CSR matrix(m, n), or COO matrix(m, n)
+        X : array(m, n), or None
             New 'X' data with potentially missing entries which are to be imputed.
             Missing entries should have value ``np.nan`` when passing a dense
             array.
@@ -2492,30 +3050,23 @@ class CMF_explicit(_CMF):
             pipelines.
         U : array(m, p), CSR matrix(m, p), COO matrix(m, p), or None
             User attributes information for each row in 'X'.
-            Missing entries should have value ``np.nan`` when passing a dense
-            array.
-        U_bin : array(m, p_bin)
+        U_bin : array(m, p_bin) or None
             User binary attributes for each row in 'X'.
-            Missing entries should have value ``np.nan``.
             Only supported with ``method='lbfgs'``.
         W : array(m, n), array(nnz,), or None
             Observation weights. Must have the same shape as 'X' - that is,
             if 'X' is a sparse COO matrix, must be a 1-d array with the same
             number of non-zero entries as 'X.data', if 'X' is a 2-d array,
             'W' must also be a 2-d array.
-        replace_existing : bool
-            Whether to replace existing non-missing entries in 'X' with the
-            model predictions - that is, if passing 'False', will only fill
-            in the missing entries in 'X', leaving the non-missing entries
-            as they were.
 
         Returns
         -------
         X : array(m, n)
-            The 'X' matrix as a dense array with all entries as determined by
-            the model. Note that this will be returned as a dense NumPy array.
+            The 'X' matrix as a dense array with all missing entries imputed
+            according to the model.
         """
-        c_funs = wrapper_float if self.use_float else wrapper_double
+        if (X is not None) and (X.__class__.__name__ != "ndarray"):
+            raise ValueError("'X' must be a NumPy array.")
 
         Xrow, Xcol, Xval, W_sp, Xarr, \
         Xcsr_p, Xcsr_i, Xcsr, \
@@ -2527,64 +3078,41 @@ class CMF_explicit(_CMF):
             self._process_transform_inputs(X=X, U=U, U_bin=U_bin, W=W,
                                            replace_existing=replace_existing)
 
-        if (Xarr.shape[0] == 0) and (Xval.shape[0] == 0):
-            A = c_funs.call_collective_factors_cold_multiple(
-                Uarr,
-                Urow,
-                Ucol,
-                Uval,
-                Ucsr_p, Ucsr_i, Ucsr,
-                Ub_arr,
-                self.C_,
-                self.Cbin_,
-                self._CtCinvCt,
-                self._CtC,
-                self._CtCchol,
-                self._U_colmeans,
-                m_u, m_ubin,
-                self._k_pred, self.k_user, self._k_main_col,
-                lambda_, self.w_user,
-                self.NA_as_zero_user,
-                self.nthreads
-            )
-            A_bias = np.empty(0, dtype=self.dtype_)
-        else:
-            A, A_bias = c_funs.call_collective_factors_warm_multiple(
-                Xrow,
-                Xcol,
-                Xval,
-                Xcsr_p, Xcsr_i, Xcsr,
-                W_sp,
-                Xarr,
-                W_dense,
-                Uarr,
-                Urow,
-                Ucol,
-                Uval,
-                Ucsr_p, Ucsr_i, Ucsr,
-                Ub_arr,
-                self._U_colmeans,
-                self.item_bias_,
-                self._B_pred,
-                self._B_plus_bias,
-                self.C_,
-                self.Cbin_,
-                self._BtBinvBt,
-                self._BtB,
-                self._CtCinvCt,
-                self._CtC,
-                self._CtCchol,
-                n, m_u, m_x,
-                self.glob_mean_,
-                self._k_pred, self.k_user, self.k_item, self._k_main_col,
-                lambda_, lambda_bias,
-                self.w_user, self.w_main,
-                self.user_bias,
-                self.NA_as_zero_user, self.NA_as_zero,
-                self.nthreads
-            )
+        if Xarr.shape[0] == 0:
+            Xarr = np.repeat(np.nan, self._n_orig*m_x).reshape((m_x, self._n_orig))
 
-        return self._transform_step(A, A_bias, mask_take, Xorig)
+        c_funs = wrapper_float if self.use_float else wrapper_double
+        return c_funs.call_impute_X_collective_explicit(
+            Xarr,
+            W_dense,
+            Uarr,
+            Urow,
+            Ucol,
+            Uval,
+            Ucsr_p, Ucsr_i, Ucsr,
+            Ub_arr,
+            self._U_colmeans,
+            self.item_bias_,
+            self.B_,
+            self._B_plus_bias,
+            self.C_,
+            self.Cbin_,
+            self._TransBtBinvBt,
+            self._BtB,
+            self._BeTBeChol,
+            self._TransCtCinvCt,
+            self._CtC,
+            m_u,
+            self.glob_mean_,
+            self._n_orig,
+            self.k, self.k_user, self.k_item, self.k_main,
+            lambda_, lambda_bias,
+            self.w_user, self.w_main,
+            self.user_bias,
+            self.NA_as_zero_user,
+            self.include_all_X,
+            self.nthreads
+        )
 
     def force_precompute_for_predictions(self):
         """
@@ -2600,6 +3128,7 @@ class CMF_explicit(_CMF):
         self
         
         """
+        ### TODO: should have an option to precompute also for item factors
         assert self.is_fitted_
         if isinstance(self.lambda_, np.ndarray):
             lambda_ = self.lambda_[2]
@@ -2608,14 +3137,17 @@ class CMF_explicit(_CMF):
             lambda_ = self.lambda_
             lambda_bias = self.lambda_
         c_funs = wrapper_float if self.use_float else wrapper_double
-        self._BtBinvBt, self._BtB, self._BtBchol, self._CtCinvCt, self._CtC, self._CtCchol = \
+        
+        self._B_plus_bias, self._BtB, self._TransBtBinvBt, self._BeTBeChol, \
+        self._TransCtCinvCt, self._CtC = \
             c_funs.precompute_matrices_collective_explicit(
                 self.B_,
-                self._B_plus_bias,
-                self.k, self.k_main, self.k_user, self.k_item,
                 self.C_,
+                self.user_bias,
+                self._n_orig,
+                self.k, self.k_user, self.k_item, self.k_main,
                 lambda_, lambda_bias, self.w_main, self.w_user,
-                self.C_.shape[0]>0, self.Cbin_.shape[0]>0
+                self.include_all_X
             )
         return self
 
@@ -2624,11 +3156,28 @@ class CMF_implicit(_CMF):
     Collective model for implicit-feedback data
 
     Tries to approximate the 'X' interactions matrix  by a formula as follows:
-    X ~ A * t(B)
+        X ~ A * t(B)
     While at the same time also approximating the user side information
     matrix 'U' and the item side information matrix 'I' as follows:
-    U ~ A * t(C)
-    I ~ B * t(D)
+        U ~ A * t(C)
+        I ~ B * t(D)
+
+    Note
+    ----
+    The default hyperparameters in this software are very different from others.
+    For example, to match those of the package ``implicit``, the corresponding
+    hyperparameters here would be ``use_cg=True``, ``finalize_chol=False``,
+    ``k=100``, ``lambda_=0.01``, ``niter=15``, ``use_float=True``, `alpha=1.``,
+    ``downweight=False`` (see the individual documentation of each hyperarameter
+    for details).
+
+    Note
+    ----
+    The default arguments are not geared towards speed.
+    For faster fitting, use ``use_cg=True``,
+    ``finalize_chol=False``, ``use_float=True``,
+    ``precompute_for_predictions=False``, ``produce_dicts=False``,
+    and pass COO matrices or NumPy arrays instead of DataFrames to ``fit``.
 
     Note
     ----
@@ -2643,15 +3192,34 @@ class CMF_implicit(_CMF):
         factorization), which will be shared between the factorization of the
         'X' matrix and the side info matrices. Additional non-shared components
         can also be specified through ``k_user``, ``k_item``, and ``k_main``.
+        Typical values are 30 to 100.
     lambda_ : float or array(6,)
         Regularization parameter. Can also use different regularization for each
         matrix, in which case it should be an array with 6 entries, corresponding,
         in this order, to: <ignored>, <ignored>, A, B, C, D. Note that the default
         value for ``lambda_`` here is much higher than in other software.
+        Typical values are 10^-2 to 10^2.
     alpha : float
         Weighting parameter for the non-zero entries in the implicit-feedback
         model. See [3] for details. Note that, while the author's suggestion for
-        this value is 40, other software such as ``implicit`` use a value of 1.
+        this value is 40, other software such as ``implicit`` use a value of 1,
+        and values higher than 10 are unlikely to improve results. Recommended to
+        use ``downweight=True`` when using higher "alpha".
+    use_cg : bool
+        In the ALS method, whether to use a conjugate gradient method to solve
+        the closed-form least squares problems. This is a faster and more
+        memory-efficient alternative than the default Cholesky solver, but less
+        exact, less numerically stable, and will require slightly more ALS
+        iterations (``niter``) to reach a good optimum.
+        Note that, if using this method, calculations after fitting which involve
+        new data such as ``factors_warm``,  might produce slightly different
+        results from the factors obtained from calling ``fit`` with the same data,
+        due to differences in numerical precision. A workaround for this issue
+        (factors on new data that might differ slightly) is to use
+        ``finalize_chol=True``.
+        Even if passing "True" here, will use the Cholesky method in cases in which
+        it is faster (e.g. dense matrices with no missing values),
+        and will not use the conjugate gradient method on new data.
     k_user : int
         Number of factors in the factorizing A and C matrices which will be used
         only for the 'U' matrix, while being ignored for the 'X' matrix.
@@ -2670,24 +3238,44 @@ class CMF_implicit(_CMF):
     w_main : float
         Weight in the optimization objective for the errors in the factorization
         of the 'X' matrix.
+        Note that, since the "X" matrix is considered to be full with mostly zero
+        values, the overall sum of errors for "X" will be much larger than for the
+        side info matrices (especially if using large ``alpha``), thus it's
+        recommended to give higher weights to the side info matrices than to
+        the main matrix.
     w_user : float
         Weight in the optimization objective for the errors in the factorization
         of the 'U' matrix. Ignored when not passing 'U' to 'fit'.
+        Note that, since the "X" matrix is considered to be full with mostly zero
+        values, the overall sum of errors for "X" will be much larger than for the
+        side info matrices (especially if using large ``alpha``), thus it's
+        recommended to give higher weights to the side info matrices than to
+        the main matrix.
     w_item : float
         Weight in the optimization objective for the errors in the factorization
         of the 'I' matrix. Ignored when not passing 'I' to 'fit'.
+        Note that, since the "X" matrix is considered to be full with mostly zero
+        values, the overall sum of errors for "X" will be much larger than for the
+        side info matrices (especially if using large ``alpha``), thus it's
+        recommended to give higher weights to the side info matrices than to
+        the main matrix.
     downweight : bool
         Whether to decrease the weight of the 'X' matrix being factorized
         according to the number of present entries. This has the same effect
         as rescaling (increasing) the regularization parameter for the A and B
-        matrices while increasing ``w_user`` and ``w_item``.
+        matrices while increasing ``w_user`` and ``w_item``. Recommended to use
+        when passing ``alpha``.
     niter : int
         Number of alternating least-squares iterations to perform. Note that
         one iteration denotes an update round for all the matrices rather than
         an update of a single matrix.
+        Typical values are 6 to 20.
     NA_as_zero_user : bool
         Whether to take missing entries in the 'U' matrix as zeros (only
         when the 'U' matrix is passed as sparse COO matrix) instead of ignoring them.
+        Note that passing "True" will affect the results of the functions named
+        "warm" if no data is passed there (as it will assume zeros instead of
+        missing). Can be changed after the model has already been fit to data.
     NA_as_zero_item : bool
         Whether to take missing entries in the 'I' matrix as zeros (only
         when the 'I' matrix is passed as sparse COO matrix) instead of ignoring them.
@@ -2702,18 +3290,21 @@ class CMF_implicit(_CMF):
         ``np.float32``). If passing ``False``, will use C double (typically this
         is ``np.float64``). Using float types will speed up computations and
         use less memory, at the expense of reduced numerical precision.
-    use_cg : bool
-        Whether to use a conjugate gradient method to solve the closed-form
-        least squares problems. This was implemented for experimentation
-        purposes only - will not provide any advantage over the default
-        Cholesky solver.
+    max_cg_steps : int
+        Maximum number of conjugate gradient iterations to perform in an ALS round.
+        Ignored when passing ``use_cg=False``.
+    finalize_chol : bool
+        When passing ``use_cg=True``, whether to perform the last iteration with
+        the Cholesky solver. This will make it slower, but will avoid the issue
+        of potential mismatches between the result from ``fit`` and calls to
+        ``factors_warm`` or similar with the same data.
     random_state : int, RandomState, or Generator
         Seed used to initialize parameters at random. If passing a NumPy
         RandomState or Generator, will use it to draw a random integer.
     init : str, "normal" or "gamma"
         Distribution used to initialize the model parameters. Both
-        distributions will reach similar end results, but the distribution
-        of the factors themselves will be slightly different.
+        distributions are likely to reach similar end results, but the
+        distribution of the factors themselves will be different.
     verbose : bool
         Whether to print informational messages about the optimization
         routine used to fit the model. Note that, if running this from a
@@ -2726,6 +3317,14 @@ class CMF_implicit(_CMF):
         but it will add some extra overhead at the time of fitting the model
         and extra memory usage. Ignored when passing the data as matrices
         and arrays instead of data frames.
+    handle_interrupt : bool
+        Whether to respond to interrupt signals in the optimization procedure.
+        If passing 'True', whenever it receives an interrupt signal during the
+        optimzation procedure, it will termnate earlier, taking the current values
+        of the variables without finishing, instead of raising an error.
+        If passing 'False', will raise an error when it is interrupted, which
+        will only be catched after the procedure is finished, and the obtained
+        object will not be usable.
     copy_data : bool
         Whether to make copies of the input data that is passed to this
         object's methods (``fit``, ``predict``, etc.), in order to avoid
@@ -2777,16 +3376,23 @@ class CMF_implicit(_CMF):
     .. [3] Hu, Yifan, Yehuda Koren, and Chris Volinsky.
            "Collaborative filtering for implicit feedback datasets."
            2008 Eighth IEEE International Conference on Data Mining. Ieee, 2008.
+    .. [4] Takacs, Gabor, Istvan Pilaszy, and Domonkos Tikk.
+           "Applications of the conjugate gradient method for implicit feedback collaborative filtering."
+           Proceedings of the fifth ACM conference on Recommender systems. 2011.
     """
-    def __init__(self, k=50, lambda_=1e3, alpha=40.,
+    def __init__(self, k=50, lambda_=1e0, alpha=1., use_cg=True,
                  k_user=0, k_item=0, k_main=0,
-                 w_main=1., w_user=1., w_item=1., downweight=True,
+                 w_main=1., w_user=10., w_item=10., downweight=False,
                  niter=10, NA_as_zero_user=False, NA_as_zero_item=False,
-                 precompute_for_predictions=True, use_float=False, use_cg=False,
+                 precompute_for_predictions=True, use_float=False,
+                 max_cg_steps=3, finalize_chol=True,
                  random_state=1, init="normal", verbose=False,
-                 produce_dicts=False, copy_data=True, nthreads=-1):
+                 produce_dicts=False, handle_interrupt=True,
+                 copy_data=True, nthreads=-1):
         self._take_params(implicit=True, alpha=alpha, downweight=downweight,
-                          k=k, lambda_=lambda_, method="als", use_cg=use_cg,
+                          k=k, lambda_=lambda_, method="als",
+                          use_cg=use_cg, max_cg_steps=max_cg_steps,
+                          finalize_chol=finalize_chol,
                           user_bias=False, item_bias=False,
                           k_user=k_user, k_item=k_item, k_main=k_main,
                           w_main=w_main, w_user=w_user, w_item=w_item,
@@ -2798,6 +3404,7 @@ class CMF_implicit(_CMF):
                           use_float=use_float,
                           random_state=random_state, init=init,
                           verbose=verbose, print_every=0,
+                          handle_interrupt=handle_interrupt,
                           produce_dicts=produce_dicts, copy_data=copy_data,
                           nthreads=nthreads)
 
@@ -2829,15 +3436,25 @@ class CMF_implicit(_CMF):
         ----
         It's possible to pass partially disjoints sets of users/items between
         the different matrices (e.g. it's possible for both the 'X' and 'U'
-        matrices to have rows that the other doesn't have).
-        In this case, the overlapping entries should come first in both
-        matrices. If there are entries in 'U' or 'I' which 'X' doesn't have,
-        and at the same time, entries in 'X' which 'U' or 'I' don't have,
-        one of the matrices should be appended missing entries (``np.nan`` for
-        dense arrays, shapes for COO matrices) - **if the data
-        doesn't follow this order, the optimization procedure will
-        fail and might crash the Python process along with it**. This reordering is
-        done internally when passing data frames with 'UserId' and 'ItemId'.
+        matrices to have rows that the other doesn't have), but note that
+        missing values in 'X' are treated as zeros.
+        The procedure supports missing values for "U" and "I".
+        If any of the inputs has less rows/columns than the other(s) (e.g.
+        "U" has more rows than "X", or "I" has more rows than there are columns
+        in "X"), will assume that the rest of the rows/columns have only
+        missing values (zero values for "X").
+        Note however that when having partially disjoint inputs, the order of
+        the rows/columns matters for speed, as it might run faster when the "U"/"I"
+        inputs that do not have matching rows/columns in "X" have those unmatched
+        rows/columns at the end (last rows/columns) and the "X" input is shorter.
+
+        Note
+        ----
+        When passing NumPy arrays, missing (unobserved) entries should 
+        have value ``np.nan``. When passing sparse inputs, the zero-valued entries
+        will be considered as missing (unless using "NA_as_zero", and except for
+        "X" for which missing will always be treated as zero), and it should
+        not contain "NaN" values among the non-zero entries.
 
         Parameters
         ----------
@@ -2846,20 +3463,16 @@ class CMF_implicit(_CMF):
             sparse COO matrix (recommended), or
             as a Pandas DataFrame, in which case it should contain the
             following columns: 'UserId', 'ItemId', and 'Value'.
-            If passing a NumPy array, missing (unobserved) entries should 
-            have value ``np.nan``.
             If passing a DataFrame,
             the IDs will be internally remapped.
         U : array(m, p), COO(m, p), DataFrame(m, p+1), or None
             User attributes information. If 'X' is a DataFrame, should also
             be a DataFrame, containing column 'UserId'. If 'U' is sparse,
             'X' should be passed as a sparse COO matrix too.
-            Might contain missing values.
         I : array(n, q), COO(n, q), DataFrame(n, q+1), or None
             Item attributes information. If 'X' is a DataFrame, should also
             be a DataFrame, containing column 'ItemId'. If 'I' is sparse,
             'X' should be passed as a sparse COO matrix too.
-            Might contain missing values.
 
         Returns
         -------
@@ -2870,13 +3483,17 @@ class CMF_implicit(_CMF):
             raise ValueError("'X' must be a Pandas DataFrame or SciPy sparse COO matrix.")
         return self._fit_common(X, U=U, I=I, U_bin=None, I_bin=None, W=None)
 
-    def _fit(self, Xrow, Xcol, Xval, W_sp, Xarr, W_dense,
+    def _fit(self,
+             Xrow, Xcol, Xval, W_sp, Xarr, W_dense,
              Uarr, Urow, Ucol, Uval, Ub_arr,
              Iarr, Irow, Icol, Ival, Ib_arr,
              m, n, m_u, n_i, p, q,
              m_ub, n_ib, pbin, qbin):
         c_funs = wrapper_float if self.use_float else wrapper_double
-        self._U_colmeans, self._I_colmeans, values, self._w_main_multiplier = \
+
+        self.A_, self.B_, self.C_, self.D_, \
+        self._U_colmeans, self._I_colmeans, self._w_main_multiplier, \
+        self._BtB, self._BeTBe, self._BeTBeChol = \
             c_funs.call_fit_collective_implicit_als(
                 Xrow,
                 Xcol,
@@ -2897,23 +3514,17 @@ class CMF_implicit(_CMF):
                 self.alpha, self.downweight,
                 self.lambda_ if isinstance(self.lambda_, np.ndarray) else np.empty(0, dtype=self.dtype_),
                 self.verbose, self.niter,
-                self.nthreads, self.use_cg, self.random_state,
-                init=self.init
-            )
-
-        self.A_, self.B_, self.C_, self.D_ = \
-            c_funs.unpack_values_collective_implicit(
-                values,
-                self.k, self.k_user, self.k_item, self.k_main,
-                m, n, p, q,
-                m_u, n_i
+                self.nthreads, self.use_cg,
+                self.max_cg_steps, self.finalize_chol,
+                self.random_state, init=self.init,
+                handle_interrupt=self.handle_interrupt,
+                precompute_for_predictions=self.precompute_for_predictions
             )
 
         self._A_pred = self.A_
         self._B_pred = self.B_
+        self._n_orig = self.B_.shape[0]
         self.is_fitted_ = True
-        if self.precompute_for_predictions:
-            self.force_precompute_for_predictions()
         return self
 
     def force_precompute_for_predictions(self):
@@ -2930,17 +3541,17 @@ class CMF_implicit(_CMF):
         self
 
         """
+        ### TODO: should have an option to precompute also for item factors
         assert self.is_fitted_
         if isinstance(self.lambda_, np.ndarray):
             lambda_ = self.lambda_[2]
         else:
             lambda_ = self.lambda_
         c_funs = wrapper_float if self.use_float else wrapper_double
-        self._BeTBe, self._BtB_padded, self._BtB_shrunk, self._CtCinvCt, self._CtC, self._CtCchol = \
+        self._BtB, self._BeTBe, self._BeTBeChol = \
             c_funs.precompute_matrices_collective_implicit(
-                self.B_,
+                self.B_, self.C_,
                 self.k, self.k_main, self.k_user, self.k_item,
-                self.C_,
                 lambda_,
                 self.w_main, self.w_user,
                 self._w_main_multiplier
@@ -3065,6 +3676,10 @@ class CMF_implicit(_CMF):
         """
         Predict value/confidence given by new users to existing items, given U
 
+        Note
+        ----
+        See the documentation of "fit" for details about handling of missing values.
+
         Parameters
         ----------
         item : array-like(m,)
@@ -3075,7 +3690,7 @@ class CMF_implicit(_CMF):
             Attributes for the users for which to predict ratings/values.
             Data frames with 'UserId' column are not supported.
             Must have one row per entry
-            in ``item``. Might contain missing values.
+            in ``item``.
 
         Returns
         -------
@@ -3088,6 +3703,12 @@ class CMF_implicit(_CMF):
     def item_factors_cold(self, I=None, I_col=None, I_val=None):
         """
         Determine item-factors from new data, given I
+
+        Note
+        ----
+        Calculating item factors might be a lot slower than user factors,
+        as the model does not keep precomputed matrices that might speed
+        up these factor calculations.
 
         Parameters
         ----------
@@ -3232,8 +3853,8 @@ class CMF_implicit(_CMF):
             self.B_,
             self.C_,
             self._BeTBe,
-            self._BtB_padded,
-            self._BtB_shrunk,
+            self._BtB,
+            self._BeTBeChol,
             self.k, self.k_user, self.k_item, self.k_main,
             lambda_, self.alpha,
             self._w_main_multiplier,
@@ -3242,6 +3863,43 @@ class CMF_implicit(_CMF):
         )
 
         return a_vec
+
+    def factors_multiple(self, X=None, U=None):
+        """
+        Determine user latent factors based on new data (warm and cold)
+
+        Determines latent factors for multiple rows/users at once given new
+        data for them.
+
+        Note
+        ----
+        See the documentation of "fit" for details about handling of missing values.
+
+        Note
+        ----
+        If fitting the model to DataFrame inputs (instead of NumPy arrays and/or
+        SciPy sparse matrices), the IDs are reindexed internally,
+        and the inputs provided here should match with the numeration that was
+        produced by the model. The mappings in such case are available under
+        attributes ``self.user_mapping_`` and ``self.item_mapping_``.
+        
+        Parameters
+        ----------
+        X : CSR matrix(m_x, n), COO matrix(m_x, n), or None
+            New 'X' data.
+        U : array(m_u, p), CSR matrix(m_u, p), COO matrix(m_u, p), or None
+            User attributes information for rows in 'X'.
+
+        Returns
+        -------
+        A : array(max(m_x,m_u), k_user+k+k_main)
+            The new factors determined for all the rows given the new data.
+        """
+        if (X is None) and (U is None):
+            raise ValueError("Must pass at least one of 'X', 'U'.")
+        
+        A, _ = self._factors_multiple_common(X, U, None, None)
+        return A
 
 
     def topN_warm(self, n=10, X_col=None, X_val=None,
@@ -3372,12 +4030,22 @@ class CMF_implicit(_CMF):
         """
         Predict scores for existing items, for new users, given 'X'
 
+        Note
+        ----
+        See the documentation of "fit" for details about handling of missing values.
+
+        Note
+        ----
+        If fitting the model to DataFrame inputs (instead of NumPy arrays and/or
+        SciPy sparse matrices), the IDs are reindexed internally,
+        and the inputs provided here should match with the numeration that was
+        produced by the model. The mappings in such case are available under
+        attributes ``self.user_mapping_`` and ``self.item_mapping_``.
+
         Parameters
         ----------
-        X : array(m, n), CSR matrix(m, n) , or COO matrix(m, n)
+        X : CSR matrix(m, n) , or COO matrix(m, n)
             New 'X' data with potentially missing entries.
-            Missing entries should have value ``np.nan`` when passing a dense
-            array.
             Must have one row per entry of ``item``.
         item : array-like(m,)
             Items for whom ratings/values are to be predicted. If 'X' passed to
@@ -3387,8 +4055,6 @@ class CMF_implicit(_CMF):
             of ``X``.
         U : array(m, p), CSR matrix(m, p), COO matrix(m, p), or None
             User attributes information for each row in 'X'.
-            Missing entries should have value ``np.nan`` when passing a dense
-            array.
 
         Returns
         -------
@@ -3406,7 +4072,7 @@ class CMF_implicit(_CMF):
                                            replace_existing=True)
 
         c_funs = wrapper_float if self.use_float else wrapper_double
-        A = c_funs.call_collective_factors_warm_implicit_multiple(
+        A = c_funs.call_factors_collective_implicit_multiple(
             Xrow,
             Xcol,
             Xval,
@@ -3420,11 +4086,8 @@ class CMF_implicit(_CMF):
             self._B_pred,
             self.C_,
             self._BeTBe,
-            self._BtB_padded,
-            self._BtB_shrunk,
-            self._CtCinvCt,
-            self._CtC,
-            self._CtCchol,
+            self._BtB,
+            self._BeTBeChol,
             n, m_u, m_x,
             self.k, self.k_user, self.k_item, self.k_main,
             lambda_, self.alpha,
@@ -3447,6 +4110,11 @@ class _OMF_Base(_CMF):
         matrix multiplication of the attributes matrix and the
         attribute (model parameter) ``C_``, plus the intercept if
         present (``C_bias_``).
+
+        Note
+        ----
+        The argument 'NA_as_zero' (if available)
+        is ignored here - thus, it assumes all the 'X' values are missing.
 
         Parameters
         ----------
@@ -3491,6 +4159,11 @@ class _OMF_Base(_CMF):
         """
         Predict rating/confidence given by a new user to existing items, given U
 
+        Note
+        ----
+        The argument 'NA_as_zero' (if available)
+        is ignored here - thus, it assumes all the 'X' values are missing.
+
         Parameters
         ----------
         items : array-like(n,)
@@ -3523,6 +4196,11 @@ class _OMF_Base(_CMF):
                   include=None, exclude=None, output_score=False):
         """
         Compute top-N highest-predicted items for a new user, given 'U'
+
+        Note
+        ----
+        The argument 'NA_as_zero' (if available)
+        is ignored here - thus, it assumes all the 'X' values are missing.
 
         Parameters
         ----------
@@ -3632,6 +4310,7 @@ class _OMF(_OMF_Base):
         letter = "U" if not is_I else "I"
         infoname = "user" if not is_I else "item"
         Mat = self.C_ if not is_I else self.D_
+        MatBias = self.C_bias_ if not is_I else self.D_bias_
 
         if U is None:
             raise ValueError("Must pass '%s'." % letter)
@@ -3652,21 +4331,64 @@ class _OMF(_OMF_Base):
         Uarr, Urow, Ucol, Uval, Ucsr_p, Ucsr_i, Ucsr, m_u, p = \
             self._process_new_U_2d(U=U, is_I=is_I, allow_csr=True)
 
+        empty_arr = np.empty((0,0), dtype=self.dtype_)
+
         c_funs = wrapper_float if self.use_float else wrapper_double
-        A = c_funs.call_offsets_factors_cold_multiple(
-            Uarr,
-            Urow,
-            Ucol,
-            Uval,
-            Ucsr_p, Ucsr_i, Ucsr,
-            Mat,
-            self.C_bias_ if not is_I else self.D_bias_,
-            m_u,
-            self.k,
-            self.k_sec, self.k_main,
-            self.w_user if not is_I else self.w_item,
-            self.nthreads
-        )
+        if not self._implicit:
+            A, _1, _2 = c_funs.call_factors_offsets_explicit_multiple(
+                            np.empty(0, dtype=ctypes.c_int),
+                            np.empty(0, dtype=ctypes.c_int),
+                            np.empty(0, dtype=self.dtype_),
+                            np.empty(0, dtype=ctypes.c_size_t),
+                            np.empty(0, dtype=ctypes.c_int),
+                            np.empty(0, dtype=self.dtype_),
+                            np.empty(0, dtype=self.dtype_),
+                            np.empty((0,0), dtype=self.dtype_),
+                            np.empty((0,0), dtype=self.dtype_),
+                            Uarr,
+                            Urow,
+                            Ucol,
+                            Uval,
+                            Ucsr_p, Ucsr_i, Ucsr,
+                            self.item_bias_ if not is_I else self.user_bias_,
+                            self._B_pred if not is_I else self._A_pred,
+                            self._B_plus_bias if not is_I else empty_arr,
+                            Mat,
+                            MatBias,
+                            self._TransBtBinvBt if not is_I else empty_arr,
+                            self._BtB if not is_I else empty_arr,
+                            glob_mean,
+                            m_u, 0,
+                            self.k, self.k_sec, self.k_main,
+                            lambda_, lambda_,
+                            self.w_user if not is_I else self.w_item,
+                            self.user_bias if not is_I else self.item_bias,
+                            0, 0,
+                            self.nthreads
+                        )
+        else:
+            A, _ = c_funs.call_factors_offsets_implicit_multiple(
+                        np.empty(0, dtype=ctypes.c_int),
+                        np.empty(0, dtype=ctypes.c_int),
+                        np.empty(0, dtype=self.dtype_),
+                        np.empty(0, dtype=ctypes.c_size_t),
+                        np.empty(0, dtype=ctypes.c_int),
+                        np.empty(0, dtype=self.dtype_),
+                        Uarr,
+                        Urow,
+                        Ucol,
+                        Uval,
+                        Ucsr_p, Ucsr_i, Ucsr,
+                        self._B_pred if not is_I else self._A_pred,
+                        Mat,
+                        MatBias,
+                        self._BtB if not is_I else empty_arr,
+                        m_u, 0,
+                        self.k,
+                        lambda_, self.alpha,
+                        0,
+                        self.nthreads
+                    )
         return A
 
     def predict_cold_multiple(self, item, U):
@@ -3750,14 +4472,13 @@ class _OMF(_OMF_Base):
         B = self._factors_cold_multiple(I=I, is_I=True)
         return self._topN(user=user, B=B, n=n, output_score=output_score)
 
-
 class OMF_explicit(_OMF):
     """
     Offsets model for explicit-feedback data
 
     Tries to approximate the 'X' ratings matrix using the user side information
     'U' and item side information 'I' by a formula as follows:
-    X ~ (A + U*C) * t(B + I*D)
+        X ~ (A + U*C) * t(B + I*D)
 
     Note
     ----
@@ -3777,7 +4498,7 @@ class OMF_explicit(_OMF):
     reconstructing the parameters by least squares approximations, so when
     making warm-start predictions, the results will be exactly the same as if
     not using any side information (user/item attributes). The ALS procedure
-    for this model was implemented for experimentation purposes and it's
+    for this model was implemented for experimentation purposes only, and it's
     recommended to use L-BFGS instead.
 
     Note
@@ -3793,6 +4514,7 @@ class OMF_explicit(_OMF):
         factorization), which will have a free component and an attribute-dependent
         component. Other additional separate factors can be specified through
         ``k_sec`` and ``k_main``.
+        Typical values are 30 to 100.
     lambda_ : float or array(6,)
         Regularization parameter. Can also use different regularization for each
         matrix, in which case it should be an array with 6 entries, corresponding,
@@ -3801,6 +4523,7 @@ class OMF_explicit(_OMF):
         to which they apply (C and D).
         Note that the default
         value for ``lambda_`` here is much higher than in other software.
+        Typical values are 10^-2 to 10^2.
         Passing different regularization for each matrix is not supported with
         ``method='als'``.
     method : str, one of "lbfgs" or "als"
@@ -3811,13 +4534,31 @@ class OMF_explicit(_OMF):
         model described in other papers), then reconstruct the model matrices
         by a least-squares approximation. The ALS approach was implemented for
         experimentation purposes only and is not recommended.
+    use_cg : bool
+        In the ALS method, whether to use a conjugate gradient method to solve
+        the closed-form least squares problems. This is a faster and more
+        memory-efficient alternative than the default Cholesky solver, but less
+        exact, less numerically stable, and will require slightly more ALS
+        iterations (``niter``) to reach a good optimum.
+        Note that, if using this method, calculations after fitting which involve
+        new data such as ``factors_warm``,  might produce slightly different
+        results from the factors obtained from calling ``fit`` with the same data,
+        due to differences in numerical precision. A workaround for this issue
+        (factors on new data that might differ slightly) is to use
+        ``finalize_chol=True``.
+        Even if passing "True" here, will use the Cholesky method in cases in which
+        it is faster (e.g. dense matrices with no missing values),
+        and will not use the conjugate gradient method on new data.
+        Ignored when passing ``method="lbfgs"``.
     user_bias : bool
         Whether to add user biases (intercepts) to the model.
+        Cannot be used together with ``NA_as_zero``.
     item_bias : bool
         Whether to add item biases (intercepts) to the model. Be aware that using
         item biases with low regularization for them will tend to favor items
         with high average ratings regardless of the number of ratings the item
         has received.
+        Cannot be used together with ``NA_as_zero``.
     k_sec : int
         Number of factors in the factorizing matrices which are determined
         exclusively from user/item attributes. These will be at the beginning
@@ -3827,6 +4568,8 @@ class OMF_explicit(_OMF):
         then the B matrix will have an extra ``k_sec`` factors). Will be counted
         in addition to those already set by ``k``. Not supported when
         using ``method='als'``.
+        For a different model having only ``k_sec`` with ``k=0`` and ``k_main=0``,
+        the the ``ContentBased`` class.
     k_main : int
         Number of factors in the factorizing matrices which are determined
         without any user/item attributes. These will be at the end of the
@@ -3858,6 +4601,7 @@ class OMF_explicit(_OMF):
         Number of alternating least-squares iterations to perform. Note that
         one iteration denotes an update round for all the matrices rather than
         an update of a single matrix. Ignored when passing ``method='lbfgs'``.
+        Typical values are 6 to 20.
     parallelize : str, "separate" or "single"
         How to parallelize gradient calculations when using more than one
         thread with ``method='lbfgs'``. Passing ``'separate'`` will iterate
@@ -3883,22 +4627,28 @@ class OMF_explicit(_OMF):
         Recommended values are between 3 and 7. Note that higher values
         translate into higher memory requirements. Ignored when passing
         ``method='als'``.
+    max_cg_steps : int
+        Maximum number of conjugate gradient iterations to perform in an ALS round.
+        Ignored when passing ``use_cg=False`` or ``method="lbfgs"``.
+    finalize_chol : bool
+        When passing ``use_cg=True`` and ``method="als"``, whether to perform the last iteration with
+        the Cholesky solver. This will make it slower, but will avoid the issue
+        of potential mismatches between the result from ``fit`` and calls to
+        ``factors_warm`` or similar with the same data.
     NA_as_zero : bool
         Whether to take missing entries in the 'X' matrix as zeros (only
         when the 'X' matrix is passed as sparse COO matrix or DataFrame)
         instead of ignoring them. Note that this is a different model from the
         implicit-feedback version with weighted entries, and it's a much faster
-        model to fit.
+        model to fit. Be aware that this option will be ignored later when
+        predicting on new data - that is, non-present values will be treated
+        as missing.
+        Cannot be used together with ``user_bias`` or ``item_bias``.
     use_float : bool
         Whether to use C float type for the model parameters (typically this is
         ``np.float32``). If passing ``False``, will use C double (typically this
         is ``np.float64``). Using float types will speed up computations and
         use less memory, at the expense of reduced numerical precision.
-    use_cg : bool
-        Whether to use a conjugate gradient method to solve the closed-form
-        least squares problems. This was implemented for experimentation
-        purposes only - will not provide any advantage over the default
-        Cholesky solver. Ignored when passing ``method='lbfgs'``.
     random_state : int, RandomState, or Generator
         Seed used to initialize parameters at random. If passing a NumPy
         RandomState or Generator, will use it to draw a random integer. Note
@@ -3915,6 +4665,14 @@ class OMF_explicit(_OMF):
     print_every : int
         Print L-BFGS convergence messages every n-iterations. Ignored
         when passing ``verbose=False`` or ``method='als'``.
+    handle_interrupt : bool
+        Whether to respond to interrupt signals in the optimization procedure.
+        If passing 'True', whenever it receives an interrupt signal during the
+        optimzation procedure, it will termnate earlier, taking the current values
+        of the variables without finishing, instead of raising an error.
+        If passing 'False', will raise an error when it is interrupted, which
+        will only be catched after the procedure is finished, and the obtained
+        object will not be usable.
     produce_dicts : bool
         Whether to produce Python dicts from the mappings between user/item
         IDs passed to 'fit' and the internal IDs used by the class. Having
@@ -3990,16 +4748,20 @@ class OMF_explicit(_OMF):
            "Cold-start recommendations in Collective Matrix Factorization."
            arXiv preprint arXiv:1809.00366 (2018).
     """
-    def __init__(self, k=50, lambda_=1e1, method="lbfgs",
+    def __init__(self, k=50, lambda_=1e1, method="lbfgs", use_cg=True,
                  user_bias=True, item_bias=True, k_sec=0, k_main=0,
                  add_intercepts=True, w_user=1., w_item=1.,
                  maxiter=10000, niter=10, parallelize="separate", corr_pairs=7,
-                 NA_as_zero=False, use_float=False, use_cg=False,
+                 max_cg_steps=3, finalize_chol=True,
+                 NA_as_zero=False, use_float=False,
                  random_state=1, verbose=True, print_every=100,
-                 produce_dicts=False, copy_data=True, nthreads=-1):
+                 produce_dicts=False, handle_interrupt=True,
+                 copy_data=True, nthreads=-1):
         assert k>0 or k_sec>0 or k_main>0
         self._take_params(implicit=False, alpha=0., downweight=False,
-                          k=1, lambda_=lambda_, method=method, use_cg=use_cg,
+                          k=1, lambda_=lambda_, method=method,
+                          use_cg=use_cg, max_cg_steps=max_cg_steps,
+                          finalize_chol=finalize_chol,
                           user_bias=user_bias, item_bias=item_bias,
                           k_user=0, k_item=0, k_main=0,
                           w_main=1., w_user=w_user, w_item=w_item,
@@ -4011,6 +4773,7 @@ class OMF_explicit(_OMF):
                           use_float=use_float,
                           random_state=random_state, init="normal",
                           verbose=verbose, print_every=print_every,
+                          handle_interrupt=handle_interrupt,
                           produce_dicts=produce_dicts, copy_data=copy_data,
                           nthreads=nthreads)
         self.k = int(k)
@@ -4048,11 +4811,9 @@ class OMF_explicit(_OMF):
 
         Note
         ----
-        None of the inputs should have missing values. If passing side
+        None of the side info inputs should have missing values. If passing side
         information 'U' and/or 'I', all entries (users/items) must be present
         in both the main matrix and the side info matrix.
-        **Passing a COO matrix as X with unmatched entries in 'U' or 'I' might
-        crash the Python process.**
         
         Parameters
         ----------
@@ -4107,7 +4868,7 @@ class OMF_explicit(_OMF):
         c_funs = wrapper_float if self.use_float else wrapper_double
         if self.method == "lbfgs":
             self.glob_mean_, self._A_pred, self._B_pred, values, self.nupd_, self.nfev_, self._B_plus_bias = \
-                c_funs.call_fit_offsets_explicit_lbfgs(
+                c_funs.call_fit_offsets_explicit_lbfgs_internal(
                     Xrow,
                     Xcol,
                     Xval,
@@ -4132,7 +4893,8 @@ class OMF_explicit(_OMF):
                     self.verbose, self.print_every,
                     self.corr_pairs, self.maxiter,
                     self.nthreads, self.parallelize != "separate",
-                    self.random_state
+                    self.random_state,
+                    self.handle_interrupt
             )
             self.user_bias_, self.item_bias_, self.A_, self.B_, self.C_, self.D_, \
             self.C_bias_, self.D_bias_ = \
@@ -4147,8 +4909,31 @@ class OMF_explicit(_OMF):
                 self._A_pred = self.A_
             if (not Iarr.shape[0]) and (not Ival.shape[0]):
                 self._B_pred = self.B_
+            
+            if self.precompute_for_predictions:
+                if isinstance(self.lambda_, np.ndarray):
+                    lambda_ = self.lambda_[2]
+                    lambda_bias = self.lambda_[0]
+                else:
+                    lambda_ = self.lambda_
+                    lambda_bias = self.lambda_
+
+                _1, self._BtB, self._TransBtBinvBt, _2, _3, _4 = \
+                    c_funs.precompute_matrices_collective_explicit(
+                        self._B_pred,
+                        np.empty((0,0), dtype=self.dtype_),
+                        self.user_bias,
+                        self._B_pred.shape[0],
+                        self.k_sec+self.k+self.k_main,
+                        0, 0, 0,
+                        lambda_, lambda_bias, 1., 1.,
+                        True
+                    )
+
         else:
-            self.glob_mean_, self._A_pred, self._B_pred, values, self._B_plus_bias = \
+            self.user_bias_, self.item_bias_, self.A_, self.B_, self.C_, self.D_, \
+            self._A_pred, self._B_pred, self.glob_mean_, \
+            self._B_plus_bias, self._BtB, self._TransBtBinvBt = \
                 c_funs.call_fit_offsets_explicit_als(
                     Xrow,
                     Xcol,
@@ -4164,50 +4949,15 @@ class OMF_explicit(_OMF):
                     self.user_bias, self.item_bias,
                     self.add_intercepts,
                     self.lambda_,
-                    self.verbose, self.nthreads, self.use_cg,
-                    self.random_state, self.niter
-                )
-            self.user_bias_, self.item_bias_, self.A_, self.B_, self.C_, self.D_, \
-            self.C_bias_, self.D_bias_ = \
-                c_funs.unpack_values_offsets_explicit_als(
-                    values,
-                    self.user_bias, self.item_bias,
-                    self.k,
-                    m, n, p, q,
-                    self.add_intercepts
+                    self.verbose, self.nthreads,
+                    self.use_cg, self.max_cg_steps,
+                    self.finalize_chol,
+                    self.random_state, self.niter,
+                    self.handle_interrupt,
+                    precompute_for_predictions=self.precompute_for_predictions
                 )
         
-        if isinstance(self.lambda_, np.ndarray):
-            lambda_ = self.lambda_[2]
-            lambda_bias = self.lambda_[0]
-        else:
-            lambda_ = self.lambda_
-            lambda_bias = self.lambda_
-        
-        self._A_pred, self._B_pred, self._BtBinvBt, self._BtB, self._BtBchol = \
-            c_funs.precompute_matrices_offsets_explicit(
-                self.A_,
-                self.B_,
-                self.C_,
-                self.C_bias_,
-                self.D_,
-                self.D_bias_,
-                self._A_pred,
-                self._B_pred,
-                self._B_plus_bias,
-                Uarr,
-                Iarr,
-                np.empty(0, dtype=ctypes.c_long),
-                np.empty(0, dtype=ctypes.c_int),
-                np.empty(0, dtype=self.dtype_),
-                np.empty(0, dtype=ctypes.c_long),
-                np.empty(0, dtype=ctypes.c_int),
-                np.empty(0, dtype=self.dtype_),
-                self.k, self.k_main, self.k_sec,
-                lambda_, lambda_bias, self.w_user, self.w_item,
-                self.nthreads
-            )
-
+        self._n_orig = self._B_pred.shape[0]
         self.is_fitted_ = True
         return self
 
@@ -4216,6 +4966,10 @@ class OMF_explicit(_OMF):
                      return_bias=False, return_raw_A=False):
         """
         Determine user latent factors based on new ratings data
+
+        Note
+        ----
+        The argument 'NA_as_zero' is ignored here.
 
         Parameters
         ----------
@@ -4329,7 +5083,7 @@ class OMF_explicit(_OMF):
             self._B_plus_bias,
             self.C_,
             self.C_bias_,
-            self._BtBinvBt,
+            self._TransBtBinvBt,
             self._BtB,
             self.glob_mean_,
             self.k, self.k_sec, self.k_main,
@@ -4348,6 +5102,10 @@ class OMF_explicit(_OMF):
                      U=None, U_col=None, U_val=None):
         """
         Predict ratings for existing items, for a new user, given 'X'
+
+        Note
+        ----
+        The argument 'NA_as_zero' is ignored here.
 
         Parameters
         ----------
@@ -4405,6 +5163,10 @@ class OMF_explicit(_OMF):
         """
         Predict ratings for existing items, for new users, given 'X'
 
+        Note
+        ----
+        The argument 'NA_as_zero' is ignored here.
+
         Parameters
         ----------
         X : array(m, n), CSR matrix(m, n) , or COO matrix(m, n)
@@ -4450,7 +5212,7 @@ class OMF_explicit(_OMF):
                                            replace_existing=True)
 
         c_funs = wrapper_float if self.use_float else wrapper_double
-        A, A_bias, _ = c_funs.call_offsets_factors_warm_multiple(
+        A, A_bias, _ = c_funs.call_factors_offsets_explicit_multiple(
             Xrow,
             Xcol,
             Xval,
@@ -4468,7 +5230,7 @@ class OMF_explicit(_OMF):
             self._B_plus_bias,
             self.C_,
             self.C_bias_,
-            self._BtBinvBt,
+            self._TransBtBinvBt,
             self._BtB,
             self.glob_mean_,
             m_x, n,
@@ -4487,6 +5249,10 @@ class OMF_explicit(_OMF):
                   include=None, exclude=None, output_score=False):
         """
         Compute top-N highest-predicted items for a new user, given 'X'
+
+        Note
+        ----
+        The argument 'NA_as_zero' is ignored here.
 
         Parameters
         ----------
@@ -4572,12 +5338,23 @@ class OMF_explicit(_OMF):
         by the model. This method is intended to be used for imputing tabular
         data, and can be used as part of SciKit-Learn pipelines.
 
+        Note
+        ----
+        The argument 'NA_as_zero' is ignored here.
+
+        Note
+        ----
+        If fitting the model to DataFrame inputs (instead of NumPy arrays and/or
+        SciPy sparse matrices), the IDs are reindexed internally,
+        and the inputs provided here should match with the numeration that was
+        produced by the model. The mappings in such case are available under
+        attributes ``self.user_mapping_`` and ``self.item_mapping_``.
+
         Parameters
         ----------
-        X : array(m, n), CSR matrix(m, n) , or COO matrix(m, n)
+        X : array(m, n)
             New 'X' data with potentially missing entries which are to be imputed.
-            Missing entries should have value ``np.nan`` when passing a dense
-            array.
+            Missing entries should have value ``np.nan``.
         y : None
             Not used. Kept as a placeholder for compatibility with SciKit-Learn
             pipelines.
@@ -4589,11 +5366,6 @@ class OMF_explicit(_OMF):
             if 'X' is a sparse COO matrix, must be a 1-d array with the same
             number of non-zero entries as 'X.data', if 'X' is a 2-d array,
             'W' must also be a 2-d array.
-        replace_existing : bool
-            Whether to replace existing non-missing entries in 'X' with the
-            model predictions - that is, if passing 'False', will only fill
-            in the missing entries in 'X', leaving the non-missing entries
-            as they were.
 
         Returns
         -------
@@ -4616,39 +5388,38 @@ class OMF_explicit(_OMF):
         n, m_u, m_x, p, _2, \
         lambda_, lambda_bias = \
             self._process_transform_inputs(X=X, U=U, U_bin=None, W=W,
-                                           replace_existing=replace_existing)
+                                           replace_existing=False)
 
         c_funs = wrapper_float if self.use_float else wrapper_double
-        A, A_bias, _1 = c_funs.call_offsets_factors_warm_multiple(
-            Xrow,
-            Xcol,
-            Xval,
-            Xcsr_p, Xcsr_i, Xcsr,
-            W_sp,
-            Xarr,
-            W_dense,
-            Uarr,
-            Urow,
-            Ucol,
-            Uval,
-            Ucsr_p, Ucsr_i, Ucsr,
-            self.item_bias_,
-            self._B_pred,
-            self._B_plus_bias,
-            self.C_,
-            self.C_bias_,
-            self._BtBinvBt,
-            self._BtB,
-            self.glob_mean_,
-            m_x, n,
-            self.k, self.k_sec, self.k_main,
-            lambda_, lambda_bias,
-            self.w_user,
-            self.user_bias,
-            0, 0,
-            self.nthreads
-        )
-
+        A, A_bias, _1 = c_funs.call_factors_offsets_explicit_multiple(
+                            Xrow,
+                            Xcol,
+                            Xval,
+                            Xcsr_p, Xcsr_i, Xcsr,
+                            W_sp,
+                            Xarr,
+                            W_dense,
+                            Uarr,
+                            Urow,
+                            Ucol,
+                            Uval,
+                            Ucsr_p, Ucsr_i, Ucsr,
+                            self.item_bias_,
+                            self._B_pred,
+                            self._B_plus_bias,
+                            self.C_,
+                            self.C_bias_,
+                            self._TransBtBinvBt,
+                            self._BtB,
+                            self.glob_mean_,
+                            m_x, n,
+                            self.k, self.k_sec, self.k_main,
+                            lambda_, lambda_bias,
+                            self.w_user,
+                            self.user_bias,
+                            0, 0,
+                            self.nthreads
+                        )
         return self._transform_step(A, A_bias, mask_take, Xorig)
 
 
@@ -4658,7 +5429,7 @@ class OMF_implicit(_OMF):
 
     Tries to approximate the 'X' interactions matrix using the user side information
     'U' and item side information 'I' by a formula as follows:
-    X ~ (A + U*C) * t(B + I*D)
+        X ~ (A + U*C) * t(B + I*D)
 
     Note
     ----
@@ -4677,33 +5448,55 @@ class OMF_implicit(_OMF):
     k : int
         Number of latent factors to use (dimensionality of the low-rank
         approximation).
+        Typical values are 30 to 100.
     lambda_ : float
         Regularization parameter. Note that the default
         value for ``lambda_`` here is much higher than in other software.
+        Typical values are 10^-2 to 10^2.
     alpha : float
         Weighting parameter for the non-zero entries in the implicit-feedback
         model. See [2] for details. Note that, while the author's suggestion for
         this value is 40, other software such as ``implicit`` use a value of 1.
+    use_cg : bool
+        In the ALS method, whether to use a conjugate gradient method to solve
+        the closed-form least squares problems. This is a faster and more
+        memory-efficient alternative than the default Cholesky solver, but less
+        exact, less numerically stable, and will require slightly more ALS
+        iterations (``niter``) to reach a good optimum.
+        Note that, if using this method, calculations after fitting which involve
+        new data such as ``factors_warm``,  might produce slightly different
+        results from the factors obtained from calling ``fit`` with the same data,
+        due to differences in numerical precision. A workaround for this issue
+        (factors on new data that might differ slightly) is to use
+        ``finalize_chol=True``.
+        Even if passing "True" here, will use the Cholesky method in cases in which
+        it is faster (e.g. dense matrices with no missing values),
+        and will not use the conjugate gradient method on new data.
     downweight : bool
         Whether to decrease the weight of the 'X' matrix being factorized
         according to the number of present entries. This has the same effect
         as rescaling (increasing) the regularization parameter.
+        Recommended to use when passing ``alpha``.
     add_intercepts : bool
         Whether to add intercepts/biases to the user/item attribute matrices.
     niter : int
         Number of alternating least-squares iterations to perform. Note that
         one iteration denotes an update round for all the matrices rather than
         an update of a single matrix.
+        Typical values are 6 to 20.
     use_float : bool
         Whether to use C float type for the model parameters (typically this is
         ``np.float32``). If passing ``False``, will use C double (typically this
         is ``np.float64``). Using float types will speed up computations and
         use less memory, at the expense of reduced numerical precision.
-    use_cg : bool
-        Whether to use a conjugate gradient method to solve the closed-form
-        least squares problems. This was implemented for experimentation
-        purposes only - will not provide any advantage over the default
-        Cholesky solver.
+    max_cg_steps : int
+        Maximum number of conjugate gradient iterations to perform in an ALS round.
+        Ignored when passing ``use_cg=False``.
+    finalize_chol : bool
+        When passing ``use_cg=True``, whether to perform the last iteration with
+        the Cholesky solver. This will make it slower, but will avoid the issue
+        of potential mismatches between the result from ``fit`` and calls to
+        ``factors_warm`` or similar with the same data.
     random_state : int, RandomState, or Generator
         Seed used to initialize parameters at random. If passing a NumPy
         RandomState or Generator, will use it to draw a random integer.
@@ -4712,6 +5505,14 @@ class OMF_implicit(_OMF):
         routine used to fit the model. Note that, if running this from a
         Jupyter notebook, these messages will be printed in the console,
         not in the notebook itself.
+    handle_interrupt : bool
+        Whether to respond to interrupt signals in the optimization procedure.
+        If passing 'True', whenever it receives an interrupt signal during the
+        optimzation procedure, it will termnate earlier, taking the current values
+        of the variables without finishing, instead of raising an error.
+        If passing 'False', will raise an error when it is interrupted, which
+        will only be catched after the procedure is finished, and the obtained
+        object will not be usable.
     produce_dicts : bool
         Whether to produce Python dicts from the mappings between user/item
         IDs passed to 'fit' and the internal IDs used by the class. Having
@@ -4772,13 +5573,20 @@ class OMF_implicit(_OMF):
     .. [2] Hu, Yifan, Yehuda Koren, and Chris Volinsky.
            "Collaborative filtering for implicit feedback datasets."
            2008 Eighth IEEE International Conference on Data Mining. Ieee, 2008.
+    .. [3] Takacs, Gabor, Istvan Pilaszy, and Domonkos Tikk.
+           "Applications of the conjugate gradient method for implicit feedback collaborative filtering."
+           Proceedings of the fifth ACM conference on Recommender systems. 2011.
     """
-    def __init__(self, k=50, lambda_=1e3, alpha=40., downweight=True,
-                 add_intercepts=True, niter=10, use_float=False, use_cg=False,
+    def __init__(self, k=50, lambda_=1e0, alpha=1., use_cg=True, downweight=False,
+                 add_intercepts=True, niter=10, use_float=False,
+                 max_cg_steps=3, finalize_chol=True,
                  random_state=1, verbose=False,
-                 produce_dicts=False, copy_data=True, nthreads=-1):
+                 produce_dicts=False, handle_interrupt=True,
+                 copy_data=True, nthreads=-1):
         self._take_params(implicit=True, alpha=alpha, downweight=downweight,
-                          k=k, lambda_=lambda_, method="als", use_cg=use_cg,
+                          k=k, lambda_=lambda_, method="als",
+                          use_cg=use_cg, max_cg_steps=max_cg_steps,
+                          finalize_chol=finalize_chol,
                           user_bias=False, item_bias=False,
                           k_user=0, k_item=0, k_main=0,
                           w_main=1., w_user=1., w_item=1.,
@@ -4790,6 +5598,7 @@ class OMF_implicit(_OMF):
                           use_float=use_float,
                           random_state=random_state, init="normal",
                           verbose=verbose, print_every=0,
+                          handle_interrupt=handle_interrupt,
                           produce_dicts=produce_dicts, copy_data=copy_data,
                           nthreads=nthreads)
         self._take_params_offsets(k_sec=0, k_main=0, add_intercepts=add_intercepts)
@@ -4820,11 +5629,9 @@ class OMF_implicit(_OMF):
 
         Note
         ----
-        None of the inputs should have missing values. If passing side
+        None of the side info inputs should have missing values. If passing side
         information 'U' and/or 'I', all entries (users/items) must be present
         in both the main matrix and the side info matrix.
-        **Passing a COO matrix as X with unmatched entries in 'U' or 'I' might
-        crash the Python process.**
 
         Parameters
         ----------
@@ -4866,7 +5673,9 @@ class OMF_implicit(_OMF):
              m, n, m_u, n_i, p, q,
              m_ub, n_ib, pbin, qbin):
         c_funs = wrapper_float if self.use_float else wrapper_double
-        self._A_pred, self._B_pred, values, self._w_main_multiplier = \
+        self._w_main_multiplier = 1.
+        self.A_, self.B_, self.C_, self.D_, \
+        self._A_pred, self._B_pred, self._BtB = \
             c_funs.call_fit_offsets_implicit_als(
                 Xrow,
                 Xcol,
@@ -4877,43 +5686,12 @@ class OMF_implicit(_OMF):
                 self.k, self.add_intercepts,
                 self.lambda_, self.alpha,
                 self.verbose, self.nthreads, self.use_cg,
+                self.max_cg_steps, self.finalize_chol,
                 self.downweight,
-                self.random_state, self.niter
+                self.random_state, self.niter,
+                self.handle_interrupt
             )
-        self.A_, self.B_, self.C_, self.D_, self.C_bias_, self.D_bias_ = \
-            c_funs.unpack_values_offsets_implicit_als(
-                values,
-                self.k,
-                m, n, p, q,
-                self.add_intercepts
-            )
-
-        if isinstance(self.lambda_, np.ndarray):
-            lambda_ = self.lambda_[2]
-        else:
-            lambda_ = self.lambda_
-
-        self._A_pred, self._B_pred, self._BtB = \
-            c_funs.precompute_matrices_offsets_implicit(
-                self.C_,
-                self.C_bias_,
-                self.D_,
-                self.D_bias_,
-                self._A_pred,
-                self._B_pred,
-                Uarr,
-                Iarr,
-                np.empty(0, dtype=ctypes.c_long),
-                np.empty(0, dtype=ctypes.c_int),
-                np.empty(0, dtype=self.dtype_),
-                np.empty(0, dtype=ctypes.c_long),
-                np.empty(0, dtype=ctypes.c_int),
-                np.empty(0, dtype=self.dtype_),
-                self.k,
-                lambda_,
-                self.nthreads
-            )
-
+        self._n_orig = self.B_.shape[0]
         self.is_fitted_ = True
         return self
 
@@ -4957,11 +5735,10 @@ class OMF_implicit(_OMF):
             self._B_pred,
             self.C_,
             self.C_bias_,
-            self._BtBinvBt,
+            self._TransBtBinvBt,
             self._BtB,
             self.k, 0, 0,
             self.lambda_, self.alpha,
-            self._w_main_multiplier,
             0,
             0
         )
@@ -4997,7 +5774,7 @@ class OMF_implicit(_OMF):
         a_vec = self.factors_warm(X_col=X_col, X_val=X_val)
         return self._predict(user=None, a_vec=a_vec, a_bias=0., item=items)
 
-    def predict_warm_multiple(self, X, item):
+    def predict_warm_multiple(self, X, item, U=None):
         """
         Predict scores for existing items, for new users, given 'X'
 
@@ -5014,6 +5791,9 @@ class OMF_implicit(_OMF):
             column, otherwise should match with the columns of 'X'.
             Each entry in ``item`` will be matched with the corresponding row
             of ``X``.
+        U : array(m, p), CSR matrix(m, p), COO matrix(m, p), or None
+            User attributes information for each row in 'X'.
+            Should not contain any missing values.
 
         Returns
         -------
@@ -5026,27 +5806,32 @@ class OMF_implicit(_OMF):
         Uarr, Urow, Ucol, Uval, _1, Ucsr_p, Ucsr_i, Ucsr, \
         n, m_u, m_x, p, _2, \
         lambda_, lambda_bias = \
-            self._process_transform_inputs(X=X, U=None, U_bin=None, W=None,
+            self._process_transform_inputs(X=X, U=U, U_bin=None, W=None,
                                            replace_existing=True)
 
         c_funs = wrapper_float if self.use_float else wrapper_double
-        A, _ = c_funs.call_offsets_factors_warm_implicit_multiple(
-            Xrow,
-            Xcol,
-            Xval,
-            Xcsr_p, Xcsr_i, Xcsr,
-            self._B_pred,
-            self.C_,
-            self._BtBinvBt,
-            self._BtB,
-            m_x, n,
-            self._k_pred,
-            lambda_, self.alpha,
-            self._w_main_multiplier,
-            0,
-            self.nthreads
-        )
-
+        A, _ = c_funs.call_factors_offsets_implicit_multiple(
+                    Xrow,
+                    Xcol,
+                    Xval,
+                    Xcsr_p, Xcsr_i, Xcsr,
+                    Uarr,
+                    Urow,
+                    Ucol,
+                    Uval,
+                    Ucsr_p,
+                    Ucsr_i,
+                    Ucsr,
+                    self._B_pred,
+                    self._C,
+                    self._C_bias,
+                    self._BtB,
+                    m_x, n,
+                    self.k,
+                    lambda_, self.alpha,
+                    0,
+                    self.nthreads
+                )
         return self._predict_user_multiple(A, item, bias=None)
 
     def topN_warm(self, n=10, X_col=None, X_val=None,
@@ -5117,7 +5902,7 @@ class ContentBased(_OMF_Base):
 
     The 'X' is approximated using the user side information
     'U' and item side information 'I' by a formula as follows:
-    X ~ (U*C) * t(I*D)
+        X ~ (U*C) * t(I*D)
 
     Note
     ----
@@ -5128,7 +5913,8 @@ class ContentBased(_OMF_Base):
     Note
     ----
     The input data for attributes does not undergo any transformations when
-    fitting this model, which is to some extent sensible to the scales of the variables and their means in the same way as regulaized linear regression.
+    fitting this model, which is to some extent sensible to the scales of the
+    variables and their means in the same way as regularized linear regression.
 
     Note
     ----
@@ -5143,12 +5929,14 @@ class ContentBased(_OMF_Base):
     k : int
         Number of latent factors to use (dimensionality of the low-rank
         approximation).
+        Recommended values are 30 to 100.
     lambda_ : float or array(6,)
         Regularization parameter. Can also use different regularization for each
         matrix, in which case it should be an array with 6 entries, corresponding,
         in this order, to: user_bias, item_bias, [ignored], [ignored], C, D.
         Note that the default
         value for ``lambda_`` here is much higher than in other software.
+        Recommended values are 10^-2 to 10^2.
     user_bias : bool
         Whether to add user biases (intercepts) to the model.
     item_bias : bool
@@ -5207,6 +5995,18 @@ class ContentBased(_OMF_Base):
         but it will add some extra overhead at the time of fitting the model
         and extra memory usage. Ignored when passing the data as matrices
         and arrays instead of data frames.
+    handle_interrupt : bool
+        Whether to respond to interrupt signals in the optimization procedure.
+        If passing 'True', whenever it receives an interrupt signal during the
+        optimzation procedure, it will termnate earlier, taking the current values
+        of the variables without finishing, instead of raising an error.
+        If passing 'False', will raise an error when it is interrupted, which
+        will only be catched after the procedure is finished, and the obtained
+        object will not be usable.
+    start_with_ALS : bool
+        Whether to determine the initial coefficients through an ALS procedure.
+        This might help to speed up the procedure by starting closer to an
+        optimum.
     copy_data : bool
         Whether to make copies of the input data that is passed to this
         object's methods (``fit``, ``predict``, etc.), in order to avoid
@@ -5271,7 +6071,8 @@ class ContentBased(_OMF_Base):
                  add_intercepts=True, maxiter=15000, corr_pairs=3,
                  parallelize="separate", verbose=True, print_every=100,
                  random_state=1, use_float=False,
-                 produce_dicts=False, copy_data=True, nthreads=-1):
+                 produce_dicts=False, handle_interrupt=True, start_with_ALS=False,
+                 copy_data=True, nthreads=-1):
         self._take_params(implicit=False, alpha=40., downweight=False,
                           k=1, lambda_=lambda_, method="lbfgs", use_cg=False,
                           user_bias=user_bias, item_bias=item_bias,
@@ -5285,12 +6086,14 @@ class ContentBased(_OMF_Base):
                           precompute_for_predictions=True, use_float=use_float,
                           random_state=random_state,
                           init="normal", verbose=verbose, print_every=print_every,
+                          handle_interrupt=handle_interrupt,
                           produce_dicts=produce_dicts, copy_data=copy_data,
                           nthreads=nthreads)
         self._take_params_offsets(k_sec=k, k_main=0,
                                   add_intercepts=add_intercepts)
         self.k = 0
         self._k_pred = self.k_sec
+        self.start_with_ALS = bool(start_with_ALS)
 
     def __str__(self):
         msg  = "Content-based factorization model\n"
@@ -5317,10 +6120,8 @@ class ContentBased(_OMF_Base):
 
         Note
         ----
-        None of the inputs should have missing values. All entries (users/items)
+        None of the side info inputs should have missing values. All entries (users/items)
         must be present in both the main matrix and the side info matrix.
-        **Passing a COO matrix as X with unmatched entries in 'U' or 'I' might
-        crash the Python process.**
 
         Parameters
         ----------
@@ -5365,8 +6166,11 @@ class ContentBased(_OMF_Base):
              m, n, m_u, n_i, p, q,
              m_ub, n_ib, pbin, qbin):
         c_funs = wrapper_float if self.use_float else wrapper_double
-        self.glob_mean_, self._A_pred, self._B_pred, values, self.nupd_, self.nfev_, B_plus_bias = \
-            c_funs.call_fit_offsets_explicit_lbfgs(
+
+        self.user_bias_, self.item_bias_, \
+        self.C_, self.D_, self.C_bias_, self.D_bias_, \
+        self._A_pred, self._B_pred, self.glob_mean_, self.nupd_, self.nfev_ = \
+            c_funs.call_fit_content_based_lbfgs(
                 Xrow,
                 Xcol,
                 Xval,
@@ -5382,8 +6186,7 @@ class ContentBased(_OMF_Base):
                 Icol,
                 Ival,
                 m, n, p, q,
-                0, self.k_sec, 0,
-                1., 1.,
+                self.k_sec,
                 self.user_bias, self.item_bias,
                 self.add_intercepts,
                 self.lambda_ if isinstance(self.lambda_, float) else 0.,
@@ -5391,19 +6194,12 @@ class ContentBased(_OMF_Base):
                 self.verbose, self.print_every,
                 self.corr_pairs, self.maxiter,
                 self.nthreads, self.parallelize != "separate",
-                self.random_state
+                self.random_state,
+                self.handle_interrupt,
+                start_with_ALS=self.start_with_ALS
         )
 
-        self.user_bias_, self.item_bias_, _1, _2, self.C_, self.D_, \
-        self.C_bias_, self.D_bias_ = \
-            c_funs.unpack_values_lbfgs_offsets(
-                values,
-                self.user_bias, self.item_bias,
-                self.k, self.k_sec, self.k_main,
-                m, n, p, q,
-                self.add_intercepts
-            )
-
+        self._n_orig = 0
         self.is_fitted_ = True
         return self
 
@@ -5442,7 +6238,7 @@ class ContentBased(_OMF_Base):
         assert self.is_fitted_
         U, U_col, U_val, _ = self._process_new_U(U, U_col, U_val, None)
         c_funs = wrapper_float if self.use_float else wrapper_double
-        a_vec = c_funs.call_factors_content_based(
+        a_vec = c_funs.call_factors_content_based_single(
             U,
             U_val,
             U_col,
@@ -5450,6 +6246,25 @@ class ContentBased(_OMF_Base):
             self.C_bias_
         )
         return a_vec
+
+    def factors_multiple(self, U=None):
+        """
+        Determine user-factors from new data for multiple rows, given U
+
+        Parameters
+        ----------
+        U : array-like(m, p)
+            User attributes in the new data.
+
+        Returns
+        -------
+        factors : array(m, k)
+            The user-factors as determined by the model.
+        """
+        factors = U.dot(self.C_)
+        if self.C_bias_.shape[0]:
+            factors[:] += self.C_bias_.reshape((1,-1))
+        return factors
 
     def topN_new(self, n=10, U=None, U_col=None, U_val=None,
                  I=None, output_score=False):
@@ -5499,7 +6314,7 @@ class ContentBased(_OMF_Base):
             raise ValueError("There are fewer than 'n' items to rank.")
 
         c_funs = wrapper_float if self.use_float else wrapper_double
-        rank_new, scores_new = c_funs.call_rank_content_based_new(
+        rank_new, scores_new = c_funs.call_topN_new_content_based(
             U,
             U_val,
             U_col,
@@ -5550,7 +6365,7 @@ class ContentBased(_OMF_Base):
             self._process_new_U_2d(I, is_I=True, allow_csr=True)
 
         c_funs = wrapper_float if self.use_float else wrapper_double
-        scores_new = c_funs.call_predict_content_based_new(
+        scores_new = c_funs.call_predict_X_new_content_based(
             Uarr,
             Urow,
             Ucol,
@@ -5600,7 +6415,7 @@ class ContentBased(_OMF_Base):
             self._process_new_U_2d(U, is_I=False, allow_csr=True)
 
         c_funs = wrapper_float if self.use_float else wrapper_double
-        scores_new = c_funs.call_predict_content_based_old(
+        scores_new = c_funs.call_predict_X_old_content_based(
             Uarr,
             Urow,
             Ucol,
@@ -5647,6 +6462,7 @@ class MostPopular(_CMF):
         Weighting parameter for the non-zero entries in the implicit-feedback
         model. See [2] for details. Note that, while the author's suggestion for
         this value is 40, other software such as ``implicit`` use a value of 1.
+        See the documentation of ``CMF_implicit`` for more details.
     downweight : bool
         (Only when passing ``implicit=True``) Whether to decrease the weight
         of the 'X' matrix being factorized according to the number of
@@ -5716,10 +6532,10 @@ class MostPopular(_CMF):
            "Collaborative filtering for implicit feedback datasets."
            2008 Eighth IEEE International Conference on Data Mining. Ieee, 2008.
     """
-    def __init__(self, implicit=False, user_bias=False, lambda_=1e1, alpha=40.,
-                 downweight=True, use_float=False, produce_dicts=False,
+    def __init__(self, implicit=False, user_bias=False, lambda_=1e1, alpha=1.,
+                 downweight=False, use_float=False, produce_dicts=False,
                  copy_data=True, nthreads=-1):
-        self._take_params(implicit=implicit, alpha=alpha, downweight=False,
+        self._take_params(implicit=implicit, alpha=alpha, downweight=downweight,
                           k=1, lambda_=lambda_, method="als", use_cg=False,
                           user_bias=user_bias, item_bias=True,
                           k_user=0, k_item=0, k_main=0,
@@ -5732,6 +6548,7 @@ class MostPopular(_CMF):
                           use_float=use_float,
                           random_state=1, init="normal",
                           verbose=0, print_every=0,
+                          handle_interrupt=False,
                           produce_dicts=produce_dicts, copy_data=copy_data,
                           nthreads=nthreads)
         self.k = 0
@@ -5821,6 +6638,7 @@ class MostPopular(_CMF):
 
         self._A_pred = np.zeros((m,1), dtype=self.dtype_)
         self._B_pred = np.zeros((n,1), dtype=self.dtype_)
+        self._n_orig = n
         self.is_fitted_ = True
         return self
 
@@ -5879,14 +6697,14 @@ class MostPopular(_CMF):
                               include=include, exclude=exclude,
                               output_score=output_score)
 
-class CMF_imputer(CMF_explicit):
+class CMF_imputer(CMF):
     """
-    A wrapper for CMF_explicit allowing argument 'y' in 'fit' and
+    A wrapper for CMF allowing argument 'y' in 'fit' and
     'transform' (used as a placeholder only, not used for anything),
     which can be used as part of SciKit-Learn pipelines due to having
     this extra parameter.
 
-    Everything else is exactly the same as for 'CMF_explicit'
+    Everything else is exactly the same as for 'CMF'
     """
     def fit(self, X, y=None, U=None, I=None, U_bin=None, I_bin=None, W=None):
         return super().fit(X=X, U=U, U_bin=U_bin, I=I, I_bin=I_bin, W=W)
