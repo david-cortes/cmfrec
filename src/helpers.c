@@ -750,6 +750,18 @@ void transpose_mat2(FPnum *restrict A, size_t m, size_t n, FPnum *restrict outp)
             outp[row + col*m] = A[col + row*n];
 }
 
+void transpose_mat3
+(
+    FPnum *restrict A, size_t lda,
+    size_t m, size_t n,
+    FPnum *restrict outp, size_t ldb
+)
+{
+    for (size_t row = 0; row < m; row++)
+        for (size_t col = 0; col < n; col++)
+            outp[row + col*ldb] = A[col + row*lda];
+}
+
 int coo_to_csr_plus_alloc
 (
     int *restrict Xrow, int *restrict Xcol, FPnum *restrict Xval,

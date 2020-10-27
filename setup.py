@@ -35,8 +35,12 @@ class build_ext_subclass( build_ext_with_blas ):
                 e.extra_link_args += ['-fopenmp']
 
                 # e.extra_compile_args += ['-O3', '-march=native', '-std=c99']
+                
+
                 # e.extra_compile_args += ['-fsanitize=address', '-static-libasan', '-ggdb']
                 # e.extra_link_args += ['-fsanitize=address', '-static-libasan']
+                
+
                 # e.extra_link_args += ["-lopenblas"]
 
         ## Note: apple will by default alias 'gcc' to 'clang', and will ship its own "special"

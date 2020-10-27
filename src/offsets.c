@@ -1615,52 +1615,57 @@ int fit_offsets_als
     FPnum *restrict precomputedTransBtBinvBt
 )
 {
+    int retval = 0;
     if (p > m || q > n || k > m || k > n) {
         if (verbose) {
             if (k > m || k > n)
                 fprintf(stderr, "'k' cannot be greater than 'm' or 'n'.\n");
             else
                 fprintf(stderr, "Side info has larger dimension than 'X'\n");
-            #ifndef _FOR_R
-            fflush(stderr);
-            #endif
         }
-        return 2;
+        retval = 2;
     }
     if (implicit && (NA_as_zero_X || weight != NULL || Xfull != NULL)) {
         if (verbose) {
-            fprintf(stderr,"Combination of inputs invalid for 'implicit'.\n");
-            #ifndef _FOR_R
-            fflush(stderr);
-            #endif
+            fprintf(stderr, "Combination of inputs invalid for 'implicit'.\n");
         }
-        return 2;
+        retval = 2;
+    }
+    if (NA_as_zero_X && Xfull != NULL) {
+        if (verbose) {
+            fprintf(stderr, "Cannot use 'NA_as_zero' with dense inputs.\n");
+        }
+        retval = 2;
+    }
+
+    if (retval != 0) {
+        #ifndef _FOR_R
+        fflush(stderr);
+        #endif
+        return retval;
     }
 
     int minus_one = -1;
-    char trans = 'T';
-    char uplo = '?';
     int ignore = 0;
     FPnum temp = 0;
-    int temp_intA;
-    int temp_intB;
+    int temp_intA = 0;
+    int ldb = 0;
     FPnum placeholder = 0;
+
+    FPnum threshold_svd = 1e-3;
+    int rank = 0;
+    int sz_iwork = 0;
+    FPnum *restrict sv = NULL;
+
 
     int p_plus_bias = p + (int)add_intercepts;
     int q_plus_bias = q + (int)add_intercepts;
     FPnum *U_plus_bias = NULL;
     FPnum *I_plus_bias = NULL;
-    FPnum *C_plus_bias = NULL;
-    FPnum *D_plus_bias = NULL;
-    FPnum *buffer_C_or_D_plus_bias = NULL;
-    bool need_C_plus_bias = false;
-    bool need_D_plus_bias = false;
-
     FPnum *restrict MatTrans = NULL;
-    FPnum *restrict MatTransSec = NULL;
     FPnum *restrict buffer_FPnum = NULL;
+    int *restrict buffer_iwork = NULL;
 
-    int retval;
     if (!implicit)
         retval = fit_collective_explicit_als(
                     biasA, biasB, A, B, (FPnum*)NULL, (FPnum*)NULL,
@@ -1727,80 +1732,6 @@ int fit_offsets_als
         return retval;
     }
 
-    need_C_plus_bias = !(U == NULL  || !add_intercepts);
-    need_D_plus_bias = !(II == NULL || !add_intercepts);
-    if (need_C_plus_bias || need_D_plus_bias)
-    {
-        if (need_C_plus_bias && need_D_plus_bias)
-            buffer_C_or_D_plus_bias
-                =
-            (FPnum*)malloc(((size_t)max2(p, q)+(size_t)1)*(size_t)k
-                            * sizeof(FPnum));
-        else if (need_C_plus_bias)
-            buffer_C_or_D_plus_bias
-                =
-            (FPnum*)malloc(((size_t)p+(size_t)1)*(size_t)k*sizeof(FPnum));
-        else if (need_D_plus_bias)
-            buffer_C_or_D_plus_bias
-                =
-            (FPnum*)malloc(((size_t)q+(size_t)1)*(size_t)k*sizeof(FPnum));
-
-        if (buffer_C_or_D_plus_bias == NULL) goto throw_oom;
-    }
-
-    if (U == NULL || !add_intercepts) {
-        U_plus_bias = U;
-        C_plus_bias = C;
-    }
-    else {
-        U_plus_bias = (FPnum*)malloc((size_t)m *
-                                     ((size_t)p+(size_t)1)
-                                      * sizeof(FPnum));
-        C_plus_bias = buffer_C_or_D_plus_bias;
-        if (U_plus_bias == NULL) goto throw_oom;
-        append_ones_last_col(
-            U, m, p,
-            U_plus_bias
-        );
-    }
-
-    if (II == NULL || !add_intercepts) {
-        I_plus_bias = II;
-        D_plus_bias = D;
-    }
-    else {
-        I_plus_bias = (FPnum*)malloc((size_t)n *
-                                     ((size_t)q+(size_t)1)
-                                      * sizeof(FPnum));
-        D_plus_bias = buffer_C_or_D_plus_bias;
-        if (I_plus_bias == NULL) goto throw_oom;
-        append_ones_last_col(
-            II, n, q,
-            I_plus_bias
-        );
-    }
-
-    if (U != NULL && II != NULL) {
-        MatTrans = (FPnum*)malloc((size_t)max2(m,n)*(size_t)k*sizeof(FPnum));
-        MatTransSec = (FPnum*)malloc((size_t)max2(p_plus_bias,q_plus_bias)
-                                      * (size_t)k * sizeof(FPnum));
-    }
-    else if (U != NULL) {
-        MatTrans = (FPnum*)malloc((size_t)m*(size_t)k*sizeof(FPnum));
-        MatTransSec = (FPnum*)malloc((size_t)p_plus_bias
-                                      * (size_t)k*sizeof(FPnum));
-    }
-    else if (II != NULL) {
-        MatTrans = (FPnum*)malloc((size_t)n*(size_t)k*sizeof(FPnum));
-        MatTransSec = (FPnum*)malloc((size_t)q_plus_bias
-                                      * (size_t)k*sizeof(FPnum));
-    }
-
-    if ((U != NULL || II != NULL) && (MatTrans == NULL || MatTransSec == NULL))
-    {
-        goto throw_oom;
-    }
-
     if (Am != NULL)
         copy_arr(A, Am, (size_t)m*(size_t)k, nthreads);
     if (Bm != NULL)
@@ -1808,80 +1739,156 @@ int fit_offsets_als
 
     if (U != NULL)
     {
-        /* Determine the size of the working array */
-        tgels_(&trans, &p_plus_bias, &m, &k,
-               U_plus_bias, &p_plus_bias, MatTrans, &m,
-               &temp, &minus_one, &ignore);
+        ldb = max2(m, p_plus_bias);
+        MatTrans = (FPnum*)malloc((size_t)ldb*(size_t)k*sizeof(FPnum));
+        U_plus_bias = (FPnum*)malloc((size_t)m*(size_t)p_plus_bias
+                                      * sizeof(FPnum));
+        sv = (FPnum*)malloc((size_t)min2(m,p_plus_bias)*sizeof(FPnum));
+        if (MatTrans == NULL || U_plus_bias == NULL || sv == NULL)
+            goto throw_oom;
+
+        tgelsd_(&m, &p_plus_bias, &k,
+                U_plus_bias, &m, MatTrans, &ldb,
+                sv, &threshold_svd, &rank,
+                &temp, &minus_one, &sz_iwork, &ignore);
         temp_intA = (int)temp;
+
         buffer_FPnum = (FPnum*)malloc((size_t)temp_intA*sizeof(FPnum));
-        if (buffer_FPnum == NULL) goto throw_oom;
+        buffer_iwork = (int*)malloc((size_t)(sz_iwork+1)*sizeof(int));
+        if (buffer_FPnum == NULL || buffer_iwork == NULL)
+            goto throw_oom;
 
-        /* Obtain t(C) */
-        transpose_mat2(A, m, k, MatTrans);
-        tgels_(&trans, &p_plus_bias, &m, &k,
-               U_plus_bias, &p_plus_bias, MatTrans, &m,
-               buffer_FPnum, &temp_intA, &ignore);
-        tlacpy_(&uplo, &k, &p_plus_bias, MatTrans, &m, MatTransSec, &k);
+        
+        transpose_mat3(
+            A, k,
+            m, k,
+            MatTrans, ldb
+        );
 
+        transpose_mat3(
+            U, p,
+            m, p,
+            U_plus_bias, m
+        );
+        if (add_intercepts)
+            for (size_t ix = 0; ix < (size_t)m; ix++)
+                U_plus_bias[(size_t)m*(size_t)p + ix] = 1.;
 
-        /* Now obtain A and C */
+        tgelsd_(&m, &p_plus_bias, &k,
+                U_plus_bias, &m, MatTrans, &ldb,
+                sv, &threshold_svd, &rank,
+                buffer_FPnum, &temp_intA, buffer_iwork, &ignore);
+
+        if (add_intercepts)
+            append_ones_last_col(
+                U, m, p,
+                U_plus_bias
+            );
+        else
+            U_plus_bias = U;
+        transpose_mat3(
+            MatTrans, ldb,
+            k, p,
+            C, k
+        );
+        if (add_intercepts)
+            cblas_tcopy(k, MatTrans + p, ldb, C_bias, 1);
+
         cblas_tgemm(CblasRowMajor, CblasNoTrans, CblasTrans,
                     m, k, p_plus_bias,
-                    -1., U_plus_bias, p_plus_bias, MatTransSec, p_plus_bias,
+                    -1., U_plus_bias, p_plus_bias, MatTrans, ldb,
                     1., A, k);
-        transpose_mat2(MatTransSec, k, p_plus_bias, C_plus_bias);
-        if (C_plus_bias != C) {
-            copy_arr(C_plus_bias, C, (size_t)p*(size_t)k, nthreads);
-            copy_arr(C_plus_bias + (size_t)p*(size_t)k, C_bias, k, 1);
+
+        free(MatTrans); MatTrans = NULL;
+        free(buffer_FPnum); buffer_FPnum = NULL;
+        if (U_plus_bias != U) {
+            free(U_plus_bias);
+            U_plus_bias = NULL;
         }
+        free(sv); sv = NULL;
+        free(buffer_iwork); buffer_iwork = NULL;
     }
 
     if (II != NULL)
     {
-        /* Determine the size of the working array */
-        tgels_(&trans, &q_plus_bias, &n, &k,
-               I_plus_bias, &q_plus_bias, MatTrans, &n,
-               &temp, &minus_one, &ignore);
-        temp_intB = (int)temp;
+        ldb = max2(n, q_plus_bias);
+        MatTrans = (FPnum*)malloc((size_t)ldb*(size_t)k*sizeof(FPnum));
+        I_plus_bias = (FPnum*)malloc((size_t)n*(size_t)q_plus_bias
+                                      * sizeof(FPnum));
+        sv = (FPnum*)malloc((size_t)min2(n,q_plus_bias)*sizeof(FPnum));
+        if (MatTrans == NULL || I_plus_bias == NULL || sv == NULL)
+            goto throw_oom;
 
-        if (temp_intB > temp_intA)
-        {
-            free(buffer_FPnum);
-            buffer_FPnum = NULL;
-        }
-        if (buffer_FPnum == NULL)
-            buffer_FPnum = (FPnum*)malloc((size_t)temp_intB*sizeof(FPnum));
-        if (buffer_FPnum == NULL) goto throw_oom;
+        tgelsd_(&n, &q_plus_bias, &k,
+                I_plus_bias, &m, MatTrans, &ldb,
+                sv, &threshold_svd, &rank,
+                &temp, &minus_one, &sz_iwork, &ignore);
+        temp_intA = (int)temp;
 
-        /* Obtain t(D) */
-        transpose_mat2(B, n, k, MatTrans);
-        tgels_(&trans, &q_plus_bias, &n, &k,
-               I_plus_bias, &q_plus_bias, MatTrans, &n,
-               buffer_FPnum, &temp_intB, &ignore);
-        tlacpy_(&uplo, &k, &q_plus_bias, MatTrans, &n, MatTransSec, &k);
+        buffer_FPnum = (FPnum*)malloc((size_t)temp_intA*sizeof(FPnum));
+        buffer_iwork = (int*)malloc((size_t)(sz_iwork+1)*sizeof(int));
+        if (buffer_FPnum == NULL || buffer_iwork == NULL)
+            goto throw_oom;
+        
+        transpose_mat3(
+            B, k,
+            n, k,
+            MatTrans, ldb
+        );
 
-        /* Now obtain B and D */
+        transpose_mat3(
+            II, q,
+            n, q,
+            I_plus_bias, n
+        );
+        if (add_intercepts)
+            for (size_t ix = 0; ix < (size_t)n; ix++)
+                I_plus_bias[(size_t)n*(size_t)q + ix] = 1.;
+
+        tgelsd_(&n, &q_plus_bias, &k,
+                I_plus_bias, &n, MatTrans, &ldb,
+                sv, &threshold_svd, &rank,
+                buffer_FPnum, &temp_intA, buffer_iwork, &ignore);
+
+        if (add_intercepts)
+            append_ones_last_col(
+                II, n, q,
+                I_plus_bias
+            );
+        else
+            I_plus_bias = II;
+        transpose_mat3(
+            MatTrans, ldb,
+            k, q,
+            D, k
+        );
+        if (add_intercepts)
+            cblas_tcopy(k, MatTrans + q, ldb, D_bias, 1);
+
         cblas_tgemm(CblasRowMajor, CblasNoTrans, CblasTrans,
                     n, k, q_plus_bias,
-                    -1., I_plus_bias, q_plus_bias, MatTransSec, q_plus_bias,
+                    -1., I_plus_bias, q_plus_bias, MatTrans, ldb,
                     1., B, k);
-        transpose_mat2(MatTransSec, k, q_plus_bias, D_plus_bias);
-        if (C_plus_bias != C) {
-            copy_arr(D_plus_bias, D, (size_t)q*(size_t)k, nthreads);
-            copy_arr(D_plus_bias + (size_t)q*(size_t)k, D_bias, k, 1);
-        }
-    }
 
+        free(MatTrans); MatTrans = NULL;
+        free(buffer_FPnum); buffer_FPnum = NULL;
+        if (I_plus_bias != II) {
+            free(I_plus_bias);
+            I_plus_bias = NULL;
+        }
+        free(sv); sv = NULL;
+        free(buffer_iwork); buffer_iwork = NULL;
+    }
 
     cleanup:
         free(MatTrans);
-        free(MatTransSec);
         free(buffer_FPnum);
         if (U_plus_bias != U)
             free(U_plus_bias);
         if (I_plus_bias != II)
             free(I_plus_bias);
-        free(buffer_C_or_D_plus_bias);
+        free(sv);
+        free(buffer_iwork);
     return retval;
 
     throw_oom:

@@ -4492,7 +4492,7 @@ class OMF_explicit(_OMF):
     reconstructing the parameters by least squares approximations, so when
     making warm-start predictions, the results will be exactly the same as if
     not using any side information (user/item attributes). The ALS procedure
-    for this model was implemented for experimentation purposes and it's
+    for this model was implemented for experimentation purposes only, and it's
     recommended to use L-BFGS instead.
 
     Note
@@ -5940,10 +5940,6 @@ class ContentBased(_OMF_Base):
         has received.
     add_intercepts : bool
         Whether to add intercepts/biases to the user/item attribute matrices.
-    start_with_ALS : bool
-        Whether to determine the initial coefficients through an ALS procedure.
-        This might help to speed up the procedure by starting closer to an
-        optimum.
     maxiter : int
         Maximum L-BFGS iterations to perform. The procedure will halt if it
         has not converged after this number of updates. Note that, compared to
@@ -5986,6 +5982,13 @@ class ContentBased(_OMF_Base):
         ``np.float32``). If passing ``False``, will use C double (typically this
         is ``np.float64``). Using float types will speed up computations and
         use less memory, at the expense of reduced numerical precision.
+    produce_dicts : bool
+        Whether to produce Python dicts from the mappings between user/item
+        IDs passed to 'fit' and the internal IDs used by the class. Having
+        these dicts might speed up some computations such as 'predict',
+        but it will add some extra overhead at the time of fitting the model
+        and extra memory usage. Ignored when passing the data as matrices
+        and arrays instead of data frames.
     handle_interrupt : bool
         Whether to respond to interrupt signals in the optimization procedure.
         If passing 'True', whenever it receives an interrupt signal during the
@@ -5994,13 +5997,10 @@ class ContentBased(_OMF_Base):
         If passing 'False', will raise an error when it is interrupted, which
         will only be catched after the procedure is finished, and the obtained
         object will not be usable.
-    produce_dicts : bool
-        Whether to produce Python dicts from the mappings between user/item
-        IDs passed to 'fit' and the internal IDs used by the class. Having
-        these dicts might speed up some computations such as 'predict',
-        but it will add some extra overhead at the time of fitting the model
-        and extra memory usage. Ignored when passing the data as matrices
-        and arrays instead of data frames.
+    start_with_ALS : bool
+        Whether to determine the initial coefficients through an ALS procedure.
+        This might help to speed up the procedure by starting closer to an
+        optimum.
     copy_data : bool
         Whether to make copies of the input data that is passed to this
         object's methods (``fit``, ``predict``, etc.), in order to avoid
@@ -6062,11 +6062,10 @@ class ContentBased(_OMF_Base):
            arXiv preprint arXiv:1809.00366 (2018).
     """
     def __init__(self, k=20, lambda_=1e2, user_bias=False, item_bias=False,
-                 add_intercepts=True, start_with_ALS=True,
-                 maxiter=15000, corr_pairs=3,
+                 add_intercepts=True, maxiter=15000, corr_pairs=3,
                  parallelize="separate", verbose=True, print_every=100,
                  random_state=1, use_float=False,
-                 produce_dicts=False, handle_interrupt=True,
+                 produce_dicts=False, handle_interrupt=True, start_with_ALS=False,
                  copy_data=True, nthreads=-1):
         self._take_params(implicit=False, alpha=40., downweight=False,
                           k=1, lambda_=lambda_, method="lbfgs", use_cg=False,

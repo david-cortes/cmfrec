@@ -150,7 +150,7 @@ extern "C" {
     #define tlarnv_ dlarnv_
     #define tpotrf_ dpotrf_
     #define tpotrs_ dpotrs_
-    #define tgels_ dgels_
+    #define tgelsd_ dgelsd_
 #else
     #define LBFGS_FLOAT 32
     #define FPnum float
@@ -170,7 +170,7 @@ extern "C" {
     #define tlarnv_ slarnv_
     #define tpotrf_ spotrf_
     #define tpotrs_ spotrs_
-    #define tgels_ sgels_
+    #define tgelsd_ sgelsd_
 #endif
 
 #if !defined(LAPACK_H) && !defined(_FOR_R)
@@ -179,9 +179,11 @@ void tlacpy_(const char*, const int*, const int*, const FPnum*, const int*, cons
 void tlarnv_(const int*, const int*, const int*, const FPnum*);
 void tpotrf_(const char*, const int*, const FPnum*, const int*, const int*);
 void tpotrs_(const char*, const int*, const int*, const FPnum*, const int*, const FPnum*, const int*, const int*);
-void tgels_(const char*, const int*, const int*, const int*,
-            const FPnum*, const int*, const FPnum*, const int*,
-            const FPnum*, const int*, const int*);
+void tgelsd_(const int*, const int*, const int*,
+             const FPnum*, const int*,
+             const FPnum*, const int*,
+             const FPnum*, const FPnum*, const int*, const FPnum*,
+             const int*, const int*, const int*);
 #endif
 
 #ifndef CBLAS_H
@@ -311,6 +313,12 @@ void sum_mat
 );
 void transpose_mat(FPnum *restrict A, size_t m, size_t n, FPnum *restrict buffer_FPnum);
 void transpose_mat2(FPnum *restrict A, size_t m, size_t n, FPnum *restrict outp);
+void transpose_mat3
+(
+    FPnum *restrict A, size_t lda,
+    size_t m, size_t n,
+    FPnum *restrict outp, size_t ldb
+);
 int coo_to_csr_plus_alloc
 (
     int *restrict Xrow, int *restrict Xcol, FPnum *restrict Xval,
