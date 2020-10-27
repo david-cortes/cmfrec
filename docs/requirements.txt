@@ -1,0 +1,6 @@
+cython
+numpy
+scipy
+pandas>=0.25.0
+findblas
+Sphinx>=3.2.1
