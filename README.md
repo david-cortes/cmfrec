@@ -18,6 +18,10 @@ The package has been rewritten in C with Python wrappers. If you've used earlier
 
 The new version is faster, multi-threaded, and has some new functionality, but if for some reason you still need the old one, it can be found under the git branch "tensorflow".
 
+## Update 2020-10-27
+
+The package has now introduced a conjugate gradient method for the ALS procedures and has undergone many improvements in terms of speed, memory usage, and numerical precision. The models with ALS-CG are now competitive in speed against libraries such as `implicit` or `rsparse`. The C code now also contains the full prediction API.
+
 ## Highlights
 
 * Can fit factorization models with or without user and/or item side information.

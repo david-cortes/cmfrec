@@ -80,7 +80,7 @@ if sys.platform[:3] != "dar":
 setup(
     name  = "cmfrec",
     packages = ["cmfrec"],
-    version = '1.1.0',
+    version = '2.0.0',
     description = 'Collective matrix factorization',
     author = 'David Cortes',
     author_email = 'david.cortes.rivera@gmail.com',
