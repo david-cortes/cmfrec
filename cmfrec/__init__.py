@@ -1540,7 +1540,7 @@ class _CMF:
         Uarr, Urow, Ucol, Uval, Ub_arr, \
         Ucsr_p, Ucsr_i, Ucsr, \
         n, m_u, m_x, p, pbin, \
-        lambda_, lambda_bias = self._process_multiple_common(self, X, U, U_bin, W)
+        lambda_, lambda_bias = self._process_multiple_common(X, U, U_bin, W)
         A, A_bias = self._factors_multiple(
             Xrow, Xcol, Xval, W_sp,
             Xcsr_p, Xcsr_i, Xcsr,
@@ -1552,7 +1552,8 @@ class _CMF:
         )
         return A, A_bias
 
-    def _factors_multiple(Xrow, Xcol, Xval, W_sp,
+    def _factors_multiple(self,
+                          Xrow, Xcol, Xval, W_sp,
                           Xcsr_p, Xcsr_i, Xcsr,
                           Xarr, W_dense,
                           Uarr, Urow, Ucol, Uval, Ub_arr,
@@ -3060,7 +3061,7 @@ class CMF_explicit(_CMF):
             The 'X' matrix as a dense array with all missing entries imputed
             according to the model.
         """
-        if (X is not None) and (X.__class__ != "ndarray"):
+        if (X is not None) and (X.__class__.__name__ != "ndarray"):
             raise ValueError("'X' must be a NumPy array.")
 
         Xrow, Xcol, Xval, W_sp, Xarr, \
