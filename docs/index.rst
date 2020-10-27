@@ -1,5 +1,5 @@
 .. cmfrec documentation master file, created by
-   sphinx-quickstart on Tue Jun  5 21:41:58 2018.
+   sphinx-quickstart on Tue Oct 27 17:39:53 2020.
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
@@ -37,10 +37,6 @@ About function descriptions:
  - 'existing' -> the user/item was present in the training data that was passed to 'fit'.
  - 'new' -> the user/items was not present in the training data that was passed to 'fit'.
 
- Also be aware that many of the model attributes in fitted-model objects, such as the A and B matrices,
- have a name ending in underscore (e.g. *CMF.A_*), but the docs you are reading here might
- render them without that underscore in the generated HTML. See the docstrings in the source code
- to be sure.
 
 .. toctree::
    :maxdepth: 3

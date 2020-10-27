@@ -18,6 +18,7 @@ cmfrec.egg-info/*
 
 build/*
 
+docs/.directory
 docs/_build/*
 
 test_math/build/*
