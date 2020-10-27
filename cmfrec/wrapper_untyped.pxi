@@ -1162,11 +1162,11 @@ def call_fit_collective_implicit_als(
         int_t m, int_t n, int_t m_u, int_t n_i, int_t p, int_t q,
         int_t k=50, int_t k_user=0, int_t k_item=0, int_t k_main=0,
         real_t w_main=1., real_t w_user=1., real_t w_item=1.,
-        real_t lam=1e2, real_t alpha=40., bint adjust_weight=1,
+        real_t lam=1e2, real_t alpha=1., bint adjust_weight=1,
         np.ndarray[real_t, ndim=1] lam_unique=np.empty(0, dtype=c_real_t),
-        bint verbose=1, int_t niter=5,
-        int_t nthreads=1, bint use_cg=0,
-        int_t max_cg_steps=3, bint finalize_chol=0,
+        bint verbose=1, int_t niter=10,
+        int_t nthreads=1, bint use_cg=1,
+        int_t max_cg_steps=3, bint finalize_chol=1,
         int_t seed=1, init="normal", bint handle_interrupt=1,
         bint precompute_for_predictions = 1
     ):
@@ -1243,14 +1243,14 @@ def call_fit_collective_implicit_als(
         if sizeC:
             C = rs.standard_normal(size = (p, k_user + k), dtype = c_real_t)
         if sizeD:
-            C = rs.standard_normal(size = (q, k_item + k), dtype = c_real_t)
+            D = rs.standard_normal(size = (q, k_item + k), dtype = c_real_t)
     else:
         A = rs.random(size = (max(m, m_u), (k_user+k+k_main)), dtype = c_real_t)
         B = rs.random(size = (max(n, n_i), (k_item+k+k_main)), dtype = c_real_t)
         if sizeC:
             C = rs.random(size = (p, k_user + k), dtype = c_real_t)
         if sizeD:
-            C = rs.random(size = (q, k_item + k), dtype = c_real_t)
+            D = rs.random(size = (q, k_item + k), dtype = c_real_t)
     
         if init == "gamma":
             A[:] = -np.log(A.clip(min=1e-6, max=20.))

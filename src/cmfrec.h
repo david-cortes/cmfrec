@@ -76,7 +76,9 @@ extern "C" {
 
 #ifdef _FOR_PYTHON
     /* This contains the standard cblas.h header */
-    #include "findblas.h" /* https://www.github.com/david-cortes/findblas */
+    #ifdef USE_FINDBLAS
+        #include "findblas.h" /* https://www.github.com/david-cortes/findblas */
+    #endif
 #elif defined(_FOR_R)
     #include <R.h>
     #include <Rinternals.h>
@@ -588,7 +590,6 @@ void optimizeA_implicit
     real_t lam,
     int_t nthreads,
     bool use_cg, int_t max_cg_steps, bool force_set_to_zero,
-    bool keep_precomputedBtB,
     real_t *restrict precomputedBtB,
     real_t *restrict buffer_real_t
 );
@@ -873,7 +874,6 @@ void optimizeA_collective_implicit
     real_t lam, real_t w_user,
     int_t nthreads,
     bool use_cg, int_t max_cg_steps, bool is_first_iter,
-    bool keep_precomputedBtB,
     real_t *restrict precomputedBtB, /* will not have lambda with CG */
     real_t *restrict precomputedBeTBe,
     real_t *restrict precomputedBeTBeChol,

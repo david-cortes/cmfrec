@@ -4390,7 +4390,6 @@ void optimizeA_collective_implicit
     real_t lam, real_t w_user,
     int_t nthreads,
     bool use_cg, int_t max_cg_steps, bool is_first_iter,
-    bool keep_precomputedBtB,
     real_t *restrict precomputedBtB, /* will not have lambda with CG */
     real_t *restrict precomputedBeTBe,
     real_t *restrict precomputedBeTBeChol,
@@ -4429,12 +4428,6 @@ void optimizeA_collective_implicit
         precomputedBtB = buffer_real_t;
         buffer_real_t += square(ld_BtB);
     }
-    cblas_tsyrk(CblasRowMajor, CblasUpper, CblasTrans,
-                k+k_main, n,
-                1., B + k_item, k_totB,
-                0., precomputedBtB, ld_BtB);
-    if (!use_cg)
-        add_to_diag(precomputedBtB, lam, ld_BtB);
 
 
     /* TODO: should get rid of the tsymv, replacing them with tgemv as it's
@@ -4454,11 +4447,20 @@ void optimizeA_collective_implicit
                 m_diff, n, k + k_main,
                 Xcsr_p + m_u, Xcsr_i, Xcsr,
                 lam,
-                nthreads, use_cg, max_cg_steps, false, false,
+                nthreads, use_cg, max_cg_steps, false,
                 precomputedBtB,
                 buffer_real_t
             );
         m = m_u;
+    }
+
+    else {
+        cblas_tsyrk(CblasRowMajor, CblasUpper, CblasTrans,
+                    k+k_main, n,
+                    1., B + k_item, k_totB,
+                    0., precomputedBtB, ld_BtB);
+        if (!use_cg)
+            add_to_diag(precomputedBtB, lam, ld_BtB);
     }
 
 
@@ -6985,7 +6987,7 @@ int_t fit_collective_implicit_als
                 (lam_unique == NULL)? (lam) : (lam_unique[3]),
                 w_item,
                 nthreads, use_cg, max_cg_steps, iter == 0,
-                true, precomputedBtB,
+                precomputedBtB,
                 (k_item <= k_user)? (precomputedBeTBe) : ((real_t*)NULL),
                 (k_item <= k_user)? (precomputedBeTBeChol) : ((real_t*)NULL),
                 precomputedCtC,
@@ -7000,7 +7002,7 @@ int_t fit_collective_implicit_als
                 Xcsc_p, Xcsc_i, Xcsc,
                 (lam_unique == NULL)? (lam) : (lam_unique[3]),
                 nthreads, use_cg, max_cg_steps, iter == 0,
-                true, precomputedBtB,
+                precomputedBtB,
                 buffer_real_t
             );
         if (verbose) {
@@ -7032,7 +7034,7 @@ int_t fit_collective_implicit_als
                 (lam_unique == NULL)? (lam) : (lam_unique[2]),
                 w_user,
                 nthreads, use_cg, max_cg_steps, iter == 0,
-                true, precomputedBtB,
+                precomputedBtB,
                 precomputedBeTBe,
                 precomputedBeTBeChol,
                 precomputedCtC,
@@ -7049,7 +7051,7 @@ int_t fit_collective_implicit_als
                 (lam_unique == NULL)? (lam) : (lam_unique[2]),
                 nthreads,
                 use_cg, max_cg_steps, iter == 0,
-                true, precomputedBtB,
+                precomputedBtB,
                 buffer_real_t
             );
         if (verbose) {

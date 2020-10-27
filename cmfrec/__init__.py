@@ -3479,7 +3479,8 @@ class CMF_implicit(_CMF):
             raise ValueError("'X' must be a Pandas DataFrame or SciPy sparse COO matrix.")
         return self._fit_common(X, U=U, I=I, U_bin=None, I_bin=None, W=None)
 
-    def _fit(self, Xrow, Xcol, Xval, W_sp, Xarr, W_dense,
+    def _fit(self,
+             Xrow, Xcol, Xval, W_sp, Xarr, W_dense,
              Uarr, Urow, Ucol, Uval, Ub_arr,
              Iarr, Irow, Icol, Ival, Ib_arr,
              m, n, m_u, n_i, p, q,

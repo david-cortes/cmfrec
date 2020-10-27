@@ -1304,7 +1304,7 @@ void factors_implicit_cg
         for (size_t ix = 0; ix < nnz; ix++) {
             coef = cblas_tdot(k, B + (size_t)ixB[ix]*ldb, 1, p, 1);
             cblas_taxpy(k,
-                        (coef - 1.) * Xa[ix] + coef,
+                        coef * (Xa[ix] - 1.) + coef,
                         B + (size_t)ixB[ix]*ldb, 1,
                         Ap, 1);
         }
@@ -2099,26 +2099,23 @@ void optimizeA_implicit
     real_t lam,
     int_t nthreads,
     bool use_cg, int_t max_cg_steps, bool force_set_to_zero,
-    bool keep_precomputedBtB,
     real_t *restrict precomputedBtB, /* <- will be calculated if not passed */
     real_t *restrict buffer_real_t
 )
 {
-    bool compute_BtB = precomputedBtB == NULL || keep_precomputedBtB;
     if (precomputedBtB == NULL)
     {
         precomputedBtB = buffer_real_t;
         buffer_real_t += square(k);
     }
-    if (compute_BtB)
-    {
-        cblas_tsyrk(CblasRowMajor, CblasUpper, CblasTrans,
-                    k, n,
-                    1., B, (int)ldb,
-                    0., precomputedBtB, k);
-        if (!use_cg)
-            add_to_diag(precomputedBtB, lam, k);
-    }
+    /* TODO: keep it as a parameter whether the BtB comes precomputed or not,
+       so as to incorporate this function later into the 'factors_multiple'. */
+    cblas_tsyrk(CblasRowMajor, CblasUpper, CblasTrans,
+                k, n,
+                1., B, (int)ldb,
+                0., precomputedBtB, k);
+    if (!use_cg)
+        add_to_diag(precomputedBtB, lam, k);
     if (!use_cg || force_set_to_zero)
         set_to_zero(A, (size_t)m*(size_t)k - (lda-(size_t)k), nthreads);
     size_t size_buffer = use_cg? (3 * k) : (square(k));

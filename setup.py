@@ -19,6 +19,8 @@ import os, sys
 ## Or alternatively, pass your own BLAS/LAPACK linkage parameters here:
 custom_blas_link_args = []
 custom_blas_compile_args = []
+# example:
+# custom_blas_link_args = ["-lopenblas"]
 if len(custom_blas_link_args) or len(custom_blas_compile_args):
     from Cython.Distutils import build_ext
     build_ext_with_blas = build_ext
@@ -56,6 +58,7 @@ class build_ext_subclass( build_ext_with_blas ):
         if len(custom_blas_link_args) or len(custom_blas_compile_args):
             e.extra_compile_args += custom_blas_compile_args
             e.extra_link_args += custom_blas_link_args
+            e.define_macros = [m for m in e.define_macros if m[0] != "USE_FINDBLAS"]
 
         build_ext_with_blas.build_extensions(self)
 
@@ -98,14 +101,18 @@ setup(
                      "src/offsets.c", "src/helpers.c", "src/lbfgs.c",
                      "src/cblas_wrappers.c"],
             include_dirs=[np.get_include(), "src"],
-            define_macros = [("_FOR_PYTHON", None), ("USE_DOUBLE", None)]
+            define_macros = [("_FOR_PYTHON", None),
+                             ("USE_DOUBLE", None),
+                             ("USE_FINDBLAS", None)]
             ),
         Extension("cmfrec.wrapper_float",
             sources=["cmfrec/cfuns_float.pyx", "src/collective.c", "src/common.c",
                      "src/offsets.c", "src/helpers.c", "src/lbfgs.c",
                      "src/cblas_wrappers.c"],
             include_dirs=[np.get_include(), "src"],
-            define_macros = [("_FOR_PYTHON", None), ("USE_FLOAT", None)]
+            define_macros = [("_FOR_PYTHON", None),
+                             ("USE_FLOAT", None),
+                             ("USE_FINDBLAS", None)]
             ),
         ]
     )
