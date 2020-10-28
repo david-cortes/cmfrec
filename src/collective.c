@@ -7475,7 +7475,7 @@ int_t factors_collective_explicit_single
     bool NA_as_zero_U, bool NA_as_zero_X,
     real_t *restrict C, real_t *restrict Cb,
     real_t glob_mean, real_t *restrict biasB,
-    real_t *restrict col_means,
+    real_t *restrict U_colmeans,
     real_t *restrict Xa, int_t ixB[], size_t nnz,
     real_t *restrict Xa_dense, int_t n,
     real_t *restrict weight,
@@ -7545,7 +7545,7 @@ int_t factors_collective_explicit_single
             C, Cb,
             TransCtCinvCt,
             CtCw,
-            col_means,
+            U_colmeans,
             k, k_user, k_main,
             lam, w_main, w_user,
             NA_as_zero_U
@@ -7559,7 +7559,7 @@ int_t factors_collective_explicit_single
             u_bin_vec, pbin,
             C, Cb,
             glob_mean, biasB,
-            col_means,
+            U_colmeans,
             Xa, ixB, nnz,
             Xa_dense, n,
             weight,
@@ -7592,7 +7592,7 @@ int_t factors_collective_implicit_single
     real_t *restrict u_vec, int_t p,
     real_t *restrict u_vec_sp, int_t u_vec_ixB[], size_t nnz_u_vec,
     bool NA_as_zero_U,
-    real_t *restrict col_means,
+    real_t *restrict U_colmeans,
     real_t *restrict B, int_t n, real_t *restrict C,
     real_t *restrict Xa, int_t ixB[], size_t nnz,
     int_t k, int_t k_user, int_t k_item, int_t k_main,
@@ -7638,7 +7638,7 @@ int_t factors_collective_implicit_single
             u_vec, p,
             u_vec_sp, u_vec_ixB, nnz_u_vec,
             NA_as_zero_U,
-            col_means,
+            U_colmeans,
             B, n, C,
             Xa, ixB, nnz,
             k, k_user, k_item, k_main,
@@ -7658,7 +7658,7 @@ int_t factors_collective_implicit_single
             BeTBe,
             BtB,
             BeTBeChol,
-            col_means,
+            U_colmeans,
             k, k_user, k_item, k_main,
             lam, w_main, w_user, w_main_multiplier,
             NA_as_zero_U
@@ -7687,7 +7687,7 @@ int_t factors_collective_explicit_multiple
     real_t *restrict Ub, int_t m_ubin, int_t pbin,
     real_t *restrict C, real_t *restrict Cb,
     real_t glob_mean, real_t *restrict biasB,
-    real_t *restrict col_means,
+    real_t *restrict U_colmeans,
     real_t *restrict X, int_t ixA[], int_t ixB[], size_t nnz,
     size_t *restrict Xcsr_p, int_t *restrict Xcsr_i, real_t *restrict Xcsr,
     real_t *restrict Xfull, int_t n,
@@ -7784,7 +7784,7 @@ int_t factors_collective_explicit_multiple
     }
 
     #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
-            shared(A, B, C, Cb, biasA, glob_mean, col_means, \
+            shared(A, B, C, Cb, biasA, glob_mean, U_colmeans, \
                    Xfull, weight, Xcsr, Xcsr_p, Xcsr_i, weightR, m, n, \
                    U, U_csr, U_csr_p, U_csr_i, p, Ub, pbin, m_u, m_ubin, \
                    NA_as_zero_X, NA_as_zero_U, \
@@ -7811,7 +7811,7 @@ int_t factors_collective_explicit_multiple
             NA_as_zero_U, NA_as_zero_X,
             C, Cb,
             glob_mean, biasB,
-            col_means,
+            U_colmeans,
             (ix < (size_t)m && Xcsr_p != NULL)?
                 (Xcsr + Xcsr_p[ix]) : ((real_t*)NULL),
             (ix < (size_t)m && Xcsr_p != NULL)?
@@ -7881,7 +7881,7 @@ int_t factors_collective_implicit_multiple
     size_t *restrict Xcsr_p, int_t *restrict Xcsr_i, real_t *restrict Xcsr,
     real_t *restrict B, int_t n,
     real_t *restrict C,
-    real_t *restrict col_means,
+    real_t *restrict U_colmeans,
     int_t k, int_t k_user, int_t k_item, int_t k_main,
     real_t lam, real_t alpha, real_t w_main, real_t w_user,
     real_t w_main_multiplier,
@@ -7959,7 +7959,7 @@ int_t factors_collective_implicit_multiple
 
 
     #pragma omp parallel for schedule(static) num_threads(nthreads) \
-            shared(A, B, C, m, m_u, col_means, n, \
+            shared(A, B, C, m, m_u, U_colmeans, n, \
                    U, U_csr, U_csr_i, U_csr_p, NA_as_zero_U, \
                    Xcsr, Xcsr_i, Xcsr_p, \
                    lam, alpha, w_main, w_user, w_main_multiplier, \
@@ -7978,7 +7978,7 @@ int_t factors_collective_implicit_multiple
             (ix < (size_t)m_u && U_csr_p != NULL)?
                 (U_csr_p[ix+1] - U_csr_p[ix]) : ((size_t)0),
             NA_as_zero_U,
-            col_means,
+            U_colmeans,
             B, n, C,
             Xcsr + Xcsr_p[ix],
             Xcsr_i + Xcsr_p[ix],
@@ -8030,7 +8030,7 @@ int_t impute_X_collective_explicit
     real_t *restrict Ub, int_t m_ubin, int_t pbin,
     real_t *restrict C, real_t *restrict Cb,
     real_t glob_mean, real_t *restrict biasB,
-    real_t *restrict col_means,
+    real_t *restrict U_colmeans,
     real_t *restrict Xfull, int_t n,
     real_t *restrict weight,
     real_t *restrict B,
@@ -8106,7 +8106,7 @@ int_t impute_X_collective_explicit
         Ub, m_ubin, pbin,
         C, Cb,
         glob_mean, biasB,
-        col_means,
+        U_colmeans,
         (real_t*)NULL, (int_t*)NULL, (int_t*)NULL, (size_t)0,
         (size_t*)NULL, (int_t*)NULL, (real_t*)NULL,
         Xpred, n,
@@ -8261,7 +8261,7 @@ int_t topN_new_collective_explicit
     bool NA_as_zero_U, bool NA_as_zero_X,
     real_t *restrict C, real_t *restrict Cb,
     real_t glob_mean, real_t *restrict biasB,
-    real_t *restrict col_means,
+    real_t *restrict U_colmeans,
     real_t *restrict Xa, int_t ixB[], size_t nnz,
     real_t *restrict Xa_dense, int_t n,
     real_t *restrict weight,
@@ -8297,7 +8297,7 @@ int_t topN_new_collective_explicit
         NA_as_zero_U, NA_as_zero_X,
         C, Cb,
         glob_mean, biasB,
-        col_means,
+        U_colmeans,
         Xa, ixB, nnz,
         Xa_dense, n,
         weight,
@@ -8348,7 +8348,7 @@ int_t topN_new_collective_implicit
     real_t *restrict u_vec, int_t p,
     real_t *restrict u_vec_sp, int_t u_vec_ixB[], size_t nnz_u_vec,
     bool NA_as_zero_U,
-    real_t *restrict col_means,
+    real_t *restrict U_colmeans,
     real_t *restrict B, real_t *restrict C,
     real_t *restrict Xa, int_t ixB[], size_t nnz,
     int_t k, int_t k_user, int_t k_item, int_t k_main,
@@ -8374,7 +8374,7 @@ int_t topN_new_collective_implicit
         u_vec, p,
         u_vec_sp, u_vec_ixB, nnz_u_vec,
         NA_as_zero_U,
-        col_means,
+        U_colmeans,
         B, n, C,
         Xa, ixB, nnz,
         k, k_user, k_item, k_main,
@@ -8475,7 +8475,7 @@ int_t predict_X_new_collective_explicit
     real_t *restrict Ub, int_t m_ubin, int_t pbin,
     real_t *restrict C, real_t *restrict Cb,
     real_t glob_mean, real_t *restrict biasB,
-    real_t *restrict col_means,
+    real_t *restrict U_colmeans,
     real_t *restrict X, int_t ixA[], int_t ixB[], size_t nnz,
     size_t *restrict Xcsr_p, int_t *restrict Xcsr_i, real_t *restrict Xcsr,
     real_t *restrict Xfull, int_t n,
@@ -8513,7 +8513,7 @@ int_t predict_X_new_collective_explicit
         Ub, m_ubin, pbin,
         C, Cb,
         glob_mean, biasB,
-        col_means,
+        U_colmeans,
         X, ixA, ixB, nnz,
         Xcsr_p, Xcsr_i, Xcsr,
         Xfull, n,
@@ -8571,7 +8571,7 @@ int_t predict_X_new_collective_implicit
     size_t *restrict Xcsr_p, int_t *restrict Xcsr_i, real_t *restrict Xcsr,
     real_t *restrict B, int_t n,
     real_t *restrict C,
-    real_t *restrict col_means,
+    real_t *restrict U_colmeans,
     int_t k, int_t k_user, int_t k_item, int_t k_main,
     real_t lam, real_t alpha, real_t w_main, real_t w_user,
     real_t w_main_multiplier,
@@ -8596,7 +8596,7 @@ int_t predict_X_new_collective_implicit
         Xcsr_p, Xcsr_i, Xcsr,
         B, n,
         C,
-        col_means,
+        U_colmeans,
         k, k_user, k_item, k_main,
         lam, alpha, w_main, w_user,
         w_main_multiplier,

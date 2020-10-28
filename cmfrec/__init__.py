@@ -6071,7 +6071,7 @@ class ContentBased(_OMF_Base):
                  add_intercepts=True, maxiter=15000, corr_pairs=3,
                  parallelize="separate", verbose=True, print_every=100,
                  random_state=1, use_float=False,
-                 produce_dicts=False, handle_interrupt=True, start_with_ALS=False,
+                 produce_dicts=False, handle_interrupt=True, start_with_ALS=True,
                  copy_data=True, nthreads=-1):
         self._take_params(implicit=False, alpha=40., downweight=False,
                           k=1, lambda_=lambda_, method="lbfgs", use_cg=False,

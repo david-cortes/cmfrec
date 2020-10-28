@@ -1656,7 +1656,7 @@ int_t fit_offsets_als
     int_t ldb = 0;
     real_t placeholder = 0;
 
-    real_t threshold_svd = 1e-3;
+    real_t threshold_svd = 1e-5;
     int_t rank = 0;
     int_t sz_iwork = 0;
     real_t *restrict sv = NULL;
@@ -3001,6 +3001,7 @@ int_t fit_content_based_lbfgs
     int_t retval = 0;
     real_t *restrict tempA = NULL;
     real_t *restrict tempB = NULL;
+    real_t *restrict Xorig = NULL;
     real_t *values = NULL;
     size_t edge = 0;
     /* If the values are all in contiguous order, can avoid allocating and
@@ -3023,7 +3024,17 @@ int_t fit_content_based_lbfgs
     {
         tempA = (real_t*)malloc((size_t)m*(size_t)k*sizeof(real_t));
         tempB = (real_t*)malloc((size_t)n*(size_t)k*sizeof(real_t));
-        if (tempA == NULL || tempB == NULL) goto throw_oom;
+        if (Xfull != NULL)
+            Xorig = (real_t*)malloc((size_t)m*(size_t)n*sizeof(real_t));
+        else
+            Xorig = (real_t*)malloc(nnz*sizeof(real_t));
+        if (tempA == NULL || tempB == NULL || Xorig == NULL)
+            goto throw_oom;
+
+        if (Xfull != NULL)
+            copy_arr(Xfull, Xorig, (size_t)m*(size_t)n, nthreads);
+        else
+            copy_arr(X, Xorig, nnz, nthreads);
 
         retval = fit_offsets_explicit_als(
             biasA, biasB,
@@ -3033,8 +3044,8 @@ int_t fit_content_based_lbfgs
             true, 123,
             glob_mean,
             m, n, k,
-            ixA, ixB, X, nnz,
-            Xfull,
+            ixA, ixB, (X == NULL)? ((real_t*)NULL) : Xorig, nnz,
+            (Xfull == NULL)? ((real_t*)NULL) : Xorig,
             weight,
             user_bias, item_bias, add_intercepts,
             lam,
@@ -3056,6 +3067,7 @@ int_t fit_content_based_lbfgs
 
         free(tempA); tempA = NULL;
         free(tempB); tempB = NULL;
+        free(Xorig); Xorig = NULL;
     }
 
     if (free_values)
@@ -3151,6 +3163,7 @@ int_t fit_content_based_lbfgs
             free(values);
         free(tempA);
         free(tempB);
+        free(Xorig);
         return retval;
     throw_oom:
     {
