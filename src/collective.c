@@ -4776,12 +4776,12 @@ int_t convert_sparse_X
 )
 {
     *Xcsr_p = (size_t*)malloc(((size_t)m+(size_t)1)*sizeof(size_t));
-    *Xcsr_i = (int_t*)malloc(nnz*sizeof(int));
+    *Xcsr_i = (int_t*)malloc(nnz*sizeof(int_t));
     *Xcsr = (real_t*)malloc(nnz*sizeof(real_t));
     if (weight != NULL)
         *weightR = (real_t*)malloc(nnz*sizeof(real_t));
     *Xcsc_p = (size_t*)malloc(((size_t)n+(size_t)1)*sizeof(size_t));
-    *Xcsc_i = (int_t*)malloc(nnz*sizeof(int));
+    *Xcsc_i = (int_t*)malloc(nnz*sizeof(int_t));
     *Xcsc = (real_t*)malloc(nnz*sizeof(real_t));
     if (weight != NULL)
         *weightC = (real_t*)malloc(nnz*sizeof(real_t));
@@ -4819,8 +4819,8 @@ int_t preprocess_sideinfo_matrix
     *near_dense_u_col = false;
     if (U != NULL)
     {
-        *cnt_NA_u_byrow = (int_t*)calloc(m_u, sizeof(int));
-        *cnt_NA_u_bycol = (int_t*)calloc(p, sizeof(int));
+        *cnt_NA_u_byrow = (int_t*)calloc(m_u, sizeof(int_t));
+        *cnt_NA_u_bycol = (int_t*)calloc(p, sizeof(int_t));
         if (*cnt_NA_u_byrow == NULL || *cnt_NA_u_bycol == NULL)
             return 1;
         count_NAs_by_row(U, m_u, p, *cnt_NA_u_byrow, nthreads,
@@ -4832,10 +4832,10 @@ int_t preprocess_sideinfo_matrix
     else
     {
         *U_csr_p = (size_t*)malloc(((size_t)m_u+(size_t)1)*sizeof(size_t));
-        *U_csr_i = (int_t*)malloc(nnz_U*sizeof(int));
+        *U_csr_i = (int_t*)malloc(nnz_U*sizeof(int_t));
         *U_csr = (real_t*)malloc(nnz_U*sizeof(real_t));
         *U_csc_p = (size_t*)malloc(((size_t)p+(size_t)1)*sizeof(size_t));
-        *U_csc_i = (int_t*)malloc(nnz_U*sizeof(int));
+        *U_csc_i = (int_t*)malloc(nnz_U*sizeof(int_t));
         *U_csc = (real_t*)malloc(nnz_U*sizeof(real_t));
         if (*U_csr_p == NULL || *U_csr_i == NULL || *U_csr == NULL ||
             *U_csc_p == NULL || *U_csc_i == NULL || *U_csc == NULL)
@@ -5640,8 +5640,8 @@ int_t fit_collective_explicit_als
 
     if (Xfull != NULL)
     {
-        cnt_NA_byrow = (int_t*)calloc(m, sizeof(int));
-        cnt_NA_bycol = (int_t*)calloc(n, sizeof(int));
+        cnt_NA_byrow = (int_t*)calloc(m, sizeof(int_t));
+        cnt_NA_bycol = (int_t*)calloc(n, sizeof(int_t));
         if (cnt_NA_byrow == NULL || cnt_NA_bycol == NULL)
             goto throw_oom;
 
@@ -5880,7 +5880,7 @@ int_t fit_collective_explicit_als
 
     if (reset_values)
     {
-        seed_arr = (int_t*)malloc(4*sizeof(int));
+        seed_arr = (int_t*)malloc(4*sizeof(int_t));
         if (seed_arr == NULL) goto throw_oom;
         for (int_t ix = 0; ix < 4; ix++) seed_arr[ix] = seed;
         rnorm_preserve_seed(A, (size_t)m_max*(size_t)k_totA, seed_arr);
@@ -6642,10 +6642,10 @@ int_t fit_collective_implicit_als
     size_t size_buffer = 0;
 
     size_t *Xcsr_p = (size_t*)malloc(((size_t)m+(size_t)1)*sizeof(size_t));
-    int_t *Xcsr_i = (int_t*)malloc(nnz*sizeof(int));
+    int_t *Xcsr_i = (int_t*)malloc(nnz*sizeof(int_t));
     real_t *restrict Xcsr = (real_t*)malloc(nnz*sizeof(real_t));
     size_t *Xcsc_p = (size_t*)malloc(((size_t)n+(size_t)1)*sizeof(size_t));
-    int_t *Xcsc_i = (int_t*)malloc(nnz*sizeof(int));
+    int_t *Xcsc_i = (int_t*)malloc(nnz*sizeof(int_t));
     real_t *restrict Xcsc = (real_t*)malloc(nnz*sizeof(real_t));
     real_t *restrict Utrans = NULL;
     size_t *U_csr_p = NULL;
@@ -6823,7 +6823,7 @@ int_t fit_collective_implicit_als
 
     if (reset_values)
     {
-        seed_arr = (int_t*)malloc(4*sizeof(int));
+        seed_arr = (int_t*)malloc(4*sizeof(int_t));
         if (seed_arr == NULL) goto throw_oom;
         for (int_t ix = 0; ix < 4; ix++) seed_arr[ix] = seed;
         rnorm_preserve_seed(A, (size_t)k_totA*(size_t)m_max, seed_arr);
@@ -7701,7 +7701,7 @@ int_t factors_collective_explicit_multiple
     real_t *restrict weightR = NULL;
     bool free_U_csr = false;
     bool free_X_csr = false;
-    int_t *restrict ret = (int_t*)malloc(m_max*sizeof(int));
+    int_t *restrict ret = (int_t*)malloc(m_max*sizeof(int_t));
     if (ret == NULL) goto throw_oom;
 
     if (user_bias && B_plus_bias == NULL)
@@ -7720,7 +7720,7 @@ int_t factors_collective_explicit_multiple
     {
         free_X_csr = true;
         Xcsr_p = (size_t*)malloc(((size_t)m + (size_t)1) * sizeof(size_t));
-        Xcsr_i = (int_t*)malloc(nnz*sizeof(int));
+        Xcsr_i = (int_t*)malloc(nnz*sizeof(int_t));
         Xcsr = (real_t*)malloc(nnz*sizeof(real_t));
         if (Xcsr_p == NULL || Xcsr_i == NULL || Xcsr == NULL)
             goto throw_oom;
@@ -7745,7 +7745,7 @@ int_t factors_collective_explicit_multiple
     {
         free_U_csr = true;
         U_csr_p = (size_t*)malloc(((size_t)m_u + (size_t)1) * sizeof(size_t));
-        U_csr_i = (int_t*)malloc(nnz_U*sizeof(int));
+        U_csr_i = (int_t*)malloc(nnz_U*sizeof(int_t));
         U_csr = (real_t*)malloc(nnz_U*sizeof(real_t));
         if (U_csr_p == NULL || U_csr_i == NULL || U_csr == NULL)
             goto throw_oom;
@@ -7882,14 +7882,14 @@ int_t factors_collective_implicit_multiple
     
     bool free_U_csr = false;
     bool free_X_csr = false;
-    int_t *restrict ret = (int_t*)malloc(m*sizeof(int));
+    int_t *restrict ret = (int_t*)malloc(m*sizeof(int_t));
     if (ret == NULL) goto throw_oom;
 
     if (Xcsr == NULL)
     {
         free_X_csr = true;
         Xcsr_p = (size_t*)malloc(((size_t)m + (size_t)1) * sizeof(size_t));
-        Xcsr_i = (int_t*)malloc(nnz*sizeof(int));
+        Xcsr_i = (int_t*)malloc(nnz*sizeof(int_t));
         Xcsr = (real_t*)malloc(nnz*sizeof(real_t));
         if (Xcsr_p == NULL || Xcsr_i == NULL || Xcsr == NULL)
             goto throw_oom;
@@ -7906,7 +7906,7 @@ int_t factors_collective_implicit_multiple
     {
         free_U_csr = true;
         U_csr_p = (size_t*)malloc(((size_t)m_u + (size_t)1) * sizeof(size_t));
-        U_csr_i = (int_t*)malloc(nnz_U*sizeof(int));
+        U_csr_i = (int_t*)malloc(nnz_U*sizeof(int_t));
         U_csr = (real_t*)malloc(nnz_U*sizeof(real_t));
         if (U_csr_p == NULL || U_csr_i == NULL || U_csr == NULL)
             goto throw_oom;

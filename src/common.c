@@ -2384,7 +2384,7 @@ int_t center_by_cols
     #endif
     int_t *restrict cnt_by_col = NULL;
     if (Xfull != NULL || Xcsc == NULL) {
-        cnt_by_col = (int_t*)calloc(n, sizeof(int));
+        cnt_by_col = (int_t*)calloc(n, sizeof(int_t));
         if (cnt_by_col == NULL) return 1;
     }
     set_to_zero(col_means, n, 1);
@@ -2646,7 +2646,7 @@ int_t topN
     }
 
     else {
-        buffer_ix = (int_t*)malloc((size_t)n*sizeof(int));
+        buffer_ix = (int_t*)malloc((size_t)n*sizeof(int_t));
         if (buffer_ix == NULL) goto throw_oom;
         for (int_t ix = 0; ix < n; ix++) buffer_ix[ix] = ix;
     }
@@ -2656,7 +2656,7 @@ int_t topN
         int_t move_to = n-1;
         int_t temp;
         if (!check_is_sorted(exclude_ix, n_exclude))
-            qsort(exclude_ix, n_exclude, sizeof(int), cmp_int);
+            qsort(exclude_ix, n_exclude, sizeof(int_t), cmp_int);
 
         for (int_t ix = n_exclude-1; ix >= 0; ix--) {
             temp = buffer_ix[move_to];
@@ -2672,7 +2672,7 @@ int_t topN
     if (include_ix != NULL)
     {
         buffer_scores = (real_t*)malloc((size_t)n_include*sizeof(real_t));
-        buffer_mask = (int_t*)malloc((size_t)n_include*sizeof(int));
+        buffer_mask = (int_t*)malloc((size_t)n_include*sizeof(int_t));
         if (buffer_scores == NULL || buffer_mask == NULL) goto throw_oom;
         #pragma omp parallel for schedule(static) num_threads(nthreads) \
                 shared(a_vec, B, k_pred, k_item, n_include, k_totB, \
@@ -2693,7 +2693,7 @@ int_t topN
     else if (exclude_ix != NULL && (double)n_exclude > (double)n/20)
     {
         buffer_scores = (real_t*)malloc(n_take*sizeof(real_t));
-        buffer_mask = (int_t*)malloc(n_take*sizeof(int));
+        buffer_mask = (int_t*)malloc(n_take*sizeof(int_t));
         if (buffer_scores == NULL || buffer_mask == NULL) goto throw_oom;
         #pragma omp parallel for schedule(static) num_threads(nthreads) \
                 shared(a_vec, B, k_pred, k_item, n_take, k_totB, \
@@ -2731,17 +2731,17 @@ int_t topN
            make a full argsort, taking advantage of qsort's optimizations */
         if (n_take <= 50 || n_take >= (double)n*0.75)
         {
-            qsort(buffer_ix, n_take, sizeof(int), cmp_argsort);
+            qsort(buffer_ix, n_take, sizeof(int_t), cmp_argsort);
         }
 
         /* Otherwise, do a proper partial sort */
         else
         {
             qs_argpartition(buffer_ix, buffer_scores, n_take, n_top);
-            qsort(buffer_ix, n_top, sizeof(int), cmp_argsort);
+            qsort(buffer_ix, n_top, sizeof(int_t), cmp_argsort);
         }
 
-        memcpy(outp_ix, buffer_ix, (size_t)n_top*sizeof(int));
+        memcpy(outp_ix, buffer_ix, (size_t)n_top*sizeof(int_t));
     }
 
     /* Otherwise, do a partial argsort with doubly-indexed arrays */
@@ -2749,13 +2749,13 @@ int_t topN
     {
         if (n_take <= 50 || n_take >= (double)n*0.75)
         {
-            qsort(buffer_mask, n_take, sizeof(int), cmp_argsort);
+            qsort(buffer_mask, n_take, sizeof(int_t), cmp_argsort);
         }
 
         else
         {
             qs_argpartition(buffer_mask, buffer_scores, n_take, n_top);
-            qsort(buffer_mask, n_top, sizeof(int), cmp_argsort);
+            qsort(buffer_mask, n_top, sizeof(int_t), cmp_argsort);
         }
 
         for (int_t ix = 0; ix < n_top; ix++)
@@ -2812,7 +2812,7 @@ int_t fit_most_popular
 
     if (implicit)
     {
-        cnt_by_col = (int_t*)calloc((size_t)n, sizeof(int));
+        cnt_by_col = (int_t*)calloc((size_t)n, sizeof(int_t));
         sum_by_col = (real_t*)calloc((size_t)n, sizeof(real_t));
         if (cnt_by_col == NULL || sum_by_col == NULL) goto throw_oom;
 
@@ -2856,8 +2856,8 @@ int_t fit_most_popular
     if (biasA != NULL) {
 
         if (weight == NULL) {
-            cnt_by_col = (int_t*)calloc((size_t)n, sizeof(int));
-            cnt_by_row = (int_t*)calloc((size_t)m, sizeof(int));
+            cnt_by_col = (int_t*)calloc((size_t)n, sizeof(int_t));
+            cnt_by_row = (int_t*)calloc((size_t)m, sizeof(int_t));
         }
         else {
             sum_by_col = (real_t*)calloc((size_t)n, sizeof(real_t));

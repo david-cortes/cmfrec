@@ -470,7 +470,7 @@ int_t rnorm(real_t *restrict arr, size_t n, int_t seed, int_t nthreads)
         int_t chunk_size = (int)INT_MAX;
         size_t chunks = n / (size_t)INT_MAX;
         int_t remainder = n - (size_t)INT_MAX * chunks;
-        int_t *restrict mt_seed_arr = (int_t*)malloc(4*nthreads*sizeof(int));
+        int_t *restrict mt_seed_arr = (int_t*)malloc(4*nthreads*sizeof(int_t));
         int_t *restrict thread_seed;
         if (mt_seed_arr == NULL) return 1;
 
@@ -772,7 +772,7 @@ int_t coo_to_csr_plus_alloc
 )
 {
     *csr_p = (size_t*)malloc(((size_t)m+(size_t)1)*sizeof(size_t));
-    *csr_i = (int_t*)malloc(nnz*sizeof(int));
+    *csr_i = (int_t*)malloc(nnz*sizeof(int_t));
     *csr_v = (real_t*)malloc(nnz*sizeof(real_t));
     if (csr_p == NULL || csr_i == NULL || csr_v == NULL)
         return 1;
@@ -815,7 +815,7 @@ void coo_to_csr
 
     if (!has_mem) goto cleanup;
 
-    cnt_byrow = (int_t*)calloc(m, sizeof(int));
+    cnt_byrow = (int_t*)calloc(m, sizeof(int_t));
 
     if (cnt_byrow != NULL)
     {
@@ -886,8 +886,8 @@ void coo_to_csr_and_csc
 
     if (!has_mem) goto cleanup;
 
-    cnt_byrow = (int_t*)calloc(m, sizeof(int));
-    cnt_bycol = (int_t*)calloc(n, sizeof(int));
+    cnt_byrow = (int_t*)calloc(m, sizeof(int_t));
+    cnt_bycol = (int_t*)calloc(n, sizeof(int_t));
 
     #if defined(_OPENMP) && (_OPENMP > 201305) /* OpenMP >= 4.0 */
     omp_set_max_active_levels(2);

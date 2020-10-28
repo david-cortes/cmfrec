@@ -828,7 +828,7 @@ int_t precompute_offsets_both
     {
         free_U_csr = true;
         U_csr_p = (size_t*)malloc(((size_t)m+(size_t)1)*sizeof(size_t));
-        U_csr_i = (int_t*)malloc(nnz_U*sizeof(int));
+        U_csr_i = (int_t*)malloc(nnz_U*sizeof(int_t));
         U_csr = (real_t*)malloc(nnz_U*sizeof(real_t));
         if (U_csr_p == NULL || U_csr_i == NULL || U_csr == NULL)
             goto throw_oom;
@@ -845,7 +845,7 @@ int_t precompute_offsets_both
     {
         free_I_csr = true;
         I_csr_p = (size_t*)malloc(((size_t)n+(size_t)1)*sizeof(size_t));
-        I_csr_i = (int_t*)malloc(nnz_I*sizeof(int));
+        I_csr_i = (int_t*)malloc(nnz_I*sizeof(int_t));
         I_csr = (real_t*)malloc(nnz_I*sizeof(real_t));
         if (I_csr_p == NULL || I_csr_i == NULL || I_csr == NULL)
             goto throw_oom;
@@ -1758,7 +1758,7 @@ int_t fit_offsets_als
         temp_intA = (int)temp;
 
         buffer_real_t = (real_t*)malloc((size_t)temp_intA*sizeof(real_t));
-        buffer_iwork = (int_t*)malloc((size_t)(sz_iwork+1)*sizeof(int));
+        buffer_iwork = (int_t*)malloc((size_t)(sz_iwork+1)*sizeof(int_t));
         if (buffer_real_t == NULL || buffer_iwork == NULL)
             goto throw_oom;
 
@@ -1830,7 +1830,7 @@ int_t fit_offsets_als
         temp_intA = (int)temp;
 
         buffer_real_t = (real_t*)malloc((size_t)temp_intA*sizeof(real_t));
-        buffer_iwork = (int_t*)malloc((size_t)(sz_iwork+1)*sizeof(int));
+        buffer_iwork = (int_t*)malloc((size_t)(sz_iwork+1)*sizeof(int_t));
         if (buffer_real_t == NULL || buffer_iwork == NULL)
             goto throw_oom;
         
@@ -2284,7 +2284,7 @@ int_t factors_offsets_explicit_multiple
     size_t lda = k_sec + k + k_main;
     size_t ld_A_orig = k + k_main;
     real_t *restrict weightR = NULL;
-    int_t *restrict ret = (int_t*)malloc(m*sizeof(int));
+    int_t *restrict ret = (int_t*)malloc(m*sizeof(int_t));
     if (ret == NULL) goto throw_oom;
 
     if (!nnz && (Bm_plus_bias == NULL && biasA != NULL))
@@ -2311,7 +2311,7 @@ int_t factors_offsets_explicit_multiple
     {
         free_X_csr = true;
         Xcsr_p = (size_t*)malloc(((size_t)m + (size_t)1) * sizeof(size_t));
-        Xcsr_i = (int_t*)malloc(nnz*sizeof(int));
+        Xcsr_i = (int_t*)malloc(nnz*sizeof(int_t));
         Xcsr = (real_t*)malloc(nnz*sizeof(real_t));
         if (Xcsr_p == NULL || Xcsr_i == NULL || Xcsr == NULL)
             goto throw_oom;
@@ -2341,7 +2341,7 @@ int_t factors_offsets_explicit_multiple
     {
         free_U_csr = true;
         U_csr_p = (size_t*)malloc(((size_t)m + (size_t)1) * sizeof(size_t));
-        U_csr_i = (int_t*)malloc(nnz_U*sizeof(int));
+        U_csr_i = (int_t*)malloc(nnz_U*sizeof(int_t));
         U_csr = (real_t*)malloc(nnz_U*sizeof(real_t));
         if (U_csr_p == NULL || U_csr_i == NULL || U_csr == NULL)
             goto throw_oom;
@@ -2459,14 +2459,14 @@ int_t factors_offsets_implicit_multiple
     
     bool free_U_csr = false;
     bool free_X_csr = false;
-    int_t *restrict ret = (int_t*)malloc(m*sizeof(int));
+    int_t *restrict ret = (int_t*)malloc(m*sizeof(int_t));
     if (ret == NULL) goto throw_oom;
 
     if (Xcsr == NULL && nnz)
     {
         free_X_csr = true;
         Xcsr_p = (size_t*)malloc(((size_t)m + (size_t)1) * sizeof(size_t));
-        Xcsr_i = (int_t*)malloc(nnz*sizeof(int));
+        Xcsr_i = (int_t*)malloc(nnz*sizeof(int_t));
         Xcsr = (real_t*)malloc(nnz*sizeof(real_t));
         if (Xcsr_p == NULL || Xcsr_i == NULL || Xcsr == NULL)
             goto throw_oom;
@@ -2488,7 +2488,7 @@ int_t factors_offsets_implicit_multiple
     {
         free_U_csr = true;
         U_csr_p = (size_t*)malloc(((size_t)m + (size_t)1) * sizeof(size_t));
-        U_csr_i = (int_t*)malloc(nnz_U*sizeof(int));
+        U_csr_i = (int_t*)malloc(nnz_U*sizeof(int_t));
         U_csr = (real_t*)malloc(nnz_U*sizeof(real_t));
         if (U_csr_p == NULL || U_csr_i == NULL || U_csr == NULL)
             goto throw_oom;
@@ -3272,7 +3272,7 @@ int_t topN_new_content_based
     if (n_top == 0 || n_top == n_new)
         buffer_ix = outp_ix;
     else
-        buffer_ix = (int_t*)malloc((size_t)n_new*sizeof(int));
+        buffer_ix = (int_t*)malloc((size_t)n_new*sizeof(int_t));
 
     if (a_vec == NULL || Bm == NULL || scores_copy == NULL || buffer_ix == NULL)
     {
@@ -3313,17 +3313,17 @@ int_t topN_new_content_based
     ptr_real_t_glob = scores_copy;
     if (n_top <= 50 || n_top >= (double)n_new*0.75)
     {
-        qsort(buffer_ix, n_new, sizeof(int), cmp_argsort);
+        qsort(buffer_ix, n_new, sizeof(int_t), cmp_argsort);
     }
 
     else
     {
         qs_argpartition(buffer_ix, scores_copy, n_new, n_top);
-        qsort(buffer_ix, n_top, sizeof(int), cmp_argsort);
+        qsort(buffer_ix, n_top, sizeof(int_t), cmp_argsort);
     }
 
     if (buffer_ix != outp_ix)
-        memcpy(outp_ix, buffer_ix, (size_t)n_top*sizeof(int));
+        memcpy(outp_ix, buffer_ix, (size_t)n_top*sizeof(int_t));
 
     if (outp_score != NULL)
         for (int_t ix = 0; ix < n_top; ix++)
