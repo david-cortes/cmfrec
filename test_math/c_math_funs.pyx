@@ -158,7 +158,6 @@ cdef extern from "cmfrec.h":
         double lam,
         int nthreads,
         bint use_cg, int max_cg_steps, bint force_set_to_zero,
-        bint keep_precomputedBtB,
         double *precomputedBtB,
         double *buffer_double
     )
@@ -196,7 +195,6 @@ cdef extern from "cmfrec.h":
         double lam, double w_user,
         int nthreads,
         bint use_cg, int max_cg_steps, bint is_first_iter,
-        bint keep_precomputedBtB,
         double *precomputedBtB,
         double *precomputedBeTBe,
         double *precomputedBeTBeChol,
@@ -1128,7 +1126,7 @@ def py_optimizeA_implicit(
         &Xcsr_p[0], &Xcsr_i[0], &Xcsr_pass[0],
         lam,
         nthreads,
-        0, 0, 1, 0,
+        0, 0, 1,
         <double*>NULL,
         &buffer_double[0]
     )
@@ -1198,7 +1196,6 @@ def py_optimizeA_collective_implicit(
         lam/w_main, w_user/w_main,
         nthreads,
         0, 0, 1,
-        0,
         <double*>NULL,
         <double*>NULL,
         <double*>NULL,

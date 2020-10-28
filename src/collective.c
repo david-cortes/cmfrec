@@ -7614,12 +7614,26 @@ int_t factors_collective_implicit_single
         return 0;
     }
 
+    bool free_BtB = false;
+    int retval = 0;
+    if (BtB == NULL)
+    {
+        free_BtB = true;
+        BtB = (real_t*)malloc((size_t)square(k+k_main)*sizeof(real_t));
+        if (BtB == NULL) goto throw_oom;
+        cblas_tsyrk(CblasRowMajor, CblasUpper, CblasTrans,
+                    k+k_main, n,
+                    1., B + k_item, k_item+k+k_main,
+                    0., BtB, k+k_main);
+        add_to_diag(BtB, lam, k+k_main);
+    }
+
     #ifdef _FOR_R
     if (u_vec != NULL) R_nan_to_C_nan(u_vec, p);
     #endif
 
     if (nnz)
-        return collective_factors_warm_implicit(
+        retval = collective_factors_warm_implicit(
             a_vec,
             u_vec, p,
             u_vec_sp, u_vec_ixB, nnz_u_vec,
@@ -7635,7 +7649,7 @@ int_t factors_collective_implicit_single
             BeTBeChol
         );
     else
-        return collective_factors_cold_implicit(
+        retval = collective_factors_cold_implicit(
             a_vec,
             u_vec, p,
             u_vec_sp, u_vec_ixB, nnz_u_vec,
@@ -7649,6 +7663,17 @@ int_t factors_collective_implicit_single
             lam, w_main, w_user, w_main_multiplier,
             NA_as_zero_U
         );
+
+    cleanup:
+        if (free_BtB) {
+            free(BtB);
+        }
+        return retval;
+    throw_oom:
+    {
+        retval = 1;
+        goto cleanup;
+    }
 }
 
 /* TODO: these functions should call 'optimizeA' instead */
@@ -7882,10 +7907,11 @@ int_t factors_collective_implicit_multiple
     
     bool free_U_csr = false;
     bool free_X_csr = false;
+    bool free_BtB = false;
     int_t *restrict ret = (int_t*)malloc(m*sizeof(int_t));
     if (ret == NULL) goto throw_oom;
 
-    if (Xcsr == NULL)
+    if (Xcsr_p == NULL)
     {
         free_X_csr = true;
         Xcsr_p = (size_t*)malloc(((size_t)m + (size_t)1) * sizeof(size_t));
@@ -7917,6 +7943,18 @@ int_t factors_collective_implicit_multiple
             U_csr_p, U_csr_i, U_csr,
             (real_t*)NULL
         );
+    }
+
+    if (BtB == NULL)
+    {
+        free_BtB = true;
+        BtB = (real_t*)malloc((size_t)square(k+k_main)*sizeof(real_t));
+        if (BtB == NULL) goto throw_oom;
+        cblas_tsyrk(CblasRowMajor, CblasUpper, CblasTrans,
+                    k+k_main, n,
+                    1., B + k_item, k_item+k+k_main,
+                    0., BtB, k+k_main);
+        add_to_diag(BtB, lam, k+k_main);
     }
 
 
@@ -7968,6 +8006,9 @@ int_t factors_collective_implicit_multiple
             free(Xcsr);
             free(Xcsr_p);
             free(Xcsr_i);
+        }
+        if (free_BtB) {
+            free(BtB);
         }
         free(ret);
         return retval;

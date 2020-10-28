@@ -29,14 +29,14 @@ The package has now introduced a conjugate gradient method for the ALS procedure
 * Can be used for cold-start recommendations (when using side information).
 * Supports user and item biases in the explicit-feedback models (these are not just pre-estimated beforehand as in other software).
 * Provides an API for top-N recommended lists and for calculating latent factors from new data.
+* Can work with both sparse and dense matrices for each input (e.g. can also be used as a general missing-value imputer for 2-d data), and can work efficiently with a mix of dense and sparse inputs.
+* Can produce factorizations for variations of the problem such as sparse inputs with missing-as-zero instead of missing-as-unknown (e.g. when used for dimensionality reduction).
 * Can use either an alternating least-squares procedure (ALS) or a gradient-based procedure using an L-BFGS optimizer for the explicit-feedback models (the package bundles a modified version of [Okazaki's C implementation](https://github.com/chokkan/liblbfgs)).
 * For the ALS option, can use either the exact Cholesky method or the faster conjugate gradient method (see [4]).
 * Provides a content-based model and other models aimed at better cold-start recommendations.
 * Provides an intercepts-only "most-popular" model for non-personalized recommendations, which can be used as a benchmark as it uses the same hyperparameters as the other models.
 * Allows variations of the original collective factorization models such as setting some factors to be used only for one factorization, setting different weights for the errors on each matrix, or setting different regularization parameters for each matrix.
 * Can use sigmoid transformations for binary-distributed columns in the side info data.
-* Can work with both sparse and dense matrices for each input (e.g. can also be used as a general missing-value imputer for 2-d data), and can work efficiently with a mix of dense and sparse inputs.
-* Can produce factorizations for variations of the problem such as sparse inputs with non-present values as zeros instead of missing (e.g. when used for dimensionality reduction).
 * Can work with large datasets (supports arrays/matrices larger than `INT_MAX`).
 * Supports observation weights (for the explicit-feedback models).
 
