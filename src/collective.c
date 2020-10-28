@@ -291,7 +291,7 @@
     formulas can be used for any of the 4 matrices by substituting the matrices
     accordingly - i.e.
         For matrix 'B', replace:
-            A->B, C->D, U->I
+            A->B, C->D, X->t(X), U->I
         For matrix 'C', replace:
             A->C, C->NULL, X->U, U->NULL
         For matrix 'D', replace:
@@ -5659,6 +5659,7 @@ int_t fit_collective_explicit_als
                 m = max2(m, m_u);
             if (II != NULL || nnz_I)
                 n = max2(n, n_i);
+            *glob_mean = 0.;
         }
         retval = convert_sparse_X(
                     ixA, ixB, X, nnz,
