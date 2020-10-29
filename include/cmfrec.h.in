@@ -1,0 +1,1893 @@
+/*******************************************************************************
+    Collective Matrix Factorization
+    -------------------------------
+    
+    This is a module for multi-way factorization of sparse and dense matrices
+    intended to be used for recommender system with explicit feedback data plus
+    side information about users and/or items.
+
+    The reference papers are:
+        (a) Cortes, David.
+            "Cold-start recommendations in Collective Matrix Factorization."
+            arXiv preprint_t arXiv:1809.00366 (2018).
+        (b) Singh, Ajit P., and Geoffrey J. Gordon.
+            "Relational learning via collective matrix factorization."
+            Proceedings of the 14th ACM SIGKDD international conference on
+            Knowledge discovery and data mining. 2008.
+        (c) Hu, Yifan, Yehuda Koren, and Chris Volinsky.
+            "Collaborative filtering for implicit feedback datasets."
+            2008 Eighth IEEE International Conference on Data Mining.
+            Ieee, 2008.
+        (d) Takacs, Gabor, Istvan Pilaszy, and Domonkos Tikk.
+            "Applications of the conjugate gradient method for
+            implicit feedback collaborative filtering."
+            Proceedings of the fifth ACM conference on
+            Recommender systems. 2011.
+
+    For information about the models offered here and how they are fit to
+    the data, see the files 'collective.c' and 'offsets.c'.
+
+    Written for C99 standard and OpenMP version 2.0 or higher, and aimed to be
+    used either as a stand-alone program, or wrapped into scripting languages
+    such as Python and R.
+    <https://www.github.com/david-cortes/cmfrec>
+
+    
+
+    MIT License:
+
+    Copyright (c) 2020 David Cortes
+
+    All rights reserved.
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to
+    deal in the Software without restriction, including without limitation the
+    rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
+    sell copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
+    IN THE SOFTWARE.
+
+*******************************************************************************/
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#cmakedefine USE_INT64
+#ifdef USE_INT64
+	#include <inttypes.h>
+#endif
+
+#cmakedefine real_t @real_t@
+#cmakedefine int_t @int_t@
+#include <stddef.h>
+#include <stdbool.h>
+
+/*******************************************************************************
+                        CMFREC library header
+                        ---------------------
+********************************************************************************
+
+    Overview
+    --------
+    This library provides functionality for approximate low-rank matrix
+    factorization of a matrix "X", optionally aided by secondary matrices
+    "U" (rows matching to rows of "X") and "I" (rows matching to columns of "X")
+    which are also factorized along the way sharing the same latent factors or
+    components - i.e.
+        X ~ A*t(B)
+        U ~ A*t(C)
+        I ~ B*t(D)
+    Where "A", "B", "C", "D" are the obtained model parameters, with a
+    dimensionality lower than "X".
+
+    The matrix dimensions are referred to as follows:
+        * X -> [m, n]
+        * U -> [m_u, p]
+        * I -> [n_i, q]
+
+    The matrices "A", "B", "C", "D" are obtained by minimizing the squared error
+    with respect to the values of "X" obtained from their product - either with
+    missing entries in "X" being ignored for the error function, or taken as
+    zeros. The intended usage is for recommender systems, in which users
+    correspond to rows of "X", items to columns of "X", "U" and "I" to side
+    information about users and items, and values of "X" denoting interactions
+    such as users giving a certain rating to a given item.
+
+    The library provides different models, which are explained below:
+    * Collective explicit model: this is the model described in reference (a),
+      and is the most flexible model and the main feature of this library.
+    * Collective implicit model: is similar to the explicit model, but entries
+      of "X" are treated as either zero (if missing) or one (if not missing),
+      with the positive (non-missing) ones having a weight given by X+1.
+    * Most-Popular: is a model with only intercepts or only one parameter per
+      item (corresponding to k=1), which can mimic either the explicit or the
+      implicit error functions. This is intended for comparison purposes as a
+      non-personalized recommender model.
+    * Content-Based: is a model in which instead of there being multiple
+      factorizations, there is only one factorization, but the matrices are
+      determined directly from the user and item attributes - that is:
+        A = U*C,  B = I*D
+      With no free parameters per user or per item.
+      There is no "implicit" version for this model.
+
+    Alternatively, the library also offers the following experimental model:
+    * Offsets explicit: is similar to the content-based model, but an additional
+      offset per user and per item is added - that is:
+        A = A' + U*C,   B = B' + I*D
+    * Offsets implicit: is the same as above, but taking "X" as weighted binary
+      entries just like in the collective implicit model.
+    The last two models are not recommended to be used, and were only
+    implemented for research purposes. It is not recommende to rely on them.
+
+    For more details about the models, see the files "collective.c" and
+    "offsets.c"
+
+********************************************************************************
+
+    Funcionality
+    ------------
+    The following classes of functions are available:
+    * "fit" -> fits the given model to data.
+    * "precompute" -> pre-calculates matrices based on the fitted model which
+       might be used to speed up predictions on new data.
+    * "topN" -> determines top-N recommended items for a given users.
+    * "factors_single" -> determines the latent factors (row of A) for a user
+       given its data.
+    * "factors_multiple" -> determines the latent factors (rows of A) for
+       a series of users, given their data.
+    * "predict_X" -> predicts the value of given entries in the "X" matrix
+       given by a row and column index.
+    * "impute_X" -> replaces missing entries in rows of a new "X" matrix with
+       their predicted value.
+
+    The functions based on new data work for both warm-start and cold-start
+    scenarios - that is, they can work with "X" data alone, with "U" data alone.
+    or with both. All the functions that take new data are just wrappers around
+    the "factors" functions which then pass them to the corresponding function
+    for "old" data.
+
+    Note that the library is user/row oriented and all the prediction functions
+    for new data assume the items remain constant. The functions however can
+    also be used for new items or for the side information by substituting the
+    input matrices and sizes as follows:
+    * For items:
+        A -> B, B -> A, C -> D, X -> t(X)
+        m -> n, n -> m, p -> q, k_user -> k_item
+    * For user attributes:
+        A -> C, B -> A, C -> NULL, X -> U
+        m -> p, n -> m, p -> 0, k_main -> 0
+    * For item attributes:
+        A -> D, B -> B, C -> NULL, X -> I
+        m -> q, n -> n, p -> 0, k_main -> 0
+
+    All the functions assume that the matrices are pre-allocated, and might
+    modify the input data "X"-"U"-"I" in-place.
+
+    All the matrices are assumed to be in row-major order (the opposite of
+    FORTRAN), unless they are sparse, in which case either COO or CSR are
+    assumed depending on the function. One should pass the data for a given
+    input "X","U","I" in only one format to each function, but it is possible
+    to mix dense/sparse-coo/sparse-csr inputs between "X"-"U"-"I".
+
+    Note: the documentation below uses Doxygen keywords, but it is NOT meant
+    to be compiled through doxygen - those are just for ease of reading.
+
+    Functions have the following return codes:
+    * 0 -> completed successfully.
+    * 1 -> ran out of memory.
+    * 2 -> received invalid inputs or invalid input combination.
+
+*******************************************************************************/
+
+
+/*******************************************************************************
+    Collective Model
+    ----------------
+
+    Some notes:
+    * The "X" data must always be passed to "fit", whereas "U" and "I" are
+      optional.
+    * It's possible to pass partially disjoints sets of users/items - that is
+      both the "X" and "U" matrices might have rows that the other doesn't, in
+      which case it will consider the missing rows to have all values missing.
+      Same thing for "X" and "I". However, the procedure will work faster if
+      the "X" matrix is the shorter one.
+    * When using the "NA_as_zero" options, the matrix with "NA_as_zero" should
+      not have smaller dimension (less rows/columns) than its counterpart.
+      E.g. if passing "NA_as_zero_U", then 'm_u' >= 'm'.
+    * For the implicit model, it is assumed that 'm' >= 'm_u' and 'n' >= 'n_i'.
+    * For sparse matrices "X"-"U"-"I", these shape constraints are just nominal,
+      as it is possible to have entire rows or entire columns missing, in which
+      case the underlying data arrays do not change if empty rows or columns are
+      added (since the data is passed as COO).
+    * For dense inputs, missing values should be coded as NAN. The sparse inputs
+      should NOT have any NAN values among the non-zero/non-missing entries.
+    * For the optional inputs, should pass NULL when they are array pointers
+      and are not given, or zero if they are integers and not given.
+    * m_max = max(m, m_u, m_ubin)
+    * n_max = max(n, n_i, n_ibin)
+    
+    
+    --- Model matrices ---
+    @param biasA  (out)(optional) The user/row biases or intercepts. These are
+                   only available for the explicit-feedback model. If not used,
+                   should pass 'user_bias'=false.
+                   Dimension: [m_max]
+    @param biasB  (out)(optional) The item/column biases or intercepts.These are
+                   only available for the explicit-feedback model. If not used,
+                   should pass NULL here and pass 'item_bias'=false.
+                   Dimension: [n_max]
+    @param A  (out) The user-factors matrix (2D).
+               Dimension: [m_max, k_user+k+k_main]
+    @param B  (out) The item-factors matrix (2D).
+               Dimension: [n_max, k_item+k+k_main]
+    @param C  (out)(optional) The user-attribute factors matrix (2D).
+               If passing "U" data, "C" must be passed.
+               Dimension: [m_u, k_user+k]
+    @param D  (out)(optional) The itemn-attribute factors matrix (2D).
+               If passing "I" data, "D" must be passed.
+               Dimension: [n_i, k_item+k]
+    @param Cb  (out)(optional) The binary-user-attribute factors matrix (2D).
+               If passing "Ub" data, "Cb" must be passed.
+               Dimension: [m_ubin, k_user+k]
+    @param Db  (out)(optional) The binary-item-attribute factors matrix (2D).
+               If passing "Ib" data, "Db" must be passed.
+               Dimension: [n_i, k_item+k]
+    
+    
+    @param reset_values  Whether to reset the values in the model matrices to
+                         random normal numbers. If the matrices are already
+                         initialized, should pass 'false' here. Note that it
+                         uses LAPACK's "larnv" subroutine, which might not
+                         be as good quality as random numbers generated through
+                         e.g. the Mersenne-Twister method.
+    @param seed  Random seed used to initialize the matrices, if passing
+                 'reset_values'=true/
+    
+    
+    --- Other model parameters ---
+    @param glob_mean  (out) The global mean of "X", used to center it.
+                       This is not calculated with the "NA_as_zero_X" option,
+                       but must still be passed.
+                       Dimension: [1]
+    @param U_colmeans  (out)(optional) The column means for the "U" matrix,
+                        which are used to center it. These are not calculated
+                        with the "NA_as_zero_U" option, but must still be passed
+                        whenever there is "U" data.
+                        Dimension: [m_u]
+    @param I_colmeans  (out)(optional) The column means for the "I" matrix,
+                        which are used to center it. These are not calculated
+                        with the "NA_as_zero_I" option, but must still be passed
+                        whenever there is "I" data.
+                        Dimension: [n_i]
+    
+    
+    --- Problem dimensions ---
+    @param m  Number of rows in "X".
+    @param n  Number of columns in "X".
+    @param k  Number of shared latent factors.
+              Recommended values: 30 to 100
+    @param k_user  Number of latent factors which are only used to factorize
+                   "C" and "Cb". These will be the first columns in the results.
+                   Recommended value: 0
+    @param k_item  Number of latent factors which are only used to factorize
+                   "D" and "Db". These will be the first columns in the results.
+                   Recommended value: 0
+    @param k_main  Number of latent factors which are only used to factorize
+                   "X". These will be the last columns in the results.
+                   Recommended value: 0
+
+    
+    --- More model hyperparameters ---
+    @param user_bias  Whether to include user/row biases/intercepts in
+                      the model.
+                      Recommended value: true
+    @param item_bias  Whether to include item/column biases/intercepts in
+                      the model.
+                      Recommended value: true
+    @param lam  Regularization parameter applied to the model matrices.
+                Will be ignored if passing 'lam_unique'.
+                Recommended values: from 10^-2 to 10^2
+    @param lam_unique  Regularization parameter to apply to each matrix of the
+                       model. Should specify the regularizations in this order:
+                         biasA, biasB, A, B, C/Cb, D/Db.
+                       Note that setting a too low regularization parameter for
+                       the item biases might result in recommending the ones
+                       with highest "X" value regardless of number of
+                       occurrences
+                       Dimension: [6] (regardless of model)
+    @param w_main  Weight to assign to the errors of the factorization of "X"
+                   in the final objective. Note that, in the implicit model,
+                   the sum of errors from "X" is typically much larger than for
+                   the other matrices, and one usually wants to correct for
+                   this by playing with the weights.
+                   Recommended value: 1
+    @param w_user  Weight to assing to the errors of the factorization of "U"
+                   in the final objective.
+                   Recommended value: 1
+    @param w_item  Weight to assing to the errors of the factorization of "I"
+                   in the final objective.
+                   Recommended value: 1
+    @param alpha  Multiplier for the values in the "X" matrix.
+                  Recommended value: 1 (but reference (c) suggests 40)
+    @param adjust_weight  Whether to downweight (decrease 'w_main') the errors
+                          in the "X" matrix according to the number of present
+                          entries.
+                          Recommended value: 0
+
+
+    --- "X" data ---
+    @param X_row  Row indices when passing "X" as a sparse COO matrix.
+                  Dimension: [nnz]
+    @param X_col  Column indices when passing "X" as a sparse COO matrix.
+                  Dimension: [nnz]
+    @param X  Non-missing values of the "X" matrix, when passing it as sparse
+              COO, with row and column indices given by 'X_row' and 'X_col'.
+              Dimension: [nnz]
+    @param nnz  Number of non-missing entries in "X", when passing it as sparse.
+    @param Xfull  "X" as a full 2D array, if passing it as dense.
+                   Dimension: [m, n]
+    @param weight  (optional) Observation weights for the entries in "X". Must
+                    be of the same shape as the "X" data passed - that is, if
+                    "X" is passed as sparse COO, must match with values of 'X',
+                    if "X" is passed as dense, must match with values of 'Xfull'
+                    Dimension: [nnz] or [m, n]
+    
+    
+    --- "U" and "I" data ---
+    @param U  (optional) The "U" data, in dense format.
+               Dimension: [m_u, p]
+    @param m_u  (optional) Number of rows in the "U" matrix. Pass zero if there
+                 is no "U" matrix.
+    @param p  (optional) Number of columns in the "U" matrix. Pass zero if there
+                 is no "U" matrix.
+    @param II  (optional) The "I" data, in dense format.
+                Note: variable with name "I" alone is already taken by the
+                C preprocesor in most compilers, hence the name "II".
+                Dimension: [n_i, q]
+    @param n_i  (optional) Number of rows in the "I" matrix. Pass zero if there
+                 is no "I" matrix.
+    @param q  (optional) Number of columns in the "I" matrix. Pass zero if there
+                 is no "I" matrix.
+    @param U_row  (optional) The "U" data, in sparse COO format.
+                   This array indicates the row indices.
+                   Dimension: [nnz_U]
+    @param U_col  (optional) The "U" data, in sparse COO format.
+                   This array indicates the column indices.
+                   Dimension: [nnz_U]
+    @param U_sp  (optional) The "U" data, in sparse COO format.
+                  This array indicates the non-missing values.
+                  Dimension: [nnz_U]
+    @param nnz_U  (optional) Number of non-zero entries in the "U" matrix, if
+                   passing it as sparse COO. Pass zero if there is no "U" matrix
+                   or if is passed as dense.
+    @param I_row  (optional) The "I" data, in sparse COO format.
+                   This array indicates the row indices.
+                   Dimension: [nnz_I]
+    @param I_col  (optional) The "I" data, in sparse COO format.
+                   This array indicates the column indices.
+                   Dimension: [nnz_I]
+    @param I_sp  (optional) The "I" data, in sparse COO format.
+                  This array indicates the non-missing values.
+                  Dimension: [nnz_I]
+    @param nnz_I  (optional) Number of non-zero entries in the "I" matrix, if
+                   passing it as sparse COO. Pass zero if there is no "I" matrix
+                   or if is passed as dense.
+
+
+    --- "U" and "I" with binary values ---
+    @param Ub  (optional) Columns of the "U" matrix which have only binary (0/1)
+                values, for which a sigmoid transformation will be applied on
+                the predicted values. If passed, should always be dense and
+                contain no NAN values. Only supported with the L-BFGS method.
+                Dimension: [m_ubin, pbin]
+    @param m_ubin (optional) Number of rows in the "Ub" matrix. Pass zero here
+                   if there is no "Ub" matrix.
+    @param pbin  (optional) Number of columns in the "Ub" matrix. Pass zero
+                  here if there is no "Ub" matrix.
+    @param Ib  (optional) Columns of the "I" matrix which have only binary (0/1)
+                values, for which a sigmoid transformation will be applied on
+                the predicted values. If passed, should always be dense and
+                contain no NAN values. Only supported with the L-BFGS method.
+                Dimension: [n_ibin, qbin]
+    @param n_ibin (optional) Number of rows in the "Ib" matrix. Pass zero here
+                   if there is no "Ib" matrix.
+    @param qbin  (optional) Number of columns in the "Ib" matrix. Pass zero
+                  here if there is no "Ib" matrix.
+    
+    
+    --- More options for the data ---
+    @param NA_as_zero_X  Whether to consider the non-present entries in the
+                         sparse "X" matrix as zeroes (they count towards the
+                         errors) instead of as unknown (they don't count towards
+                         the errors).
+                         For recommender systems, one usually wants to pass
+                         'false' here.
+                         Ignored if "X" is passed as dense.
+    @param NA_as_zero_U  Same but for the "U" matrix.
+    @param NA_as_zero_I  Same but for the "I" matrix.
+    
+    --- For the ALS procedures ---
+    @param niter  Number of ALS iterations to perform. Note that one iteration
+                  denotes an update round over all the matrices.
+                  Recommended values: 6 to 12
+    @param use_cg  Whether to use a Conjugate Gradient method to optimize the
+                   model matrices - this is faster than the default Cholesky
+                   method, but less precise, less numerically stable, and might
+                   require more iterations to converge. Note that it will be
+                   ignored in cases in which the Cholesky approach is faster,
+                   such as when ussing missing-as-zero with no weights.
+                   Recommended value: true
+    @param max_cg_steps  Maximum number of CG updates to perform per iteration.
+                         Recommended values: 2 to 3
+    @param finalize_chol  Whether to perform the last iteration with the
+                          Cholesky solver. Note that, under the CG method,
+                          the factors obtained by calling the prediction
+                          functionality might differ slightly from those
+                          obtained from the 'fit' functionality. This option
+                          allows such problem.
+                          Recommended value: true
+
+    --- For the L-BFGS procedures ---
+    @param n_corr_pairs  Number of correction pairs to use for the L-BFGS solver
+    @param maxiter  Maximum number of L-BFGS updates to perform.
+    @param prefer_onepass  Whether to prefer a parallelization strategy that
+                           iterates over the data only once. This uses a lot
+                           more memory than a strategy that iterates first by
+                           rows and then by columns, but might be faster when
+                           the problem dimension is small.
+    @param niter  (out) Number of L-BFGS updates that were performed.
+                   Dimension: [1]
+    @param nfev  (out) Number of function evaluations that were performed.
+                  Dimension: [1]
+    
+    
+    --- Other ---
+    @param verbose  Whether to print information about the optimization
+                    procedure. This can be helpful for getting an idea of the
+                    bottlenecks in ALS, and for determining if the
+                    hyperparameters in L-BFGS make sense (e.g. if there are
+                    many iterations with no or very small decrease in the loss
+                    function, the regularization is probably too small, if it
+                    converges in too few iterations, regularization is probably
+                    too large).
+                    Recommended value: true
+    @param print_every  Every how many L-BFGS iterations to print information.
+                        Recommended value: 100
+    @param handle_interrupt  Whether to handle interrupt singals (SIGINT) by
+                             terminating the procedure earlier. The results
+                             from the matrices will still be usable if
+                             interrupted. Note however that the signal will be
+                             lost after this, which might be problematic when
+                             calling the functions from another language.
+    
+    
+    --- When using the prediction API ---
+    @param precompute_for_predictions  Whether to precompute some extra matrices
+                                       which can help to speed up calculations
+                                       of factors in new data.
+                                       If passing 'true', must also pass arrays
+                                       for the matrices below.
+                                       If passing 'false', these values can
+                                       still be obtained later through the
+                                       functions named 'precompute_*'.
+                                       Note that, when passing 'user_bias'=true,
+                                       the precomputed matrices are computed
+                                       from 'B_plus_bias', not from 'B'.
+                                       Recommended value: true
+    @param include_all_X  When 'n' is less than 'n_i' or 'n_ibin' and passing
+                          'precompute_for_predictions'=true, whether to
+                          construct the precomputed matrices with all the
+                          missing items/columns, so that it would be possible to
+                          take in new "X" data about them.
+                          Recommended value: true
+    @param B_plus_bias  (out)(optional)  Precomputed matrix consisting of the
+                         "B" matrix with an extra column of all-ones. Only used
+                         when passing 'user_bias'=true.
+                         Dimension: [n_max, k_item+k+k_main+1]
+    @param precomputedBtB  (out)(optional)  Precomputed matrix, containing
+                              t(B)*B - for the explicit model, or
+                              t(B)*B + diag(lambda') - for the implicit model
+                            With lambda' = lambda_ / w_main
+                            Dimension: [k+k_main+user_bias, k+k_main+user_bias]
+
+    @param precomputedTransBtBinvBt  (out)(optional) Precomputed matrix,
+                                      containing:
+                                        t( inv(t(B)*B+diag(lambda'))*t(B) )
+                                      With lambda' = lambda_ / w_main
+                                      This is only used for warm-start
+                                      predictions with no "U" data and "X" data
+                                      with no missing values or with
+                                      "NA_as_zero_X". This matrix is optional
+                                      even if passing
+                                      'precompute_for_predictions' = true.
+                                      If passing 'include_all_X', will need to
+                                      have also the entries for potentially
+                                      missing "X" columns.
+                                      Dimension: [k+k_main+user_bias, n_max]
+                                                    or
+                                                 [k+k_main+user_bias, n]
+    @param precomputedBeTBeChol  (out)(optional) Precomputed matrix, containing:
+                                    Chol(t(Be)*Be)
+                                  Where Be is the extended block matrix from
+                                  reference (a). This matrix is optional even if 
+                                  passing 'precompute_for_predictions' = true.
+                                  Dimension: [k_user+k+k_main+user_bias,
+                                              k_user+k+k_main+user_bias]
+
+    @param precomputedTransCtCinvCt  (out)(optional) Precomputed matrix,
+                                      containing:
+                                        t( inv(t(C)*C+diag(lambda'))*t(C) )
+                                      with lambda_ here calculated as:
+                                        lambda' = lambda_ / (w_main * w_user)
+                                      This is only used for cold-start
+                                      predictions with no "X" data plus "U" data
+                                      with no missing values or with
+                                      "NA_as_zero_U". This matrix is optional
+                                      even if passing
+                                      'precompute_for_predictions' = true.
+                                      Dimension: [k_user+k, p]
+    @param precomputedCtCw  (out)(optional) Precomputed matrix, containing
+                               w_user*t(C)*C
+                             Dimension: [k_user+k, k_user+k]
+
+    
+    --- Parallelization ---
+    @param nthreads  Number of parallel threads to use. Parallelization is only
+                     available when compiling with OpenMP support. Note that,
+                     (a) the more threads that are used, the higher the memory
+                     consumption will be, and (b) parallelization occurs by rows
+                     and by columns, thus values higher than 'm' or 'n' will not
+                     result in a speed up.
+    
+*******************************************************************************/
+
+
+/* For ease of reading - these structs/enums are not used by the library */
+enum CmfReturnCode {Success=0, OutOfMemory=1, InvalidInput=2};
+
+struct CollectiveExplicitModel {
+    /* Model parameters and their dimensions */
+    real_t *A; real_t *biasA; int_t m; int_t m_max;
+    real_t *B; real_t *biasB; int_t n; int_t n_max;
+    real_t *C; int_t m_u; int_t p;
+    real_t *D; int_t n_i; int_t q;
+    real_t *Cb; int_t m_ubin; int_t pbin;
+    real_t *Db; int_t n_ibin; int_t qbin;
+    int_t k; int_t k_user; int_t k_item; int_t k_main;
+
+    /* Means used to center data */
+    real_t glob_mean;
+    real_t *U_colmeans; real_t *I_colmeans;
+
+    /* Optional (for predictions) */
+    real_t *B_plus_bias;
+    real_t *precomputedBtB;
+    real_t *precomputedTransBtBinvBt;
+    real_t *precomputedBeTBeChol;
+    real_t *precomputedTransCtCinvCt;
+    real_t *precomputedCtCw;
+};
+
+struct CollectiveImplicitModel {
+    /* Model parameters and their dimensions */
+    real_t *A; real_t *biasA; int_t m;
+    real_t *B; real_t *biasB; int_t n;
+    real_t *C; int_t m_u; int_t p;
+    real_t *D; int_t n_i; int_t q;
+    int_t k; int_t k_user; int_t k_item; int_t k_main;
+
+    /* Means used to center data */
+    real_t *U_colmeans; real_t *I_colmeans;
+
+    /* Other parameters */
+    real_t w_main_multiplier;
+
+    /* Optional (for predictions) */
+    real_t *B_plus_bias;
+    real_t *precomputedBtB;
+    real_t *precomputedBeTBe;
+    real_t *precomputedBeTBeChol;
+};
+
+
+int_t fit_collective_explicit_lbfgs
+(
+    real_t *biasA, real_t *biasB,
+    real_t *A, real_t *B,
+    real_t *C, real_t *Cb,
+    real_t *D, real_t *Db,
+    bool reset_values, int_t seed,
+    real_t *glob_mean,
+    real_t *U_colmeans, real_t *I_colmeans,
+    int_t m, int_t n, int_t k,
+    int_t X_row[], int_t X_col[], real_t *X, size_t nnz,
+    real_t *Xfull,
+    real_t *weight,
+    bool user_bias, bool item_bias,
+    real_t lam, real_t *lam_unique,
+    real_t *U, int_t m_u, int_t p,
+    real_t *II, int_t n_i, int_t q,
+    real_t *Ub, int_t m_ubin, int_t pbin,
+    real_t *Ib, int_t n_ibin, int_t qbin,
+    int_t U_row[], int_t U_col[], real_t *U_sp, size_t nnz_U,
+    int_t I_row[], int_t I_col[], real_t *I_sp, size_t nnz_I,
+    int_t k_main, int_t k_user, int_t k_item,
+    real_t w_main, real_t w_user, real_t w_item,
+    int_t n_corr_pairs, size_t maxiter,
+    int_t nthreads, bool prefer_onepass,
+    bool verbose, int_t print_every, bool handle_interrupt,
+    int_t *niter, int_t *nfev,
+    bool precompute_for_predictions,
+    real_t *B_plus_bias,
+    real_t *precomputedBtB,
+    real_t *precomputedTransBtBinvBt,
+    real_t *precomputedBeTBeChol,
+    real_t *precomputedTransCtCinvCt,
+    real_t *precomputedCtCw
+);
+int_t fit_collective_explicit_als
+(
+    real_t *biasA, real_t *biasB,
+    real_t *A, real_t *B,
+    real_t *C, real_t *D,
+    bool reset_values, int_t seed,
+    real_t *glob_mean,
+    real_t *U_colmeans, real_t *I_colmeans,
+    int_t m, int_t n, int_t k,
+    int_t X_row[], int_t X_col[], real_t *X, size_t nnz,
+    real_t *Xfull,
+    real_t *weight,
+    bool user_bias, bool item_bias,
+    real_t lam, real_t *lam_unique,
+    real_t *U, int_t m_u, int_t p,
+    real_t *II, int_t n_i, int_t q,
+    int_t U_row[], int_t U_col[], real_t *U_sp, size_t nnz_U,
+    int_t I_row[], int_t I_col[], real_t *I_sp, size_t nnz_I,
+    bool NA_as_zero_X, bool NA_as_zero_U, bool NA_as_zero_I,
+    int_t k_main, int_t k_user, int_t k_item,
+    real_t w_main, real_t w_user, real_t w_item,
+    int_t niter, int_t nthreads, bool verbose, bool handle_interrupt,
+    bool use_cg, int_t max_cg_steps, bool finalize_chol,
+    bool precompute_for_predictions,
+    bool include_all_X,
+    real_t *B_plus_bias,
+    real_t *precomputedBtB,
+    real_t *precomputedTransBtBinvBt,
+    real_t *precomputedBeTBeChol,
+    real_t *precomputedTransCtCinvCt,
+    real_t *precomputedCtCw
+);
+int_t fit_collective_implicit_als
+(
+    real_t *A, real_t *B,
+    real_t *C, real_t *D,
+    bool reset_values, int_t seed,
+    real_t *U_colmeans, real_t *I_colmeans,
+    int_t m, int_t n, int_t k,
+    int_t X_row[], int_t X_col[], real_t *X, size_t nnz,
+    real_t lam, real_t *lam_unique,
+    real_t *U, int_t m_u, int_t p,
+    real_t *II, int_t n_i, int_t q,
+    int_t U_row[], int_t U_col[], real_t *U_sp, size_t nnz_U,
+    int_t I_row[], int_t I_col[], real_t *I_sp, size_t nnz_I,
+    bool NA_as_zero_U, bool NA_as_zero_I,
+    int_t k_main, int_t k_user, int_t k_item,
+    real_t w_main, real_t w_user, real_t w_item,
+    real_t *w_main_multiplier,
+    real_t alpha, bool adjust_weight,
+    int_t niter, int_t nthreads, bool verbose, bool handle_interrupt,
+    bool use_cg, int_t max_cg_steps, bool finalize_chol,
+    bool precompute_for_predictions,
+    real_t *precomputedBtB,
+    real_t *precomputedBeTBe,
+    real_t *precomputedBeTBeChol
+);
+
+
+
+
+int_t precompute_collective_explicit
+(
+    real_t *B, int_t n, int_t n_max, bool include_all_X,
+    real_t *C, int_t p,
+    int_t k, int_t k_user, int_t k_item, int_t k_main,
+    bool user_bias,
+    real_t lam, real_t *lam_unique,
+    real_t w_main, real_t w_user,
+    real_t *B_plus_bias,
+    real_t *BtB,
+    real_t *TransBtBinvBt,
+    real_t *BeTBeChol,
+    real_t *TransCtCinvCt,
+    real_t *CtCw
+);
+int_t precompute_collective_implicit
+(
+    real_t *B, int_t n,
+    real_t *C, int_t p,
+    int_t k, int_t k_user, int_t k_item, int_t k_main,
+    real_t lam, real_t w_main, real_t w_user, real_t w_main_multiplier,
+    bool extra_precision,
+    real_t *BtB,
+    real_t *BeTBe,
+    real_t *BeTBeChol
+);
+
+
+
+/*******************************************************************************
+    Calculations on new data (collective model)
+    ------------------------------------------
+    
+    These functions calculate new user factors (rows of the A matrix) given
+    new data. Can be used for both cold-start (only "U" data) and warm-start
+    (having "X" data, potentially also "U" data). The API only provides
+    user-oriented functions - for item or attribute-oriented, they can be used
+    by swapping the inputs as explained under section "Funcionality" - only
+    be aware that the entries in "lam_unique" would also need to be swapped
+    if the inputs are swapped.
+
+    The inputs are the same as for the 'fit_*' functions (with some output
+    parameters to 'fit_*' being input parameters here), but in this case
+    they might be passed for one row only, and the multi-row case, when the
+    inputs are sparse, might be passed in either COO format or in CSR format
+    (not that COO inputs are internally converted to CSR).
+
+    The precomputed matrices are optional here, but if not provided, some of
+    them might need to be calculated on-the-fly, and some might do so on a
+    per-row basis, which is slow.
+
+    Note that, if the precomputed matrices were calculated with
+    'include_all_X'=false, the 'n' here (number of columns in the "X" matrix)
+    should not exceed the 'n' that was passed to 'fit_*'. If they were
+    calculated with 'include_all_X'=true, or if not passing precomputed
+    matrices, then 'n' here (in the new "X" data) can reach up to 'n_max'.
+
+    --- Parameters for single-row data ---
+    @param a_vec  (out) Obtained factors.
+                   Dimension: [k_user+k+k_main]
+    @param a_bias  (out)(optional) Obtained user/row bias/intercept.
+                    Should be provided if the model was built with
+                    'user_bias'=true.
+                    Dimension: [1]
+    
+
+    --- "X" data (single) ---
+    @param Xa  (optional) Non-missing values of a single row of the "X" matrix
+                for which to calculate new factors, if passing it as sparse.
+                Dimension: [nnz]
+    @param X_col  (optional) Column indices of the non-missing values of the
+                   "X" matrix, if passing it as sparse.
+                   Dimension: [nnz]
+    @param nnz  (optional) Number of non-missing values in the "X" matrix, if
+                 passing it as sparse. If passing "X" as dense, pass zero here.
+    @param Xa_dense  (optional) "X" data as a row vector, if passing it
+                      as dense.
+                      Dimension: [n] (with n <= n_max)
+    @param weight  (optional) Observation weights for the "X" data. If passed,
+                    should match in shape with the "X" data that was passed.
+                    Dimension: [nnz] or [n]
+
+    --- "U" data (single) ---
+    @param u_vec  (optional) Single row of the "U" matrix, if passing it
+                   as dense.
+                   Dimension: [p]
+    @param u_vec_sp  (optional) Non-missing values of a single row of the "U"
+                      matrix, if passing it as sparse.
+                      Dimension: [nnz_u_vec]
+    @param u_vec_X_col  (optional) Column indices of the non-missing values of the
+                       "U" matrix, if passing it as sparse.
+                       Dimension: [nnz_u_vec]
+    @param nnz_u_vec  (optional) Number of non-missing values in the "U" matrix,
+                       if passing it as sparse. If passing "U" as dense, pass
+                       zero here.
+    @param u_bin_vec  (optional) Single row of the "Ub" matrix.
+                       Dimension: [pbin]
+
+    --- Parameters for multi-row data ---
+    @param Xcsr_p  (optional) The "X" matrix, if passed in sparse CSR format.
+                     This array denotes the index pointer.
+                     Dimension: [m + 1]
+    @param Xcsr_i  (optional) The "X" matrix, if passed in sparse CSR format.
+                     This array denotes the column indices.
+                     Dimension: [nnz]
+    @param Xcsr  (optional) The "X" matrix, if passed in sparse CSR format.
+                     This array denotes the non-missing values.
+                     Dimension: [nnz]
+    @param U_csr_p  (optional) The "U" matrix, if passed in sparse CSR format.
+                     This array denotes the index pointer.
+                     Dimension: [m_u + 1]
+    @param U_csr_i  (optional) The "U" matrix, if passed in sparse CSR format.
+                     This array denotes the column indices.
+                     Dimension: [nnz_U]
+    @param U_csr  (optional) The "U" matrix, if passed in sparse CSR format.
+                     This array denotes the non-missing values.
+                     Dimension: [nnz_U]
+
+*******************************************************************************/
+int_t factors_collective_explicit_single
+(
+    real_t *a_vec, real_t *a_bias,
+    real_t *u_vec, int_t p,
+    real_t *u_vec_sp, int_t u_vec_X_col[], size_t nnz_u_vec,
+    real_t *u_bin_vec, int_t pbin,
+    bool NA_as_zero_U, bool NA_as_zero_X,
+    real_t *C, real_t *Cb,
+    real_t glob_mean, real_t *biasB,
+    real_t *U_colmeans,
+    real_t *Xa, int_t X_col[], size_t nnz,
+    real_t *Xa_dense, int_t n,
+    real_t *weight,
+    real_t *B,
+    int_t k, int_t k_user, int_t k_item, int_t k_main,
+    real_t lam, real_t *lam_unique,
+    real_t w_main, real_t w_user,
+    int_t n_max, bool include_all_X,
+    real_t *TransBtBinvBt,
+    real_t *BtB,
+    real_t *BeTBeChol,
+    real_t *CtCw,
+    real_t *TransCtCinvCt,
+    real_t *B_plus_bias
+);
+int_t factors_collective_implicit_single
+(
+    real_t *a_vec,
+    real_t *u_vec, int_t p,
+    real_t *u_vec_sp, int_t u_vec_X_col[], size_t nnz_u_vec,
+    bool NA_as_zero_U,
+    real_t *U_colmeans,
+    real_t *B, int_t n, real_t *C,
+    real_t *Xa, int_t X_col[], size_t nnz,
+    int_t k, int_t k_user, int_t k_item, int_t k_main,
+    real_t lam, real_t alpha, real_t w_main, real_t w_user,
+    real_t w_main_multiplier,
+    real_t *BeTBe,
+    real_t *BtB,
+    real_t *BeTBeChol
+);
+int_t factors_collective_explicit_multiple
+(
+    real_t *A, real_t *biasA, int_t m,
+    real_t *U, int_t m_u, int_t p,
+    bool NA_as_zero_U, bool NA_as_zero_X,
+    int_t U_row[], int_t U_col[], real_t *U_sp, size_t nnz_U,
+    size_t U_csr_p[], int_t U_csr_i[], real_t *U_csr,
+    real_t *Ub, int_t m_ubin, int_t pbin,
+    real_t *C, real_t *Cb,
+    real_t glob_mean, real_t *biasB,
+    real_t *U_colmeans,
+    real_t *X, int_t X_row[], int_t X_col[], size_t nnz,
+    size_t *Xcsr_p, int_t *Xcsr_i, real_t *Xcsr,
+    real_t *Xfull, int_t n,
+    real_t *weight,
+    real_t *B,
+    int_t k, int_t k_user, int_t k_item, int_t k_main,
+    real_t lam, real_t *lam_unique,
+    real_t w_main, real_t w_user,
+    int_t n_max, bool include_all_X,
+    real_t *TransBtBinvBt,
+    real_t *BtB,
+    real_t *BeTBeChol,
+    real_t *TransCtCinvCt,
+    real_t *CtCw,
+    real_t *B_plus_bias,
+    int_t nthreads
+);
+int_t factors_collective_implicit_multiple
+(
+    real_t *A, int_t m,
+    real_t *U, int_t m_u, int_t p,
+    bool NA_as_zero_U,
+    int_t U_row[], int_t U_col[], real_t *U_sp, size_t nnz_U,
+    size_t U_csr_p[], int_t U_csr_i[], real_t *U_csr,
+    real_t *X, int_t X_row[], int_t X_col[], size_t nnz,
+    size_t *Xcsr_p, int_t *Xcsr_i, real_t *Xcsr,
+    real_t *B, int_t n,
+    real_t *C,
+    real_t *U_colmeans,
+    int_t k, int_t k_user, int_t k_item, int_t k_main,
+    real_t lam, real_t alpha, real_t w_main, real_t w_user,
+    real_t w_main_multiplier,
+    real_t *BeTBe,
+    real_t *BtB,
+    real_t *BeTBeChol,
+    int_t nthreads
+);
+
+
+
+
+
+/*******************************************************************************
+    Prediction functions (collective model)
+    --------------------------------------
+
+    (For information about what they do, see the section "Funcionality")
+    These functions have a version applied to "old" data (rows of "A" to which
+    the model was fit) and to "new" data (entries which were not rows of "A"
+    but for which new factors can be calculated based on data).
+
+    The "new" functions will call the factors functions behind the scenes, and
+    as such, will require the same inputs as the factors functions.
+
+    For the predict functions, can either pass a new vector of factors, or pass
+    the original A matrix and a row index to select from it.
+
+    If any of the row/column combinations passed to 'predict_X' is invalid, will
+    set the predicted value to NAN.
+
+    -- Parameters for impute_X ---
+    @param Xfull  (input, output) New 'X' data with missing values. The missing
+                   values will be imputed (replaced with their predictions)
+                   in-place, according to the non-missing values of "X", and to
+                   the "U" data if passed.
+                   Dimension: [m, n] (this 'm' is unrelated to that of 'fit')
+
+    -- Parameters for topN ---
+    @param a_vec  (optional) The user factors to be used for calculating topN
+                   predictions. Can either pass the factors through this
+                   parameter, or can pass the model's "A" matrix plus a row
+                   index.
+                   Dimension: [k_user+k+k_main]
+    @param a_bias  (optional) The bias associated to the user factors in
+                    'a_vec', if 'a_vec' if passed and the model had biases.
+                    Pass zero if the model had no biases.
+    @param A  (optional) The "A" matrix as obtained through 'fit_*', if 'a_vec'
+               is not passed.
+               Dimension: [m_max, k_user+k+k_main]
+    @param biasA  (optional) The "biasA" vector obtained through 'fit_*', if
+                   'a_vec' is not passed.
+                   Dimension: [m_max]
+    @param row_index  (optional) Row number (starting at zero) to take from A
+                       (i.e. user in the original data), if 'a_vec' is not
+                       passed. The recommendations will be computed for this
+                       user.
+    @param include_ix  (optional) If passed, the topN recommendations will be
+                        calculated only among the items (columns of "X") passed
+                        here, ignoring all the rest. These indices must match
+                        with rows of "B" (columns of "X"), with numeration
+                        starting at zero.
+                        Cannot be passed together with 'exclude_ix'. If not
+                        passed, will calculate the topN among all items.
+                        Dimension: [n_include]
+    @param n_include  (optional) Number of entries in 'include_ix'. Pass zero
+                       if 'include_ix' is not provided.
+    @param exclude_ix  (optional) If passed, the topN recommendations will
+                        exclude the items in this array. These indices must
+                        match with rows of "B" (columns of "X"), with numeration
+                        starting at zero.
+                        Cannot be passed together with 'include_ix'/
+                        Dimension: [n_exclude]
+    @param n_exclude  (optional) Number of entries in 'exclude_ix'. Pass zero
+                       if 'exclude_ix' is not provided.
+    @param outp_ix  (out) The indices of the topN recommended items.
+                     Dimension: [n_top]
+    @param outp_score  (out)(optional) If passed, the scores from the topN items
+                        in 'outp_ix' will be written here.
+                        Dimension: [n_top]
+    @param n_top  Number of  topN entries to rank.
+
+
+    --- Parameters for predict_X ---
+    @param m_new  Number of new rows in the data.
+    @param row  Array with the row indices to predict.
+                Must match with rows of "A" for the 'old' version, and with rows
+                of the new "X" or "U" data in the 'new' version.
+                Dimension: [n_predict]
+    @param col  Array with the column indices to predict.
+                Must match with rows of "B" for both versions.
+                Dimension: [n_predict]
+    @param predicted  (out) Predicted values for the required entries of "X"
+                       given by 'row' and 'col'.
+                       Dimension: [n_predict]
+    @param n_predict  Number of entries in "X" to predict.
+
+*******************************************************************************/
+int_t impute_X_collective_explicit
+(
+    int_t m, bool user_bias,
+    real_t *U, int_t m_u, int_t p,
+    bool NA_as_zero_U,
+    int_t U_row[], int_t U_col[], real_t *U_sp, size_t nnz_U,
+    size_t U_csr_p[], int_t U_csr_i[], real_t *U_csr,
+    real_t *Ub, int_t m_ubin, int_t pbin,
+    real_t *C, real_t *Cb,
+    real_t glob_mean, real_t *biasB,
+    real_t *U_colmeans,
+    real_t *Xfull, int_t n,
+    real_t *weight,
+    real_t *B,
+    int_t k, int_t k_user, int_t k_item, int_t k_main,
+    real_t lam, real_t *lam_unique,
+    real_t w_main, real_t w_user,
+    int_t n_max, bool include_all_X,
+    real_t *TransBtBinvBt,
+    real_t *BtB,
+    real_t *BeTBeChol,
+    real_t *TransCtCinvCt,
+    real_t *CtCw,
+    real_t *B_plus_bias,
+    int_t nthreads
+);
+int_t topN_old_collective_explicit
+(
+    real_t *a_vec, real_t a_bias,
+    real_t *A, real_t *biasA, int_t row_index,
+    real_t *B,
+    real_t *biasB,
+    real_t glob_mean,
+    int_t k, int_t k_user, int_t k_item, int_t k_main,
+    int_t *include_ix, int_t n_include,
+    int_t *exclude_ix, int_t n_exclude,
+    int_t *outp_ix, real_t *outp_score,
+    int_t n_top, int_t n, int_t n_max, bool include_all_X, int_t nthreads
+);
+int_t topN_old_collective_implicit
+(
+    real_t *a_vec,
+    real_t *A, int_t row_index,
+    real_t *B,
+    int_t k, int_t k_user, int_t k_item, int_t k_main,
+    int_t *include_ix, int_t n_include,
+    int_t *exclude_ix, int_t n_exclude,
+    int_t *outp_ix, real_t *outp_score,
+    int_t n_top, int_t n, int_t nthreads
+);
+int_t topN_new_collective_explicit
+(
+    /* inputs for the factors */
+    bool user_bias,
+    real_t *u_vec, int_t p,
+    real_t *u_vec_sp, int_t u_vec_X_col[], size_t nnz_u_vec,
+    real_t *u_bin_vec, int_t pbin,
+    bool NA_as_zero_U, bool NA_as_zero_X,
+    real_t *C, real_t *Cb,
+    real_t glob_mean, real_t *biasB,
+    real_t *U_colmeans,
+    real_t *Xa, int_t X_col[], size_t nnz,
+    real_t *Xa_dense, int_t n,
+    real_t *weight,
+    real_t *B,
+    int_t k, int_t k_user, int_t k_item, int_t k_main,
+    real_t lam, real_t *lam_unique,
+    real_t w_main, real_t w_user,
+    int_t n_max, bool include_all_X,
+    real_t *TransBtBinvBt,
+    real_t *BtB,
+    real_t *BeTBeChol,
+    real_t *CtCw,
+    real_t *TransCtCinvCt,
+    real_t *B_plus_bias,
+    /* inputs for topN */
+    int_t *include_ix, int_t n_include,
+    int_t *exclude_ix, int_t n_exclude,
+    int_t *outp_ix, real_t *outp_score,
+    int_t n_top, int_t nthreads
+);
+int_t topN_new_collective_implicit
+(
+    /* inputs for the factors */
+    int_t n,
+    real_t *u_vec, int_t p,
+    real_t *u_vec_sp, int_t u_vec_X_col[], size_t nnz_u_vec,
+    bool NA_as_zero_U,
+    real_t *U_colmeans,
+    real_t *B, real_t *C,
+    real_t *Xa, int_t X_col[], size_t nnz,
+    int_t k, int_t k_user, int_t k_item, int_t k_main,
+    real_t lam, real_t alpha, real_t w_main, real_t w_user,
+    real_t w_main_multiplier,
+    real_t *BeTBe,
+    real_t *BtB,
+    real_t *BeTBeChol,
+    /* inputs for topN */
+    int_t *include_ix, int_t n_include,
+    int_t *exclude_ix, int_t n_exclude,
+    int_t *outp_ix, real_t *outp_score,
+    int_t n_top, int_t nthreads
+);
+
+int_t predict_X_old_collective_explicit
+(
+    int_t row[], int_t col[], real_t *predicted, size_t n_predict,
+    real_t *A, real_t *biasA,
+    real_t *B, real_t *biasB,
+    real_t glob_mean,
+    int_t k, int_t k_user, int_t k_item, int_t k_main,
+    int_t m, int_t n_max,
+    int_t nthreads
+);
+int_t predict_X_old_collective_implicit
+(
+    int_t row[], int_t col[], real_t *predicted, size_t n_predict,
+    real_t *A,
+    real_t *B,
+    int_t k, int_t k_user, int_t k_item, int_t k_main,
+    int_t m, int_t n,
+    int_t nthreads
+);
+int_t predict_X_new_collective_explicit
+(
+    /* inputs for predictions */
+    int_t m_new,
+    int_t row[], int_t col[], real_t *predicted, size_t n_predict,
+    int_t nthreads,
+    /* inputs for factors */
+    bool user_bias,
+    real_t *U, int_t m_u, int_t p,
+    bool NA_as_zero_U, bool NA_as_zero_X,
+    int_t U_row[], int_t U_col[], real_t *U_sp, size_t nnz_U,
+    size_t U_csr_p[], int_t U_csr_i[], real_t *U_csr,
+    real_t *Ub, int_t m_ubin, int_t pbin,
+    real_t *C, real_t *Cb,
+    real_t glob_mean, real_t *biasB,
+    real_t *U_colmeans,
+    real_t *X, int_t X_row[], int_t X_col[], size_t nnz,
+    size_t *Xcsr_p, int_t *Xcsr_i, real_t *Xcsr,
+    real_t *Xfull, int_t n,
+    real_t *weight,
+    real_t *B,
+    int_t k, int_t k_user, int_t k_item, int_t k_main,
+    real_t lam, real_t *lam_unique,
+    real_t w_main, real_t w_user,
+    int_t n_max, bool include_all_X,
+    real_t *TransBtBinvBt,
+    real_t *BtB,
+    real_t *BeTBeChol,
+    real_t *TransCtCinvCt,
+    real_t *CtCw,
+    real_t *B_plus_bias
+);
+int_t predict_X_new_collective_implicit
+(
+    /* inputs for predictions */
+    int_t m_new,
+    int_t row[], int_t col[], real_t *predicted, size_t n_predict,
+    int_t nthreads,
+    /* inputs for factors */
+    real_t *U, int_t m_u, int_t p,
+    bool NA_as_zero_U,
+    int_t U_row[], int_t U_col[], real_t *U_sp, size_t nnz_U,
+    size_t U_csr_p[], int_t U_csr_i[], real_t *U_csr,
+    real_t *X, int_t X_row[], int_t X_col[], size_t nnz,
+    size_t *Xcsr_p, int_t *Xcsr_i, real_t *Xcsr,
+    real_t *B, int_t n,
+    real_t *C,
+    real_t *U_colmeans,
+    int_t k, int_t k_user, int_t k_item, int_t k_main,
+    real_t lam, real_t alpha, real_t w_main, real_t w_user,
+    real_t w_main_multiplier,
+    real_t *BeTBe,
+    real_t *BtB,
+    real_t *BeTBeChol
+);
+
+
+
+
+
+/*******************************************************************************
+    Most-Popular Model
+    ------------------
+
+    This is a non-personalized model as explained at the beginning of the
+    header. It corresponds to the collective model with k=1 and no biases,
+    or to the collective model with k=0 and biases only.
+
+    The model parameters are written to the bias arrays.
+
+    --- Key differences with the earlier functions ----
+    @param implicit  Whether to fit the implicit model or not. If passing
+                     'false', will fit the explicit model ('X' taken as-is).
+    @param biasA  (out)(optional) User biases, which for this model are
+                   optional. Instead of a boolean parameter 'user_bias', whether
+                   the model is to include user biases is signaled by this
+                   array being NULL or non-NULL.
+                   Dimension: [m]
+*******************************************************************************/
+int_t fit_most_popular
+(
+    real_t *biasA, real_t *biasB,
+    real_t *glob_mean,
+    real_t lam_user, real_t lam_item,
+    real_t alpha,
+    int_t m, int_t n,
+    int_t X_row[], int_t X_col[], real_t *X, size_t nnz,
+    real_t *Xfull,
+    real_t *weight,
+    bool implicit, bool adjust_weight,
+    real_t *w_main_multiplier,
+    int_t nthreads
+);
+int_t topN_old_most_popular
+(
+    bool user_bias,
+    real_t a_bias,
+    real_t *biasA, int_t row_index,
+    real_t *B,
+    real_t *biasB,
+    real_t glob_mean,
+    int_t *include_ix, int_t n_include,
+    int_t *exclude_ix, int_t n_exclude,
+    int_t *outp_ix, real_t *outp_score,
+    int_t n_top, int_t n
+);
+int_t predict_X_old_most_popular
+(
+    int_t row[], int_t col[], real_t *predicted, size_t n_predict,
+    real_t *biasA, real_t *biasB,
+    real_t glob_mean,
+    int_t m, int_t n
+);
+
+
+
+
+
+
+/*******************************************************************************
+    Content-Based model
+    -------------------
+
+    This is a model in which the latent factors are determined directly from
+    the user and item side information, without any free parameters for
+    specific users or items (unless using biases):
+        X ~ (U*C + C_bias) * t(I*D + D_bias)
+
+    This model does not offer an 'implicit' version, and is only aimed at
+    cold-start recommendations.
+
+    Some key differences with the collective model:
+    * The "U" and "I" matrices should NOT include any NAN values. If the
+      matrices are sparse, will be assumed to have "NA_as_zero".
+    * There should not be any mismatch between the shapes of "X"-"U"-"I" - that
+      is, NROW(X) == NROW(U); NCOL(X) == NROW(I)
+    * The outputs now include optional matrices:
+        Am = U*C + C_bias
+        Bm = I*D + D_bias
+      Which are used for the prediction functionality with 'old' data.
+
+    @param add_intercepts  Whether to add intercepts for 'C' and 'D'.
+                           If passing 'true', must also pass 'C_bias' and
+                           'D_bias'.
+                           Recommended value: true
+    @param C_bias  (out)(optional) Intercepts for the 'C' matrix.
+                    Dimension: [k]
+    @param D_bias  (out)(optional) Intercepts for the 'D' matrix.
+                    Dimension: [k]
+    @param Am  (out)(optional) "User-factors" pre-computed for the old data.
+                Dimension: [m, k]
+    @param Bm  (out)(optional) "Item-factors" pre-computed for the old data.
+                Dimension: [n, k]
+    @param start_with_ALS  Whether to initialize the matrices through an ALS
+                           procedure and get a solution through a least-squares
+                           problem with respect to the ALS solution. This 
+                           might reduce fitting times due to starting closer
+                           to a local optimum.
+                           Recommended value: true
+
+    --- For prediction functionality ---
+    @param m_new  See below
+    @param n_new  Number of rows in the new "I" data. For the 'predict_X_new'
+                  functionality, can make predictions in 2 ways:
+                   - Passing row and column indices of the new data, in which
+                     case will predict these combinations.
+                   - Passing the same number of rows for "U" and "I", with no
+                     row or column indices, in which case will predict the value
+                     of "X" for each such entry given by the row of "U" and
+                     corresponding row of "I" (that is, both 'm_new' and 'n_new'
+                     match to 'n_predict').
+                  For 'predict_X_old', can also make predictions in 2 ways:
+                   - Passing row indices from the new data and column indices
+                     of the old data.
+                   - Passing no row indices, but passing column indices of the
+                     old data, in which case it will match each entry of 'col'
+                     to the corresponding row of "U" (that is, will assume there
+                     is one row of "U" per entry in 'col' - i.e. 'm_new'
+                     matches to 'n_predict').
+                  For predicting through the second mode, should not pass (pass
+                  a NULL pointer for) the optional arguments. See function
+                  signatures for more details.
+    @param row  (when optional) See above.
+    @param col  (when optional) See above.
+
+*******************************************************************************/
+
+/* For ease of reading only */
+struct ContentBasedModel {
+    /* Optional Model parameters */
+    real_t *biasA; int_t m; real_t *bias_B; int_t n;
+
+    /* Model parameters */
+    real_t *C; real_t* C_bias; int_t p;
+    real_t *D; real_t *D_bias; int_t q;
+    int_t k;
+
+    /* Optional (for predictions) */
+    real_t *Am; real_t *Bm;
+};
+
+
+int_t fit_content_based_lbfgs
+(
+    real_t *biasA, real_t *biasB,
+    real_t *C, real_t *C_bias,
+    real_t *D, real_t *D_bias,
+    bool start_with_ALS, bool reset_values, int_t seed,
+    real_t *glob_mean,
+    int_t m, int_t n, int_t k,
+    int_t X_row[], int_t X_col[], real_t *X, size_t nnz,
+    real_t *Xfull,
+    real_t *weight,
+    bool user_bias, bool item_bias,
+    bool add_intercepts,
+    real_t lam, real_t *lam_unique,
+    real_t *U, int_t p,
+    real_t *II, int_t q,
+    int_t U_row[], int_t U_col[], real_t *U_sp, size_t nnz_U,
+    int_t I_row[], int_t I_col[], real_t *I_sp, size_t nnz_I,
+    int_t n_corr_pairs, size_t maxiter,
+    int_t nthreads, bool prefer_onepass,
+    bool verbose, int_t print_every, bool handle_interrupt,
+    int_t *niter, int_t *nfev,
+    real_t *Am, real_t *Bm
+);
+
+int_t factors_content_based_single
+(
+    real_t *a_vec, int_t k,
+    real_t *u_vec, int_t p,
+    real_t *u_vec_sp, int_t u_vec_X_col[], size_t nnz_u_vec,
+    real_t *C, real_t *C_bias
+);
+int_t factors_content_based_mutliple
+(
+    real_t *Am, int_t m_new, int_t k,
+    real_t *C, real_t *C_bias,
+    real_t *U, int_t p,
+    int_t U_row[], int_t U_col[], real_t *U_sp, size_t nnz_U,
+    size_t U_csr_p[], int_t U_csr_i[], real_t *U_csr,
+    int_t nthreads
+);
+
+int_t topN_old_content_based
+(
+    real_t *a_vec, real_t a_bias,
+    real_t *Am, real_t *biasA, int_t row_index,
+    real_t *Bm,
+    real_t *biasB,
+    real_t glob_mean,
+    int_t k,
+    int_t *include_ix, int_t n_include,
+    int_t *exclude_ix, int_t n_exclude,
+    int_t *outp_ix, real_t *outp_score,
+    int_t n_top, int_t n, int_t nthreads
+);
+int_t topN_new_content_based
+(
+    /* inputs for the factors */
+    int_t k, int_t n_new,
+    real_t *u_vec, int_t p,
+    real_t *u_vec_sp, int_t u_vec_X_col[], size_t nnz_u_vec,
+    real_t *II, int_t q,
+    int_t I_row[], int_t I_col[], real_t *I_sp, size_t nnz_I,
+    size_t I_csr_p[], int_t I_csr_i[], real_t *I_csr,
+    real_t *C, real_t *C_bias,
+    real_t *D, real_t *D_bias,
+    real_t glob_mean,
+    /* inputs for topN */
+    int_t *outp_ix, real_t *outp_score,
+    int_t n_top, int_t nthreads
+);
+int_t predict_X_old_content_based
+(
+    real_t *predicted, size_t n_predict,
+    int_t m_new, int_t k,
+    int_t row[], /* <- optional */
+    int_t col[],
+    int_t m_orig, int_t n_orig,
+    real_t *U, int_t p,
+    int_t U_row[], int_t U_col[], real_t *U_sp, size_t nnz_U,
+    size_t U_csr_p[], int_t U_csr_i[], real_t *U_csr,
+    real_t *C, real_t *C_bias,
+    real_t *Bm, real_t *biasB,
+    real_t glob_mean,
+    int_t nthreads
+);
+int_t predict_X_new_content_based
+(
+    real_t *predicted, size_t n_predict,
+    int_t m_new, int_t n_new, int_t k,
+    int_t row[], int_t col[], /* <- optional (both together) */
+    real_t *U, int_t p,
+    int_t U_row[], int_t U_col[], real_t *U_sp, size_t nnz_U,
+    size_t U_csr_p[], int_t U_csr_i[], real_t *U_csr,
+    real_t *II, int_t q,
+    int_t I_row[], int_t I_col[], real_t *I_sp, size_t nnz_I,
+    size_t I_csr_p[], int_t I_csr_i[], real_t *I_csr,
+    real_t *C, real_t *C_bias,
+    real_t *D, real_t *D_bias,
+    real_t glob_mean,
+    int_t nthreads
+);
+
+
+
+/*******************************************************************************
+    Offsets model (not recommended)
+    ------------------------------
+
+    This is similar to the content-based model, but adding a free offset per
+    user and item to the factor matrices. It was implemented for experimentation
+    purposes only, and it's not recommended to rely on it. The goal of this
+    model was to make cold-start predictions when there is only one of "U" or
+    "I" - if both are available it's then better to use the content-based model.
+    This model is extremely unlikely to make better new-data predictions than
+    the collective model when there is "X" data available.
+
+    If there is "I" data with no "U" data, it's recommended to swap the inputs
+    as passed to the functions here (see "Funcionality" section for details),
+    as the prediction functionality is row/user oriented.
+
+    The ALS version is especially not recommended - note that what it does is
+    it first obtains a solution without the side information, and then tries
+    to decompose the obtained factor matrices between what can be obtained from
+    "U" through a least-squares solution (the coefficients of which become "C"),
+    assigning the residual difference then as "A". The regularization for "A"
+    and "B" in this case is applied to "Am" and "Bm", and if passing
+    'lam_unique', the parameters for "C" and "D" are ignored (see 'offsets.c'
+    for details).
+
+    The model idea is as follows:
+        X ~ Am*t(Bm)
+        Am = A + (U*C + C_bias)
+        Bm = B + (I*D + D_bias)
+
+    Note that the precomputed matrices in this case are calculated through
+    "Bm" rather than "B", and the prediction functions for 'old' data use "Am"
+    and "Bm", and construct a new "Am" for the case of 'new' data.
+
+    Just like in the content-based model, here:
+    * 'm' == 'm_u'.
+    * 'n' == 'n_i'.
+    * "U" and "I" cannot have NAN values. If sparse, will be assumed missing
+      values are zeros.
+
+    See the documentation for the content-based and the collective models
+    for more details about the parameters.
+    
+    --- New parameters here ---
+    @param k_sec  Extra factors/component in Am/Bm which are determined only
+                  from the side info matrices "U"-"I".
+                  These will be the first columns in the result.
+                  Recommended value: 0
+    @param k_main  Extra factors/components in Am/Bm which are determined only
+                   from the free user/item offset.
+                   These will be the last columns in the result.
+                   Recommended value: 0
+    @param A  (out) The "A" matrix, with which "Am" is constructed.
+               Note that, if using 'k_sec' and there is no "U" data, this
+               matrix must match in dimension with "Bm" (i.e. having extra
+               'k_sec' columns).
+               Dimension: [m, k+k_main] or [m, k_sec+k+k_main]
+    @param B  (out) The "B" matrix, with which "Bm" is constructed.
+               Note that, if using 'k_sec' and there is no "I" data, this
+               matrix must match in dimension with "Am" (i.e. having extra
+               'k_sec' columns).
+               Dimension: [m, k+k_main] or [m, k_sec+k+k_main]
+    @param Am  (out)(optional) The Am matrix which is readily usable for
+                predictions.
+                Dimension: [m, k_sec+k+k_main]
+    @param Bm  (out)(optional) The Bm matrix which is readily usable for
+                predictions.
+                Dimension: [n, k_sec+k+k_main]
+    @param Bm_plus_bias  (out)(optional) The Bm matrix with a column of all ones
+                          appended at the end. This is only used when passing
+                          'user_bias'=true.
+                          Dimension: [n, k_sec+k+k_main+1]
+
+    --- For predictions ---
+    @param exact  Whether to make a prediction for "Am" and "A" according to the
+                  exact formula that was specified (i.e. regularization applied
+                  to the appropriate matrix). This option will be forced to
+                  'true' if passing 'k_sec' or 'k_main'. Computing the exact
+                  solution is slower, and if using the ALS method, the model
+                  would not have been fit with the exact solution in the first
+                  place.
+                  Recommended value: false
+    @param a_vec  (out) For the offsets model, 'a_vec' refers to a row vector of
+                   the "Am" matrix, NOT of the "A" matrix like in the other
+                   models. If the pure "A" with no side info component is
+                   desired, itcan be calculated too and written into "output_a"
+                   (see below).
+                   Dimension: [k_sec+k+k_main]
+    @param output_a  (out)(optional) If the "A" component of "Am" is desired,
+                      this array can be passed and the resulting vector of "A"
+                      will be written here. If not passed, only the row vector
+                      of "Am" will be returned. Note that, if fitting the model
+                      without "U" data, then "A" == "Am".
+                      Dimension: [k+k_main] or [k_sec+k+k_main]
+
+*******************************************************************************/
+
+/* For ease of reading only - not used by the pacakge */
+struct OffsetsExplicitModel {
+    /* Model parameters and their dimensions */
+    real_t *A; real_t *biasA; int_t m;
+    real_t *B; real_t *biasB; int_t n;
+    real_t *C; real_t *C_bias; int_t p;
+    real_t *D; real_t *D_bias; int_t q;
+    int_t k; int_t k_sec; int_t k_main;
+
+    /* Mean used to center data */
+    real_t glob_mean;
+
+    /* Optional (for predictions) */
+    real_t *Am; real_t *Bm;
+    real_t *Bm_plus_bias;
+    real_t *precomputedBtB;
+    real_t *precomputedTransBtBinvBt;
+};
+
+struct OffsetsImplicitModel {
+    /* Model parameters and their dimensions */
+    real_t *A; int_t m;
+    real_t *B; int_t n;
+    real_t *C; real_t *C_bias; int_t p;
+    real_t *D; real_t *D_bias; int_t q;
+    int_t k;
+
+    /* Optional (for predictions) */
+    real_t *Am; real_t *Bm;
+    real_t *precomputedBtB;
+};
+
+
+int_t fit_offsets_explicit_lbfgs
+(
+    real_t *biasA, real_t *biasB,
+    real_t *A, real_t *B,
+    real_t *C, real_t *C_bias,
+    real_t *D, real_t *D_bias,
+    bool reset_values, int_t seed,
+    real_t *glob_mean,
+    int_t m, int_t n, int_t k,
+    int_t X_row[], int_t X_col[], real_t *X, size_t nnz,
+    real_t *Xfull,
+    real_t *weight,
+    bool user_bias, bool item_bias,
+    bool add_intercepts,
+    real_t lam, real_t *lam_unique,
+    real_t *U, int_t p,
+    real_t *II, int_t q,
+    int_t U_row[], int_t U_col[], real_t *U_sp, size_t nnz_U,
+    int_t I_row[], int_t I_col[], real_t *I_sp, size_t nnz_I,
+    int_t k_main, int_t k_sec,
+    real_t w_user, real_t w_item,
+    int_t n_corr_pairs, size_t maxiter,
+    int_t nthreads, bool prefer_onepass,
+    bool verbose, int_t print_every, bool handle_interrupt,
+    int_t *niter, int_t *nfev,
+    bool precompute_for_predictions,
+    real_t *Am, real_t *Bm,
+    real_t *Bm_plus_bias,
+    real_t *precomputedBtB,
+    real_t *precomputedTransBtBinvBt
+);
+int_t fit_offsets_explicit_als
+(
+    real_t *biasA, real_t *biasB,
+    real_t *A, real_t *B,
+    real_t *C, real_t *C_bias,
+    real_t *D, real_t *D_bias,
+    bool reset_values, int_t seed,
+    real_t *glob_mean,
+    int_t m, int_t n, int_t k,
+    int_t X_row[], int_t X_col[], real_t *X, size_t nnz,
+    real_t *Xfull,
+    real_t *weight,
+    bool user_bias, bool item_bias, bool add_intercepts,
+    real_t lam,
+    real_t *U, int_t p,
+    real_t *II, int_t q,
+    bool NA_as_zero_X,
+    int_t niter,
+    int_t nthreads, bool use_cg,
+    int_t max_cg_steps, bool finalize_chol,
+    bool verbose, bool handle_interrupt,
+    bool precompute_for_predictions,
+    real_t *Am, real_t *Bm,
+    real_t *Bm_plus_bias,
+    real_t *precomputedBtB,
+    real_t *precomputedTransBtBinvBt
+);
+int_t fit_offsets_implicit_als
+(
+    real_t *A, real_t *B,
+    real_t *C, real_t *C_bias,
+    real_t *D, real_t *D_bias,
+    bool reset_values, int_t seed,
+    int_t m, int_t n, int_t k,
+    int_t X_row[], int_t X_col[], real_t *X, size_t nnz,
+    bool add_intercepts,
+    real_t lam,
+    real_t *U, int_t p,
+    real_t *II, int_t q,
+    real_t alpha,
+    int_t niter,
+    int_t nthreads, bool use_cg,
+    int_t max_cg_steps, bool finalize_chol,
+    bool verbose, bool handle_interrupt,
+    bool precompute_for_predictions,
+    real_t *Am, real_t *Bm,
+    real_t *Bm_plus_bias,
+    real_t *precomputedBtB,
+    real_t *precomputedTransBtBinvBt
+);
+
+
+int_t precompute_offsets_explicit
+(
+    real_t *A, int_t m,
+    real_t *B, int_t n,
+    real_t *C, int_t p,
+    real_t *D, int_t q,
+    real_t *C_bias, real_t *D_bias,
+    bool user_bias, bool add_intercepts,
+    int_t k, int_t k_main, int_t k_sec,
+    real_t lam, real_t *lam_unique,
+    real_t w_user, real_t w_item, 
+    real_t *U,
+    int_t U_row[], int_t U_col[], real_t *U_sp, size_t nnz_U,
+    size_t U_csr_p[], int_t U_csr_i[], real_t *U_csr,
+    real_t *II,
+    size_t I_csr_p[], int_t I_csr_i[], real_t *I_csr,
+    int_t I_row[], int_t I_col[], real_t *I_sp, size_t nnz_I,
+    real_t *Am,
+    real_t *Bm,
+    real_t *Bm_plus_bias,
+    real_t *BtB,
+    real_t *TransBtBinvBt
+);
+int_t precompute_offsets_implicit
+(
+    real_t *A, int_t m,
+    real_t *B, int_t n,
+    real_t *C, int_t p,
+    real_t *D, int_t q,
+    real_t *C_bias, real_t *D_bias,
+    bool add_intercepts,
+    int_t k,
+    real_t lam,
+    real_t *U,
+    int_t U_row[], int_t U_col[], real_t *U_sp, size_t nnz_U,
+    size_t U_csr_p[], int_t U_csr_i[], real_t *U_csr,
+    real_t *II,
+    size_t I_csr_p[], int_t I_csr_i[], real_t *I_csr,
+    int_t I_row[], int_t I_col[], real_t *I_sp, size_t nnz_I,
+    real_t *Am,
+    real_t *Bm,
+    real_t *BtB
+);
+
+
+int_t factors_offsets_explicit_single
+(
+    real_t *a_vec, real_t *a_bias, real_t *output_a,
+    real_t *u_vec, int_t p,
+    real_t *u_vec_sp, int_t u_vec_X_col[], size_t nnz_u_vec,
+    real_t *Xa, int_t X_col[], size_t nnz,
+    real_t *Xa_dense, int_t n,
+    real_t *weight,
+    real_t *Bm, real_t *C,
+    real_t *C_bias,
+    real_t glob_mean, real_t *biasB,
+    int_t k, int_t k_sec, int_t k_main,
+    real_t w_user,
+    real_t lam, real_t *lam_unique,
+    bool exact,
+    real_t *precomputedTransBtBinvBt,
+    real_t *precomputedBtB,
+    real_t *Bm_plus_bias
+);
+int_t factors_offsets_implicit_single
+(
+    real_t *a_vec,
+    real_t *u_vec, int_t p,
+    real_t *u_vec_sp, int_t u_vec_X_col[], size_t nnz_u_vec,
+    real_t *Xa, int_t X_col[], size_t nnz,
+    real_t *Bm, real_t *C,
+    real_t *C_bias,
+    int_t k, int_t n,
+    real_t lam, real_t alpha,
+    real_t *precomputedBtB,
+    real_t *output_a
+);
+int_t factors_offsets_explicit_multiple
+(
+    real_t *Am, real_t *biasA,
+    real_t *A, int_t m,
+    real_t *U, int_t p,
+    int_t U_row[], int_t U_col[], real_t *U_sp, size_t nnz_U,
+    size_t U_csr_p[], int_t U_csr_i[], real_t *U_csr,
+    real_t *X, int_t X_row[], int_t X_col[], size_t nnz,
+    size_t *Xcsr_p, int_t *Xcsr_i, real_t *Xcsr,
+    real_t *Xfull, int_t n,
+    real_t *weight,
+    real_t *Bm, real_t *C,
+    real_t *C_bias,
+    real_t glob_mean, real_t *biasB,
+    int_t k, int_t k_sec, int_t k_main,
+    real_t w_user,
+    real_t lam, real_t *lam_unique, bool exact,
+    real_t *precomputedTransBtBinvBt,
+    real_t *precomputedBtB,
+    real_t *Bm_plus_bias,
+    int_t nthreads
+);
+int_t factors_offsets_implicit_multiple
+(
+    real_t *Am, int_t m,
+    real_t *A,
+    real_t *U, int_t p,
+    int_t U_row[], int_t U_col[], real_t *U_sp, size_t nnz_U,
+    size_t U_csr_p[], int_t U_csr_i[], real_t *U_csr,
+    real_t *X, int_t X_row[], int_t X_col[], size_t nnz,
+    size_t *Xcsr_p, int_t *Xcsr_i, real_t *Xcsr,
+    real_t *Bm, real_t *C,
+    real_t *C_bias,
+    int_t k, int_t n,
+    real_t lam, real_t alpha,
+    real_t *precomputedBtB,
+    int_t nthreads
+);
+
+
+int_t topN_old_offsets_explicit
+(
+    real_t *a_vec, real_t a_bias,
+    real_t *Am, real_t *biasA, int_t row_index,
+    real_t *Bm,
+    real_t *biasB,
+    real_t glob_mean,
+    int_t k, int_t k_sec, int_t k_main,
+    int_t *include_ix, int_t n_include,
+    int_t *exclude_ix, int_t n_exclude,
+    int_t *outp_ix, real_t *outp_score,
+    int_t n_top, int_t n, int_t nthreads
+);
+int_t topN_old_offsets_implicit
+(
+    real_t *a_vec,
+    real_t *Am, int_t row_index,
+    real_t *Bm,
+    int_t k,
+    int_t *include_ix, int_t n_include,
+    int_t *exclude_ix, int_t n_exclude,
+    int_t *outp_ix, real_t *outp_score,
+    int_t n_top, int_t n, int_t nthreads
+);
+int_t topN_new_offsets_explicit
+(
+    /* inputs for factors */
+    bool user_bias, int_t n,
+    real_t *u_vec, int_t p,
+    real_t *u_vec_sp, int_t u_vec_X_col[], size_t nnz_u_vec,
+    real_t *Xa, int_t X_col[], size_t nnz,
+    real_t *Xa_dense,
+    real_t *weight,
+    real_t *Bm, real_t *C,
+    real_t *C_bias,
+    real_t glob_mean, real_t *biasB,
+    int_t k, int_t k_sec, int_t k_main,
+    real_t w_user,
+    real_t lam, real_t *lam_unique,
+    bool exact,
+    real_t *precomputedTransBtBinvBt,
+    real_t *precomputedBtB,
+    real_t *Bm_plus_bias,
+    /* inputs for topN */
+    int_t *include_ix, int_t n_include,
+    int_t *exclude_ix, int_t n_exclude,
+    int_t *outp_ix, real_t *outp_score,
+    int_t n_top, int_t nthreads
+);
+int_t topN_new_offsets_implicit
+(
+    /* inputs for factors */
+    real_t *u_vec, int_t p,
+    real_t *u_vec_sp, int_t u_vec_X_col[], size_t nnz_u_vec,
+    real_t *Xa, int_t X_col[], size_t nnz,
+    real_t *Bm, real_t *C,
+    real_t *C_bias,
+    int_t k,
+    real_t lam, real_t alpha,
+    real_t *precomputedBtB,
+    /* inputs for topN */
+    int_t *include_ix, int_t n_include,
+    int_t *exclude_ix, int_t n_exclude,
+    int_t *outp_ix, real_t *outp_score,
+    int_t n_top, int_t n, int_t nthreads
+);
+int_t predict_X_old_offsets_explicit
+(
+    int_t row[], int_t col[], real_t *predicted, size_t n_predict,
+    real_t *Am, real_t *biasA,
+    real_t *Bm, real_t *biasB,
+    real_t glob_mean,
+    int_t k, int_t k_sec, int_t k_main,
+    int_t m, int_t n,
+    int_t nthreads
+);
+int_t predict_X_old_offsets_implicit
+(
+    int_t row[], int_t col[], real_t *predicted, size_t n_predict,
+    real_t *Am,
+    real_t *Bm,
+    int_t k,
+    int_t m, int_t n,
+    int_t nthreads
+);
+int_t predict_X_new_offsets_explicit
+(
+    /* inputs for predictions */
+    int_t m_new, bool user_bias,
+    int_t row[], int_t col[], real_t *predicted, size_t n_predict,
+    int_t nthreads,
+    /* inputs for factors */
+    real_t *U, int_t p,
+    int_t U_row[], int_t U_col[], real_t *U_sp, size_t nnz_U,
+    size_t U_csr_p[], int_t U_csr_i[], real_t *U_csr,
+    real_t *X, int_t X_row[], int_t X_col[], size_t nnz,
+    size_t *Xcsr_p, int_t *Xcsr_i, real_t *Xcsr,
+    real_t *Xfull, int_t n, /* <- 'n' MUST be passed */
+    real_t *weight,
+    real_t *Bm, real_t *C,
+    real_t *C_bias,
+    real_t glob_mean, real_t *biasB,
+    int_t k, int_t k_sec, int_t k_main,
+    real_t w_user,
+    real_t lam, real_t *lam_unique, bool exact,
+    real_t *precomputedTransBtBinvBt,
+    real_t *precomputedBtB,
+    real_t *Bm_plus_bias
+);
+int_t predict_X_new_offsets_implicit
+(
+    /* inputs for predictions */
+    int_t m_new,
+    int_t row[], int_t col[], real_t *predicted, size_t n_predict,
+    int_t n_orig,
+    int_t nthreads,
+    /* inputs for factors */
+    real_t *U, int_t p,
+    int_t U_row[], int_t U_col[], real_t *U_sp, size_t nnz_U,
+    size_t U_csr_p[], int_t U_csr_i[], real_t *U_csr,
+    real_t *X, int_t X_row[], int_t X_col[], size_t nnz,
+    size_t *Xcsr_p, int_t *Xcsr_i, real_t *Xcsr,
+    real_t *Bm, real_t *C,
+    real_t *C_bias,
+    int_t k,
+    real_t lam, real_t alpha,
+    real_t *precomputedBtB
+);
+
+
+
+#ifdef __cplusplus
+}
+#endif

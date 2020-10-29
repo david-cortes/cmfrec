@@ -10,7 +10,7 @@ For more information about the implementation here, or if you would like to cite
 
 For a similar package with Poisson distributions see [ctpfrec](https://github.com/david-cortes/ctpfrec).
 
-Written in C with a Python interface. R version and C public header to come in the future.
+Written in C with a Python interface. R version to come in the future.
 
 ## Update 2020-03-20
 
@@ -60,13 +60,10 @@ While the method was initially devised for recommender systems, can also be used
 
 ## Instalation
 
-From PyPI:
+* Python:
+
 ```
 pip install cmfrec
-```
-From GitHub:
-```
-pip install git+https://www.github.com/david-cortes/cmfrec.git
 ```
 
 (Note: NumPy must already be installed in the Python environment before attempting to install `cmfrec`)
@@ -81,9 +78,30 @@ pip install cmfrec
 ```
 (Alternatively, can also pass argument enable-omp to the setup.py file: python setup.py install enable-omp)
 
+* C:
+
+Package can be built as a shared library - see the CMake build file for options:
+```
+git clone https://www.github.com/david-cortes/cmfrec.git
+cd cmfrec
+mkdir build
+cd build
+cmake ..
+make
+
+## For a system-wide install
+sudo make install
+sudo ldconfig
+```
+
+Linkage is then done with `-lcmfrec`.
+
+
 **Note:** this package relies heavily on BLAS and LAPACK functions for calculations. It's recommended to use MKL (comes by default in Anaconda) or OpenBLAS as backend for them, but note that, as of OpenBLAS 0.3.9, some of the functions used here might be significantly faster in MKL depending on CPU architecture.
 
 ## Sample Usage
+
+* Python
 
 ```python
 import numpy as np, pandas as pd
@@ -138,6 +156,8 @@ model.factors_warm(X_col=ratings.ItemId.loc[ratings.UserId == 3],
 
 Users and items can be reindexed internally (if passing data frames), so you can use strings or non-consecutive numbers as IDs when passing data to the object's methods.
 
+* C: see file [example/c_example.c](https://github.com/david-cortes/cmfrec/blob/master/example/c_example.c)
+
 For more details see the online documentation.
 
 ## Getting started
@@ -146,7 +166,13 @@ For a longer example with real data see the notebook [MovieLens Recommender with
 
 ## Documentation
 
+* Python:
+
 Documentation is available at ReadTheDocs: [http://cmfrec.readthedocs.io/en/latest/](http://cmfrec.readthedocs.io/en/latest/).
+
+* C:
+
+Documentation is available in the public header that is generated through the build script - see [include/cmfrec.h.in](https://github.com/david-cortes/cmfrec/blob/master/include/cmfrec.h.in).
 
 ## Some comments
 
