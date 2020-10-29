@@ -2015,7 +2015,7 @@ int_t fit_offsets_implicit_als
 int_t matrix_content_based
 (
     real_t *restrict Am_new,
-    int_t n_new, int_t k_sec,
+    int_t m_new, int_t k,
     real_t *restrict U, int_t p,
     int_t U_row[], int_t U_col[], real_t *restrict U_sp, size_t nnz_U,
     size_t U_csr_p[], int_t U_csr_i[], real_t *restrict U_csr,
@@ -2026,9 +2026,9 @@ int_t matrix_content_based
     if (U != NULL)
     {
         cblas_tgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,
-                    n_new, k_sec, p,
-                    1., U, p, C, k_sec,
-                    0., Am_new, k_sec);
+                    m_new, k, p,
+                    1., U, p, C, k,
+                    0., Am_new, k);
     }
 
     else
@@ -2037,10 +2037,10 @@ int_t matrix_content_based
         size_t *restrict U_csr_p_use = NULL;
         int_t *restrict U_csr_i_use = NULL;
         real_t *restrict U_csr_use = NULL;
-        if (U_sp != NULL && U_csr == NULL) {
+        if (U_sp != NULL && U_csr_p == NULL) {
             retval = coo_to_csr_plus_alloc(
                         U_row, U_col, U_sp, (real_t*)NULL,
-                        n_new, p, nnz_U,
+                        m_new, p, nnz_U,
                         &U_csr_p_use, &U_csr_i_use, &U_csr_use, (real_t**)NULL
                     );
             if (retval != 0) goto cleanup;
@@ -2051,12 +2051,12 @@ int_t matrix_content_based
             U_csr_use = U_csr;
         }
 
-        set_to_zero(Am_new, (size_t)n_new*(size_t)k_sec, nthreads);
+        set_to_zero(Am_new, (size_t)m_new*(size_t)k, nthreads);
         tgemm_sp_dense(
-            n_new, k_sec, 1.,
+            m_new, k, 1.,
             U_csr_p_use, U_csr_i_use, U_csr_use,
-            C, (size_t)k_sec,
-            Am_new, (size_t)k_sec,
+            C, (size_t)k,
+            Am_new, (size_t)k,
             nthreads
         );
 
@@ -2071,8 +2071,8 @@ int_t matrix_content_based
     }
 
     if (C_bias != NULL)
-        mat_plus_colvec(Am_new, C_bias, 1., n_new,
-                        k_sec, (size_t)k_sec, nthreads);
+        mat_plus_colvec(Am_new, C_bias, 1., m_new,
+                        k, (size_t)k, nthreads);
 
     return 0;
 }
@@ -3036,12 +3036,43 @@ int_t fit_content_based_lbfgs
         else
             copy_arr(X, Xorig, nnz, nthreads);
 
+        if (!reset_values)
+        {
+            retval = matrix_content_based(
+                tempA,
+                m, k,
+                U, p,
+                U_row, U_col, U_sp, nnz_U,
+                (size_t*)NULL, (int_t*)NULL, (real_t*)NULL,
+                C, C_bias,
+                nthreads
+            );
+            if (retval == 1)
+                goto throw_oom;
+            else if (retval != 0)
+                goto cleanup;
+
+            retval = matrix_content_based(
+                tempB,
+                n, k,
+                II, q,
+                I_row, I_col, I_sp, nnz_I,
+                (size_t*)NULL, (int_t*)NULL, (real_t*)NULL,
+                D, D_bias,
+                nthreads
+            );
+            if (retval == 1)
+                goto throw_oom;
+            else if (retval != 0)
+                goto cleanup;
+        }
+
         retval = fit_offsets_explicit_als(
             biasA, biasB,
             tempA, tempB,
             C, C_bias,
             D, D_bias,
-            true, 123,
+            reset_values, seed,
             glob_mean,
             m, n, k,
             ixA, ixB, (X == NULL)? ((real_t*)NULL) : Xorig, nnz,

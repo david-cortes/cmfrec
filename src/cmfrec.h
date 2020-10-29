@@ -1851,7 +1851,7 @@ int_t fit_offsets_implicit_als
 int_t matrix_content_based
 (
     real_t *restrict Am_new,
-    int_t n_new, int_t k_sec,
+    int_t m_new, int_t k,
     real_t *restrict U, int_t p,
     int_t U_row[], int_t U_col[], real_t *restrict U_sp, size_t nnz_U,
     size_t U_csr_p[], int_t U_csr_i[], real_t *restrict U_csr,
