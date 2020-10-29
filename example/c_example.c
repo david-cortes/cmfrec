@@ -198,7 +198,10 @@ void print_dense_matrix(double X[], int m, int n)
 
 
         for (int col = 0; col < n; col++) {
-            printf("% 5.2f,  ", X[col + row*n]);
+            if (col != n-1)
+                printf("% 5.2f,  ", X[col + row*n]);
+            else
+                printf("% 5.2f ", X[col + row*n]);
         }
 
 
