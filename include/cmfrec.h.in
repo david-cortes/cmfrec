@@ -325,7 +325,7 @@ extern "C" {
     @param adjust_weight  Whether to downweight (decrease 'w_main') the errors
                           in the "X" matrix according to the number of present
                           entries.
-                          Recommended value: 0
+                          Recommended value: false
 
 
     --- "X" data ---
@@ -437,7 +437,7 @@ extern "C" {
                           the factors obtained by calling the prediction
                           functionality might differ slightly from those
                           obtained from the 'fit' functionality. This option
-                          allows such problem.
+                          solves such problem.
                           Recommended value: true
 
     --- For the L-BFGS procedures ---
@@ -744,7 +744,7 @@ int_t precompute_collective_implicit
     parameters to 'fit_*' being input parameters here), but in this case
     they might be passed for one row only, and the multi-row case, when the
     inputs are sparse, might be passed in either COO format or in CSR format
-    (not that COO inputs are internally converted to CSR).
+    (note that COO inputs are internally converted to CSR).
 
     The precomputed matrices are optional here, but if not provided, some of
     them might need to be calculated on-the-fly, and some might do so on a

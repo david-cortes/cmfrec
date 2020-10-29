@@ -1016,7 +1016,7 @@ int_t lbfgs_printer_collective
     ((data_collective_fun_grad*)instance)->niter = k;
     int_t print_every = ((data_collective_fun_grad*)instance)->print_every;
     if ((k % print_every) == 0 && print_every > 0) {
-        printf("Iteration %3d - f(x)=%7.03g - ||g(x)||=%5.03g - ls=%d\n",
+        printf("Iteration %-4d - f(x)= %-8.03g - ||g(x)||= %-8.03g - ls=% 2d\n",
                k, fx, gnorm, ls);
         #if !defined(_FOR_R)
         fflush(stdout);
@@ -1048,7 +1048,7 @@ int_t lbfgs_printer_offsets
     ((data_offsets_fun_grad*)instance)->niter = k;
     int_t print_every = ((data_offsets_fun_grad*)instance)->print_every;
     if ((k % print_every) == 0 && print_every > 0) {
-        printf("Iteration %3d - f(x)=%7.03g - ||g(x)||=%5.03g - ls=%d\n",
+        printf("Iteration %-4d - f(x)= %-8.03g - ||g(x)||= %-8.03g - ls=% 2d\n",
                k, fx, gnorm, ls);
         #if !defined(_FOR_R)
         fflush(stdout);

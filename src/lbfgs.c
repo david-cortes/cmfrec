@@ -81,8 +81,8 @@ licence.
 // #include "arithmetic_sse_double.h"
 
 // #elif   defined(USE_SSE) && defined(__SSE__) && LBFGS_FLOAT == 32
-// /* Use SSE optimization for 32bit FPnum precision. */
-// #include "arithmetic_sse_FPnum.h"
+// /* Use SSE optimization for 32bit real_t precision. */
+// #include "arithmetic_sse_real_t.h"
 
 // #else
 // /* No CPU specific optimization. */
@@ -251,7 +251,7 @@ int_t lbfgs(
     lbfgs_progress_t proc_progress,
     void *instance,
     lbfgs_parameter_t *_param,
-    real_t *buffer_FPnum,
+    real_t *buffer_real_t,
     iteration_data_t *buffer_iter
     )
 {
@@ -265,14 +265,14 @@ int_t lbfgs(
     lbfgs_parameter_t param = (_param != NULL) ? (*_param) : _defparam;
     const size_t m = param.m;
 
-    bool free_buffer_FPnum = true;
+    bool free_buffer_real_t = true;
     bool free_buffer_iter = true;
     size_t size_buffer = 5*(size_t)n + 2*(size_t)m*(size_t)n + (size_t)param.past;
-    if (buffer_FPnum == NULL)
-        buffer_FPnum = (real_t*)calloc(size_buffer, sizeof(real_t));
+    if (buffer_real_t == NULL)
+        buffer_real_t = (real_t*)calloc(size_buffer, sizeof(real_t));
     else {
-        free_buffer_FPnum = false;
-        set_to_zero(buffer_FPnum, size_buffer, 1);
+        free_buffer_real_t = false;
+        set_to_zero(buffer_real_t, size_buffer, 1);
     }
     if (buffer_iter == NULL)
         buffer_iter = (iteration_data_t*)calloc(m, sizeof(iteration_data_t));
@@ -291,7 +291,7 @@ int_t lbfgs(
     real_t rate = 0.;
     line_search_proc linesearch = line_search_morethuente;
 
-    if (buffer_FPnum == NULL || buffer_iter == NULL) {
+    if (buffer_real_t == NULL || buffer_iter == NULL) {
         ret = LBFGSERR_OUTOFMEMORY;
         goto lbfgs_exit;
     }
@@ -395,11 +395,11 @@ int_t lbfgs(
     // gp = (real_t*)vecalloc(n, sizeof(real_t));
     // d = (real_t*)vecalloc(n, sizeof(real_t));
     // w = (real_t*)vecalloc(n, sizeof(real_t));
-    xp = buffer_FPnum;
-    g = buffer_FPnum + (size_t)n;
-    gp = buffer_FPnum + 2*(size_t)n;
-    d = buffer_FPnum + 3*(size_t)n;
-    w = buffer_FPnum + 4*(size_t)n;
+    xp = buffer_real_t;
+    g = buffer_real_t + (size_t)n;
+    gp = buffer_real_t + 2*(size_t)n;
+    d = buffer_real_t + 3*(size_t)n;
+    w = buffer_real_t + 4*(size_t)n;
     if (xp == NULL || g == NULL || gp == NULL || d == NULL || w == NULL) {
         ret = LBFGSERR_OUTOFMEMORY;
         goto lbfgs_exit;
@@ -429,7 +429,7 @@ int_t lbfgs(
         it->ys = 0;
         // it->s = (real_t*)vecalloc(n, sizeof(real_t));
         // it->y = (real_t*)vecalloc(n, sizeof(real_t));
-        it->s = buffer_FPnum + (5*(size_t)n + 2*(size_t)i*(size_t)n);
+        it->s = buffer_real_t + (5*(size_t)n + 2*(size_t)i*(size_t)n);
         it->y = it->s + n;
         if (it->s == NULL || it->y == NULL) {
             ret = LBFGSERR_OUTOFMEMORY;
@@ -440,7 +440,7 @@ int_t lbfgs(
     /* Allocate an array for storing previous values of the objective function. */
     if (0 < param.past) {
         // pf = (real_t*)vecalloc(param.past, sizeof(real_t));
-        pf = buffer_FPnum + (5*(size_t)n + 2*(size_t)m*(size_t)n);
+        pf = buffer_real_t + (5*(size_t)n + 2*(size_t)m*(size_t)n);
     }
 
     /* Evaluate the function value and its gradient. */
@@ -676,7 +676,7 @@ lbfgs_exit:
     // vecfree(gp);
     // vecfree(g);
     // vecfree(xp);
-    if (free_buffer_FPnum) free(buffer_FPnum);
+    if (free_buffer_real_t) free(buffer_real_t);
     if (free_buffer_iter)  free(buffer_iter);
 
     return ret;
