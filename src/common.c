@@ -1343,12 +1343,11 @@ void factors_implicit_chol
     char lo = 'L';
     int_t one = 1;
     int_t ignore;
-    real_t *restrict BtB = buffer_real_t;
-    copy_mat(k, k,
-             precomputedBtB, ld_BtB,
-             BtB, k);
     if (zero_out || nnz == 0) set_to_zero(a_vec, k, 1);
     if (nnz == 0) return;
+
+    real_t *restrict BtB = buffer_real_t;
+    set_to_zero(BtB, square(k), 1);
 
     for (size_t ix = 0; ix < nnz; ix++) {
         cblas_tsyr(CblasRowMajor, CblasUpper, k,
@@ -1357,6 +1356,10 @@ void factors_implicit_chol
         cblas_taxpy(k, Xa[ix] + 1.,
                     B + (size_t)ixB[ix]*ldb, 1, a_vec, 1);
     }
+
+    sum_mat(k, k,
+            precomputedBtB, ld_BtB,
+            BtB, k);
 
     if (force_add_diag)
         add_to_diag(BtB, lam, k);

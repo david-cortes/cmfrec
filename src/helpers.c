@@ -727,12 +727,12 @@ void sum_mat
     real_t *restrict B, size_t ldb
 )
 {
-    int_t n_int_t = (int)n;
-    if (lda == n && ldb == n)
-        taxpy_large(A, 1., B, m*n, 1);
-    else
-        for (size_t row = 0; row < m; row++)
-            cblas_taxpy(n_int_t, 1., A + row*lda, 1, B + row*ldb, 1);
+    /* Note1: do NOT change this to axpy, it gets a huge slow-down when
+       used with MKL for some reason. OpenBLAS still works fine though */
+    /* Note2: in most cases it is expected that m >> n */
+    for (size_t row = 0; row < m; row++)
+        for (size_t col = 0; col < n; col++)
+            B[col + row*ldb] += A[col + row*lda];
 }
 
 void transpose_mat(real_t *restrict A, size_t m, size_t n, real_t *restrict buffer_real_t)

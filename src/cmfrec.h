@@ -113,7 +113,7 @@ extern "C" {
     #define restrict 
 #endif
 
-/*    OpenMP < 3.0 (e.g. MSVC as of 2020) does not support parallel for's with unsigned iterators,
+/*  OpenMP < 3.0 (e.g. MSVC as of 2020) does not support parallel for's with unsigned iterators,
     and does not support declaring the iterator type in the loop itself */
 #ifdef _OPENMP
     #if (_OPENMP < 200801) || defined(_WIN32) || defined(_WIN64) /* OpenMP < 3.0 */
