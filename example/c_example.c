@@ -11,21 +11,33 @@
    (Dimension is [6, 8])
 
    Into the product of two smaller matrices A[6,3] and B[8,3],
-   by minimizing the squared error with respect to the non-zero
-   entries.
+   by minimizing the squared error with respect to the non-missing
+   entries, which are not counted towards the errors.
 
    The "X" matrix is centered within the procedure by substracting its mean.
 
    The example then prints the obtained factor matrices and the values of
-   "X" that are approximates with them.
+   "X" that are approximated with them.
 
-   To run the example, build the library through the CMake system, and then
-   compile this file linking to it. Examples:
-     gcc c_example.c -lcmfrec -std=c99 (from 'example/', system wide install)
+   To run the example, build the library through the CMake system:
+     mkdir build
+     cd build
+     cmake ..
+     make
+     (optionally for a system install)
+     sudo make install
+     sudo ldconfig
+
+   And then compile this file linking to it. Examples:
+     gcc c_example.c -lcmfrec -std=c99
      gcc example/c_example.c -std=c99 \
         -I./build -L./build -l:libcmfrec.so -Wl,-rpath,./build
-        (form root folder, assuming the package was built under 'build/''
-         but not installed)
+     
+     (First line assumes the command is being run from '/example' and the
+      library is installed in the system, second one assumes it is being run
+      from the root folder and the library is available under 'build/'
+      but not installed in the system)
+   
    Then execute the produced file - e.g.
      ./a.out
  */ 
