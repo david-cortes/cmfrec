@@ -254,7 +254,7 @@ extern "C" {
                          be as good quality as random numbers generated through
                          e.g. the Mersenne-Twister method.
     @param seed  Random seed used to initialize the matrices, if passing
-                 'reset_values'=true/
+                 'reset_values'=true.
     
     
     --- Other model parameters ---
@@ -300,14 +300,15 @@ extern "C" {
     @param lam  Regularization parameter applied to the model matrices.
                 Will be ignored if passing 'lam_unique'.
                 Recommended values: from 10^-2 to 10^2
-    @param lam_unique  Regularization parameter to apply to each matrix of the
-                       model. Should specify the regularizations in this order:
-                         biasA, biasB, A, B, C/Cb, D/Db.
-                       Note that setting a too low regularization parameter for
-                       the item biases might result in recommending the ones
-                       with highest "X" value regardless of number of
-                       occurrences
-                       Dimension: [6] (regardless of model)
+    @param lam_unique  (optional) Regularization parameter to apply to each
+                        matrix of the model. Should specify the regularizations
+                        in this order:
+                          biasA, biasB, A, B, C/Cb, D/Db.
+                        Note that setting a too low regularization parameter for
+                        the item biases might result in recommending the ones
+                        with highest "X" value regardless of number of
+                        occurrences
+                        Dimension: [6] (regardless of model)
     @param w_main  Weight to assign to the errors of the factorization of "X"
                    in the final objective. Note that, in the implicit model,
                    the sum of errors from "X" is typically much larger than for
@@ -350,17 +351,21 @@ extern "C" {
     @param U  (optional) The "U" data, in dense format.
                Dimension: [m_u, p]
     @param m_u  (optional) Number of rows in the "U" matrix. Pass zero if there
-                 is no "U" matrix.
+                 is no "U" matrix. Should be passed regardless of whether "U"
+                 is passed as dense or sparse.
     @param p  (optional) Number of columns in the "U" matrix. Pass zero if there
-                 is no "U" matrix.
+                 is no "U" matrix. Should be passed regardless of whether "U"
+                 is passed as dense or sparse.
     @param II  (optional) The "I" data, in dense format.
                 Note: variable with name "I" alone is already taken by the
                 C preprocesor in most compilers, hence the name "II".
                 Dimension: [n_i, q]
     @param n_i  (optional) Number of rows in the "I" matrix. Pass zero if there
-                 is no "I" matrix.
+                 is no "I" matrix. Should be passed regardless of whether "I"
+                 is passed as dense or sparse.
     @param q  (optional) Number of columns in the "I" matrix. Pass zero if there
-                 is no "I" matrix.
+                 is no "I" matrix. Should be passed regardless of whether "I"
+                 is passed as dense or sparse.
     @param U_row  (optional) The "U" data, in sparse COO format.
                    This array indicates the row indices.
                    Dimension: [nnz_U]
@@ -390,8 +395,8 @@ extern "C" {
     --- "U" and "I" with binary values ---
     @param Ub  (optional) Columns of the "U" matrix which have only binary (0/1)
                 values, for which a sigmoid transformation will be applied on
-                the predicted values. If passed, should always be dense and
-                contain no NAN values. Only supported with the L-BFGS method.
+                the predicted values. If passed, should always be dense.
+                Only supported with the L-BFGS method.
                 Dimension: [m_ubin, pbin]
     @param m_ubin (optional) Number of rows in the "Ub" matrix. Pass zero here
                    if there is no "Ub" matrix.
@@ -399,8 +404,8 @@ extern "C" {
                   here if there is no "Ub" matrix.
     @param Ib  (optional) Columns of the "I" matrix which have only binary (0/1)
                 values, for which a sigmoid transformation will be applied on
-                the predicted values. If passed, should always be dense and
-                contain no NAN values. Only supported with the L-BFGS method.
+                the predicted values. If passed, should always be dense.
+                Only supported with the L-BFGS method.
                 Dimension: [n_ibin, qbin]
     @param n_ibin (optional) Number of rows in the "Ib" matrix. Pass zero here
                    if there is no "Ib" matrix.
