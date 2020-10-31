@@ -1628,7 +1628,7 @@ def precompute_matrices_collective_explicit(
     ptr_BtB = &BtB[0,0]
     ptr_TransBtBinvBt = &TransBtBinvBt[0,0]
     if user_bias:
-        B_plus_bias = np.empty((B.shape[0], B.shape[0]+1), dtype=c_real_t)
+        B_plus_bias = np.empty((B.shape[0], B.shape[1]+1), dtype=c_real_t)
         ptr_B_plus_bias = &B_plus_bias[0,0]
     else:
         B_plus_bias = B
