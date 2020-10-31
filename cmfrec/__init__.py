@@ -2261,6 +2261,7 @@ class CMF(_CMF):
                     m_u, n_i, m_ub, n_ib
                 )
             self._n_orig = self.B_.shape[0] if self.include_all_X else n
+            self.is_fitted_ = True
             if self.precompute_for_predictions:
                 self.force_precompute_for_predictions()
         else:
