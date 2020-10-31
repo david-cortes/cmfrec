@@ -4919,6 +4919,7 @@ class OMF_explicit(_OMF):
                     lambda_ = self.lambda_
                     lambda_bias = self.lambda_
 
+                self.is_fitted_ = True
                 _1, self._BtB, self._TransBtBinvBt, _2, _3, _4 = \
                     c_funs.precompute_matrices_collective_explicit(
                         self._B_pred,
