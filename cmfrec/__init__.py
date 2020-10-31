@@ -1840,7 +1840,8 @@ class CMF(_CMF):
         Regularization parameter. Can also use different regularization for each
         matrix, in which case it should be an array with 6 entries, corresponding,
         in this order, to: user_bias, item_bias, A, B, C, D. Note that the default
-        value for ``lambda_`` here is much higher than in other software.
+        value for ``lambda_`` here is much higher than in other software, and that
+        the loss/objective function is not divided by the number of entries.
         Typical values are 10^-2 to 10^2.
     method : str, one of "lbfgs" or "als"
         Optimization method used to fit the model. If passing ``'lbfgs'``, will
@@ -3198,7 +3199,8 @@ class CMF_implicit(_CMF):
         Regularization parameter. Can also use different regularization for each
         matrix, in which case it should be an array with 6 entries, corresponding,
         in this order, to: <ignored>, <ignored>, A, B, C, D. Note that the default
-        value for ``lambda_`` here is much higher than in other software.
+        value for ``lambda_`` here is much higher than in other software, and that
+        the loss/objective function is not divided by the number of entries.
         Typical values are 10^-2 to 10^2.
     alpha : float
         Weighting parameter for the non-zero entries in the implicit-feedback
@@ -4523,7 +4525,8 @@ class OMF_explicit(_OMF):
         The attribute biases will have the same regularization as the matrices
         to which they apply (C and D).
         Note that the default
-        value for ``lambda_`` here is much higher than in other software.
+        value for ``lambda_`` here is much higher than in other software, and that
+        the loss/objective function is not divided by the number of entries.
         Typical values are 10^-2 to 10^2.
         Passing different regularization for each matrix is not supported with
         ``method='als'``.
@@ -5453,7 +5456,8 @@ class OMF_implicit(_OMF):
         Typical values are 30 to 100.
     lambda_ : float
         Regularization parameter. Note that the default
-        value for ``lambda_`` here is much higher than in other software.
+        value for ``lambda_`` here is much higher than in other software, and that
+        the loss/objective function is not divided by the number of entries.
         Typical values are 10^-2 to 10^2.
     alpha : float
         Weighting parameter for the non-zero entries in the implicit-feedback
@@ -5937,7 +5941,8 @@ class ContentBased(_OMF_Base):
         matrix, in which case it should be an array with 6 entries, corresponding,
         in this order, to: user_bias, item_bias, [ignored], [ignored], C, D.
         Note that the default
-        value for ``lambda_`` here is much higher than in other software.
+        value for ``lambda_`` here is much higher than in other software, and that
+        the loss/objective function is not divided by the number of entries.
         Recommended values are 10^-2 to 10^2.
     user_bias : bool
         Whether to add user biases (intercepts) to the model.
@@ -6459,7 +6464,8 @@ class MostPopular(_CMF):
         Regularization parameter. For the explicit-feedback case (default),
         lower values will tend to favor the highest-rated items regardless
         of the number of observations. Note that the default
-        value for ``lambda_`` here is much higher than in other software.
+        value for ``lambda_`` here is much higher than in other software, and that
+        the loss/objective function is not divided by the number of entries.
     alpha : float
         Weighting parameter for the non-zero entries in the implicit-feedback
         model. See [2] for details. Note that, while the author's suggestion for
