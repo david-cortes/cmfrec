@@ -252,7 +252,7 @@ real_t fun_grad_cannonical_form
     bool parallel_onepass = (Xfull == NULL && nthreads > 1 &&
                              Xcsr == NULL  && buffer_mt != NULL);
     if (parallel_onepass)
-        set_to_zero(buffer_mt, (size_t)nthreads
+        set_to_zero_(buffer_mt, (size_t)nthreads
                                 * (  (size_t)(k + (int)user_bias) * (size_t)m
                                     +(size_t)(k + (int)item_bias) * (size_t)n),
                     nthreads);
@@ -467,7 +467,7 @@ real_t fun_grad_cannonical_form
     else /* dense input - this is usually not optimal, but still supported */
     {
         /* Buffer = X */
-        copy_arr(Xfull, buffer_real_t, m_by_n, nthreads);
+        copy_arr_(Xfull, buffer_real_t, m_by_n, nthreads);
         /* Buffer = A*t(B) - Buffer */
         cblas_tgemm(CblasRowMajor, CblasNoTrans, CblasTrans,
                     m, n, k,
@@ -642,7 +642,7 @@ void factors_closed_form
     if ((Xa_dense != NULL && cnt_NA == n) ||
         (Xa_dense == NULL && nnz == 0))
     {
-        set_to_zero(a_vec, k, 1);
+        set_to_zero(a_vec, k);
         return;
     }
 
@@ -662,7 +662,7 @@ void factors_closed_form
                         0., a_vec, 1);
         else
         {
-            set_to_zero(a_vec, k, 1);
+            set_to_zero(a_vec, k);
             tgemv_dense_sp(
                 n, k, /* <- 'n' doesn't get used*/
                 1., precomputedTransBtBinvBt, k,
@@ -686,7 +686,7 @@ void factors_closed_form
             cblas_tscal(square(k), 1./scale_BtB, bufferBtB, 1);
         add_diag = !BtB_has_diag;
 
-        set_to_zero(a_vec, k, 1);
+        set_to_zero(a_vec, k);
         for (size_t ix = 0; ix < (size_t)n; ix++)
         {
             if (isnan(Xa_dense[ix]))
@@ -708,7 +708,7 @@ void factors_closed_form
     else if (NA_as_zero && weight == NULL &&
              Xa_dense == NULL && precomputedBtBchol != NULL)
     {
-        set_to_zero(a_vec, k, 1);
+        set_to_zero(a_vec, k);
         tgemv_dense_sp(n, k,
                        1., B, (size_t)ldb,
                        ixB, Xa, nnz,
@@ -730,7 +730,7 @@ void factors_closed_form
        then adjust by substracting from it again. */
     else if (Xa_dense == NULL && NA_as_zero && !use_cg)
     {
-        set_to_zero(a_vec, k, 1);
+        set_to_zero(a_vec, k);
         if (precomputedBtB == NULL)
             cblas_tsyrk(CblasRowMajor, CblasUpper, CblasTrans,
                         k, max2(n, n_BtB),
@@ -824,7 +824,7 @@ void factors_closed_form
         /* Sparse X - obtain t(B)*B through SR1 updates, avoiding a full
            matrix-matrix multiplication. This is the expected scenario for
            most use-cases. */
-        set_to_zero(bufferBtB, square(k), 1);
+        set_to_zero(bufferBtB, square(k));
         for (size_t ix = 0; ix < nnz; ix++)
             cblas_tsyr(CblasRowMajor, CblasUpper, k,
                        (weight == NULL)? (1.) : (weight[ix]),
@@ -834,7 +834,7 @@ void factors_closed_form
         /* Now obtain t(B)*t(X) from a dense_matrix-sparse_vector product,
            avoid again a full matrix-vector multiply. Note that this is
            stored in 'a_vec', despite the name */
-        set_to_zero(a_vec, k, 1);
+        set_to_zero(a_vec, k);
         /* Note: in theory, should pass max2(n, n_BtB) to these functions,
            but 'n' is not used so it doesn't matter. */
         if (weight == NULL) {
@@ -877,8 +877,8 @@ void factors_closed_form
 
         else
         {
-            set_to_zero(a_vec, k, 1);
-            set_to_zero(bufferBtB, square(k), 1);
+            set_to_zero(a_vec, k);
+            set_to_zero(bufferBtB, square(k));
             for (size_t ix = 0; ix < (size_t)n; ix++) {
                 if (!isnan(Xa_dense[ix])) {
                     cblas_tsyr(CblasRowMajor, CblasUpper,
@@ -927,7 +927,7 @@ void factors_explicit_cg
     real_t *restrict Ap = buffer_real_t;
     real_t *restrict p  = Ap + k;
     real_t *restrict r  = p  + k;
-    set_to_zero(r, k, 1);
+    set_to_zero(r, k);
     real_t coef;
     real_t a;
     real_t r_old, r_new;
@@ -952,7 +952,7 @@ void factors_explicit_cg
     if (lam != lam_last)
         r[k-1] -= (lam_last-lam) * a_vec[k-1];
 
-    copy_arr(r, p, k, 1);
+    copy_arr(r, p, k);
     r_old = cblas_tdot(k, r, 1, r, 1);
 
     #ifdef FORCE_CG
@@ -965,7 +965,7 @@ void factors_explicit_cg
 
     for (int_t cg_step = 0; cg_step < max_cg_steps; cg_step++)
     {
-        set_to_zero(Ap, k, 1);
+        set_to_zero(Ap, k);
         for (size_t ix = 0; ix < nnz; ix++) {
             coef = cblas_tdot(k, B + (size_t)ixB[ix]*(size_t)ldb, 1, p, 1);
             coef *= (weight == NULL)? 1. : weight[ix];
@@ -1011,7 +1011,7 @@ void factors_explicit_cg_NA_as_zero_weighted
     real_t *restrict p  = Ap + k;
     real_t *restrict r  = p  + k;
     real_t *restrict wr = r  + k; /* length is 'n' */
-    set_to_zero(r, k, 1);
+    set_to_zero(r, k);
     real_t a;
     real_t r_old, r_new, coef;
 
@@ -1059,7 +1059,7 @@ void factors_explicit_cg_NA_as_zero_weighted
     if (lam != lam_last)
         r[k-1] -= (lam_last-lam) * a_vec[k-1];
 
-    copy_arr(r, p, k, 1);
+    copy_arr(r, p, k);
     r_old = cblas_tdot(k, r, 1, r, 1);
 
     #ifdef FORCE_CG
@@ -1148,7 +1148,7 @@ void factors_explicit_cg_dense
 
     bool prefer_BtB = cnt_NA < k && precomputedBtB != NULL && weight == NULL;
     if (!prefer_BtB)
-        set_to_zero(r, k, 1);
+        set_to_zero(r, k);
 
     if (prefer_BtB)
     {
@@ -1189,7 +1189,7 @@ void factors_explicit_cg_dense
     if (lam != lam_last)
         r[k-1] -= (lam_last-lam) * a_vec[k-1];
 
-    copy_arr(r, p, k, 1);
+    copy_arr(r, p, k);
     r_old = cblas_tdot(k, r, 1, r, 1);
 
     #ifdef FORCE_CG
@@ -1217,7 +1217,7 @@ void factors_explicit_cg_dense
 
         else
         {
-            set_to_zero(Ap, k, 1);
+            set_to_zero(Ap, k);
             for (size_t ix = 0; ix < (size_t)n; ix++)
             {
                 if (!isnan(Xa_dense[ix]))
@@ -1284,7 +1284,7 @@ void factors_implicit_cg
     }
     cblas_taxpy(k, -lam, a_vec, 1, r, 1);
 
-    copy_arr(r, p, k, 1);
+    copy_arr(r, p, k);
     r_old = cblas_tdot(k, r, 1, r, 1);
 
     #ifdef FORCE_CG
@@ -1343,11 +1343,11 @@ void factors_implicit_chol
     char lo = 'L';
     int_t one = 1;
     int_t ignore;
-    if (zero_out || nnz == 0) set_to_zero(a_vec, k, 1);
+    if (zero_out || nnz == 0) set_to_zero(a_vec, k);
     if (nnz == 0) return;
 
     real_t *restrict BtB = buffer_real_t;
-    set_to_zero(BtB, square(k), 1);
+    set_to_zero(BtB, square(k));
 
     for (size_t ix = 0; ix < nnz; ix++) {
         cblas_tsyr(CblasRowMajor, CblasUpper, k,
@@ -1383,8 +1383,10 @@ void factors_implicit
     bool force_add_diag
 )
 {
-    if (nnz == 0)
-        return set_to_zero(a_vec, k, 1);
+    if (nnz == 0) {
+        set_to_zero(a_vec, k);
+        return;
+    }
 
     if (use_cg)
         factors_implicit_cg(
@@ -1435,7 +1437,7 @@ real_t fun_grad_Adense
     real_t f = 0.;
     size_t m_by_n = (size_t)m * (size_t)n;
 
-    copy_arr(Xfull, buffer_real_t, m_by_n, nthreads);
+    copy_arr_(Xfull, buffer_real_t, m_by_n, nthreads);
     cblas_tgemm(CblasRowMajor, CblasNoTrans, CblasTrans,
                 m, n, k,
                 1., A, lda, B, ldb,
@@ -1795,7 +1797,7 @@ void optimizeA
                     1., B, ldb,
                     0., bufferBtB, k);
         if (precomputedBtB != NULL && keep_precomputedBtB) {
-            copy_arr(bufferBtB, precomputedBtB, square(k), nthreads);
+            copy_arr(bufferBtB, precomputedBtB, square(k));
             *filled_BtB = true;
         }
         add_to_diag(bufferBtB, lam, k);
@@ -1857,7 +1859,7 @@ void optimizeA
                 if (cnt_NA[ix] > 0)
                 {
                     if (cnt_NA[ix] == n) {
-                        set_to_zero(A + ix*(size_t)lda, k, 1);
+                        set_to_zero(A + ix*(size_t)lda, k);
                         continue;
                     }
 
@@ -1869,7 +1871,7 @@ void optimizeA
                             + ((size_t)n*(size_t)omp_get_thread_num()), 1);
 
                     if (use_cg)
-                        set_to_zero(A + ix*(size_t)lda, k, 1);
+                        set_to_zero(A + ix*(size_t)lda, k);
 
                     factors_closed_form(
                         A + ix*(size_t)lda, k,
@@ -1931,7 +1933,7 @@ void optimizeA
                         0., bufferBtB, k);
             if (keep_precomputedBtB && precomputedBtB != NULL)
             {
-                copy_arr(bufferBtB, precomputedBtB, square(k), nthreads);
+                copy_arr(bufferBtB, precomputedBtB, square(k));
                 *filled_BtB = true;
             }
             add_to_diag(bufferBtB, lam, k);
@@ -2002,13 +2004,13 @@ void optimizeA
                     0., bufferBtB, k);
         if (keep_precomputedBtB && precomputedBtB != NULL)
         {
-            copy_arr(bufferBtB, precomputedBtB, square(k), nthreads);
+            copy_arr(bufferBtB, precomputedBtB, square(k));
             *filled_BtB = true;
         }
         add_to_diag(bufferBtB, lam, k);
         if (lam_last != lam) bufferBtB[square(k)-1] += (lam_last - lam);
         if (lda == k)
-            set_to_zero(A, (size_t)m*(size_t)k, 1);
+            set_to_zero_(A, (size_t)m*(size_t)k, nthreads);
         else
             for (size_t row = 0; row < (size_t)m; row++)
                 memset(A + row*(size_t)lda, 0, (size_t)k*sizeof(real_t));
@@ -2051,7 +2053,7 @@ void optimizeA
             if (precomputedBtB != NULL && keep_precomputedBtB &&
                 bufferBtB != precomputedBtB)
             {
-                copy_arr(bufferBtB, precomputedBtB, square(k), nthreads);
+                copy_arr(bufferBtB, precomputedBtB, square(k));
             }
             if (add_diag_to_BtB)
             {
@@ -2120,7 +2122,7 @@ void optimizeA_implicit
     if (!use_cg)
         add_to_diag(precomputedBtB, lam, k);
     if (!use_cg || force_set_to_zero)
-        set_to_zero(A, (size_t)m*(size_t)k - (lda-(size_t)k), nthreads);
+        set_to_zero_(A, (size_t)m*(size_t)k - (lda-(size_t)k), nthreads);
     size_t size_buffer = use_cg? (3 * k) : (square(k));
 
     int_t ix = 0;
@@ -2265,7 +2267,7 @@ int_t initialize_biases
     /* Calculate item biases, but don't apply them to X */
     if (item_bias)
     {
-        set_to_zero(biasB, n_bias, 1);
+        set_to_zero(biasB, n_bias);
         if (Xtrans != NULL)
         {
             #pragma omp parallel for schedule(static) num_threads(nthreads) \
@@ -2319,7 +2321,7 @@ int_t initialize_biases
     /* Finally, user biases */
     if (user_bias)
     {
-        set_to_zero(biasA, m_bias, 1);
+        set_to_zero(biasA, m_bias);
         if (item_bias) memset(buffer_cnt, 0, (size_t)m*sizeof(size_t));
 
         if (Xfull != NULL)
@@ -2390,7 +2392,7 @@ int_t center_by_cols
         cnt_by_col = (int_t*)calloc(n, sizeof(int_t));
         if (cnt_by_col == NULL) return 1;
     }
-    set_to_zero(col_means, n, 1);
+    set_to_zero(col_means, n);
 
     if (Xfull != NULL)
     {
@@ -2928,15 +2930,15 @@ int_t fit_most_popular
             }
     }
 
-    set_to_zero(biasA, m, 1);
-    set_to_zero(biasB, n, 1);
+    set_to_zero(biasA, m);
+    set_to_zero(biasB, n);
 
     for (int_t iter = 0; iter <= 5; iter++)
     {
         if (Xfull != NULL)
         {
             if (iter > 0)
-                set_to_zero(biasB, n, 1);
+                set_to_zero(biasB, n);
 
             if (weight == NULL)
             {
@@ -2963,7 +2965,7 @@ int_t fit_most_popular
             for (int_t ix = 0; ix < n; ix++)
                 biasB[ix] = (!isnan(biasB[ix]))? biasB[ix] : 0.;
 
-            set_to_zero(biasA, m, 1);
+            set_to_zero(biasA, m);
 
             if (weight == NULL)
             {
@@ -2994,7 +2996,7 @@ int_t fit_most_popular
         else
         {
             if (iter > 0)
-                set_to_zero(biasB, n, 1);
+                set_to_zero(biasB, n);
 
             if (weight == NULL)
             {
@@ -3015,7 +3017,7 @@ int_t fit_most_popular
             for (int_t ix = 0; ix < n; ix++)
                 biasB[ix] = (!isnan(biasB[ix]))? biasB[ix] : 0.;
 
-            set_to_zero(biasA, m, 1);
+            set_to_zero(biasA, m);
 
             if (weight == NULL)
             {

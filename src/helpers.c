@@ -63,7 +63,7 @@
 
 /* Note: in x86_64 computers, there's hardly any speed up from having > 2
    threads zeroing out an array */
-void set_to_zero(real_t *arr, size_t n, int_t nthreads)
+void set_to_zero_(real_t *arr, size_t n, int_t nthreads)
 {
     if (n == 0) return;
     #if defined(_OPENMP)
@@ -88,7 +88,7 @@ void set_to_zero(real_t *arr, size_t n, int_t nthreads)
 
 /* Note: in x86_64 computers, there's hardly any speed up from having > 4
    threads copying arrays */
-void copy_arr(real_t *restrict src, real_t *restrict dest, size_t n, int_t nthreads)
+void copy_arr_(real_t *restrict src, real_t *restrict dest, size_t n, int_t nthreads)
 {
     /* Note: don't use BLAS scopy as it's actually much slower */
     if (n == 0) return;
@@ -976,7 +976,7 @@ void row_means_csr(size_t indptr[], real_t *restrict values,
                    real_t *restrict output, int_t m, int_t nthreads)
 {
     int_t row = 0;
-    set_to_zero(values, m, nthreads);
+    set_to_zero(values, m);
     #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
             shared(indptr, values, output, m)
     for (row = 0; row < m; row++)

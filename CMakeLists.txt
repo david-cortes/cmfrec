@@ -1,5 +1,5 @@
 cmake_minimum_required (VERSION 3.9)
-project (cmfrec VERSION 2.0.1)
+project (cmfrec VERSION 2.0.3)
 set(CMAKE_BUILD_TYPE Release)
 
 ### Note: this build script allows configuring 4 things manually:
@@ -94,7 +94,7 @@ endif()
 if (MSVC)
     add_compile_options(/O2)
 else()
-    add_compile_options(-O3 -march=native)
+    add_compile_options(-O2 -march=native)
 endif()
 
 # Linkage to BLAS and LAPACK

@@ -33,7 +33,7 @@ class build_ext_subclass( build_ext_with_blas ):
                 e.extra_compile_args += ['/O2', '/openmp']
         else: # everything else that cares about following standards
             for e in self.extensions:
-                e.extra_compile_args += ['-O3', '-fopenmp', '-march=native', '-std=c99']
+                e.extra_compile_args += ['-O2', '-fopenmp', '-march=native', '-std=c99']
                 e.extra_link_args += ['-fopenmp']
 
                 # e.extra_compile_args += ['-O3', '-march=native', '-std=c99']
@@ -80,7 +80,7 @@ if sys.platform[:3] != "dar":
 setup(
     name  = "cmfrec",
     packages = ["cmfrec"],
-    version = '2.0.2',
+    version = '2.0.3',
     description = 'Collective matrix factorization',
     author = 'David Cortes',
     author_email = 'david.cortes.rivera@gmail.com',

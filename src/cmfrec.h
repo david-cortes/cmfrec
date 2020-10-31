@@ -230,11 +230,13 @@ void cblas_tsymv(const CBLAS_ORDER order, const CBLAS_UPLO Uplo, const int_t N, 
 #define cap_to_4(x) (((x) > 4)? 4 : (x))
 #define max2(a, b) ((a) >= ((b))? (a) : (b))
 #define min2(a, b) ((a) <= ((b))? (a) : (b))
+#define set_to_zero(arr, n) memset((arr), 0, (size_t)(n)*sizeof(real_t))
+#define copy_arr(from, to, n) memcpy((to), (from), (size_t)(n)*sizeof(real_t))
 
 
 /* helpers.c */
-void set_to_zero(real_t *arr, const size_t n, int_t nthreads);
-void copy_arr(real_t *restrict src, real_t *restrict dest, size_t n, int_t nthreads);
+void set_to_zero_(real_t *arr, const size_t n, int_t nthreads);
+void copy_arr_(real_t *restrict src, real_t *restrict dest, size_t n, int_t nthreads);
 int_t count_NAs(real_t arr[], size_t n, int_t nthreads);
 void count_NAs_by_row
 (

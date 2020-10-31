@@ -279,7 +279,7 @@ real_t offsets_fun_grad
     if (has_I) nvars += dimD;
     if (add_intercepts && has_U) nvars += (size_t)(k_sec + k);
     if (add_intercepts && has_I) nvars += (size_t)(k_sec + k);
-    set_to_zero(grad, nvars, nthreads);
+    set_to_zero_(grad, nvars, nthreads);
 
     real_t *restrict biasA = values;
     real_t *restrict biasB = biasA + (user_bias? m : 0);
@@ -315,14 +315,14 @@ real_t offsets_fun_grad
     if ((k_main || k_sec) && (has_U || has_I))
     {
         if (has_U && has_I) {
-            set_to_zero(bufferA,
-                        (size_t)m*(size_t)k_totA + (size_t)n*(size_t)k_totB,
-                        nthreads);
+            set_to_zero_(bufferA,
+                         (size_t)m*(size_t)k_totA + (size_t)n*(size_t)k_totB,
+                         nthreads);
         } else if (has_U && !has_I) {
-            set_to_zero(bufferA, (size_t)m*(size_t)k_totA, nthreads);
+            set_to_zero_(bufferA, (size_t)m*(size_t)k_totA, nthreads);
             bufferB = g_B;
         } else if (!has_U && has_I) {
-            set_to_zero(bufferB, (size_t)n*(size_t)k_totB, nthreads);
+            set_to_zero_(bufferB, (size_t)n*(size_t)k_totB, nthreads);
             bufferA = g_A;
         }
     }
@@ -459,10 +459,10 @@ void construct_Am
     size_t k_szA = ((U == NULL && U_csr == NULL)? k_sec : 0) + k + k_main;
 
     if (k_sec == 0 && k_main == 0) {
-        copy_arr(A, Am, (size_t)m*k_totA, nthreads);
+        copy_arr_(A, Am, (size_t)m*k_totA, nthreads);
     } else {
         /* Am[:,:] = 0; Am[:,k_sec:] = A[:,:] */
-        set_to_zero(Am, (size_t)m*k_totA, nthreads);
+        set_to_zero_(Am, (size_t)m*k_totA, nthreads);
         copy_mat(m, k+k_main, A, k_szA, Am + k_sec, (int)k_totA);
     }
 
@@ -533,9 +533,9 @@ int_t offsets_factors_cold
        a_vec[k_sec+k:] := 0 */
     int_t k_pred = k_sec + k;
     if (u_vec_sp != NULL)
-        set_to_zero(a_vec, k_sec+k+k_main, 1);
+        set_to_zero(a_vec, k_sec+k+k_main);
     else if (k_main != 0)
-        set_to_zero(a_vec + (k_sec+k), k_main, 1);
+        set_to_zero(a_vec + (k_sec+k), k_main);
 
     if (u_vec != NULL)
         cblas_tgemv(CblasRowMajor, CblasTrans,
@@ -717,7 +717,7 @@ int_t offsets_factors_warm
                                  C_bias,
                                  k, k_sec, 0, w_user);
         else
-            set_to_zero(a_vec, k_sec+k+k_main, 1);
+            set_to_zero(a_vec, k_sec+k+k_main);
 
         /* buffer_uc = w*U*C (save for later) */
         memcpy(buffer_uc, a_vec, (size_t)(k_sec+k)*sizeof(real_t));
@@ -729,7 +729,7 @@ int_t offsets_factors_warm
                         a_vec, 1,
                         0., bufferX, 1);
         else
-            set_to_zero(bufferX, n, 1);
+            set_to_zero(bufferX, n);
 
         /* BufferX += X */
         if (Xa_dense == NULL)
@@ -1470,30 +1470,30 @@ int_t fit_offsets_explicit_lbfgs
     {
         edge = 0;
         if (user_bias) {
-            copy_arr(biasA, values + edge, m, 1);
+            copy_arr(biasA, values + edge, m);
             edge += m;
         }
         if (item_bias) {
-            copy_arr(biasB, values + edge, n, 1);
+            copy_arr(biasB, values + edge, n);
             edge += n;
         }
-        copy_arr(A, values + edge, (size_t)m*k_szA, nthreads);
+        copy_arr_(A, values + edge, (size_t)m*k_szA, nthreads);
         edge += (size_t)m*k_szA;
-        copy_arr(B, values + edge, (size_t)n*k_szB, nthreads);
+        copy_arr_(B, values + edge, (size_t)n*k_szB, nthreads);
         edge += (size_t)n*k_szB;
         if (p) {
-            copy_arr(C, values + edge, (size_t)p*(size_t)(k_sec+k), nthreads);
+            copy_arr_(C, values + edge, (size_t)p*(size_t)(k_sec+k), nthreads);
             edge += (size_t)p*(size_t)(k_sec+k);
             if (add_intercepts) {
-                copy_arr(C_bias, values + edge, k_sec+k, 1);
+                copy_arr(C_bias, values + edge, k_sec+k);
                 edge += k_sec+k;
             }
         }
         if (q) {
-            copy_arr(D, values + edge, (size_t)q*(size_t)(k_sec+k), nthreads);
+            copy_arr_(D, values + edge, (size_t)q*(size_t)(k_sec+k), nthreads);
             edge += (size_t)q*(size_t)(k_sec+k);
             if (add_intercepts) {
-                copy_arr(D_bias, values + edge, k_sec+k, 1);
+                copy_arr(D_bias, values + edge, k_sec+k);
                 edge += k_sec+k;
             }
         }
@@ -1528,30 +1528,30 @@ int_t fit_offsets_explicit_lbfgs
     {
         edge = 0;
         if (user_bias) {
-            copy_arr(values + edge, biasA, m, 1);
+            copy_arr(values + edge, biasA, m);
             edge += m;
         }
         if (item_bias) {
-            copy_arr(values + edge, biasB, n, 1);
+            copy_arr(values + edge, biasB, n);
             edge += n;
         }
-        copy_arr(values + edge, A, (size_t)m*k_szA, nthreads);
+        copy_arr_(values + edge, A, (size_t)m*k_szA, nthreads);
         edge += (size_t)m*k_szA;
-        copy_arr(values + edge, B, (size_t)n*k_szB, nthreads);
+        copy_arr_(values + edge, B, (size_t)n*k_szB, nthreads);
         edge += (size_t)n*k_szB;
         if (p) {
-            copy_arr(values + edge, C, (size_t)p*(size_t)(k_sec+k), nthreads);
+            copy_arr_(values + edge, C, (size_t)p*(size_t)(k_sec+k), nthreads);
             edge += (size_t)p*(size_t)(k_sec+k);
             if (add_intercepts) {
-                copy_arr(values + edge, C_bias, k_sec+k, 1);
+                copy_arr(values + edge, C_bias, k_sec+k);
                 edge += k_sec+k;
             }
         }
         if (q) {
-            copy_arr(values + edge, D, (size_t)q*(size_t)(k_sec+k), nthreads);
+            copy_arr_(values + edge, D, (size_t)q*(size_t)(k_sec+k), nthreads);
             edge += (size_t)q*(size_t)(k_sec+k);
             if (add_intercepts) {
-                copy_arr(values + edge, D_bias, k_sec+k, 1);
+                copy_arr(values + edge, D_bias, k_sec+k);
                 edge += k_sec+k;
             }
         }
@@ -1737,9 +1737,9 @@ int_t fit_offsets_als
     }
 
     if (Am != NULL)
-        copy_arr(A, Am, (size_t)m*(size_t)k, nthreads);
+        copy_arr_(A, Am, (size_t)m*(size_t)k, nthreads);
     if (Bm != NULL)
-        copy_arr(B, Bm, (size_t)n*(size_t)k, nthreads);
+        copy_arr_(B, Bm, (size_t)n*(size_t)k, nthreads);
 
     if (U != NULL)
     {
@@ -2051,7 +2051,7 @@ int_t matrix_content_based
             U_csr_use = U_csr;
         }
 
-        set_to_zero(Am_new, (size_t)m_new*(size_t)k, nthreads);
+        set_to_zero_(Am_new, (size_t)m_new*(size_t)k, nthreads);
         tgemm_sp_dense(
             m_new, k, 1.,
             U_csr_p_use, U_csr_i_use, U_csr_use,
@@ -3032,9 +3032,9 @@ int_t fit_content_based_lbfgs
             goto throw_oom;
 
         if (Xfull != NULL)
-            copy_arr(Xfull, Xorig, (size_t)m*(size_t)n, nthreads);
+            copy_arr_(Xfull, Xorig, (size_t)m*(size_t)n, nthreads);
         else
-            copy_arr(X, Xorig, nnz, nthreads);
+            copy_arr_(X, Xorig, nnz, nthreads);
 
         if (!reset_values)
         {
@@ -3114,23 +3114,23 @@ int_t fit_content_based_lbfgs
         {
             edge = 0;
             if (user_bias) {
-                copy_arr(biasA, values + edge, m, 1);
+                copy_arr(biasA, values + edge, m);
                 edge += m;
             }
             if (item_bias) {
-                copy_arr(biasB, values + edge, n, 1);
+                copy_arr(biasB, values + edge, n);
                 edge += n;
             }
-            copy_arr(C, values + edge, (size_t)p*(size_t)k, nthreads);
+            copy_arr_(C, values + edge, (size_t)p*(size_t)k, nthreads);
             edge += (size_t)p*(size_t)k;
             if (add_intercepts) {
-                copy_arr(C_bias, values + edge, k, 1);
+                copy_arr(C_bias, values + edge, k);
                 edge += k;
             }
-            copy_arr(D, values + edge, (size_t)q*(size_t)k, nthreads);
+            copy_arr_(D, values + edge, (size_t)q*(size_t)k, nthreads);
             edge += (size_t)q*(size_t)k;
             if (add_intercepts) {
-                copy_arr(D_bias, values + edge, k, 1);
+                copy_arr(D_bias, values + edge, k);
                 edge += k;
             }
         }
@@ -3168,23 +3168,23 @@ int_t fit_content_based_lbfgs
     {
         edge = 0;
         if (user_bias) {
-            copy_arr(values + edge, biasA, m, 1);
+            copy_arr(values + edge, biasA, m);
             edge += m;
         }
         if (item_bias) {
-            copy_arr(values + edge, biasB, n, 1);
+            copy_arr(values + edge, biasB, n);
             edge += n;
         }
-        copy_arr(values + edge, C, (size_t)p*(size_t)k, nthreads);
+        copy_arr_(values + edge, C, (size_t)p*(size_t)k, nthreads);
         edge += (size_t)p*(size_t)k;
         if (add_intercepts) {
-            copy_arr(values + edge, C_bias, k, 1);
+            copy_arr(values + edge, C_bias, k);
             edge += k;
         }
-        copy_arr(values + edge, D, (size_t)q*(size_t)k, nthreads);
+        copy_arr_(values + edge, D, (size_t)q*(size_t)k, nthreads);
         edge += (size_t)q*(size_t)k;
         if (add_intercepts) {
-            copy_arr(values + edge, D_bias, k, 1);
+            copy_arr(values + edge, D_bias, k);
             edge += k;
         }
     }
@@ -3213,7 +3213,7 @@ int_t factors_content_based_single
     real_t *restrict C, real_t *restrict C_bias
 )
 {
-    if (a_vec != NULL)
+    if (u_vec != NULL)
     {
         cblas_tgemv(CblasRowMajor, CblasTrans,
                     p, k,
@@ -3224,7 +3224,7 @@ int_t factors_content_based_single
 
     else
     {
-        set_to_zero(a_vec, k, 1);
+        set_to_zero(a_vec, k);
         tgemv_dense_sp(
             p, k,
             1., C, (size_t)k,

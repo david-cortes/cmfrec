@@ -587,8 +587,8 @@ real_t collective_fun_grad
         U_sp, U_csr, I_sp, I_csr,
         &nvars, &ignored, &mtvars
     );
-    set_to_zero(grad, nvars, nthreads);
-    if (mtvars && buffer_mt != NULL) set_to_zero(buffer_mt, mtvars, nthreads);
+    set_to_zero_(grad, nvars, nthreads);
+    if (mtvars && buffer_mt != NULL) set_to_zero_(buffer_mt, mtvars, nthreads);
 
     /* unravel the arrays */
     real_t *restrict biasA = values;
@@ -635,7 +635,7 @@ real_t collective_fun_grad
     /* then user non-binary factorization */
     if (U != NULL || U_sp != NULL || U_csr != NULL)
     {
-        set_to_zero(buffer_real_t, sizeA, nthreads);
+        set_to_zero_(buffer_real_t, sizeA, nthreads);
         f += fun_grad_cannonical_form(
             A, k_totA, C, k_user + k,
             buffer_real_t,  g_C,
@@ -659,7 +659,7 @@ real_t collective_fun_grad
     /* then item non-binary factorization */
     if (II != NULL || I_sp != NULL || I_csr != NULL)
     {
-        set_to_zero(buffer_real_t, sizeB, nthreads);
+        set_to_zero_(buffer_real_t, sizeB, nthreads);
         f += fun_grad_cannonical_form(
             B, k_totB, D, k_item + k,
             buffer_real_t, g_D,
@@ -685,7 +685,7 @@ real_t collective_fun_grad
 
     if (Ub != NULL)
     {
-        set_to_zero(buffer_real_t, sizeA, nthreads);
+        set_to_zero_(buffer_real_t, sizeA, nthreads);
         f += collective_fun_grad_bin(
             A, k_totA, Cb, k_user + k,
             buffer_real_t, g_Cb,
@@ -700,7 +700,7 @@ real_t collective_fun_grad
 
     if (Ib != NULL)
     {
-        set_to_zero(buffer_real_t, sizeB, nthreads);
+        set_to_zero_(buffer_real_t, sizeB, nthreads);
         f += collective_fun_grad_bin(
             B, k_totB, Db, k_item + k,
             buffer_real_t, g_Db,
@@ -941,7 +941,7 @@ real_t collective_fun_grad_single
 {
     int_t ldb = k_item + k + k_main;
     int_t k_pred = k + k_main;
-    set_to_zero(g_A, k_user + k + k_main, 1);
+    set_to_zero(g_A, k_user + k + k_main);
     real_t f = 0;
 
 
@@ -1149,7 +1149,7 @@ int_t collective_factors_lbfgs
 
     /* Starting point_t can be set to zero, since the other matrices
        are already at their local optima. */
-    set_to_zero(a_vec, nvars, 1);
+    set_to_zero(a_vec, nvars);
 
     int_t retval = lbfgs(
         nvars,
@@ -1210,7 +1210,7 @@ void collective_closed_form_block
           (  (u_vec != NULL && cnt_NA_u == p) ||
              (u_vec == NULL && nnz_u_vec == 0)  ) )
     {
-        set_to_zero(a_vec, k_user + k + k_main, 1);
+        set_to_zero(a_vec, k_user + k + k_main);
         return;
     }
     if (Xa_dense != NULL && cnt_NA_x == n) {
@@ -1258,13 +1258,13 @@ void collective_closed_form_block
                             u_vec, 1,
                             add_X? 0. : 1., a_vec, 1);
                 if (k_main && add_X)
-                    set_to_zero(a_vec + k_user+k, k_main, 1);
+                    set_to_zero(a_vec + k_user+k, k_main);
             }
             else {
                 if (add_X)
-                    set_to_zero(a_vec, k_user+k+k_main, 1);
+                    set_to_zero(a_vec, k_user+k+k_main);
                 else if (k_user)
-                    set_to_zero(a_vec, k_user, 1);
+                    set_to_zero(a_vec, k_user);
                 tgemv_dense_sp(
                     p, k_user+k,
                     add_X? (1.) : (w_user), C, k_user+k,
@@ -1279,7 +1279,7 @@ void collective_closed_form_block
         if (add_X)
         {
             if (!add_U)
-                set_to_zero(a_vec + k_user+k, k_main, 1);
+                set_to_zero(a_vec + k_user+k, k_main);
             if (Xa_dense != NULL)
                 cblas_tgemv(CblasRowMajor, CblasTrans,
                             n, k+k_main,
@@ -1326,14 +1326,14 @@ void collective_closed_form_block
         );
 
     real_t *restrict bufferBeTBe = buffer_real_t;
-    set_to_zero(bufferBeTBe, square(k_totA), 1);
+    set_to_zero(bufferBeTBe, square(k_totA));
     
     if (add_X && add_U)
-        set_to_zero(a_vec, k_totA, 1);
+        set_to_zero(a_vec, k_totA);
     else if (add_U)
-        set_to_zero(a_vec, k_user, 1);
+        set_to_zero(a_vec, k_user);
     else if (add_X)
-        set_to_zero(a_vec + k_user+k, k_main, 1);
+        set_to_zero(a_vec + k_user+k, k_main);
 
     bool prefer_BtB = max2((size_t)cnt_NA_x + (size_t)(n_BtB-n), nnz)
                         <
@@ -1606,7 +1606,7 @@ void collective_closed_form_block_implicit
            (u_vec == NULL && nnz_u_vec == 0))
         )
     {
-        set_to_zero(a_vec, k_user + k + k_main, 1);
+        set_to_zero(a_vec, k_user + k + k_main);
         return;
     }
 
@@ -1622,7 +1622,7 @@ void collective_closed_form_block_implicit
     if (cnt_NA_u)
         add_U = true;
     if ((add_U || cnt_NA_u > 0) && !use_cg)
-        set_to_zero(a_vec, k_totA, 1);
+        set_to_zero(a_vec, k_totA);
 
     real_t *restrict BtB = buffer_real_t;
     bool add_C = false;
@@ -1639,10 +1639,10 @@ void collective_closed_form_block_implicit
                             u_vec, 1,
                             0., a_vec, 1);
                 if (k_main)
-                    set_to_zero(a_vec + k_user+k, k_main, 1);
+                    set_to_zero(a_vec + k_user+k, k_main);
             }
             else {
-                set_to_zero(a_vec, k_totA, 1);
+                set_to_zero(a_vec, k_totA);
                 tgemv_dense_sp(
                     p, k_user+k,
                     1., C, k_user+k,
@@ -1685,7 +1685,7 @@ void collective_closed_form_block_implicit
         if (precomputedBeTBe != NULL)
             memcpy(BtB, precomputedBeTBe,(size_t)square(k_totA)*sizeof(real_t));
         else {
-            set_to_zero(BtB, offset_square, 1);
+            set_to_zero(BtB, offset_square);
             cblas_tsyrk(CblasRowMajor, CblasUpper, CblasTrans,
                         k+k_main, n,
                         1., B + k_item, k_totB,
@@ -1703,7 +1703,7 @@ void collective_closed_form_block_implicit
         add_C = true;
         if (precomputedBtB != NULL) {
             if (ld_BtB != k_totA)
-                set_to_zero(BtB, square(k_totA), 1);
+                set_to_zero(BtB, square(k_totA));
             copy_mat(ld_BtB, ld_BtB,
                      precomputedBtB, ld_BtB,
                      BtB + offset_square, k_totA);
@@ -1774,7 +1774,7 @@ void collective_closed_form_block_implicit
 
             else
             {
-                set_to_zero(a_vec, k_user+k, 1);
+                set_to_zero(a_vec, k_user+k);
                 for (size_t ix = 0; ix < (size_t)p; ix++)
                     if (!isnan(u_vec[ix]))
                         cblas_taxpy(k_user+k, u_vec[ix],
@@ -1836,7 +1836,7 @@ void collective_block_cg
     real_t *restrict wr = NULL;
     if (Xa_dense == NULL && NA_as_zero_X && weight != NULL)
         wr = r + k_totA;  /* has length 'n' */
-    set_to_zero(r, k_totA, 1);
+    set_to_zero(r, k_totA);
     real_t r_new, r_old;
     real_t a, coef, w_this;
 
@@ -2148,7 +2148,7 @@ void collective_block_cg
         r[k_totA-1] -= (lam_last-lam) * a_vec[k_totA-1];
 
     /* p := r */
-    copy_arr(r, pp, k_totA, 1);
+    copy_arr(r, pp, k_totA);
     r_old = cblas_tdot(k_totA, r, 1, r, 1);
 
     #ifdef FORCE_CG
@@ -2161,7 +2161,7 @@ void collective_block_cg
 
     for (int_t cg_step = 0; cg_step < max_cg_steps; cg_step++)
     {
-        set_to_zero(Ap, k_totA, 1);
+        set_to_zero(Ap, k_totA);
 
         /* t(B)*B*p */
         if ((Xa_dense != NULL && cnt_NA_x == 0) ||
@@ -2400,7 +2400,7 @@ void collective_block_cg_implicit
     real_t *restrict Ap = buffer_real_t;
     real_t *restrict pp = Ap + k_totA;
     real_t *restrict r  = pp + k_totA;
-    set_to_zero(r, k_user, 1);
+    set_to_zero(r, k_user);
     real_t r_new, r_old;
     real_t a, coef;
 
@@ -2544,7 +2544,7 @@ void collective_block_cg_implicit
     cblas_taxpy(k_totA, -lam, a_vec, 1, r, 1);
 
     /* p := r */
-    copy_arr(r, pp, k_totA, 1);
+    copy_arr(r, pp, k_totA);
     r_old = cblas_tdot(k_totA, r, 1, r, 1);
 
     #ifdef FORCE_CG
@@ -2559,7 +2559,7 @@ void collective_block_cg_implicit
     {
         /* t(B)*B*p */
         if (k_user)
-            set_to_zero(Ap, k_user, 1);
+            set_to_zero(Ap, k_user);
         cblas_tsymv(CblasRowMajor, CblasUpper, k+k_main,
                     1., precomputedBtB, ld_BtB,
                     pp + k_user, 1,
@@ -2731,7 +2731,7 @@ int_t collective_factors_cold
         cnt_NA_u_bin_vec = count_NAs(u_bin_vec, (size_t)pbin, 1);
 
     if (k_main > 0)
-        set_to_zero(a_vec + k_user+k, k_main, 1);
+        set_to_zero(a_vec + k_user+k, k_main);
 
     real_t *restrict buffer_real_t = NULL;
     size_t size_buffer = 0;
@@ -2823,7 +2823,7 @@ int_t collective_factors_cold_implicit
           ||
         (u_vec_sp != NULL && nnz_u_vec == 0))
     {
-        set_to_zero(a_vec, k_totA, 1);
+        set_to_zero(a_vec, k_totA);
         goto cleanup;
     }
 
@@ -2940,7 +2940,7 @@ int_t collective_factors_warm
         )
     {
         if (append_bias) *a_bias = 0;
-        set_to_zero(a_vec, k_user + k + k_main, 1);
+        set_to_zero(a_vec, k_user + k + k_main);
         return 0;
     }
 
@@ -3002,9 +3002,9 @@ int_t collective_factors_warm
 
         if (k_user > 0) {
             if (a_plus_bias == NULL)
-                set_to_zero(a_vec, k_user, 1);
+                set_to_zero(a_vec, k_user);
             else
-                set_to_zero(a_plus_bias, k_user, 1);
+                set_to_zero(a_plus_bias, k_user);
         }
         if (!append_bias)
             factors_closed_form(a_vec + k_user, k+k_main,
@@ -3195,7 +3195,7 @@ int_t collective_factors_warm_implicit
     }
 
     else {
-        set_to_zero(a_vec, k_user+k+k_main, 1);
+        set_to_zero(a_vec, k_user+k+k_main);
         factors_implicit_chol(
             a_vec + k_user, k+k_main,
             B + k_item, (size_t)(k_item+k+k_main),
@@ -3245,7 +3245,7 @@ real_t fun_grad_A_collective
     real_t err;
     size_t ib;
 
-    set_to_zero(g_A, (size_t)m_max*(size_t)k_totA, nthreads);
+    set_to_zero_(g_A, (size_t)m_max*(size_t)k_totA, nthreads);
 
     if (Xfull != NULL)
     {
@@ -3776,8 +3776,8 @@ void optimizeA_collective
     /* TODO: here should only need to set straight away the lower half,
        and only when there are un-even entries in each matrix */
     if (!use_cg || is_first_iter)
-        set_to_zero(A, (size_t)max2(m, m_u)*(size_t)lda - (size_t)(lda-k_totA),
-                    nthreads);
+        set_to_zero_(A, (size_t)max2(m, m_u)*(size_t)lda - (size_t)(lda-k_totA),
+                     nthreads);
 
     /* If one of the matrices has more rows than the other, the rows
        for the larger matrix will be independent and can be obtained
@@ -3979,7 +3979,7 @@ void optimizeA_collective
             );
 
             if (k_user || k_main)
-                set_to_zero(bufferBeTBeChol, square(k_totA), nthreads);
+                set_to_zero(bufferBeTBeChol, square(k_totA));
             copy_mat(k_totC, k_totC,
                      bufferCtC, k_totC,
                      bufferBeTBeChol, k_totA);
@@ -4099,7 +4099,7 @@ void optimizeA_collective
                     }
 
                     if (use_cg)
-                        set_to_zero(A + ix*(size_t)lda, k_totA, 1);
+                        set_to_zero(A + ix*(size_t)lda, k_totA);
                         /* this is compensated by higher 'max_cg_steps' below */
 
                     collective_closed_form_block(
@@ -4228,7 +4228,7 @@ void optimizeA_collective
         if (bufferBeTBeChol != NULL)
         {
             if (k_user || k_main)
-                set_to_zero(bufferBeTBeChol, square(k_totA), nthreads);
+                set_to_zero(bufferBeTBeChol, square(k_totA));
             copy_mat(k_user+k, k_user+k,
                      bufferCtC, k_user+k,
                      bufferBeTBeChol, k_totA);
@@ -4260,7 +4260,7 @@ void optimizeA_collective
 
             /* TODO: what's the point_t of this 'bufferX_zeros'? */
             if (!full_dense && do_B)
-                set_to_zero(bufferX_zeros, n, 1); /*still needs a placeholder*/
+                set_to_zero(bufferX_zeros, n); /*still needs a placeholder*/
         }
 
         else if (Xfull == NULL && weight == NULL && NA_as_zero_X) {
@@ -4420,7 +4420,7 @@ void optimizeA_collective_implicit
     #endif
 
     if (!use_cg || is_first_iter)
-        set_to_zero(A, (size_t)max2(m, m_u)*(size_t)k_totA, nthreads);
+        set_to_zero_(A, (size_t)max2(m, m_u)*(size_t)k_totA, nthreads);
 
     /* TODO: BtB can be skipped when using NA_as_zero_U */
     if (precomputedBtB == NULL)
@@ -4517,7 +4517,7 @@ void optimizeA_collective_implicit
     if (precomputedBeTBe != NULL)
     {
         if (ld_BtB != k_totA)
-            set_to_zero(precomputedBeTBe, square(k_totA), 1);
+            set_to_zero(precomputedBeTBe, square(k_totA));
         copy_mat(k+k_main, k+k_main,
                  precomputedBtB, k+k_main,
                  precomputedBeTBe + k_user + k_user*k_totA, k_totA);
@@ -4579,8 +4579,7 @@ void optimizeA_collective_implicit
        in U, can reuse a single Cholesky factorization for them. */
     if (precomputedBeTBeChol != NULL)
     {
-        copy_arr(precomputedBeTBe, precomputedBeTBeChol,
-                 square(k_totA), nthreads);
+        copy_arr(precomputedBeTBe, precomputedBeTBeChol, square(k_totA));
         char lo = 'L';
         tpotrf_(&lo, &k_totA, precomputedBeTBeChol, &k_totA, &ix);
         *filled_BeTBeChol = true;
@@ -4631,7 +4630,7 @@ void build_BeTBe
 )
 {
     int_t k_totA = k_user + k + k_main;
-    set_to_zero(bufferBeTBe, square(k_totA), 1);
+    set_to_zero(bufferBeTBe, square(k_totA));
     cblas_tsyrk(CblasRowMajor, CblasUpper, CblasTrans,
                 k_user + k, p,
                 w_user, C, k_user + k,
@@ -4862,7 +4861,7 @@ int_t preprocess_sideinfo_matrix
     if (retval != 0) return 1;
 
     if (NA_as_zero_U && U == NULL && U_colmeans != NULL)
-        set_to_zero(U_colmeans, p, 1);
+        set_to_zero(U_colmeans, p);
 
     if (U != NULL && Utrans != NULL && !full_dense_u && !near_dense_u_col)
     {
@@ -5302,31 +5301,31 @@ int_t fit_collective_explicit_lbfgs
     {
         edge = 0;
         if (user_bias) {
-            copy_arr(biasA, values + edge, m_max, 1);
+            copy_arr(biasA, values + edge, m_max);
             edge += m_max;
         }
         if (item_bias) {
-            copy_arr(biasB, values + edge, n_max, 1);
+            copy_arr(biasB, values + edge, n_max);
             edge += n_max;
         }
-        copy_arr(A, values + edge, (size_t)m_max*(size_t)k_totA, nthreads);
+        copy_arr_(A, values + edge, (size_t)m_max*(size_t)k_totA, nthreads);
         edge += (size_t)m_max*(size_t)k_totA;
-        copy_arr(B, values + edge, (size_t)n_max*(size_t)k_totB, nthreads);
+        copy_arr_(B, values + edge, (size_t)n_max*(size_t)k_totB, nthreads);
         edge += (size_t)n_max*(size_t)k_totB;
         if (p) {
-            copy_arr(C, values + edge, (size_t)p*(size_t)(k_user+k), nthreads);
+            copy_arr_(C, values + edge, (size_t)p*(size_t)(k_user+k), nthreads);
             edge += (size_t)p*(size_t)(k_user+k);
         }
         if (pbin) {
-            copy_arr(Cb, values+edge,(size_t)pbin*(size_t)(k_user+k),nthreads);
+            copy_arr_(Cb, values+edge,(size_t)pbin*(size_t)(k_user+k),nthreads);
             edge += (size_t)pbin*(size_t)(k_user+k);
         }
         if (q) {
-            copy_arr(D, values + edge, (size_t)q*(size_t)(k_item+k), nthreads);
+            copy_arr_(D, values + edge, (size_t)q*(size_t)(k_item+k), nthreads);
             edge += (size_t)q*(size_t)(k_item+k);
         }
         if (qbin) {
-            copy_arr(Db, values+edge,(size_t)qbin*(size_t)(k_item+k),nthreads);
+            copy_arr_(Db, values+edge,(size_t)qbin*(size_t)(k_item+k),nthreads);
             edge += (size_t)qbin*(size_t)(k_item+k);
         }
     }
@@ -5363,31 +5362,31 @@ int_t fit_collective_explicit_lbfgs
     {
         edge = 0;
         if (user_bias) {
-            copy_arr(values + edge, biasA, m_max, 1);
+            copy_arr(values + edge, biasA, m_max);
             edge += m_max;
         }
         if (item_bias) {
-            copy_arr(values + edge, biasB, n_max, 1);
+            copy_arr(values + edge, biasB, n_max);
             edge += n_max;
         }
-        copy_arr(values + edge, A, (size_t)m_max*(size_t)k_totA, nthreads);
+        copy_arr_(values + edge, A, (size_t)m_max*(size_t)k_totA, nthreads);
         edge += (size_t)m_max*(size_t)k_totA;
-        copy_arr(values + edge, B, (size_t)n_max*(size_t)k_totB, nthreads);
+        copy_arr_(values + edge, B, (size_t)n_max*(size_t)k_totB, nthreads);
         edge += (size_t)n_max*(size_t)k_totB;
         if (p) {
-            copy_arr(values + edge, C, (size_t)p*(size_t)(k_user+k), nthreads);
+            copy_arr_(values + edge, C, (size_t)p*(size_t)(k_user+k), nthreads);
             edge += (size_t)p*(size_t)(k_user+k);
         }
         if (pbin) {
-            copy_arr(values+edge,Cb, (size_t)pbin*(size_t)(k_user+k),nthreads);
+            copy_arr_(values+edge,Cb, (size_t)pbin*(size_t)(k_user+k),nthreads);
             edge += (size_t)pbin*(size_t)(k_user+k);
         }
         if (q) {
-            copy_arr(values + edge, D, (size_t)q*(size_t)(k_item+k), nthreads);
+            copy_arr_(values + edge, D, (size_t)q*(size_t)(k_item+k), nthreads);
             edge += (size_t)q*(size_t)(k_item+k);
         }
         if (qbin) {
-            copy_arr(values+edge,Db, (size_t)qbin*(size_t)(k_item+k),nthreads);
+            copy_arr_(values+edge,Db, (size_t)qbin*(size_t)(k_item+k),nthreads);
             edge += (size_t)qbin*(size_t)(k_item+k);
         }
     }
@@ -5706,12 +5705,12 @@ int_t fit_collective_explicit_als
             if (item_bias) {
                 Xcsr_orig = (real_t*)malloc(nnz*sizeof(real_t));
                 if (Xcsr_orig == NULL) goto throw_oom;
-                copy_arr(Xcsr, Xcsr_orig, nnz, nthreads);
+                copy_arr_(Xcsr, Xcsr_orig, nnz, nthreads);
             }
             if (user_bias) {
                 Xcsc_orig = (real_t*)malloc(nnz*sizeof(real_t));
                 if (Xcsc_orig == NULL) goto throw_oom;
-                copy_arr(Xcsc, Xcsc_orig, nnz, nthreads);
+                copy_arr_(Xcsc, Xcsc_orig, nnz, nthreads);
             }    
         }
 
@@ -5719,14 +5718,14 @@ int_t fit_collective_explicit_als
         {
             Xfull_orig = (real_t*)malloc((size_t)m*(size_t)n*sizeof(real_t));
             if (Xfull_orig == NULL) goto throw_oom;
-            copy_arr(Xfull, Xfull_orig, (size_t)m*(size_t)n, nthreads);
+            copy_arr_(Xfull, Xfull_orig, (size_t)m*(size_t)n, nthreads);
         }
 
         if (Xtrans != NULL && user_bias)
         {
             Xtrans_orig = (real_t*)malloc((size_t)m*(size_t)n*sizeof(real_t));
             if (Xtrans_orig == NULL) goto throw_oom;
-            copy_arr(Xtrans, Xtrans_orig, (size_t)m*(size_t)n, nthreads);
+            copy_arr_(Xtrans, Xtrans_orig, (size_t)m*(size_t)n, nthreads);
         }
     }
 
@@ -6091,9 +6090,9 @@ int_t fit_collective_explicit_als
         else if (Xfull_orig != NULL || Xtrans_orig != NULL)
         {
             if (Xtrans_orig != NULL)
-                copy_arr(Xtrans, Xtrans_orig, (size_t)m*(size_t)n, nthreads);
+                copy_arr_(Xtrans, Xtrans_orig, (size_t)m*(size_t)n, nthreads);
             else
-                copy_arr(Xfull, Xfull_orig, (size_t)m*(size_t)n, nthreads);
+                copy_arr_(Xfull, Xfull_orig, (size_t)m*(size_t)n, nthreads);
         }
 
         /* Optimize B */
@@ -6218,7 +6217,7 @@ int_t fit_collective_explicit_als
 
         else if (Xfull_orig != NULL)
         {
-            copy_arr(Xfull, Xfull_orig, (size_t)m*(size_t)n, nthreads);
+            copy_arr_(Xfull, Xfull_orig, (size_t)m*(size_t)n, nthreads);
         }
 
         /* Optimize A */
@@ -6385,7 +6384,7 @@ int_t fit_collective_explicit_als
             copy_mat(include_all_X? n_max : n, k+k_main+user_bias,
                      B_bias + k_item, k_item+k+k_main+has_bias,
                      precomputedTransBtBinvBt, k+k_main+user_bias);
-            copy_arr(precomputedBtB, arr_use, square(k_pred), nthreads);
+            copy_arr(precomputedBtB, arr_use, square(k_pred));
             add_to_diag(arr_use,
                         (lam_unique == NULL)? (lam) : (lam_unique[2]),
                         k_pred);
@@ -6429,14 +6428,14 @@ int_t fit_collective_explicit_als
                     if (arr_use == NULL) goto throw_oom;
                 }
 
-                copy_arr(C, precomputedTransCtCinvCt,
-                         (size_t)p*(size_t)(k_user+k), nthreads);
+                copy_arr_(C, precomputedTransCtCinvCt,
+                          (size_t)p*(size_t)(k_user+k), nthreads);
                 if (!filled_CtCw) {
                     cblas_tsyrk(CblasRowMajor, CblasUpper, CblasTrans,
                                 k_pred, p,
                                 1., C, k_pred,
                                 0., precomputedCtCw, k_pred);
-                    copy_arr(precomputedCtCw, arr_use, square(k_pred),nthreads);
+                    copy_arr(precomputedCtCw, arr_use, square(k_pred));
                     add_to_diag(arr_use,
                                 ((lam_unique == NULL)? (lam) : (lam_unique[2]))
                                     / w_user,
@@ -6446,7 +6445,7 @@ int_t fit_collective_explicit_als
                     filled_CtCw = true;
                 }
                 else {
-                    copy_arr(precomputedCtCw, arr_use, square(k_pred),nthreads);
+                    copy_arr(precomputedCtCw, arr_use, square(k_pred));
                     if (w_user != 1. && !use_cg)
                         cblas_tscal(square(k_pred), 1./w_user, arr_use, 1);
                     add_to_diag(arr_use,
@@ -6477,7 +6476,7 @@ int_t fit_collective_explicit_als
             if (precomputedBeTBeChol != NULL && !filled_BeTBeChol)
             {
                 k_pred = k_user + k + k_main + (int)user_bias;
-                set_to_zero(precomputedBeTBeChol, square(k_pred), 1);
+                set_to_zero(precomputedBeTBeChol, square(k_pred));
                 
                 copy_mat(k+k_main+user_bias, k+k_main+user_bias,
                          precomputedBtB, k+k_main+user_bias,
@@ -7121,7 +7120,7 @@ int_t fit_collective_implicit_als
 
         if (!filled_BeTBe && (U != NULL || nnz_U))
         {
-            set_to_zero(precomputedBeTBe, square(k_totA), nthreads);
+            set_to_zero(precomputedBeTBe, square(k_totA));
             
             if (filled_CtC)
             {
@@ -7151,8 +7150,7 @@ int_t fit_collective_implicit_als
 
         if (!filled_BeTBeChol && (U != NULL || nnz_U))
         {
-            copy_arr(precomputedBeTBe, precomputedBeTBeChol,
-                     square(k_totA), nthreads);
+            copy_arr(precomputedBeTBe, precomputedBeTBeChol, square(k_totA));
             char lo = 'L';
             int_t ignore_int = 0;
             tpotrf_(&lo, &k_totA, precomputedBeTBeChol, &k_totA, &ignore_int);
@@ -7272,7 +7270,7 @@ int_t precompute_collective_explicit
 
     if (B != NULL)
     {
-        set_to_zero(BtB, square(k+k_main), 1);
+        set_to_zero(BtB, square(k+k_main));
         cblas_tsyrk(CblasRowMajor, CblasUpper, CblasTrans,
                     k+k_main, n,
                     1., B + k_item, k_item+k+k_main,
@@ -7289,7 +7287,7 @@ int_t precompute_collective_explicit
             if (arr_use == NULL) goto throw_oom;
         }
 
-        copy_arr(BtB, arr_use, square(k+k_main), 1);
+        copy_arr(BtB, arr_use, square(k+k_main));
         add_to_diag(arr_use, lam, k+k_main);
         if (lam != lam_last)
             arr_use[square(k+k_main)-1] += (lam_last - lam);
@@ -7309,7 +7307,7 @@ int_t precompute_collective_explicit
 
     if (p > 0 && C != NULL && CtCw != NULL)
     {
-        set_to_zero(CtCw, square(k_user+k), 1);
+        set_to_zero(CtCw, square(k_user+k));
         cblas_tsyrk(CblasRowMajor, CblasUpper, CblasTrans,
                     k_user+k, p,
                     1., C, k_user+k,
@@ -7318,7 +7316,7 @@ int_t precompute_collective_explicit
         if (TransCtCinvCt != NULL)
         {
             k_pred = k_user + k;
-            copy_arr(C, TransCtCinvCt, (size_t)p*(size_t)(k_user+k), 1);
+            copy_arr(C, TransCtCinvCt, (size_t)p*(size_t)(k_user+k));
             if (BeTBeChol != NULL)
                 arr_use = BeTBeChol; /* temporary */
             else {
@@ -7327,7 +7325,7 @@ int_t precompute_collective_explicit
                 if (arr_use == NULL) goto throw_oom;
             }
 
-            copy_arr(CtCw, arr_use, square(k_user+k), 1);
+            copy_arr(CtCw, arr_use, square(k_user+k));
             add_to_diag(arr_use, lam/w_user, k_user+k);
             tposv_(&lo, &k_pred, &p,
                    arr_use, &k_pred,
@@ -7346,7 +7344,7 @@ int_t precompute_collective_explicit
 
     if (BeTBeChol != NULL && B != NULL && C != NULL)
     {
-        set_to_zero(BeTBeChol, square(k_user+k+k_main), 1);
+        set_to_zero(BeTBeChol, square(k_user+k+k_main));
         int_t k_totA = k_user + k + k_main;
         
         if (CtCw != NULL)
@@ -7421,7 +7419,7 @@ int_t precompute_collective_implicit
 
     /* BeTBe */
     int_t k_totA = k_user + k + k_main;
-    set_to_zero(BeTBe, square(k_totA), 1);
+    set_to_zero(BeTBe, square(k_totA));
     copy_mat(k+k_main, k+k_main,
              BtB, k+k_main,
              BeTBe + k_user + k_user*k_totA, k_totA);
@@ -7457,7 +7455,7 @@ int_t precompute_collective_implicit
     /* BeTBeChol */
     if (BeTBeChol != NULL)
     {
-        copy_arr(BeTBe, BeTBeChol, square(k_totA), 1);
+        copy_arr(BeTBe, BeTBeChol, square(k_totA));
         char lo = 'L';
         int_t ignore = 0;
         tpotrf_(&lo, &k_totA, BeTBeChol, &k_totA, &ignore);
@@ -8065,7 +8063,7 @@ int_t impute_X_collective_explicit
     {
         Xpred = (real_t*)malloc(m_by_n*sizeof(real_t));
         if (Xpred == NULL) goto throw_oom;
-        copy_arr(Xfull, Xpred, m_by_n, nthreads);
+        copy_arr_(Xfull, Xpred, m_by_n, nthreads);
     }
 
     else {

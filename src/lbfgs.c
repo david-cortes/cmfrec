@@ -272,7 +272,7 @@ int_t lbfgs(
         buffer_real_t = (real_t*)calloc(size_buffer, sizeof(real_t));
     else {
         free_buffer_real_t = false;
-        set_to_zero(buffer_real_t, size_buffer, 1);
+        set_to_zero(buffer_real_t, size_buffer);
     }
     if (buffer_iter == NULL)
         buffer_iter = (iteration_data_t*)calloc(m, sizeof(iteration_data_t));
