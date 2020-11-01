@@ -298,6 +298,11 @@ extern "C" {
                       the model.
                       Recommended value: true
     @param lam  Regularization parameter applied to the model matrices.
+                Note that, unlike in other software, the loss/objective function
+                here is not scaled by the number of entries anywhere, so the
+                optimal regularization value is likely going to be rather high -
+                for example, for the MovieLens10M, a value of 35 would perform
+                well.
                 Will be ignored if passing 'lam_unique'.
                 Recommended values: from 10^-2 to 10^2
     @param lam_unique  (optional) Regularization parameter to apply to each

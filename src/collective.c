@@ -1653,15 +1653,16 @@ void collective_closed_form_block_implicit
             if (w_user != 1.)
                 cblas_tscal(k_user+k, w_user, a_vec, 1);
         }
-        return tpotrs_(&lo, &k_totA, &one,
-                       precomputedBeTBeChol, &k_totA,
-                       a_vec, &k_totA,
-                       &ignore);
+        tpotrs_(&lo, &k_totA, &one,
+                precomputedBeTBeChol, &k_totA,
+                a_vec, &k_totA,
+                &ignore);
+        return;
     }
 
     else if (use_cg)
     {
-        return collective_block_cg_implicit(
+        collective_block_cg_implicit(
                 a_vec,
                 k, k_user, k_item, k_main,
                 Xa, ixB, nnz,
@@ -1677,6 +1678,7 @@ void collective_closed_form_block_implicit
                 precomputedCtCw,
                 buffer_real_t
             );
+        return;
     }
     
 
@@ -4017,7 +4019,7 @@ void optimizeA_collective
                 m_x, n, k + k_main,
                 do_B, true
             );
-        else if (Xcsr != NULL)
+        else if (Xcsr_p != NULL)
             tgemm_sp_dense(
                 m_x, k+k_main, 1.,
                 Xcsr_p, Xcsr_i, Xcsr,
@@ -4031,7 +4033,7 @@ void optimizeA_collective
                         m_u, k_user + k, p,
                         w_user, U, p, C, k_user + k,
                         1., A, lda);
-        else if (U_csr != NULL)
+        else if (U_csr_p != NULL)
             tgemm_sp_dense(
                 m_u, k_user+k, w_user,
                 U_csr_p, U_csr_i, U_csr,

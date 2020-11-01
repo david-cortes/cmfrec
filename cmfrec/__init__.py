@@ -2086,7 +2086,7 @@ class CMF(_CMF):
            "Applications of the conjugate gradient method for implicit feedback collaborative filtering."
            Proceedings of the fifth ACM conference on Recommender systems. 2011.
     """
-    def __init__(self, k=50, lambda_=1e1, method="als", use_cg=True,
+    def __init__(self, k=40, lambda_=25., method="als", use_cg=True,
                  user_bias=True, item_bias=True, k_user=0, k_item=0, k_main=0,
                  w_main=1., w_user=1., w_item=1.,
                  maxiter=400, niter=10, parallelize="separate", corr_pairs=4,

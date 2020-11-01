@@ -456,7 +456,7 @@ void construct_Am
        - Am[m, k_sec+k+k_main] */
 
     size_t k_totA = k_sec + k + k_main;
-    size_t k_szA = ((U == NULL && U_csr == NULL)? k_sec : 0) + k + k_main;
+    size_t k_szA = ((U == NULL && U_csr_p == NULL)? k_sec : 0) + k + k_main;
 
     if (k_sec == 0 && k_main == 0) {
         copy_arr_(A, Am, (size_t)m*k_totA, nthreads);
@@ -472,7 +472,7 @@ void construct_Am
                     m, k_sec+k, p,
                     w_user, U, p, C, k_sec+k,
                     1., Am, k_totA);
-    else if (U_csr != NULL)
+    else if (U_csr_p != NULL)
         tgemm_sp_dense(m, k+k_sec, w_user,
                        U_csr_p, U_csr_i, U_csr,
                        C, k_sec+k,
@@ -858,7 +858,7 @@ int_t precompute_offsets_both
         );
     }
 
-    if (U  != NULL || U_csr != NULL)
+    if (U  != NULL || U_csr_p != NULL)
         construct_Am(
             Am, A,
             C, C_bias,
@@ -871,7 +871,7 @@ int_t precompute_offsets_both
     else
         Am = A;
 
-    if (II != NULL || I_csr != NULL)
+    if (II != NULL || I_csr_p != NULL)
         construct_Am(
             Bm, B,
             D, D_bias,
