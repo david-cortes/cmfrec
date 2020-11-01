@@ -1912,7 +1912,7 @@ class CMF(_CMF):
         the ohter models, fewer iterations will be required for converge
         here. Using higher regularization values might also decrease the number
         of required iterations. Pass zero for no L-BFGS iterations limit.
-        If you see that the procedure is spending hundreds of iterations
+        If the procedure is spending hundreds of iterations
         without any significant decrease in the loss function or gradient norm,
         it's highly likely that the regularization is too low.
         Ignored when passing ``method='als'``.
@@ -3124,7 +3124,7 @@ class CMF(_CMF):
 
         Note
         ----
-        You don't need to call this method if passing
+        It's not necessary to call this method if passing
         ``precompute_for_predictions=True``.
 
         Returns
@@ -3538,7 +3538,7 @@ class CMF_implicit(_CMF):
 
         Note
         ----
-        You don't need to call this method if passing
+        It's not necessary to call this method if passing
         ``precompute_for_predictions=True``.
 
         Returns
@@ -4508,7 +4508,7 @@ class OMF_explicit(_OMF):
 
     Note
     ----
-    You might want to experiment with tuning the maximum number of L-BFGS iterations
+    It's advised to experiment with tuning the maximum number of L-BFGS iterations
     and stopping earlier. Be aware that this model requires a lot more iterations
     to reach convergence compared to the classic and the collective models.
 
@@ -4599,7 +4599,7 @@ class OMF_explicit(_OMF):
         the collective model, more iterations will be required for converge
         here. Using higher regularization values might also decrease the number
         of required iterations. Pass zero for no L-BFGS iterations limit.
-        If you see that the procedure is spending thousands of iterations
+        If the procedure is spending thousands of iterations
         without any significant decrease in the loss function or gradient norm,
         it's highly likely that the regularization is too low.
         Ignored when passing ``method='als'``.
@@ -5915,8 +5915,8 @@ class ContentBased(_OMF_Base):
     Note
     ----
     This is a highly non-linear model that will take many more L-BFGS
-    iterations to converge compared to the other models. You might also
-    want to experiment with tuning the maximum number of iterations.
+    iterations to converge compared to the other models. It's advised
+    to experiment with tuning the maximum number of iterations.
 
     Note
     ----
@@ -5961,7 +5961,7 @@ class ContentBased(_OMF_Base):
         the collective model, more iterations will be required for converge
         here. Using higher regularization values might also decrease the number
         of required iterations. Pass zero for no L-BFGS iterations limit.
-        If you see that the procedure is spending thousands of iterations
+        If the procedure is spending thousands of iterations
         without any significant decrease in the loss function or gradient norm,
         it's highly likely that the regularization is too low.
     corr_pairs : int
