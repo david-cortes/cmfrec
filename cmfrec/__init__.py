@@ -1841,7 +1841,9 @@ class CMF(_CMF):
         matrix, in which case it should be an array with 6 entries, corresponding,
         in this order, to: user_bias, item_bias, A, B, C, D. Note that the default
         value for ``lambda_`` here is much higher than in other software, and that
-        the loss/objective function is not divided by the number of entries.
+        the loss/objective function is not divided by the number of entries anywhere,
+        so this parameter needs good tuning.
+        For example, a good value for the MovieLens10M would be ``lambda_=35.``.
         Typical values are 10^-2 to 10^2.
     method : str, one of "lbfgs" or "als"
         Optimization method used to fit the model. If passing ``'lbfgs'``, will
@@ -2086,7 +2088,7 @@ class CMF(_CMF):
            "Applications of the conjugate gradient method for implicit feedback collaborative filtering."
            Proceedings of the fifth ACM conference on Recommender systems. 2011.
     """
-    def __init__(self, k=40, lambda_=25., method="als", use_cg=True,
+    def __init__(self, k=40, lambda_=1e+1, method="als", use_cg=True,
                  user_bias=True, item_bias=True, k_user=0, k_item=0, k_main=0,
                  w_main=1., w_user=1., w_item=1.,
                  maxiter=400, niter=10, parallelize="separate", corr_pairs=4,

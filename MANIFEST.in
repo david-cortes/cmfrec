@@ -1,7 +1,9 @@
 global-include *.pyx
 global-include *.pxi
-global-include *.c 
-global-include *.h 
+global-include *.c
+global-include *.h
+global-exclude *.o
+global-exclude *.so
 include pyproject.toml
 exclude .gitignore
 exclude .gitattributes
@@ -10,3 +12,4 @@ exclude test_math/*
 exclude cmfrec/*.c
 exclude docs/*
 prune docs/*
+exclude src/Rwrapper.c
