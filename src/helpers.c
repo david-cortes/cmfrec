@@ -198,7 +198,7 @@ void count_NAs_by_col
     {
         for (int_t ix = 0; ix < n; ix++)
             cnt_rows_w_NA += (cnt_NA[ix] > 0);
-        if ((n - cnt_rows_w_NA) >= (int)(0.75 * (double)n))
+        if ((n - cnt_rows_w_NA) >= (int_t)(0.75 * (real_t)n))
             *near_dense = true;
     }
 }

@@ -2117,7 +2117,7 @@ void optimizeA_implicit
        so as to incorporate this function later into the 'factors_multiple'. */
     cblas_tsyrk(CblasRowMajor, CblasUpper, CblasTrans,
                 k, n,
-                1., B, (int)ldb,
+                1., B, ldb,
                 0., precomputedBtB, k);
     if (!use_cg)
         add_to_diag(precomputedBtB, lam, k);
@@ -2703,12 +2703,12 @@ int_t topN
         #pragma omp parallel for schedule(static) num_threads(nthreads) \
                 shared(a_vec, B, k_pred, k_item, n_take, k_totB, \
                        buffer_ix, biasB, buffer_scores)
-        for (ix = 0; ix < (int)n_take; ix++)
+        for (ix = 0; ix < (int_t)n_take; ix++)
             buffer_scores[ix] = cblas_tdot(k_pred, a_vec, 1,
                                            B + k_item + (size_t)buffer_ix[ix]
                                                 * (size_t)k_totB, 1)
                                 + ((biasB != NULL)? biasB[buffer_ix[ix]] : 0.);
-        for (int_t ix = 0; ix < (int)n_take; ix++)
+        for (int_t ix = 0; ix < (int_t)n_take; ix++)
             buffer_mask[ix] = ix;
     }
 

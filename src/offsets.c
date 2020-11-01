@@ -463,7 +463,7 @@ void construct_Am
     } else {
         /* Am[:,:] = 0; Am[:,k_sec:] = A[:,:] */
         set_to_zero_(Am, (size_t)m*k_totA, nthreads);
-        copy_mat(m, k+k_main, A, k_szA, Am + k_sec, (int)k_totA);
+        copy_mat(m, k+k_main, A, k_szA, Am + k_sec, k_totA);
     }
 
     /* Am[:,:k_sec+k] += U * C */
@@ -1755,7 +1755,7 @@ int_t fit_offsets_als
                 U_plus_bias, &m, MatTrans, &ldb,
                 sv, &threshold_svd, &rank,
                 &temp, &minus_one, &sz_iwork, &ignore);
-        temp_intA = (int)temp;
+        temp_intA = (int_t)temp;
 
         buffer_real_t = (real_t*)malloc((size_t)temp_intA*sizeof(real_t));
         buffer_iwork = (int_t*)malloc((size_t)(sz_iwork+1)*sizeof(int_t));
@@ -1827,7 +1827,7 @@ int_t fit_offsets_als
                 I_plus_bias, &m, MatTrans, &ldb,
                 sv, &threshold_svd, &rank,
                 &temp, &minus_one, &sz_iwork, &ignore);
-        temp_intA = (int)temp;
+        temp_intA = (int_t)temp;
 
         buffer_real_t = (real_t*)malloc((size_t)temp_intA*sizeof(real_t));
         buffer_iwork = (int_t*)malloc((size_t)(sz_iwork+1)*sizeof(int_t));
