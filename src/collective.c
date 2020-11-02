@@ -5269,6 +5269,7 @@ int_t fit_collective_explicit_lbfgs
     bool verbose, int_t print_every, bool handle_interrupt,
     int_t *restrict niter, int_t *restrict nfev,
     bool precompute_for_predictions,
+    bool include_all_X,
     real_t *restrict B_plus_bias,
     real_t *restrict precomputedBtB,
     real_t *restrict precomputedTransBtBinvBt,
@@ -5396,7 +5397,7 @@ int_t fit_collective_explicit_lbfgs
     if (precompute_for_predictions)
     {
         retval = precompute_collective_explicit(
-            B, n, n_i, n_ibin,
+            B, n, n_max, include_all_X,
             C, p,
             k, k_user, k_item, k_main,
             user_bias,

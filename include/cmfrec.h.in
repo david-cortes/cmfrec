@@ -641,6 +641,7 @@ int_t fit_collective_explicit_lbfgs
     bool verbose, int_t print_every, bool handle_interrupt,
     int_t *niter, int_t *nfev,
     bool precompute_for_predictions,
+    bool include_all_X,
     real_t *B_plus_bias,
     real_t *precomputedBtB,
     real_t *precomputedTransBtBinvBt,

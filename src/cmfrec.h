@@ -1188,6 +1188,7 @@ int_t fit_collective_explicit_lbfgs
     bool verbose, int_t print_every, bool handle_interrupt,
     int_t *restrict niter, int_t *restrict nfev,
     bool precompute_for_predictions,
+    bool include_all_X,
     real_t *restrict B_plus_bias,
     real_t *restrict precomputedBtB,
     real_t *restrict precomputedTransBtBinvBt,
