@@ -5888,9 +5888,9 @@ int_t fit_collective_explicit_als
         rnorm_preserve_seed(A, (size_t)m_max*(size_t)k_totA, seed_arr);
         rnorm_preserve_seed(B, (size_t)n_max*(size_t)k_totB, seed_arr);
         if (U != NULL || U_csr_p != NULL)
-            rnorm_preserve_seed(C, (size_t)m_u*(size_t)(k_user+k), seed_arr);
+            rnorm_preserve_seed(C, (size_t)p*(size_t)(k_user+k), seed_arr);
         if (II != NULL || I_csr_p != NULL)
-            rnorm_preserve_seed(D, (size_t)n_i*(size_t)(k_item+k), seed_arr);
+            rnorm_preserve_seed(D, (size_t)q*(size_t)(k_item+k), seed_arr);
         free(seed_arr); seed_arr = NULL;
     }
 
@@ -6831,9 +6831,9 @@ int_t fit_collective_implicit_als
         rnorm_preserve_seed(A, (size_t)k_totA*(size_t)m_max, seed_arr);
         rnorm_preserve_seed(B, (size_t)k_totB*(size_t)n_max, seed_arr);
         if (U != NULL || U_csr_p != NULL)
-            rnorm_preserve_seed(C, (size_t)(k_user+k)*(size_t)m_u, seed_arr);
+            rnorm_preserve_seed(C, (size_t)(k_user+k)*(size_t)p, seed_arr);
         if (II != NULL || I_csr_p != NULL)
-            rnorm_preserve_seed(D, (size_t)(k_item+k)*(size_t)n_i, seed_arr);
+            rnorm_preserve_seed(D, (size_t)(k_item+k)*(size_t)q, seed_arr);
         free(seed_arr); seed_arr = NULL;
     }
 
