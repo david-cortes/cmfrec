@@ -1335,12 +1335,12 @@ void collective_closed_form_block
     else if (add_X)
         set_to_zero(a_vec + k_user+k, k_main);
 
-    bool prefer_BtB = max2((size_t)cnt_NA_x + (size_t)(n_BtB-n), nnz)
-                        <
-                      (size_t)2*(size_t)(k+k_main+1);
-    bool prefer_CtC = max2((size_t)cnt_NA_u, nnz_u_vec)
-                        <
-                      (size_t)2*(size_t)(k_user+k+1);
+    bool prefer_BtB = (cnt_NA_x + (n_BtB-n) < 2*(k+k_main+1)) ||
+                      (nnz > (size_t)(2*(k+k_main+1))) ||
+                      (NA_as_zero_X);
+    bool prefer_CtC = (cnt_NA_u < 2*(k+k_user)) ||
+                      (nnz_u_vec > (size_t)(2*(k+k_user))) ||
+                      (NA_as_zero_U);
 
     /* TODO: for better precision, here could do the parts from matrix B
        before the parts from matrix C, then rescale according to 'w_main',
@@ -1854,8 +1854,13 @@ void collective_block_cg
         NA_as_zero_X = false;
     }
 
-    bool prefer_BtB = max2((size_t)cnt_NA_x, nnz) < (size_t)(2*(k+k_main));
-    bool prefer_CtC = max2((size_t)cnt_NA_u,nnz_u_vec) < (size_t)(2*(k+k_user));
+    bool prefer_BtB = (cnt_NA_x < 2*(k+k_main)) ||
+                      (nnz > (size_t)(2*(k+k_main))) ||
+                      (NA_as_zero_X);
+    bool prefer_CtC = (cnt_NA_u < 2*(k+k_user)) ||
+                      (nnz_u_vec > (size_t)(2*(k+k_user))) ||
+                      (NA_as_zero_U);
+        prefer_CtC = true;
     if (precomputedBtB == NULL)
         prefer_BtB = false;
     if (precomputedCtC == NULL)
@@ -2406,7 +2411,10 @@ void collective_block_cg_implicit
     real_t r_new, r_old;
     real_t a, coef;
 
-    bool prefer_CtC = max2((size_t)cnt_NA_u,nnz_u_vec) < (size_t)(2*(k+k_user));
+    bool prefer_CtC = (cnt_NA_u < 2*(k+k_user)) ||
+                      (nnz_u_vec > (size_t)(2*(k+k_user)));
+    if (NA_as_zero_U)
+        prefer_CtC = true;
     if (precomputedCtC == NULL)
         prefer_CtC = false;
 

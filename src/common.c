@@ -634,7 +634,8 @@ void factors_closed_form
     int_t one = 1;
     int_t ignore;
     if (n_BtB == 0) n_BtB = n;
-    bool prefer_BtB = max2((size_t)(cnt_NA + (n_BtB-n)), nnz) < (size_t)k;
+    bool prefer_BtB = (cnt_NA + (n_BtB-n) < 2*k) ||
+                      (nnz > (size_t)(2*k));
 
     /* Note: if passing 'NA_as_zero', 'n' and 'n_BtB' cannot be different */
 
