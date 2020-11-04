@@ -1837,7 +1837,7 @@ class CMF(_CMF):
         X ~ A * t(B)
     While at the same time also approximating the user/row side information
     matrix 'U' and the item/column side information matrix 'I' as follows:
-        U ~ A * t(C)
+        U ~ A * t(C), 
         I ~ B * t(D)
     The matrices ("A", "B", "C", "D") are obtained by minimizing the error
     with respect to the non-missing entries in the input data ("X", "U", "I").
@@ -1942,9 +1942,8 @@ class CMF(_CMF):
         Weight in the optimization objective for the errors in the factorizations
         of the implicit 'X' matrices. Note that, depending on the sparsity of the
         data, the sum of errors from these factorizations might be much larger than
-        for the original 'X' and a smaller value will perform better. Note also
-        that there are two such implicit factorizations, so the errors are counted
-        twice. It is recommended to tune this parameter carefully.
+        for the original 'X' and a smaller value will perform better.
+        It is recommended to tune this parameter carefully.
         Ignored when passing ``add_implicit_features=False``.
     maxiter : int
         Maximum L-BFGS iterations to perform. The procedure will halt if it
@@ -3237,7 +3236,7 @@ class CMF_implicit(_CMF):
         X ~ A * t(B)
     While at the same time also approximating the user side information
     matrix 'U' and the item side information matrix 'I' as follows:
-        U ~ A * t(C)
+        U ~ A * t(C), 
         I ~ B * t(D)
 
     Note

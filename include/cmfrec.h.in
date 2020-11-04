@@ -350,9 +350,7 @@ extern "C" {
                        factorizations, if using 'add_implicit_features'.
                        Note that, depending on the sparsity of the matrix, the
                        sum errors on the implicit features might be much larger
-                       than for the "X" matrix of interest, and note that there
-                       are two implicit factorizations, so each error is counted
-                       twice.
+                       than for the "X" matrix of interest.
                        Recommended values: 0.01 to 0.5.
     @param alpha  Multiplier for the values in the "X" matrix.
                   Recommended value: 1 (but reference (c) suggests 40)
