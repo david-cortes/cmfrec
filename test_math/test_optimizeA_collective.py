@@ -18,6 +18,7 @@ lam = 2.5
 w_main = 3.2
 w_user = 11.123
 w_item = 0.234
+w_implicit = 0.456
 nthreads = 16
 
 def gen_data():
@@ -30,6 +31,9 @@ def gen_data():
     B = np.random.normal(size = (n,k_item+k+k_main))
     C = np.random.normal(size = (p,k_user+k))
     D = np.random.normal(size = (q,k_item+k))
+    Ai = np.empty((0,0), dtype="float64")
+    Bi = np.empty((0,0), dtype="float64")
+    Xones = np.empty((0,0), dtype="float64")
     if nzX > 0:
         X[np.random.randint(m,size=nzX),np.random.randint(n,size=nzX)] = np.nan
         all_NA_row = (np.isnan(X).sum(axis=1) == X.shape[1]).astype(bool)
@@ -48,8 +52,12 @@ def gen_data():
         I[all_NA_row, 0] = 1.
         all_NA_col = (np.isnan(I).sum(axis=0) == I.shape[0]).astype(bool)
         I[0,all_NA_col] = 1.
+    if i_f:
+        Ai = np.random.normal(size = (m,k+k_main))
+        Bi = np.random.normal(size = (n,k+k_main))
+        Xones = (~np.isnan(X)).astype("float64")
         
-    return X, W, U, I, A, B, C, D
+    return X, W, U, I, A, B, C, D, Ai, Bi, Xones
 
 def dense_to_sp(X, W):
     m = X.shape[0]
@@ -99,6 +107,7 @@ def get_solA():
         A,
         B.copy(),
         C.copy(),
+        Bi.copy() if i_f else empty_2d,
         m, n,
         k, k_user, k_item, k_main,
         m_u, p,
@@ -112,7 +121,7 @@ def get_solA():
         U_csr.copy() if utype=="sparse" else empty_1d,
         U.copy() if utype=="dense" else empty_2d,
         False,
-        lam, w_main, w_user,
+        lam, w_main, w_user, w_implicit,
         NA_as_zero_X, NA_as_zero_U,
         as_near_dense_x, as_near_dense_u,
         nthreads,
@@ -136,6 +145,7 @@ def get_solB():
         B,
         A.copy(),
         D.copy(),
+        Ai.copy() if i_f else empty_2d,
         n, m,
         k, k_item, k_user, k_main,
         n_i, q,
@@ -149,7 +159,7 @@ def get_solB():
         I_csr.copy() if utype=="sparse" else empty_1d,
         I.copy() if utype=="dense" else empty_2d,
         pass_isB,
-        lam, w_main, w_item,
+        lam, w_main, w_item, w_implicit,
         NA_as_zero_X, NA_as_zero_U,
         as_near_dense_x, as_near_dense_u,
         nthreads,
@@ -183,6 +193,9 @@ def py_evalA(x):
     E2 = U_use - A[:m_u,:k+k_user].dot(C.T)
     E2[np.isnan(U_use)] = 0
     res += w_user * E2.reshape(-1).dot(E2.reshape(-1))
+    if i_f:
+        Eones = A[:m,k_user:].dot(Bi.T) - Xones
+        res += w_implicit * Eones.reshape(-1).dot(Eones.reshape(-1))
     return res / 2
 
 def py_evalB(x):
@@ -212,6 +225,9 @@ def py_evalB(x):
     E2 = I_use - B[:n_i,:k+k_item].dot(D.T)
     E2[np.isnan(I_use)] = 0
     res += w_item * E2.reshape(-1).dot(E2.reshape(-1))
+    if i_f:
+        Eones = Ai.dot(B[:n,k_item:].T) - Xones
+        res += w_implicit * Eones.reshape(-1).dot(Eones.reshape(-1))
     return res / 2
 
 xtry = ["dense", "sparse"]
@@ -222,6 +238,7 @@ natry = [False,True]
 ktry = [0,2]
 ndtry = [False, True]
 xlength = ["smaller", "longer", "even"]
+imp_f = [False, True]
 
 
 for xtype in xtry:
@@ -237,90 +254,91 @@ for xtype in xtry:
                                         for k_main in ktry:
                                             for xlen in xlength:
                                                 for wtype in wtry:
+                                                    for i_f in imp_f:
                                 
-                                                    if (nzX == 0) and (as_near_dense_x or NA_as_zero_X):
-                                                        continue
-                                                    if (nzU == 0) and (as_near_dense_u or NA_as_zero_U):
-                                                        continue
-                                                    if (NA_as_zero_X) and (xtype!="sparse"):
-                                                        continue
-                                                    if (NA_as_zero_U) and (utype!="sparse"):
-                                                        continue
-                                                    if (as_near_dense_x) and (xtype!="dense"):
-                                                        continue
-                                                    if (as_near_dense_u) and (utype!="dense"):
-                                                        continue
+                                                        if (nzX == 0) and (as_near_dense_x or NA_as_zero_X):
+                                                            continue
+                                                        if (nzU == 0) and (as_near_dense_u or NA_as_zero_U):
+                                                            continue
+                                                        if (NA_as_zero_X) and (xtype!="sparse"):
+                                                            continue
+                                                        if (NA_as_zero_U) and (utype!="sparse"):
+                                                            continue
+                                                        if (as_near_dense_x) and (xtype!="dense"):
+                                                            continue
+                                                        if (as_near_dense_u) and (utype!="dense"):
+                                                            continue
 
-                                                    if xlen == "even":
-                                                        m = m1
-                                                        m_u = m1
-                                                        n_i = n1
-                                                    elif xlen == "smaller":
-                                                        m = m2
-                                                        m_u = m1
-                                                        n_i = n1
-                                                    else:
-                                                        m = m1
-                                                        m_u = m2
-                                                        n_i = n2
-                                                    n = n0
+                                                        if xlen == "even":
+                                                            m = m1
+                                                            m_u = m1
+                                                            n_i = n1
+                                                        elif xlen == "smaller":
+                                                            m = m2
+                                                            m_u = m1
+                                                            n_i = n1
+                                                        else:
+                                                            m = m1
+                                                            m_u = m2
+                                                            n_i = n2
+                                                        n = n0
+                                                            
+                                                        X, W, U, I, A, B, C, D, Ai, Bi, Xones = gen_data()
+                                                        Xcsr_p, Xcsr_i, Xcsr, Wcsr, \
+                                                        Xcsc_p, Xcsc_i, Xcsc, Wcsc = dense_to_sp(X, W)
+                                                        U_csr_p, U_csr_i, U_csr = dense_to_sp_simple(U)
                                                         
-                                                    X, W, U, I, A, B, C, D = gen_data()
-                                                    Xcsr_p, Xcsr_i, Xcsr, Wcsr, \
-                                                    Xcsc_p, Xcsc_i, Xcsc, Wcsc = dense_to_sp(X, W)
-                                                    U_csr_p, U_csr_i, U_csr = dense_to_sp_simple(U)
-                                                    
-                                                    
-                                                    if xtype=="sparse":
-                                                        Wpass = Wcsr
-                                                    else:
-                                                        Wpass = W.reshape(-1).copy()
-                                                    
-                                                    np.random.seed(456)
-                                                    x0 = np.random.normal(size = max(m,m_u)*(k_user+k+k_main))
-                                                    res_scipy = minimize(py_evalA, x0)["x"].reshape((max(m,m_u),k_user+k+k_main))
-                                                    res_module = get_solA()
-                                                    
-                                                    err1 = np.linalg.norm(res_module - res_scipy)
-                                                    df1 = py_evalA(res_module.reshape(-1)) - py_evalA(res_scipy.reshape(-1))
+                                                        
+                                                        if xtype=="sparse":
+                                                            Wpass = Wcsr
+                                                        else:
+                                                            Wpass = W.reshape(-1).copy()
+                                                        
+                                                        np.random.seed(456)
+                                                        x0 = np.random.normal(size = max(m,m_u)*(k_user+k+k_main))
+                                                        res_scipy = minimize(py_evalA, x0)["x"].reshape((max(m,m_u),k_user+k+k_main))
+                                                        res_module = get_solA()
+                                                        
+                                                        err1 = np.linalg.norm(res_module - res_scipy)
+                                                        df1 = py_evalA(res_module.reshape(-1)) - py_evalA(res_scipy.reshape(-1))
 
-                                                    
-                                                    np.random.seed(456)
-                                                    if xlen == "even":
-                                                        n = n1
-                                                    elif xlen == "smaller":
-                                                        n = n2
-                                                    else:
-                                                        n = n1
-                                                    m = m0
-                                                    X, W, U, I, A, B, C, D = gen_data()
-                                                    Xcsr_p, Xcsr_i, Xcsr, Wcsr, \
-                                                    Xcsc_p, Xcsc_i, Xcsc, Wcsc = dense_to_sp(X, W)
-                                                    I_csr_p, I_csr_i, I_csr = dense_to_sp_simple(I)
-                                                    if xtype=="sparse":
-                                                        Wpass = Wcsc
-                                                    else:
-                                                        Wpass = W.reshape(-1).copy()
-                                                    
-                                                    np.random.seed(456)
-                                                    x0 = np.random.normal(size = max(n,n_i)*(k_item+k+k_main))
-                                                    res_scipy = minimize(py_evalB, x0)["x"].reshape((max(n,n_i),k_item+k+k_main))
-                                                    res_module = get_solB()
-                                                    
-                                                    err2 = np.linalg.norm(res_module - res_scipy)
-                                                    df2 = py_evalB(res_module.reshape(-1)) - py_evalB(res_scipy.reshape(-1))
-                                                    
-                                                    
-                                                    is_wrong = (err1 > 5e0) or (err2 > 5e0) or (df1 > 5e0) or (df2 > 5e0) or np.any(np.isnan(res_module))
-                                                    if is_wrong:
-                                                        print("\n\n\n\n****ERROR BELOW****", flush=True)
-                                                    
-                                                    print("[X %s] [U %s] [l:%s] [w:%d] [nz:%d,%d] [nd:%d,%d] [u:%d] [m:%d] [i:%d] [na:%d,%d] -> err:%.2f,%.2f df:%.2f,%.2f"
-                                                          % (xtype[0], utype[0], xlen[0], int(wtype), nzX, nzU, int(as_near_dense_x), int(as_near_dense_u),
-                                                             k_user, k_main, k_item, int(NA_as_zero_X), int(NA_as_zero_U), err1, err2, df1, df2), flush=True)
-                                                    
-                                                    if is_wrong:
-                                                        print("****ERROR ABOVE****\n\n\n\n", flush=True)
+                                                        
+                                                        np.random.seed(456)
+                                                        if xlen == "even":
+                                                            n = n1
+                                                        elif xlen == "smaller":
+                                                            n = n2
+                                                        else:
+                                                            n = n1
+                                                        m = m0
+                                                        X, W, U, I, A, B, C, D, Ai, Bi, Xones = gen_data()
+                                                        Xcsr_p, Xcsr_i, Xcsr, Wcsr, \
+                                                        Xcsc_p, Xcsc_i, Xcsc, Wcsc = dense_to_sp(X, W)
+                                                        I_csr_p, I_csr_i, I_csr = dense_to_sp_simple(I)
+                                                        if xtype=="sparse":
+                                                            Wpass = Wcsc
+                                                        else:
+                                                            Wpass = W.reshape(-1).copy()
+                                                        
+                                                        np.random.seed(456)
+                                                        x0 = np.random.normal(size = max(n,n_i)*(k_item+k+k_main))
+                                                        res_scipy = minimize(py_evalB, x0)["x"].reshape((max(n,n_i),k_item+k+k_main))
+                                                        res_module = get_solB()
+                                                        
+                                                        err2 = np.linalg.norm(res_module - res_scipy)
+                                                        df2 = py_evalB(res_module.reshape(-1)) - py_evalB(res_scipy.reshape(-1))
+                                                        
+                                                        
+                                                        is_wrong = (err1 > 5e0) or (err2 > 5e0) or (df1 > 5e0) or (df2 > 5e0) or np.any(np.isnan(res_module))
+                                                        if is_wrong:
+                                                            print("\n\n\n\n****ERROR BELOW****", flush=True)
+                                                        
+                                                        print("[X %s] [U %s] [l:%s] [w:%d] [nz:%d,%d] [nd:%d,%d] [if:%d] [u:%d] [m:%d] [i:%d] [na:%d,%d] -> err:%.2f,%.2f df:%.2f,%.2f"
+                                                              % (xtype[0], utype[0], xlen[0], int(wtype), nzX, nzU, int(as_near_dense_x), int(as_near_dense_u),
+                                                                 int(i_f), k_user, k_main, k_item, int(NA_as_zero_X), int(NA_as_zero_U), err1, err2, df1, df2), flush=True)
+                                                        
+                                                        if is_wrong:
+                                                            print("****ERROR ABOVE****\n\n\n\n", flush=True)
 
 
 

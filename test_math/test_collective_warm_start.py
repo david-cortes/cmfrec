@@ -51,6 +51,8 @@ def py_eval(values):
         res += w_user * (errU**2).sum()
     if ubin_type != "missing":
         res += w_user * (errUb**2).sum()
+    if i_f:
+        res += w_main * (((~np.isnan(X_full)).astype("float64") - Bi.dot(values[k_user:]))**2).sum()
     return res / 2
 
 empty_1d = np.empty(0, dtype=ctypes.c_double)
@@ -70,9 +72,10 @@ def py_warm_factors():
         B,
         C if utype!="missing" else empty_2d,
         Cb if ubin_type!="missing" else empty_2d,
+        Bi if i_f else empty_2d,
         empty_1d if not weighted else (W_full if xtype in ["dense","full"] else W_sp),
         k, k_main, k_user, k_item,
-        lam, w_user, w_main,
+        lam, w_user, w_main, w_main,
         na_as_zero_x, na_as_zero_u,
         precompute
     )
@@ -87,6 +90,7 @@ wtry = [1., 0.24]
 pctry = [False,True]
 na_try = [False, True]
 nz_try = [0,1,4]
+if_try = [False, True]
 lam = 2.5
 
 
@@ -104,51 +108,61 @@ for xtype in xtry:
                                             for na_as_zero_x in na_try:
                                                 for nzU in nz_try:
                                                     for nzX in nz_try:
+                                                        for i_f in if_try:
 
-                                                        if (na_as_zero_x) and (xtype!="sparse"):
-                                                            continue
-                                                        if (na_as_zero_u) and (utype!="sparse"):
-                                                            continue
-                                                        if (na_as_zero_x or na_as_zero_u) and (ubin_type!="missing"):
-                                                            continue
-                                                        if (w_user != 1) and (utype=="missing" and ubin_type=="missing"):
-                                                            continue
-                                                        if (nzX) and (xtype=="full"):
-                                                            continue
-                                                        if (nzU) and (utype=="missing" or utype=="full"):
-                                                            continue
-                                                        if (nzU < 2) and (utype=="sparse"):
-                                                            continue
-                                                        if (nzX < 2) and (xtype=="sparse"):
-                                                            continue
-                                                        if (ubin_type=="missing") and (nzX>1 or nzU>1):
-                                                            continue
+                                                            if (na_as_zero_x) and (xtype!="sparse"):
+                                                                continue
+                                                            if (na_as_zero_u) and (utype!="sparse"):
+                                                                continue
+                                                            if (na_as_zero_x or na_as_zero_u) and (ubin_type!="missing"):
+                                                                continue
+                                                            if (w_user != 1) and (utype=="missing" and ubin_type=="missing"):
+                                                                continue
+                                                            if (nzX) and (xtype=="full"):
+                                                                continue
+                                                            if (nzU) and (utype=="missing" or utype=="full"):
+                                                                continue
+                                                            if (nzU < 1) and (utype=="sparse"):
+                                                                continue
+                                                            if (nzX < 1) and (xtype=="sparse"):
+                                                                continue
+                                                            if (ubin_type!="missing") and (nzX>1 or nzU>1):
+                                                                continue
+                                                            if (ubin_type!="missing") and (i_f or na_as_zero_x or na_as_zero_u):
+                                                                continue
+                                                            if (na_as_zero_x) and (i_f):
+                                                                continue
+                                                            if (i_f) and (nzX == 0):
+                                                                continue
 
-                                                        np.random.seed(123)
-                                                        B = np.random.gamma(1,1, size=(n,k_item+k+k_main))
-                                                        C = np.random.gamma(1,1, size=(p,k_user+k))
-                                                        Cb = np.random.gamma(1,1, size=(pbin,k_user+k))
-                                                        
-                                                        X_sp, U_sp, Ub_sp, X_sp_ix, X_sp_val, U_sp_ix, U_sp_val, W_sp =\
-                                                            gen_data()
+                                                            np.random.seed(123)
+                                                            B = np.random.gamma(1,1, size=(n,k_item+k+k_main))
+                                                            C = np.random.gamma(1,1, size=(p,k_user+k))
+                                                            Cb = np.random.gamma(1,1, size=(pbin,k_user+k))
+                                                            Bi = np.zeros((0,0))
+                                                            if i_f:
+                                                                Bi = np.random.gamma(1,1, size=(n,k+k_main))
+                                                            
+                                                            X_sp, U_sp, Ub_sp, X_sp_ix, X_sp_val, U_sp_ix, U_sp_val, W_sp =\
+                                                                gen_data()
 
-                                                        nvars = k_user + k + k_main
-                                                        x0 = np.random.normal(size = nvars)
-                                                        r_scipy = minimize(py_eval, x0)["x"]
-                                                        r_module = py_warm_factors()
-                                                        diff = np.linalg.norm(r_scipy - r_module)
-                                                        df = py_eval(r_module) - py_eval(r_scipy)
-                                                        #is_wrong = (diff >= .25*np.linalg.norm(r_scipy - x0)) or np.any(np.isnan(r_module))
-                                                        is_wrong = (diff > 1e1) or (np.isnan(diff)) or (np.any(np.isnan(r_module))) or (df > 1e1) or (np.isnan(df))
-                                                        if is_wrong:
-                                                            print("\n\n\n\n****ERROR BELOW****", flush=True)
+                                                            nvars = k_user + k + k_main
+                                                            x0 = np.random.normal(size = nvars)
+                                                            r_scipy = minimize(py_eval, x0)["x"]
+                                                            r_module = py_warm_factors()
+                                                            diff = np.linalg.norm(r_scipy - r_module)
+                                                            df = py_eval(r_module) - py_eval(r_scipy)
+                                                            #is_wrong = (diff >= .25*np.linalg.norm(r_scipy - x0)) or np.any(np.isnan(r_module))
+                                                            is_wrong = (diff > 1e1) or (np.isnan(diff)) or (np.any(np.isnan(r_module))) or (df > 1e1) or (np.isnan(df))
+                                                            if is_wrong:
+                                                                print("\n\n\n\n****ERROR BELOW****", flush=True)
 
-                                                        print(
-                                                        "[X %s] [w:%d] [U %s] [Ub %s] [m:%d] [u:%d] [i:%d] [wu:%.2f] [wm:%.2f] [pc:%d] [nax:%d] [nau:%d] [nz:%d,%d] -> diff: %.2f, %.2f"
-                                                        % (xtype[0], weighted, utype[0], ubin_type[0], k_main, k_user, k_item,
-                                                        w_user, w_main, precompute, na_as_zero_x, na_as_zero_u, nzX, nzU, diff, df)
-                                                        , flush=True
-                                                        )
+                                                            print(
+                                                            "[X %s] [w:%d] [U %s] [Ub %s] [if:%d] [m:%d] [u:%d] [i:%d] [wu:%.2f] [wm:%.2f] [pc:%d] [nax:%d] [nau:%d] [nz:%d,%d] -> diff: %.2f, %.2f"
+                                                            % (xtype[0], weighted, utype[0], ubin_type[0], int(i_f), k_main, k_user, k_item,
+                                                            w_user, w_main, precompute, na_as_zero_x, na_as_zero_u, nzX, nzU, diff, df)
+                                                            , flush=True
+                                                            )
 
-                                                        if is_wrong:
-                                                            print("****ERROR ABOVE****\n\n\n\n", flush=True)
+                                                            if is_wrong:
+                                                                print("****ERROR ABOVE****\n\n\n\n", flush=True)

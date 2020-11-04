@@ -35,15 +35,15 @@ class build_ext_subclass( build_ext_with_blas ):
             for e in self.extensions:
                 e.extra_compile_args += ['-O2', '-fopenmp', '-march=native', '-std=c99']
                 e.extra_link_args += ['-fopenmp']
+                
+                # e.extra_compile_args += ['-O2', '-fopenmp', '-march=native', '-std=c99', '-ggdb']
+                # e.extra_link_args += ['-fopenmp']
 
-                # e.extra_compile_args += ['-O3', '-march=native', '-std=c99']
+                # e.extra_compile_args += ['-O2', '-march=native', '-std=c99']
                 
 
                 # e.extra_compile_args += ['-fsanitize=address', '-static-libasan', '-ggdb']
-                # e.extra_link_args += ['-fsanitize=address', '-static-libasan']
-                
-
-                # e.extra_link_args += ["-lopenblas"]
+                # e.extra_link_args += ['-fsanitize=address', '-static-libasan']                
 
         ## Note: apple will by default alias 'gcc' to 'clang', and will ship its own "special"
         ## 'clang' which has no OMP support and nowadays will purposefully fail to compile when passed
@@ -80,7 +80,7 @@ if sys.platform[:3] != "dar":
 setup(
     name  = "cmfrec",
     packages = ["cmfrec"],
-    version = '2.0.6',
+    version = '2.1.0',
     description = 'Collective matrix factorization',
     author = 'David Cortes',
     author_email = 'david.cortes.rivera@gmail.com',

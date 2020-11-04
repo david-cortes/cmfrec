@@ -23,6 +23,10 @@
             implicit feedback collaborative filtering."
             Proceedings of the fifth ACM conference on
             Recommender systems. 2011.
+        (e) Rendle, Steffen, Li Zhang, and Yehuda Koren.
+            "On the difficulty of evaluating baselines:
+            A study on recommender systems."
+            arXiv preprint arXiv:1905.01395 (2019).
 
     For information about the models offered here and how they are fit to
     the data, see the files 'collective.c' and 'offsets.c'.
@@ -1048,7 +1052,7 @@ int_t lbfgs_printer_offsets
     ((data_offsets_fun_grad*)instance)->niter = k;
     int_t print_every = ((data_offsets_fun_grad*)instance)->print_every;
     if ((k % print_every) == 0 && print_every > 0) {
-        printf("Iteration %-4d - f(x)= %-8.03g - ||g(x)||= %-8.03g - ls=% 2d\n",
+        printf("Iteration %-5d - f(x)= %-8.03g - ||g(x)||= %-8.03g - ls=% 2d\n",
                k, fx, gnorm, ls);
         #if !defined(_FOR_R)
         fflush(stdout);

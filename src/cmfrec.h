@@ -23,6 +23,10 @@
             implicit feedback collaborative filtering."
             Proceedings of the fifth ACM conference on
             Recommender systems. 2011.
+        (e) Rendle, Steffen, Li Zhang, and Yehuda Koren.
+            "On the difficulty of evaluating baselines:
+            A study on recommender systems."
+            arXiv preprint arXiv:1905.01395 (2019).
 
     For information about the models offered here and how they are fit to
     the data, see the files 'collective.c' and 'offsets.c'.
@@ -806,13 +810,16 @@ void collective_closed_form_block
     bool NA_as_zero_X, bool NA_as_zero_U,
     real_t *restrict B, int_t n, int_t ldb,
     real_t *restrict C, int_t p,
+    real_t *restrict Bi, int_t k_main_i, bool add_implicit_features,
+    real_t *restrict Xones, int_t incXones,
     real_t *restrict weight,
-    real_t lam, real_t w_user, real_t lam_last,
+    real_t lam, real_t w_user, real_t w_implicit, real_t lam_last,
     real_t *restrict precomputedBtB, int_t cnt_NA_x,
     real_t *restrict precomputedCtCw, int_t cnt_NA_u,
     real_t *restrict precomputedBeTBeChol, int_t n_BtB,
+    real_t *restrict precomputedBiTBi,
     bool add_X, bool add_U,
-    bool use_cg, int_t max_cg_steps, /* <- 'cg' should not be used for new data */
+    bool use_cg, int_t max_cg_steps,/* <- 'cg' should not be used for new data*/
     real_t *restrict buffer_real_t
 );
 void collective_closed_form_block_implicit
@@ -844,8 +851,11 @@ void collective_block_cg
     bool NA_as_zero_X, bool NA_as_zero_U,
     real_t *restrict B, int_t n, int_t ldb,
     real_t *restrict C, int_t p,
+    bool add_implicit_features,
+    real_t *restrict Xones, int_t incXones,
+    real_t * restrict Bi, real_t *restrict precomputedBiTBi, int_t k_main_i,
     real_t *restrict weight,
-    real_t lam, real_t w_user, real_t lam_last,
+    real_t lam, real_t w_user, real_t w_implicit, real_t lam_last,
     int_t cnt_NA_x, int_t cnt_NA_u,
     real_t *restrict precomputedBtB,
     real_t *restrict precomputedCtC, /* should NOT be multiplied by 'w_user' */
@@ -932,12 +942,14 @@ int_t collective_factors_warm
     real_t *restrict Xa_dense, int_t n,
     real_t *restrict weight,
     real_t *restrict B,
+    real_t *restrict Bi, bool add_implicit_features,
     int_t k, int_t k_user, int_t k_item, int_t k_main,
-    real_t lam, real_t w_main, real_t w_user, real_t lam_bias,
+    real_t lam, real_t w_main, real_t w_user, real_t w_implicit,real_t lam_bias,
     int_t n_max, bool include_all_X,
     real_t *restrict TransBtBinvBt,
     real_t *restrict BtB,
     real_t *restrict BeTBeChol,
+    real_t *restrict BiTBi,
     real_t *restrict CtCw,
     bool NA_as_zero_U, bool NA_as_zero_X,
     real_t *restrict B_plus_bias
@@ -1004,12 +1016,14 @@ size_t buffer_size_optimizeA_collective
     bool has_dense, bool has_sparse, bool has_weights, bool NA_as_zero_X,
     bool has_dense_U, bool has_sparse_U,
     bool full_dense_u, bool near_dense_u, bool NA_as_zero_U,
+    bool add_implicit_features, size_t k_main_i,
     size_t nthreads,
     bool use_cg, bool finalize_chol,
     bool keep_precomputed,
     bool pass_allocated_BtB,
+    bool pass_allocated_CtCw,
     bool pass_allocated_BeTBeChol,
-    bool pass_allocated_CtCw
+    bool pass_allocated_BiTBi
 );
 size_t buffer_size_optimizeA_collective_implicit
 (
@@ -1029,15 +1043,18 @@ void optimizeA_collective
 (
     real_t *restrict A, int_t lda, real_t *restrict B, int_t ldb,
     real_t *restrict C,
+    real_t *restrict Bi,
     int_t m, int_t m_u, int_t n, int_t p,
     int_t k, int_t k_main, int_t k_user, int_t k_item,
     size_t Xcsr_p[], int_t Xcsr_i[], real_t *restrict Xcsr,
-    real_t *restrict Xfull, bool full_dense, bool near_dense,
+    real_t *restrict Xfull, bool full_dense, bool near_dense, int_t ldX,
     int_t cnt_NA_x[], real_t *restrict weight, bool NA_as_zero_X,
+    real_t *restrict Xones, int_t k_main_i, int_t ldXones,
+    bool add_implicit_features,
     size_t U_csr_p[], int_t U_csr_i[], real_t *restrict U_csr,
     real_t *restrict U, int_t cnt_NA_u[],
     bool full_dense_u, bool near_dense_u, bool NA_as_zero_U,
-    real_t lam, real_t w_user, real_t lam_last,
+    real_t lam, real_t w_user, real_t w_implicit, real_t lam_last,
     bool do_B,
     int_t nthreads,
     bool use_cg, int_t max_cg_steps, bool is_first_iter,
@@ -1045,6 +1062,7 @@ void optimizeA_collective
     real_t *restrict precomputedBtB,
     real_t *restrict precomputedCtCw,
     real_t *restrict precomputedBeTBeChol,
+    real_t *restrict precomputedBiTBi,
     bool *filled_BtB, bool *filled_CtCw, bool *filled_BeTBeChol,
     real_t *restrict buffer_real_t
 );
@@ -1071,6 +1089,7 @@ void build_XBw
     real_t *restrict B, int_t ldb,
     real_t *restrict Xfull, int_t ldX,
     int_t m, int_t n, int_t k,
+    real_t w,
     bool do_B, bool overwrite
 );
 void preprocess_vec
@@ -1201,6 +1220,8 @@ int_t fit_collective_explicit_als
     real_t *restrict biasA, real_t *restrict biasB,
     real_t *restrict A, real_t *restrict B,
     real_t *restrict C, real_t *restrict D,
+    real_t *restrict Ai, real_t *restrict Bi,
+    bool add_implicit_features,
     bool reset_values, int_t seed,
     real_t *restrict glob_mean,
     real_t *restrict U_colmeans, real_t *restrict I_colmeans,
@@ -1216,7 +1237,7 @@ int_t fit_collective_explicit_als
     int_t I_row[], int_t I_col[], real_t *restrict I_sp, size_t nnz_I,
     bool NA_as_zero_X, bool NA_as_zero_U, bool NA_as_zero_I,
     int_t k_main, int_t k_user, int_t k_item,
-    real_t w_main, real_t w_user, real_t w_item,
+    real_t w_main, real_t w_user, real_t w_item, real_t w_implicit,
     int_t niter, int_t nthreads, bool verbose, bool handle_interrupt,
     bool use_cg, int_t max_cg_steps, bool finalize_chol,
     bool precompute_for_predictions,
@@ -1226,7 +1247,8 @@ int_t fit_collective_explicit_als
     real_t *restrict precomputedTransBtBinvBt,
     real_t *restrict precomputedBeTBeChol,
     real_t *restrict precomputedTransCtCinvCt,
-    real_t *restrict precomputedCtCw
+    real_t *restrict precomputedCtCw,
+    real_t *restrict precomputedBiTBi
 );
 int_t fit_collective_implicit_als
 (
@@ -1257,14 +1279,16 @@ int_t precompute_collective_explicit
 (
     real_t *restrict B, int_t n, int_t n_max, bool include_all_X,
     real_t *restrict C, int_t p,
+    real_t *restrict Bi, bool add_implicit_features,
     int_t k, int_t k_user, int_t k_item, int_t k_main,
     bool user_bias,
     real_t lam, real_t *restrict lam_unique,
-    real_t w_main, real_t w_user,
+    real_t w_main, real_t w_user, real_t w_implicit,
     real_t *restrict B_plus_bias,
     real_t *restrict BtB,
     real_t *restrict TransBtBinvBt,
     real_t *restrict BeTBeChol,
+    real_t *restrict BiTBi,
     real_t *restrict TransCtCinvCt,
     real_t *restrict CtCw
 );
@@ -1288,18 +1312,20 @@ int_t factors_collective_explicit_single
     bool NA_as_zero_U, bool NA_as_zero_X,
     real_t *restrict C, real_t *restrict Cb,
     real_t glob_mean, real_t *restrict biasB,
-    real_t *restrict col_means,
+    real_t *restrict U_colmeans,
     real_t *restrict Xa, int_t ixB[], size_t nnz,
     real_t *restrict Xa_dense, int_t n,
     real_t *restrict weight,
     real_t *restrict B,
+    real_t *restrict Bi, bool add_implicit_features,
     int_t k, int_t k_user, int_t k_item, int_t k_main,
     real_t lam, real_t *restrict lam_unique,
-    real_t w_main, real_t w_user,
+    real_t w_main, real_t w_user, real_t w_implicit,
     int_t n_max, bool include_all_X,
     real_t *restrict TransBtBinvBt,
     real_t *restrict BtB,
     real_t *restrict BeTBeChol,
+    real_t *restrict BiTBi,
     real_t *restrict CtCw,
     real_t *restrict TransCtCinvCt,
     real_t *restrict B_plus_bias
@@ -1330,19 +1356,21 @@ int_t factors_collective_explicit_multiple
     real_t *restrict Ub, int_t m_ubin, int_t pbin,
     real_t *restrict C, real_t *restrict Cb,
     real_t glob_mean, real_t *restrict biasB,
-    real_t *restrict col_means,
+    real_t *restrict U_colmeans,
     real_t *restrict X, int_t ixA[], int_t ixB[], size_t nnz,
     size_t *restrict Xcsr_p, int_t *restrict Xcsr_i, real_t *restrict Xcsr,
     real_t *restrict Xfull, int_t n,
     real_t *restrict weight,
     real_t *restrict B,
+    real_t *restrict Bi, bool add_implicit_features,
     int_t k, int_t k_user, int_t k_item, int_t k_main,
     real_t lam, real_t *restrict lam_unique,
-    real_t w_main, real_t w_user,
+    real_t w_main, real_t w_user, real_t w_implicit,
     int_t n_max, bool include_all_X,
     real_t *restrict TransBtBinvBt,
     real_t *restrict BtB,
     real_t *restrict BeTBeChol,
+    real_t *restrict BiTBi,
     real_t *restrict TransCtCinvCt,
     real_t *restrict CtCw,
     real_t *restrict B_plus_bias,
@@ -1378,17 +1406,19 @@ int_t impute_X_collective_explicit
     real_t *restrict Ub, int_t m_ubin, int_t pbin,
     real_t *restrict C, real_t *restrict Cb,
     real_t glob_mean, real_t *restrict biasB,
-    real_t *restrict col_means,
+    real_t *restrict U_colmeans,
     real_t *restrict Xfull, int_t n,
     real_t *restrict weight,
     real_t *restrict B,
+    real_t *restrict Bi, bool add_implicit_features,
     int_t k, int_t k_user, int_t k_item, int_t k_main,
     real_t lam, real_t *restrict lam_unique,
-    real_t w_main, real_t w_user,
+    real_t w_main, real_t w_user, real_t w_implicit,
     int_t n_max, bool include_all_X,
     real_t *restrict TransBtBinvBt,
     real_t *restrict BtB,
     real_t *restrict BeTBeChol,
+    real_t *restrict BiTBi,
     real_t *restrict TransCtCinvCt,
     real_t *restrict CtCw,
     real_t *restrict B_plus_bias,
@@ -1428,18 +1458,20 @@ int_t topN_new_collective_explicit
     bool NA_as_zero_U, bool NA_as_zero_X,
     real_t *restrict C, real_t *restrict Cb,
     real_t glob_mean, real_t *restrict biasB,
-    real_t *restrict col_means,
+    real_t *restrict U_colmeans,
     real_t *restrict Xa, int_t ixB[], size_t nnz,
     real_t *restrict Xa_dense, int_t n,
     real_t *restrict weight,
     real_t *restrict B,
+    real_t *restrict Bi, bool add_implicit_features,
     int_t k, int_t k_user, int_t k_item, int_t k_main,
     real_t lam, real_t *restrict lam_unique,
-    real_t w_main, real_t w_user,
+    real_t w_main, real_t w_user, real_t w_implicit,
     int_t n_max, bool include_all_X,
     real_t *restrict TransBtBinvBt,
     real_t *restrict BtB,
     real_t *restrict BeTBeChol,
+    real_t *restrict BiTBi,
     real_t *restrict CtCw,
     real_t *restrict TransCtCinvCt,
     real_t *restrict B_plus_bias,
@@ -1505,19 +1537,21 @@ int_t predict_X_new_collective_explicit
     real_t *restrict Ub, int_t m_ubin, int_t pbin,
     real_t *restrict C, real_t *restrict Cb,
     real_t glob_mean, real_t *restrict biasB,
-    real_t *restrict col_means,
+    real_t *restrict U_colmeans,
     real_t *restrict X, int_t ixA[], int_t ixB[], size_t nnz,
     size_t *restrict Xcsr_p, int_t *restrict Xcsr_i, real_t *restrict Xcsr,
     real_t *restrict Xfull, int_t n,
     real_t *restrict weight,
     real_t *restrict B,
+    real_t *restrict Bi, bool add_implicit_features,
     int_t k, int_t k_user, int_t k_item, int_t k_main,
     real_t lam, real_t *restrict lam_unique,
-    real_t w_main, real_t w_user,
+    real_t w_main, real_t w_user, real_t w_implicit,
     int_t n_max, bool include_all_X,
     real_t *restrict TransBtBinvBt,
     real_t *restrict BtB,
     real_t *restrict BeTBeChol,
+    real_t *restrict BiTBi,
     real_t *restrict TransCtCinvCt,
     real_t *restrict CtCw,
     real_t *restrict B_plus_bias

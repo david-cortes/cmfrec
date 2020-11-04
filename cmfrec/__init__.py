@@ -30,10 +30,10 @@ class _CMF:
         return self
 
     def _take_params(self, implicit=False, alpha=40., downweight=True,
-                     k=50, lambda_=1e2, method="als",
+                     k=50, lambda_=1e2, method="als", add_implicit_features=False,
                      use_cg=False, max_cg_steps=3, finalize_chol=False,
                      user_bias=True, item_bias=True, k_user=0, k_item=0, k_main=0,
-                     w_main=1., w_user=1., w_item=1.,
+                     w_main=1., w_user=1., w_item=1., w_implicit=0.5,
                      maxiter=400, niter=10, parallelize="separate", corr_pairs=4,
                      NA_as_zero=False, NA_as_zero_user=False, NA_as_zero_item=False,
                      precompute_for_predictions=True, use_float=False,
@@ -92,8 +92,11 @@ class _CMF:
         elif isinstance(random_state, np.random.Generator):
             random_state = random_state.integers(np.iinfo(np.int32).max)
 
-        if (method == "lbfgs") and (NA_as_zero or NA_as_zero_user or NA_as_zero_item):
-            raise ValueError("Option 'NA_as_zero' not supported with method='lbfgs'.")
+        if (method == "lbfgs"):
+            if (NA_as_zero or NA_as_zero_user or NA_as_zero_item):
+                raise ValueError("Option 'NA_as_zero' not supported with method='lbfgs'.")
+            if add_implicit_features:
+                raise ValueError("Option 'add_implicit_features' not supported with method='lbfgs'.")
 
         if method == "als":
             assert max_cg_steps > 0
@@ -101,9 +104,11 @@ class _CMF:
         w_main = float(w_main) if isinstance(w_main, int) else w_main
         w_user = float(w_user) if isinstance(w_user, int) else w_user
         w_item = float(w_item) if isinstance(w_item, int) else w_item
+        w_implicit = float(w_implicit) if isinstance(w_implicit, int) else w_implicit
         assert isinstance(w_main, float) and w_main > 0
         assert isinstance(w_user, float) and w_user > 0
         assert isinstance(w_item, float) and w_item > 0
+        assert isinstance(w_implicit, float) and w_implicit > 0
 
         if implicit:
             alpha = float(alpha) if isinstance(alpha, int) else alpha
@@ -121,10 +126,12 @@ class _CMF:
         self.w_main = w_main
         self.w_user = w_user
         self.w_item = w_item
+        self.w_implicit = w_implicit
         self.downweight = bool(downweight)
         self.user_bias = bool(user_bias)
         self.item_bias = bool(item_bias)
         self.method = method
+        self.add_implicit_features = bool(add_implicit_features)
         self.use_cg = bool(use_cg)
         self.max_cg_steps = int(max_cg_steps)
         self.finalize_chol = bool(finalize_chol)
@@ -162,6 +169,8 @@ class _CMF:
         self.D_ = np.empty((0,0), dtype=self.dtype_)
         self.Cbin_ = np.empty((0,0), dtype=self.dtype_)
         self.Dbin_ = np.empty((0,0), dtype=self.dtype_)
+        self.Ai_ = np.empty((0,0), dtype=self.dtype_)
+        self.Bi_ = np.empty((0,0), dtype=self.dtype_)
         self.user_bias_ = np.empty(0, dtype=self.dtype_)
         self.item_bias_ = np.empty(0, dtype=self.dtype_)
         self.C_bias_ = np.empty(0, dtype=self.dtype_)
@@ -176,6 +185,7 @@ class _CMF:
         self._CtC = np.empty((0,0), dtype=self.dtype_)
         self._BeTBe = np.empty((0,0), dtype=self.dtype_)
         self._BeTBeChol = np.empty((0,0), dtype=self.dtype_)
+        self._BiTBi = np.empty((0,0), dtype=self.dtype_)
 
         self._B_pred = np.empty((0,0), dtype=self.dtype_)
         self._B_plus_bias = np.empty((0,0), dtype=self.dtype_)
@@ -193,7 +203,7 @@ class _CMF:
         self.nupd_ = None
         self.user_mapping_ = np.array([], dtype=object)
         self.item_mapping_ = np.array([], dtype=object)
-        self.reindex_ = None
+        self.reindex_ = False
         self.user_dict_ = dict()
         self.item_dict_ = dict()
 
@@ -1215,7 +1225,7 @@ class _CMF:
                 user_bias_ = a_bias
         outp_ix, outp_score = c_funs.call_topN(
             a_vec,
-            self._B_pred if B is None else B,
+            (self._B_pred[:self._n_orig] if not self.include_all_X else self._B_pred) if B is None else B,
             self.item_bias_ if B is None else \
                 (np.zeros(n, dtype=self.dtype_) if self.item_bias \
                             else np.empty(0, dtype=self.dtype_)),
@@ -1246,28 +1256,14 @@ class _CMF:
 
         if isinstance(self.lambda_, np.ndarray):
             lambda_ = self.lambda_[2]
+            lambda_bias = self.lambda_[0]
+
         else:
             lambda_ = self.lambda_
+            lambda_bias = self.lambda_
         
         if not self._implicit:
-            if not self.NA_as_zero:
-                a_vec = c_funs.call_factors_collective_cold(
-                    U,
-                    U_val,
-                    U_col,
-                    U_bin,
-                    self.C_,
-                    self.Cbin_,
-                    self._TransCtCinvCt,
-                    self._CtC,
-                    self._U_colmeans,
-                    self.C_.shape[0], self.k,
-                    self.k_user, self.k_main,
-                    lambda_, self.w_main, self.w_user,
-                    self.NA_as_zero_user
-                )
-            else:
-                _, a_vec = c_funs.call_factors_collective_warm_explicit(
+            _, a_vec = c_funs.call_factors_collective_explicit_single(
                     np.empty(0, dtype=self.dtype_),
                     np.empty(0, dtype=self.dtype_),
                     np.empty(0, dtype=self.dtype_),
@@ -1283,19 +1279,23 @@ class _CMF:
                     self._B_plus_bias,
                     self.C_,
                     self.Cbin_,
+                    self.Bi_,
                     self._TransBtBinvBt,
                     self._BtB,
                     self._BeTBeChol,
+                    self._BiTBi,
                     self._CtC,
+                    self._TransCtCinvCt,
                     self.glob_mean_,
                     self._n_orig,
                     self.k, self.k_user, self.k_item, self.k_main,
                     lambda_, lambda_bias,
-                    self.w_user, self.w_main,
+                    self.w_user, self.w_main, self.w_implicit,
                     self.user_bias,
                     self.NA_as_zero_user, self.NA_as_zero,
+                    self.add_implicit_features,
                     self.include_all_X
-                )
+            )
         else:
             a_vec = c_funs.call_factors_collective_cold_implicit(
                 U,
@@ -1581,11 +1581,13 @@ class _CMF:
                 self.item_bias_,
                 self._B_pred,
                 self._B_plus_bias,
+                self.Bi_,
                 self.C_,
                 self.Cbin_,
                 self._TransBtBinvBt,
                 self._BtB,
                 self._BeTBeChol,
+                self._BiTBi,
                 self._TransCtCinvCt,
                 self._CtC,
                 m_u, m_x,
@@ -1593,9 +1595,10 @@ class _CMF:
                 self._n_orig,
                 self._k_pred, self.k_user, self.k_item, self._k_main_col,
                 lambda_, lambda_bias,
-                self.w_user, self.w_main,
+                self.w_user, self.w_main, self.w_implicit,
                 self.user_bias,
                 self.NA_as_zero_user, self.NA_as_zero,
+                self.add_implicit_features,
                 self.include_all_X,
                 self.nthreads
             )
@@ -1638,28 +1641,48 @@ class _CMF:
 
         if isinstance(self.lambda_, np.ndarray):
             lambda_ = self.lambda_[3]
+            lambda_bias = self.lambda_[1]
         else:
             lambda_ = self.lambda_
+            lambda_bias = self.lambda_
 
         I, I_col, I_val, I_bin = self._process_new_U(U=I, U_col=I_col, U_val=I_val, U_bin=I_bin, is_I=True)
 
         c_funs = wrapper_float if self.use_float else wrapper_double
         
         if (not self._implicit):
-            b_vec = c_funs.call_factors_collective_cold(
+            _, b_vec = c_funs.call_factors_collective_explicit_single(
+                np.empty(0, dtype=self.dtype_),
+                np.empty(0, dtype=self.dtype_),
+                np.empty(0, dtype=self.dtype_),
+                np.empty(0, dtype=ctypes.c_int),
+                np.empty(0, dtype=self.dtype_),
                 I,
                 I_val,
                 I_col,
                 I_bin,
-                self.D_,
-                self.Dbin_,
-                np.empty((0,0), dtype=self.dtype_),
-                np.empty((0,0), dtype=self.dtype_),
                 self._I_colmeans,
-                self.D_.shape[0], self.k,
-                self.k_item, self.k_main,
-                lambda_, self.w_main, self.w_item,
-                self.NA_as_zero_item
+                self.user_bias_,
+                self.A_,
+                np.empty((0,0), dtype=self.dtype_),
+                self.D_,
+                self.D_bin_,
+                self.Ai_,
+                np.empty((0,0), dtype=self.dtype_),
+                np.empty((0,0), dtype=self.dtype_),
+                np.empty((0,0), dtype=self.dtype_),
+                np.empty((0,0), dtype=self.dtype_),
+                np.empty((0,0), dtype=self.dtype_),
+                np.empty((0,0), dtype=self.dtype_),
+                self.glob_mean_,
+                self.A_.shape[0],
+                self.k, self.k_item, self.k_user, self.k_main,
+                lambda_, lambda_bias,
+                self.w_item, self.w_main, self.w_implicit,
+                self.item_bias,
+                self.NA_as_zero_item, self.NA_as_zero,
+                self.add_implicit_features,
+                False
             )
         else:
             b_vec = c_funs.call_factors_collective_cold_implicit(
@@ -1747,11 +1770,13 @@ class _CMF:
                 self.item_bias_,
                 self.B_ if not is_I else self.A_,
                 self._B_plus_bias if not is_I else empty_arr,
+                self.Bi_ if not is_I else self.Ai_,
                 Mat,
                 MatBin,
                 self._TransBtBinvBt if not is_I else empty_arr,
                 self._BtB if not is_I else empty_arr,
                 self._BeTBeChol if not is_I else empty_arr,
+                self._BiTBi if not is_I else empty_arr,
                 self._TransCtCinvCt if not is_I else empty_arr,
                 self._CtC if not is_I else empty_arr,
                 m_u, 0,
@@ -1762,10 +1787,12 @@ class _CMF:
                 self.k_item if not is_I else self.k_user,
                 self.k_main,
                 lambda_, lambda_bias,
-                self.w_user if not is_I else self.w_item, self.w_main,
+                self.w_user if not is_I else self.w_item,
+                self.w_main, self.w_implicit,
                 self.user_bias if not is_I else self.item_bias,
                 self.NA_as_zero_user if not is_I else self.NA_as_zero_item,
                 self.NA_as_zero,
+                self.add_implicit_features,
                 self.include_all_X if not is_I else True,
                 self.nthreads
             )
@@ -1858,6 +1885,7 @@ class CMF(_CMF):
         memory-efficient alternative than the default Cholesky solver, but less
         exact, less numerically stable, and will require slightly more ALS
         iterations (``niter``) to reach a good optimum.
+        In general, better results are achieved with ``use_cg=False``.
         Note that, if using this method, calculations after fitting which involve
         new data such as ``factors_warm``,  might produce slightly different
         results from the factors obtained from calling ``fit`` with the same data,
@@ -1879,6 +1907,10 @@ class CMF(_CMF):
         with high average ratings regardless of the number of ratings the item
         has received.
         Cannot be used together with ``NA_as_zero``.
+    add_implicit_features : bool
+        Whether to automatically add so-called implicit features from the data,
+        as in reference [5] and similar. If using this for recommender systems
+        with small amounts of data, it's recommended to pass 'True' here.
     k_user : int
         Number of factors in the factorizing A and C matrices which will be used
         only for the 'U' and 'U_bin' matrices, while being ignored for the 'X' matrix.
@@ -1906,6 +1938,14 @@ class CMF(_CMF):
         Weight in the optimization objective for the errors in the factorization
         of the 'I' and 'I_bin' matrices. Ignored when passing neither 'I' nor
         'I_bin' to 'fit'.
+    w_implicit : float
+        Weight in the optimization objective for the errors in the factorizations
+        of the implicit 'X' matrices. Note that, depending on the sparsity of the
+        data, the sum of errors from these factorizations might be much larger than
+        for the original 'X' and a smaller value will perform better. Note also
+        that there are two such implicit factorizations, so the errors are counted
+        twice. It is recommended to tune this parameter carefully.
+        Ignored when passing ``add_implicit_features=False``.
     maxiter : int
         Maximum L-BFGS iterations to perform. The procedure will halt if it
         has not converged after this number of updates. Note that, compared to
@@ -1919,8 +1959,9 @@ class CMF(_CMF):
     niter : int
         Number of alternating least-squares iterations to perform. Note that
         one iteration denotes an update round for all the matrices rather than
-        an update of a single matrix. Ignored when passing ``method='lbfgs'``.
-        Typical values are 6 to 20.
+        an update of a single matrix. In general, the more iterations, the better
+        the end result. Ignored when passing ``method='lbfgs'``.
+        Typical values are 6 to 30.
     parallelize : str, "separate" or "single"
         How to parallelize gradient calculations when using more than one
         thread with ``method='lbfgs'``. Passing ``'separate'`` will iterate
@@ -2069,6 +2110,10 @@ class CMF(_CMF):
         The obtained user-attributes factors.
     D_ : array(q, k_item+k)
         The obtained item attributes factors.
+    Ai_ : array(m, k+k_main) or array(0, 0)
+        The obtain implicit user factors.
+    Bi_ : array(n, k+k_main) or array(0, 0)
+        The obtained implicit item factors.
     nfev_ : int
         Number of function and gradient evaluations performed during the
         L-BFGS optimization procedure.
@@ -2087,11 +2132,15 @@ class CMF(_CMF):
     .. [4] Takacs, Gabor, Istvan Pilaszy, and Domonkos Tikk.
            "Applications of the conjugate gradient method for implicit feedback collaborative filtering."
            Proceedings of the fifth ACM conference on Recommender systems. 2011.
+    .. [5] Rendle, Steffen, Li Zhang, and Yehuda Koren.
+           "On the difficulty of evaluating baselines: A study on recommender systems."
+           arXiv preprint arXiv:1905.01395 (2019).
     """
     def __init__(self, k=40, lambda_=1e+1, method="als", use_cg=True,
-                 user_bias=True, item_bias=True, k_user=0, k_item=0, k_main=0,
-                 w_main=1., w_user=1., w_item=1.,
-                 maxiter=400, niter=10, parallelize="separate", corr_pairs=4,
+                 user_bias=True, item_bias=True, add_implicit_features=False,
+                 k_user=0, k_item=0, k_main=0,
+                 w_main=1., w_user=1., w_item=1., w_implicit=0.5,
+                 maxiter=800, niter=10, parallelize="separate", corr_pairs=4,
                  max_cg_steps=3, finalize_chol=True,
                  NA_as_zero=False, NA_as_zero_user=False, NA_as_zero_item=False,
                  precompute_for_predictions=True, include_all_X=True,
@@ -2101,11 +2150,13 @@ class CMF(_CMF):
                  copy_data=True, nthreads=-1):
         self._take_params(implicit=False, alpha=0., downweight=False,
                           k=k, lambda_=lambda_, method=method,
+                          add_implicit_features=add_implicit_features,
                           use_cg=use_cg, max_cg_steps=max_cg_steps,
                           finalize_chol=finalize_chol,
                           user_bias=user_bias, item_bias=item_bias,
                           k_user=k_user, k_item=k_item, k_main=k_main,
                           w_main=w_main, w_user=w_user, w_item=w_item,
+                          w_implicit=w_implicit,
                           maxiter=maxiter, niter=niter, parallelize=parallelize,
                           corr_pairs=corr_pairs,
                           NA_as_zero=NA_as_zero, NA_as_zero_user=NA_as_zero_user,
@@ -2269,10 +2320,10 @@ class CMF(_CMF):
                 self.force_precompute_for_predictions()
         else:
             self.user_bias_, self.item_bias_, \
-            self.A_, self.B_, self.C_, self.D_, \
+            self.A_, self.B_, self.C_, self.D_, self.Ai_, self.Bi_, \
             self.glob_mean_,  self._U_colmeans, self._I_colmeans, \
             self._B_plus_bias, self._BtB, self._TransBtBinvBt, \
-            self._BeTBeChol, self._TransCtCinvCt, self._CtC = \
+            self._BeTBeChol, self._BiTBi, self._TransCtCinvCt, self._CtC = \
                 c_funs.call_fit_collective_explicit_als(
                     Xrow,
                     Xcol,
@@ -2291,7 +2342,7 @@ class CMF(_CMF):
                     self.NA_as_zero, self.NA_as_zero_user, self.NA_as_zero_item,
                     m, n, m_u, n_i, p, q,
                     self.k, self.k_user, self.k_item, self.k_main,
-                    self.w_main, self.w_user, self.w_item,
+                    self.w_main, self.w_user, self.w_item, self.w_implicit,
                     self.user_bias, self.item_bias,
                     self.lambda_ if isinstance(self.lambda_, float) else 0.,
                     self.lambda_ if isinstance(self.lambda_, np.ndarray) else np.empty(0, dtype=self.dtype_),
@@ -2301,6 +2352,7 @@ class CMF(_CMF):
                     self.random_state, self.niter,
                     self.handle_interrupt,
                     precompute_for_predictions=self.precompute_for_predictions,
+                    add_implicit_features=self.add_implicit_features,
                     include_all_X=self.include_all_X
                 )
             self._n_orig = self.B_.shape[0] if (self.include_all_X or self.NA_as_zero) else n
@@ -2494,7 +2546,9 @@ class CMF(_CMF):
         ----
         Calculating item factors might be a lot slower than user factors,
         as the model does not keep precomputed matrices that might speed
-        up these factor calculations.
+        up these factor calculations. If this function is goint to be used
+        frequently, it's advised to build the model swapping the users
+        and items instead.
 
         Parameters
         ----------
@@ -2525,6 +2579,14 @@ class CMF(_CMF):
     def predict_new(self, user, I=None, I_bin=None):
         """
         Predict rating given by existing users to new items, given I
+
+        Note
+        ----
+        Calculating item factors might be a lot slower than user factors,
+        as the model does not keep precomputed matrices that might speed
+        up these factor calculations. If this function is goint to be used
+        frequently, it's advised to build the model swapping the users
+        and items instead.
 
         Parameters
         ----------
@@ -2682,7 +2744,7 @@ class CMF(_CMF):
             lambda_bias = self.lambda_
 
         c_funs = wrapper_float if self.use_float else wrapper_double
-        a_bias, a_vec = c_funs.call_factors_collective_warm_explicit(
+        a_bias, a_vec = c_funs.call_factors_collective_explicit_single(
             X,
             W_dense,
             X_val,
@@ -2698,17 +2760,21 @@ class CMF(_CMF):
             self._B_plus_bias,
             self.C_,
             self.Cbin_,
+            self.Bi_,
             self._TransBtBinvBt,
             self._BtB,
             self._BeTBeChol,
+            self._BiTBi,
             self._CtC,
+            self._TransCtCinvCt,
             self.glob_mean_,
             self._n_orig,
             self.k, self.k_user, self.k_item, self.k_main,
             lambda_, lambda_bias,
-            self.w_user, self.w_main,
+            self.w_user, self.w_main, self.w_implicit,
             self.user_bias,
             self.NA_as_zero_user, self.NA_as_zero,
+            self.add_implicit_features,
             self.include_all_X
         )
 
@@ -2910,11 +2976,13 @@ class CMF(_CMF):
                 self.item_bias_,
                 self._B_pred,
                 self._B_plus_bias,
+                self.Bi_,
                 self.C_,
                 self.Cbin_,
                 self._TransBtBinvBt,
                 self._BtB,
                 self._BeTBeChol,
+                self._BiTBi,
                 self._TransCtCinvCt,
                 self._CtC,
                 m_u, m_x,
@@ -2922,9 +2990,10 @@ class CMF(_CMF):
                 self._n_orig,
                 self._k_pred, self.k_user, self.k_item, self._k_main_col,
                 lambda_, lambda_bias,
-                self.w_user, self.w_main,
+                self.w_user, self.w_main, self.w_implicit,
                 self.user_bias,
                 self.NA_as_zero_user, self.NA_as_zero,
+                self.add_implicit_features,
                 self.include_all_X,
                 self.nthreads
             )
@@ -3099,11 +3168,13 @@ class CMF(_CMF):
             self.item_bias_,
             self.B_,
             self._B_plus_bias,
+            self.Bi_,
             self.C_,
             self.Cbin_,
             self._TransBtBinvBt,
             self._BtB,
             self._BeTBeChol,
+            self._BiTBi,
             self._TransCtCinvCt,
             self._CtC,
             m_u,
@@ -3111,9 +3182,10 @@ class CMF(_CMF):
             self._n_orig,
             self.k, self.k_user, self.k_item, self.k_main,
             lambda_, lambda_bias,
-            self.w_user, self.w_main,
+            self.w_user, self.w_main, self.w_implicit,
             self.user_bias,
             self.NA_as_zero_user,
+            self.add_implicit_features,
             self.include_all_X,
             self.nthreads
         )
@@ -3143,14 +3215,16 @@ class CMF(_CMF):
         c_funs = wrapper_float if self.use_float else wrapper_double
         
         self._B_plus_bias, self._BtB, self._TransBtBinvBt, self._BeTBeChol, \
-        self._TransCtCinvCt, self._CtC = \
+        self._BiTBi, self._TransCtCinvCt, self._CtC = \
             c_funs.precompute_matrices_collective_explicit(
                 self.B_,
                 self.C_,
-                self.user_bias,
+                self.Bi_,
+                self.user_bias, self.add_implicit_features,
                 self._n_orig,
                 self.k, self.k_user, self.k_item, self.k_main,
-                lambda_, lambda_bias, self.w_main, self.w_user,
+                lambda_, lambda_bias,
+                self.w_main, self.w_user, self.w_implicit,
                 self.include_all_X
             )
         return self
@@ -3216,6 +3290,7 @@ class CMF_implicit(_CMF):
         memory-efficient alternative than the default Cholesky solver, but less
         exact, less numerically stable, and will require slightly more ALS
         iterations (``niter``) to reach a good optimum.
+        In general, better results are achieved with ``use_cg=False``.
         Note that, if using this method, calculations after fitting which involve
         new data such as ``factors_warm``,  might produce slightly different
         results from the factors obtained from calling ``fit`` with the same data,
@@ -3273,8 +3348,9 @@ class CMF_implicit(_CMF):
     niter : int
         Number of alternating least-squares iterations to perform. Note that
         one iteration denotes an update round for all the matrices rather than
-        an update of a single matrix.
-        Typical values are 6 to 20.
+        an update of a single matrix. In general, the more iterations, the better
+        the end result.
+        Typical values are 6 to 30.
     NA_as_zero_user : bool
         Whether to take missing entries in the 'U' matrix as zeros (only
         when the 'U' matrix is passed as sparse COO matrix) instead of ignoring them.
@@ -3713,7 +3789,9 @@ class CMF_implicit(_CMF):
         ----
         Calculating item factors might be a lot slower than user factors,
         as the model does not keep precomputed matrices that might speed
-        up these factor calculations.
+        up these factor calculations. If this function is goint to be used
+        frequently, it's advised to build the model swapping the users
+        and items instead.
 
         Parameters
         ----------
@@ -3741,6 +3819,14 @@ class CMF_implicit(_CMF):
     def predict_new(self, user, I):
         """
         Predict rating given by existing users to new items, given I
+
+        Note
+        ----
+        Calculating item factors might be a lot slower than user factors,
+        as the model does not keep precomputed matrices that might speed
+        up these factor calculations. If this function is goint to be used
+        frequently, it's advised to build the model swapping the users
+        and items instead.
 
         Parameters
         ----------
@@ -4546,6 +4632,7 @@ class OMF_explicit(_OMF):
         memory-efficient alternative than the default Cholesky solver, but less
         exact, less numerically stable, and will require slightly more ALS
         iterations (``niter``) to reach a good optimum.
+        In general, better results are achieved with ``use_cg=False``.
         Note that, if using this method, calculations after fitting which involve
         new data such as ``factors_warm``,  might produce slightly different
         results from the factors obtained from calling ``fit`` with the same data,
@@ -4606,8 +4693,9 @@ class OMF_explicit(_OMF):
     niter : int
         Number of alternating least-squares iterations to perform. Note that
         one iteration denotes an update round for all the matrices rather than
-        an update of a single matrix. Ignored when passing ``method='lbfgs'``.
-        Typical values are 6 to 20.
+        an update of a single matrix. In general, the more iterations, the better
+        the end result. Ignored when passing ``method='lbfgs'``.
+        Typical values are 6 to 30.
     parallelize : str, "separate" or "single"
         How to parallelize gradient calculations when using more than one
         thread with ``method='lbfgs'``. Passing ``'separate'`` will iterate
@@ -4925,15 +5013,16 @@ class OMF_explicit(_OMF):
                     lambda_bias = self.lambda_
 
                 self.is_fitted_ = True
-                _1, self._BtB, self._TransBtBinvBt, _2, _3, _4 = \
+                _1, self._BtB, self._TransBtBinvBt, _2, _3, _4, _5 = \
                     c_funs.precompute_matrices_collective_explicit(
                         self._B_pred,
                         np.empty((0,0), dtype=self.dtype_),
-                        self.user_bias,
+                        np.empty((0,0), dtype=self.dtype_),
+                        self.user_bias, False,
                         self._B_pred.shape[0],
                         self.k_sec+self.k+self.k_main,
                         0, 0, 0,
-                        lambda_, lambda_bias, 1., 1.,
+                        lambda_, lambda_bias, 1., 1., 1.,
                         True
                     )
 
@@ -5471,6 +5560,7 @@ class OMF_implicit(_OMF):
         memory-efficient alternative than the default Cholesky solver, but less
         exact, less numerically stable, and will require slightly more ALS
         iterations (``niter``) to reach a good optimum.
+        In general, better results are achieved with ``use_cg=False``.
         Note that, if using this method, calculations after fitting which involve
         new data such as ``factors_warm``,  might produce slightly different
         results from the factors obtained from calling ``fit`` with the same data,
@@ -5490,8 +5580,9 @@ class OMF_implicit(_OMF):
     niter : int
         Number of alternating least-squares iterations to perform. Note that
         one iteration denotes an update round for all the matrices rather than
-        an update of a single matrix.
-        Typical values are 6 to 20.
+        an update of a single matrix. In general, the more iterations, the better
+        the end result.
+        Typical values are 6 to 30.
     use_float : bool
         Whether to use C float type for the model parameters (typically this is
         ``np.float32``). If passing ``False``, will use C double (typically this

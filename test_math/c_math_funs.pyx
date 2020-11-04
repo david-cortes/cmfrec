@@ -105,12 +105,14 @@ cdef extern from "cmfrec.h":
         double *Xa_dense, int n,
         double *weight,
         double *B,
+        double *Bi, bint add_implicit_features,
         int k, int k_user, int k_item, int k_main,
-        double lam, double w_main, double w_user, double lam_bias,
+        double lam, double w_main, double w_user, double w_implicit, double lam_bias,
         int n_max, bint include_all_X,
         double *TransBtBinvBt,
         double *BtB,
         double *BeTBeChol,
+        double *BiTBi,
         double *CtCw,
         bint NA_as_zero_U, bint NA_as_zero_X,
         double *B_plus_bias
@@ -163,16 +165,18 @@ cdef extern from "cmfrec.h":
     )
 
     void optimizeA_collective(
-        double* A, int lda, double* B, int ldb, double* C,
+        double* A, int lda, double* B, int ldb, double* C, double *Bi,
         int m, int m_u, int n, int p,
         int k, int k_main, int k_user, int k_item,
         size_t Xcsr_p[], int Xcsr_i[], double* Xcsr,
-        double* Xfull, bint full_dense, bint near_dense,
+        double* Xfull, bint full_dense, bint near_dense, int ldX,
         int cnt_NA_x[], double* weight, bint NA_as_zero_X,
+        double *Xones, int k_main_i, int ldXones,
+        bint add_implicit_features,
         size_t U_csr_p[], int U_csr_i[], double* U_csr,
         double* U, int cnt_NA_u[],
         bint full_dense_u, bint near_dense_u, bint NA_as_zero_U,
-        double lam, double w_user, double lam_last,
+        double lam, double w_user, double w_implicit, double lam_last,
         bint do_B,
         int nthreads,
         bint use_cg, int max_cg_steps, bint is_first_iter,
@@ -180,6 +184,7 @@ cdef extern from "cmfrec.h":
         double *precomputedBtB,
         double *precomputedCtCw,
         double *precomputedBeTBeChol,
+        double *precomputedBiTBi,
         c_bool *filled_BtB, c_bool *filled_CtCw, c_bool *filled_BeTBeChol,
         double* buffer_double
     )
@@ -252,14 +257,16 @@ cdef extern from "cmfrec.h":
     int precompute_collective_explicit(
         double *B, int n, int n_max, bint include_all_X,
         double *C, int p,
+        double *Bi, bint add_implicit_features,
         int k, int k_user, int k_item, int k_main,
         bint user_bias,
         double lam, double *lam_unique,
-        double w_main, double w_user,
+        double w_main, double w_user, double w_implicit,
         double *B_plus_bias,
         double *BtB,
         double *TransBtBinvBt,
         double *BeTBeChol,
+        double *BiTBi,
         double *TransCtCinvCt,
         double *CtCw
     )
@@ -346,13 +353,15 @@ def py_factors_closed_form(
         precompute_collective_explicit(
             &B[0,0], n, n, 0,
             <double*>NULL, 0,
+            <double*>NULL, 0,
             k, 0, 0, 0,
             0,
             lam, <double*>NULL,
-            1., 1.,
+            1., 1., 1.,
             <double*>NULL,
             &BtBw[0,0],
             &TransBtBinvBt[0,0],
+            <double*>NULL,
             <double*>NULL,
             <double*>NULL,
             <double*>NULL
@@ -430,9 +439,10 @@ def py_collective_factors(
         np.ndarray[double, ndim=2] B,
         np.ndarray[double, ndim=2] C,
         np.ndarray[double, ndim=2] Cb,
+        np.ndarray[double, ndim=2] Bi,
         np.ndarray[double, ndim=1] weight,
         int k, int k_main, int k_user, int k_item,
-        double lam, double w_user, double w_main,
+        double lam, double w_user, double w_main, double w_implicit,
         bint NA_as_zero_X,
         bint NA_as_zero_U,
         bint precompute
@@ -475,6 +485,12 @@ def py_collective_factors(
         ptr_Cb = &Cb[0,0]
         pbin = Cb.shape[0]
 
+    cdef c_bool add_implicit_features = 0
+    cdef double *ptr_Bi = NULL
+    if Bi.shape[0]:
+        ptr_Bi = &Bi[0,0]
+        add_implicit_features = 1
+
     cdef double *ptr_weight = NULL
     if weight.shape[0]:
         ptr_weight = &weight[0]
@@ -482,13 +498,16 @@ def py_collective_factors(
     cdef double *ptr_TransBtBinvBt = NULL
     cdef double *ptr_BtB = NULL
     cdef double *ptr_BeTBeChol = NULL
+    cdef double *ptr_BiTBi = NULL
     cdef double *ptr_CtCw = NULL
     cdef np.ndarray[double, ndim=2] TransBtBinvBt
     cdef np.ndarray[double, ndim=2] BtB
     cdef np.ndarray[double, ndim=2] BeTBeChol
+    cdef np.ndarray[double, ndim=2] BiTBi
     cdef np.ndarray[double, ndim=2] CtCw
     lam /= w_main
     w_user /= w_main
+    w_implicit /= w_main
     w_main = 1.
 
     cdef int one = 1
@@ -503,19 +522,25 @@ def py_collective_factors(
         if C.shape[0]:
             CtCw = np.empty((k_user+k,k_user+k))
             ptr_CtCw = &CtCw[0,0]
+        if add_implicit_features:
+            BiTBi = np.empty((k+k_main, k+k_main))
+            ptr_BiTBi = &BiTBi[0,0]
+        if p or add_implicit_features:
             BeTBeChol = np.empty((k_user+k+k_main,k_user+k+k_main))
             ptr_BeTBeChol = &BeTBeChol[0,0]
         precompute_collective_explicit(
             &B[0,0], B.shape[0], B.shape[0], 0,
             ptr_C, p,
+            ptr_Bi, add_implicit_features,
             k, k_user, k_item, k_main,
             0,
             lam, <double*>NULL,
-            w_main, w_user,
+            w_main, w_user, w_implicit,
             <double*>NULL,
             ptr_BtB,
             ptr_TransBtBinvBt,
             ptr_BeTBeChol,
+            ptr_BiTBi,
             <double*>NULL,
             ptr_CtCw
         )
@@ -554,10 +579,12 @@ def py_collective_factors(
         ptr_Xfull, B.shape[0],
         ptr_weight,
         &B[0,0],
+        ptr_Bi, add_implicit_features,
         k, k_user, k_item, k_main,
-        lam, w_main, w_user, lam,
+        lam, w_main, w_user, w_implicit, lam,
         B.shape[0], 0,
-        ptr_TransBtBinvBt, ptr_BtB, ptr_BeTBeChol, ptr_CtCw,
+        ptr_TransBtBinvBt, ptr_BtB, ptr_BeTBeChol,
+        ptr_BiTBi, ptr_CtCw,
         NA_as_zero_U, NA_as_zero_X,
         <double*>NULL
     )
@@ -886,10 +913,12 @@ def py_collective_cold_start(
         precompute_collective_explicit(
             <double*>NULL, 0, 0, 0,
             &C[0,0], p,
+            <double*>NULL, 0,
             k, k_user, 0, k_main,
             0,
             lam, <double*>NULL,
-            1., w_user,
+            1., w_user, 1.,
+            <double*>NULL,
             <double*>NULL,
             <double*>NULL,
             <double*>NULL,
@@ -1009,6 +1038,7 @@ def py_optimizeA_collective(
     np.ndarray[double, ndim=2] A,
     np.ndarray[double, ndim=2] B,
     np.ndarray[double, ndim=2] C,
+    np.ndarray[double, ndim=2] Bi,
     int m, int n,
     int k, int k_user, int k_item, int k_main,
     int m_u, int p,
@@ -1022,7 +1052,7 @@ def py_optimizeA_collective(
     np.ndarray[double, ndim=1] U_csr,
     np.ndarray[double, ndim=2] U,
     bint is_B,
-    double lam, double w_main, double w_user,
+    double lam, double w_main, double w_user, double w_implicit,
     bint NA_as_zero_X, bint NA_as_zero_U,
     bint as_near_dense_x, bint as_near_dense_u,
     int nthreads,
@@ -1082,21 +1112,42 @@ def py_optimizeA_collective(
     cdef c_bool ignore2 = 0
     cdef c_bool ignore3 = 0
 
+    cdef c_bool add_implicit_features = 0
+    cdef double *ptr_Bi = NULL
+    cdef double *ptr_X_ones = NULL
+    cdef np.ndarray[double, ndim=1] Xones1
+    cdef np.ndarray[double, ndim=2] Xones2
+    if Bi.shape[0]:
+        add_implicit_features = 1
+        ptr_Bi = &Bi[0,0]
+        if Xfull.shape[0]:
+            Xones2 = (~np.isnan(Xfull)).astype("float64")
+            if is_B:
+                Xones2 = np.asfortranarray(Xones2)
+            else:
+                Xones2 = np.ascontiguousarray(Xones2)
+            ptr_X_ones = &Xones2[0,0]
+        else:
+            Xones1 = np.ones(Xcsr.shape[0], dtype="float64")
+            ptr_X_ones = &Xones1[0]
+
     optimizeA_collective(
-        &A[0,0], A.shape[1], &B[0,0], B.shape[1], &C[0,0],
+        &A[0,0], A.shape[1], &B[0,0], B.shape[1], &C[0,0], ptr_Bi,
         m, m_u, n, p,
         k, k_main, k_user, k_item,
         ptr_Xcsr_p, ptr_Xcsr_i, ptr_Xcsr,
-        ptr_Xfull, full_dense, as_near_dense_x,
+        ptr_Xfull, full_dense, as_near_dense_x, m if is_B else n,
         ptr_cnt_NA_x, ptr_weight, NA_as_zero_X,
+        ptr_X_ones, k_main, m if is_B else n,
+        add_implicit_features,
         ptr_Ucsr_p, ptr_Ucsr_i, ptr_Ucsr,
         ptr_U, ptr_cnt_NA_u,
         full_dense_u, as_near_dense_u, NA_as_zero_U,
-        lam, w_user, lam,
+        lam, w_user, w_implicit, lam,
         is_B,
         nthreads,
         0, 0, 1,
-        0, <double*>NULL, <double*>NULL, <double*>NULL,
+        0, <double*>NULL, <double*>NULL, <double*>NULL, <double*>NULL,
         &ignore1, &ignore2, &ignore3,
         &buffer_double[0]
     )

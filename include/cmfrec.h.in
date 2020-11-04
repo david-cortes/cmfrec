@@ -23,6 +23,10 @@
             implicit feedback collaborative filtering."
             Proceedings of the fifth ACM conference on
             Recommender systems. 2011.
+        (e) Rendle, Steffen, Li Zhang, and Yehuda Koren.
+            "On the difficulty of evaluating baselines:
+            A study on recommender systems."
+            arXiv preprint arXiv:1905.01395 (2019).
 
     For information about the models offered here and how they are fit to
     the data, see the files 'collective.c' and 'offsets.c'.
@@ -91,6 +95,12 @@ extern "C" {
         I ~ B*t(D)
     Where "A", "B", "C", "D" are the obtained model parameters, with a
     dimensionality lower than "X".
+
+    As an alternative for the main explicit-feedback model, can also implicitly
+    generate features from "X" by converting it into a binary matrix in which
+    each entry is one when the value is not missing (as in reference (d)) - the
+    zeros in this case are taken into consideration in the loss/objective
+    function.
 
     The matrix dimensions are referred to as follows:
         * X -> [m, n]
@@ -245,6 +255,14 @@ extern "C" {
     @param Db  (out)(optional) The binary-item-attribute factors matrix (2D).
                If passing "Ib" data, "Db" must be passed.
                Dimension: [n_i, k_item+k]
+    @param Ai  (out)(optional) The implicit user-factors matrix. This is used
+                when passing 'add_implicit_features'=true.
+                Dimension: [m, k+k_main]
+    @param Bi  (out)(optional) The implicit item-factors matrix. This is used
+                when passing 'add_implicit_features'=true.
+                If using 'include_all_X'=true, should have the full dimension,
+                but will be filled with zeros at the end.
+                Dimension: [n, k+k_main] or [n_max, k+k_main]
     
     
     @param reset_values  Whether to reset the values in the model matrices to
@@ -287,6 +305,8 @@ extern "C" {
                    Recommended value: 0
     @param k_main  Number of latent factors which are only used to factorize
                    "X". These will be the last columns in the results.
+                   Note that these are also used in the factorization of the
+                   implicit features (when using 'add_implicit_features').
                    Recommended value: 0
 
     
@@ -326,6 +346,14 @@ extern "C" {
     @param w_item  Weight to assing to the errors of the factorization of "I"
                    in the final objective.
                    Recommended value: 1
+    @param w_implicit  Weight to assign to the errors of the implicit features
+                       factorizations, if using 'add_implicit_features'.
+                       Note that, depending on the sparsity of the matrix, the
+                       sum errors on the implicit features might be much larger
+                       than for the "X" matrix of interest, and note that there
+                       are two implicit factorizations, so each error is counted
+                       twice.
+                       Recommended values: 0.01 to 0.5.
     @param alpha  Multiplier for the values in the "X" matrix.
                   Recommended value: 1 (but reference (c) suggests 40)
     @param adjust_weight  Whether to downweight (decrease 'w_main') the errors
@@ -428,11 +456,18 @@ extern "C" {
                          Ignored if "X" is passed as dense.
     @param NA_as_zero_U  Same but for the "U" matrix.
     @param NA_as_zero_I  Same but for the "I" matrix.
+    @param add_implicit_features  Whether to generate implicit features from the
+                                  data as described in reference (d). If pasing
+                                  'true' here, must also pass the matrices
+                                  'Ai' and 'Bi'.
+                                  For recommender systems with small data, one
+                                  usually wants to pass 'true' here.
     
     --- For the ALS procedures ---
     @param niter  Number of ALS iterations to perform. Note that one iteration
                   denotes an update round over all the matrices.
-                  Recommended values: 6 to 12
+                  Generally, the more iterations, the better the end results.
+                  Recommended values: 6 to 30
     @param use_cg  Whether to use a Conjugate Gradient method to optimize the
                    model matrices - this is faster than the default Cholesky
                    method, but less precise, less numerically stable, and might
@@ -441,7 +476,7 @@ extern "C" {
                    such as when ussing missing-as-zero with no weights.
                    Recommended value: true
     @param max_cg_steps  Maximum number of CG updates to perform per iteration.
-                         Recommended values: 2 to 3
+                         Recommended values: something much smaller than k, >=2
     @param finalize_chol  Whether to perform the last iteration with the
                           Cholesky solver. Note that, under the CG method,
                           the factors obtained by calling the prediction
@@ -520,8 +555,8 @@ extern "C" {
                                       This is only used for warm-start
                                       predictions with no "U" data and "X" data
                                       with no missing values or with
-                                      "NA_as_zero_X". This matrix is optional
-                                      even if passing
+                                      "NA_as_zero_X" and no implicit features.
+                                      This matrix is optional even if passing
                                       'precompute_for_predictions' = true.
                                       If passing 'include_all_X', will need to
                                       have also the entries for potentially
@@ -532,10 +567,16 @@ extern "C" {
     @param precomputedBeTBeChol  (out)(optional) Precomputed matrix, containing:
                                     Chol(t(Be)*Be)
                                   Where Be is the extended block matrix from
-                                  reference (a). This matrix is optional even if 
+                                  reference (a), and will contain information
+                                  from 'Bi' if adding implicit features.
+                                  This matrix is optional even if 
                                   passing 'precompute_for_predictions' = true.
                                   Dimension: [k_user+k+k_main+user_bias,
                                               k_user+k+k_main+user_bias]
+
+    @param precomputedBiTBi  (out)(optional) Precomputed matrix, containing:
+                                t(Bi)*Bi
+                              Dimension: [k+k_main, k+k_main]
 
     @param precomputedTransCtCinvCt  (out)(optional) Precomputed matrix,
                                       containing:
@@ -545,8 +586,8 @@ extern "C" {
                                       This is only used for cold-start
                                       predictions with no "X" data plus "U" data
                                       with no missing values or with
-                                      "NA_as_zero_U". This matrix is optional
-                                      even if passing
+                                      "NA_as_zero_U", and no implicit features.
+                                      This matrix is optional even if passing
                                       'precompute_for_predictions' = true.
                                       Dimension: [k_user+k, p]
     @param precomputedCtCw  (out)(optional) Precomputed matrix, containing
@@ -561,6 +602,14 @@ extern "C" {
                      consumption will be, and (b) parallelization occurs by rows
                      and by columns, thus values higher than 'm' or 'n' will not
                      result in a speed up.
+
+    --- Return Codes ---
+    @retval  All the functions will return 0 upon successful termination.
+             In case the function receives an invalid combination of inputs,
+             will return 2 (but note that one should still make sure that e.g.
+             the pointers are not NULL when they shouldn't be, it won't make
+             such checks).
+             If a function runs out of memory, will return 2.
     
 *******************************************************************************/
 
@@ -576,7 +625,9 @@ struct CollectiveExplicitModel {
     real_t *D; int_t n_i; int_t q;
     real_t *Cb; int_t m_ubin; int_t pbin;
     real_t *Db; int_t n_ibin; int_t qbin;
+    real_t *Ai; real_t *Bi;
     int_t k; int_t k_user; int_t k_item; int_t k_main;
+    bool add_implicit_features; bool user_bias;
 
     /* Means used to center data */
     real_t glob_mean;
@@ -587,6 +638,7 @@ struct CollectiveExplicitModel {
     real_t *precomputedBtB;
     real_t *precomputedTransBtBinvBt;
     real_t *precomputedBeTBeChol;
+    real_t *precomputedBiTBi;
     real_t *precomputedTransCtCinvCt;
     real_t *precomputedCtCw;
 };
@@ -654,6 +706,8 @@ int_t fit_collective_explicit_als
     real_t *biasA, real_t *biasB,
     real_t *A, real_t *B,
     real_t *C, real_t *D,
+    real_t *Ai, real_t *Bi,
+    bool add_implicit_features,
     bool reset_values, int_t seed,
     real_t *glob_mean,
     real_t *U_colmeans, real_t *I_colmeans,
@@ -669,7 +723,7 @@ int_t fit_collective_explicit_als
     int_t I_row[], int_t I_col[], real_t *I_sp, size_t nnz_I,
     bool NA_as_zero_X, bool NA_as_zero_U, bool NA_as_zero_I,
     int_t k_main, int_t k_user, int_t k_item,
-    real_t w_main, real_t w_user, real_t w_item,
+    real_t w_main, real_t w_user, real_t w_item, real_t w_implicit,
     int_t niter, int_t nthreads, bool verbose, bool handle_interrupt,
     bool use_cg, int_t max_cg_steps, bool finalize_chol,
     bool precompute_for_predictions,
@@ -678,6 +732,7 @@ int_t fit_collective_explicit_als
     real_t *precomputedBtB,
     real_t *precomputedTransBtBinvBt,
     real_t *precomputedBeTBeChol,
+    real_t *precomputedBiTBi,
     real_t *precomputedTransCtCinvCt,
     real_t *precomputedCtCw
 );
@@ -714,14 +769,16 @@ int_t precompute_collective_explicit
 (
     real_t *B, int_t n, int_t n_max, bool include_all_X,
     real_t *C, int_t p,
+    real_t *Bi, bool add_implicit_features,
     int_t k, int_t k_user, int_t k_item, int_t k_main,
     bool user_bias,
     real_t lam, real_t *lam_unique,
-    real_t w_main, real_t w_user,
+    real_t w_main, real_t w_user, real_t w_implicit,
     real_t *B_plus_bias,
     real_t *BtB,
     real_t *TransBtBinvBt,
     real_t *BeTBeChol,
+    real_t *BiTBi,
     real_t *TransCtCinvCt,
     real_t *CtCw
 );
@@ -843,13 +900,15 @@ int_t factors_collective_explicit_single
     real_t *Xa_dense, int_t n,
     real_t *weight,
     real_t *B,
+    real_t *Bi, bool add_implicit_features,
     int_t k, int_t k_user, int_t k_item, int_t k_main,
     real_t lam, real_t *lam_unique,
-    real_t w_main, real_t w_user,
+    real_t w_main, real_t w_user, real_t w_implicit,
     int_t n_max, bool include_all_X,
     real_t *TransBtBinvBt,
     real_t *BtB,
     real_t *BeTBeChol,
+    real_t *BiTBi,
     real_t *CtCw,
     real_t *TransCtCinvCt,
     real_t *B_plus_bias
@@ -886,13 +945,15 @@ int_t factors_collective_explicit_multiple
     real_t *Xfull, int_t n,
     real_t *weight,
     real_t *B,
+    real_t *Bi, bool add_implicit_features,
     int_t k, int_t k_user, int_t k_item, int_t k_main,
     real_t lam, real_t *lam_unique,
-    real_t w_main, real_t w_user,
+    real_t w_main, real_t w_user, real_t w_implicit,
     int_t n_max, bool include_all_X,
     real_t *TransBtBinvBt,
     real_t *BtB,
     real_t *BeTBeChol,
+    real_t *BiTBi,
     real_t *TransCtCinvCt,
     real_t *CtCw,
     real_t *B_plus_bias,
@@ -1022,13 +1083,15 @@ int_t impute_X_collective_explicit
     real_t *Xfull, int_t n,
     real_t *weight,
     real_t *B,
+    real_t *Bi, bool add_implicit_features,
     int_t k, int_t k_user, int_t k_item, int_t k_main,
     real_t lam, real_t *lam_unique,
-    real_t w_main, real_t w_user,
+    real_t w_main, real_t w_user, real_t w_implicit,
     int_t n_max, bool include_all_X,
     real_t *TransBtBinvBt,
     real_t *BtB,
     real_t *BeTBeChol,
+    real_t *BiTBi,
     real_t *TransCtCinvCt,
     real_t *CtCw,
     real_t *B_plus_bias,
@@ -1073,13 +1136,15 @@ int_t topN_new_collective_explicit
     real_t *Xa_dense, int_t n,
     real_t *weight,
     real_t *B,
+    real_t *Bi, bool add_implicit_features,
     int_t k, int_t k_user, int_t k_item, int_t k_main,
     real_t lam, real_t *lam_unique,
-    real_t w_main, real_t w_user,
+    real_t w_main, real_t w_user, real_t w_implicit,
     int_t n_max, bool include_all_X,
     real_t *TransBtBinvBt,
     real_t *BtB,
     real_t *BeTBeChol,
+    real_t *BiTBi,
     real_t *CtCw,
     real_t *TransCtCinvCt,
     real_t *B_plus_bias,
@@ -1152,13 +1217,15 @@ int_t predict_X_new_collective_explicit
     real_t *Xfull, int_t n,
     real_t *weight,
     real_t *B,
+    real_t *Bi, bool add_implicit_features,
     int_t k, int_t k_user, int_t k_item, int_t k_main,
     real_t lam, real_t *lam_unique,
-    real_t w_main, real_t w_user,
+    real_t w_main, real_t w_user, real_t w_implicit,
     int_t n_max, bool include_all_X,
     real_t *TransBtBinvBt,
     real_t *BtB,
     real_t *BeTBeChol,
+    real_t *BiTBi,
     real_t *TransCtCinvCt,
     real_t *CtCw,
     real_t *B_plus_bias

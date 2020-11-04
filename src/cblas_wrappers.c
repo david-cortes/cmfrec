@@ -23,6 +23,10 @@
             implicit feedback collaborative filtering."
             Proceedings of the fifth ACM conference on
             Recommender systems. 2011.
+        (e) Rendle, Steffen, Li Zhang, and Yehuda Koren.
+            "On the difficulty of evaluating baselines:
+            A study on recommender systems."
+            arXiv preprint arXiv:1905.01395 (2019).
 
     For information about the models offered here and how they are fit to
     the data, see the files 'collective.c' and 'offsets.c'.

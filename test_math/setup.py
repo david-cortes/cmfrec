@@ -37,7 +37,7 @@ setup(
           include_dirs=[np.get_include(), "../src"],
           define_macros = [("_FOR_PYTHON", None),
                            ("USE_DOUBLE", None),
-                           # ("FORCE_CG", None)
+                           # ("TEST_CG", None)
                           ]
           ),
         ]

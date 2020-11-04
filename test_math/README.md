@@ -10,3 +10,7 @@ In order to use them:
 * At that point, it should be easier to see where in the source code does the error come from.
 
 They are **not** intended as unit tests - some might take very long to run, and do not test aspects such as allocating the correct sizes of arrays or the like. Some possible combinations of inputs are left untested. It's suggested to also use them with the address sanitizer and openmp enabled once the lines show no errors.
+
+# TODO
+
+The tests for implicit features are currently failing. Need to find out why, and whether it's the tests or the functions that are wrong.

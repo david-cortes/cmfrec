@@ -23,6 +23,10 @@
             implicit feedback collaborative filtering."
             Proceedings of the fifth ACM conference on
             Recommender systems. 2011.
+        (e) Rendle, Steffen, Li Zhang, and Yehuda Koren.
+            "On the difficulty of evaluating baselines:
+            A study on recommender systems."
+            arXiv preprint arXiv:1905.01395 (2019).
 
     For information about the models offered here and how they are fit to
     the data, see the files 'collective.c' and 'offsets.c'.
@@ -888,13 +892,15 @@ int_t precompute_offsets_both
         retval = precompute_collective_explicit(
             Bm, n, 0, 0,
             (real_t*)NULL, 0,
+            (real_t*)NULL, false,
             k_sec+k+k_main, 0, 0, 0,
             user_bias,
             lam, lam_unique,
-            1., 1.,
+            1., 1., 1.,
             Bm_plus_bias,
             BtB,
             TransBtBinvBt,
+            (real_t*)NULL,
             (real_t*)NULL,
             (real_t*)NULL,
             (real_t*)NULL
@@ -1563,13 +1569,15 @@ int_t fit_offsets_explicit_lbfgs
         retval = precompute_collective_explicit(
             Bm, n, 0, 0,
             (real_t*)NULL, 0,
+            (real_t*)NULL, false,
             k_sec+k+k_main, 0, 0, 0,
             user_bias,
             lam, lam_unique,
-            1., 1.,
+            1., 1., 1.,
             Bm_plus_bias,
             precomputedBtB,
             precomputedTransBtBinvBt,
+            (real_t*)NULL,
             (real_t*)NULL,
             (real_t*)NULL,
             (real_t*)NULL
@@ -1673,6 +1681,7 @@ int_t fit_offsets_als
     if (!implicit)
         retval = fit_collective_explicit_als(
                     biasA, biasB, A, B, (real_t*)NULL, (real_t*)NULL,
+                    (real_t*)NULL, (real_t*)NULL, false,
                     reset_values, seed,
                     glob_mean,
                     (real_t*)NULL, (real_t*)NULL,
@@ -1688,7 +1697,7 @@ int_t fit_offsets_als
                     (int_t*)NULL, (int_t*)NULL, (real_t*)NULL, 0,
                     NA_as_zero_X, false, false,
                     0, 0, 0,
-                    1., 1., 1.,
+                    1., 1., 1., 1.,
                     niter, nthreads, verbose, handle_interrupt,
                     use_cg, max_cg_steps, finalize_chol,
                     precompute_for_predictions,
@@ -1696,6 +1705,7 @@ int_t fit_offsets_als
                     Bm_plus_bias,
                     precomputedBtB,
                     precomputedTransBtBinvBt,
+                    (real_t*)NULL,
                     (real_t*)NULL,
                     (real_t*)NULL,
                     (real_t*)NULL
@@ -2122,7 +2132,7 @@ int_t factors_offsets_explicit_single
     real_t lam_bias = lam;
     if (lam_unique != NULL)
     {
-        lam_bias = lam_unique[0];
+        lam_bias = lam_unique[(a_bias != NULL)? 0 : 2];
         lam = lam_unique[2];
     }
 

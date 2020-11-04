@@ -23,6 +23,10 @@
             implicit feedback collaborative filtering."
             Proceedings of the fifth ACM conference on
             Recommender systems. 2011.
+        (e) Rendle, Steffen, Li Zhang, and Yehuda Koren.
+            "On the difficulty of evaluating baselines:
+            A study on recommender systems."
+            arXiv preprint arXiv:1905.01395 (2019).
 
     For information about the models offered here and how they are fit to
     the data, see the files 'collective.c' and 'offsets.c'.
@@ -636,6 +640,8 @@ void factors_closed_form
     if (n_BtB == 0) n_BtB = n;
     bool prefer_BtB = (cnt_NA + (n_BtB-n) < 2*k) ||
                       (nnz > (size_t)(2*k));
+    if (precomputedBtB == NULL)
+        prefer_BtB = false;
 
     /* Note: if passing 'NA_as_zero', 'n' and 'n_BtB' cannot be different */
 
@@ -956,7 +962,7 @@ void factors_explicit_cg
     copy_arr(r, p, k);
     r_old = cblas_tdot(k, r, 1, r, 1);
 
-    #ifdef FORCE_CG
+    #ifdef TEST_CG
     if (r_old <= 1e-15)
         return;
     #else
@@ -981,7 +987,7 @@ void factors_explicit_cg
         cblas_taxpy(k, -a, Ap, 1, r, 1);
 
         r_new = cblas_tdot(k, r, 1, r, 1);
-        #ifdef FORCE_CG
+        #ifdef TEST_CG
         if (r_new <= 1e-15)
             break;
         #else
@@ -1063,7 +1069,7 @@ void factors_explicit_cg_NA_as_zero_weighted
     copy_arr(r, p, k);
     r_old = cblas_tdot(k, r, 1, r, 1);
 
-    #ifdef FORCE_CG
+    #ifdef TEST_CG
     if (r_old <= 1e-15)
         return;
     #else
@@ -1114,7 +1120,7 @@ void factors_explicit_cg_NA_as_zero_weighted
         cblas_taxpy(k, -a, Ap, 1, r, 1);
 
         r_new = cblas_tdot(k, r, 1, r, 1);
-        #ifdef FORCE_CG
+        #ifdef TEST_CG
         if (r_new <= 1e-15)
             break;
         #else
@@ -1193,7 +1199,7 @@ void factors_explicit_cg_dense
     copy_arr(r, p, k);
     r_old = cblas_tdot(k, r, 1, r, 1);
 
-    #ifdef FORCE_CG
+    #ifdef TEST_CG
     if (r_old <= 1e-15)
         return;
     #else
@@ -1238,7 +1244,7 @@ void factors_explicit_cg_dense
         cblas_taxpy(k,  a,  p, 1, a_vec, 1);
         cblas_taxpy(k, -a, Ap, 1, r, 1);
         r_new = cblas_tdot(k, r, 1, r, 1);
-        #ifdef FORCE_CG
+        #ifdef TEST_CG
         if (r_new <= 1e-15)
             break;
         #else
@@ -1288,7 +1294,7 @@ void factors_implicit_cg
     copy_arr(r, p, k);
     r_old = cblas_tdot(k, r, 1, r, 1);
 
-    #ifdef FORCE_CG
+    #ifdef TEST_CG
     if (r_old <= 1e-15)
         return;
     #else
@@ -1315,7 +1321,7 @@ void factors_implicit_cg
         cblas_taxpy(k,  a,  p, 1, a_vec, 1);
         cblas_taxpy(k, -a, Ap, 1, r, 1);
         r_new = cblas_tdot(k, r, 1, r, 1);
-        #ifdef FORCE_CG
+        #ifdef TEST_CG
         if (r_new <= 1e-15)
             break;
         #else
