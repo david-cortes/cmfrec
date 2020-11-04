@@ -56,9 +56,10 @@ class build_ext_subclass( build_ext_with_blas ):
 
         ## If a custom BLAS/LAPACK is provided:
         if len(custom_blas_link_args) or len(custom_blas_compile_args):
-            e.extra_compile_args += custom_blas_compile_args
-            e.extra_link_args += custom_blas_link_args
-            e.define_macros = [m for m in e.define_macros if m[0] != "USE_FINDBLAS"]
+            for e in self.extensions:
+                e.extra_compile_args += custom_blas_compile_args
+                e.extra_link_args += custom_blas_link_args
+                e.define_macros = [m for m in e.define_macros if m[0] != "USE_FINDBLAS"]
 
         build_ext_with_blas.build_extensions(self)
 
