@@ -1570,7 +1570,7 @@ int_t fit_offsets_explicit_lbfgs
     if (precompute_for_predictions)
     {
         retval = precompute_collective_explicit(
-            Bm, n, 0, 0,
+            Bm, n, n, true,
             (real_t*)NULL, 0,
             (real_t*)NULL, false,
             k_sec+k+k_main, 0, 0, 0,

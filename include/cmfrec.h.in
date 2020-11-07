@@ -1294,7 +1294,6 @@ int_t topN_old_most_popular
     bool user_bias,
     real_t a_bias,
     real_t *biasA, int_t row_index,
-    real_t *B,
     real_t *biasB,
     real_t glob_mean,
     int_t *include_ix, int_t n_include,

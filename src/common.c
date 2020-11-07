@@ -3067,7 +3067,6 @@ int_t topN_old_most_popular
     bool user_bias,
     real_t a_bias,
     real_t *restrict biasA, int_t row_index,
-    real_t *restrict B,
     real_t *restrict biasB,
     real_t glob_mean,
     int_t *restrict include_ix, int_t n_include,
