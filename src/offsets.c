@@ -1459,6 +1459,9 @@ int_t fit_offsets_explicit_lbfgs
     bool has_U = (U  != NULL || nnz_U);
     bool has_I = (II != NULL || nnz_I);
 
+    if (!has_U) k_szA = k_totA;
+    if (!has_I) k_szB = k_totB;
+
     size_t nvars = (size_t)m * (size_t)k_szA + (size_t)n * (size_t)k_szB;
     if (user_bias) nvars += m;
     if (item_bias) nvars += n;
