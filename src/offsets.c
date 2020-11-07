@@ -1989,9 +1989,7 @@ int_t fit_offsets_implicit_als
     bool verbose, bool handle_interrupt,
     bool precompute_for_predictions,
     real_t *restrict Am, real_t *restrict Bm,
-    real_t *restrict Bm_plus_bias,
-    real_t *restrict precomputedBtB,
-    real_t *restrict precomputedTransBtBinvBt
+    real_t *restrict precomputedBtB
 )
 {
     return fit_offsets_als(
@@ -2016,9 +2014,9 @@ int_t fit_offsets_implicit_als
         verbose, handle_interrupt,
         precompute_for_predictions,
         Am, Bm,
-        Bm_plus_bias,
+        (real_t*)NULL,
         precomputedBtB,
-        precomputedTransBtBinvBt
+        (real_t*)NULL
     );
 }
 

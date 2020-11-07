@@ -1710,9 +1710,7 @@ int_t fit_offsets_implicit_als
     bool verbose, bool handle_interrupt,
     bool precompute_for_predictions,
     real_t *Am, real_t *Bm,
-    real_t *Bm_plus_bias,
-    real_t *precomputedBtB,
-    real_t *precomputedTransBtBinvBt
+    real_t *precomputedBtB
 );
 
 

@@ -1881,9 +1881,7 @@ int_t fit_offsets_implicit_als
     bool verbose, bool handle_interrupt,
     bool precompute_for_predictions,
     real_t *restrict Am, real_t *restrict Bm,
-    real_t *restrict Bm_plus_bias,
-    real_t *restrict precomputedBtB,
-    real_t *restrict precomputedTransBtBinvBt
+    real_t *restrict precomputedBtB
 );
 int_t matrix_content_based
 (
