@@ -48,7 +48,10 @@ class _CMF:
         k_user = int(k_user) if isinstance(k_user, float) else k_user
         k_item = int(k_item) if isinstance(k_item, float) else k_item
         k_main = int(k_main) if isinstance(k_main, float) else k_main
-        assert isinstance(k, int) and k > 0
+        if not isinstance(self, OMF_explicit):
+            assert isinstance(k, int) and k > 0
+        else:
+            assert isinstance(k, int) and k >= 0
         assert isinstance(k_user, int) and k_user >= 0
         assert isinstance(k_item, int) and k_item >= 0
         assert isinstance(k_main, int) and k_main >= 0
@@ -4598,6 +4601,8 @@ class OMF_explicit(_OMF):
         factorization), which will have a free component and an attribute-dependent
         component. Other additional separate factors can be specified through
         ``k_sec`` and ``k_main``.
+        Optionally, this parameter might be set to zero while setting ``k_sec``
+        and ``k_main`` for a different type of model.
         Typical values are 30 to 100.
     lambda_ : float or array(6,)
         Regularization parameter. Can also use different regularization for each
