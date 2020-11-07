@@ -608,8 +608,13 @@ int_t offsets_factors_warm
     if (append_bias) {
         a_plus_bias = (real_t*)malloc((size_t)(k_sec+k+k_main+1)
                                        * sizeof(real_t));
-        if (a_plus_bias == NULL) { retval = 1; goto cleanup; }
+        if (a_plus_bias == NULL) goto throw_oom;
     }
+
+    real_t *restrict bufferX = NULL;
+    real_t *restrict bufferW = NULL;
+    real_t *restrict buffer_uc = NULL;
+    real_t *restrict buffer_remainder = NULL;
 
     if ((!exact && k_sec == 0) || implicit)
     {
@@ -618,7 +623,7 @@ int_t offsets_factors_warm
         {
             size_buffer = square(k_sec + k + k_main + append_bias);
             buffer_real_t = (real_t*)malloc(size_buffer*sizeof(real_t));
-            if (buffer_real_t == NULL) return 1;
+            if (buffer_real_t == NULL) goto throw_oom;
         }
 
         /* Determine a_vec[:] through closed-form, ignore u_vec for them
@@ -695,14 +700,13 @@ int_t offsets_factors_warm
         if (weight != NULL && Xa_dense == NULL)
             size_buffer += n;
         buffer_real_t = (real_t*)malloc(size_buffer*sizeof(real_t));
-        if (buffer_real_t == NULL) return 1;
+        if (buffer_real_t == NULL) goto throw_oom;
 
-        real_t *restrict bufferX = buffer_real_t;
-        real_t *restrict bufferW = bufferX + n;
-        real_t *restrict buffer_uc = bufferW
-                                     + ((weight != NULL && Xa_dense == NULL)?
-                                        (n) : (0));
-        real_t *restrict buffer_remainder = buffer_uc + k_sec+k;
+        bufferX = buffer_real_t;
+        bufferW = bufferX + n;
+        buffer_uc = bufferW + ((weight != NULL && Xa_dense == NULL)?
+                                (n) : (0));
+        buffer_remainder = buffer_uc + k_sec+k;
 
         /* If the exact solution is desired (regularization applied to A, not
            to Am), or if there are factors from only the side info (k_sec),
@@ -798,7 +802,12 @@ int_t offsets_factors_warm
     cleanup:
         free(buffer_real_t);
         free(a_plus_bias);
-    return retval;
+        return retval;
+    throw_oom:
+    {
+        retval = 1;
+        goto cleanup;
+    }
 }
 
 int_t precompute_offsets_both
