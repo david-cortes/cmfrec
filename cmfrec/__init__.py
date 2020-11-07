@@ -3338,12 +3338,6 @@ class CMF_implicit(_CMF):
         side info matrices (especially if using large ``alpha``), thus it's
         recommended to give higher weights to the side info matrices than to
         the main matrix.
-    downweight : bool
-        Whether to decrease the weight of the 'X' matrix being factorized
-        according to the number of present entries. This has the same effect
-        as rescaling (increasing) the regularization parameter for the A and B
-        matrices while increasing ``w_user`` and ``w_item``. Recommended to use
-        when passing ``alpha``.
     niter : int
         Number of alternating least-squares iterations to perform. Note that
         one iteration denotes an update round for all the matrices rather than
@@ -3462,14 +3456,14 @@ class CMF_implicit(_CMF):
     """
     def __init__(self, k=50, lambda_=1e0, alpha=1., use_cg=True,
                  k_user=0, k_item=0, k_main=0,
-                 w_main=1., w_user=10., w_item=10., downweight=False,
+                 w_main=1., w_user=10., w_item=10.,
                  niter=10, NA_as_zero_user=False, NA_as_zero_item=False,
                  precompute_for_predictions=True, use_float=False,
                  max_cg_steps=3, finalize_chol=True,
                  random_state=1, init="normal", verbose=False,
                  produce_dicts=False, handle_interrupt=True,
                  copy_data=True, nthreads=-1):
-        self._take_params(implicit=True, alpha=alpha, downweight=downweight,
+        self._take_params(implicit=True, alpha=alpha, downweight=False,
                           k=k, lambda_=lambda_, method="als",
                           use_cg=use_cg, max_cg_steps=max_cg_steps,
                           finalize_chol=finalize_chol,
