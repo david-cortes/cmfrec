@@ -4988,8 +4988,8 @@ void optimizeA_collective_implicit
             if (w_user == 1.)
                 sum_mat(
                     k_user+k, k_user+k,
-                    precomputedBeTBe, k_totA,
-                    precomputedCtC, k_user+k
+                    precomputedCtC, k_user+k,
+                    precomputedBeTBe, k_totA
                 );
             else {
                 for (size_t row = 0; row < (size_t)(k_user+k); row++)
@@ -7820,8 +7820,8 @@ int_t fit_collective_implicit_als
                     cblas_tscal(square(k_user+k), w_user, precomputedCtC, 1);
 
                 copy_mat(k_user+k, k_user+k,
-                         precomputedBeTBe, k_totA,
-                         precomputedCtC, k_user+k);
+                         precomputedCtC, k_user+k,
+                         precomputedBeTBe, k_totA);
             }
 
             else
@@ -8136,8 +8136,8 @@ int_t precompute_collective_implicit
              BeTBe + k_user + k_user*k_totA, k_totA);
     if (extra_precision)
     {
-        real_t *restrict CtC = (real_t*)malloc((size_t)square(k_user+k)
-                                                * sizeof(real_t));
+        real_t *restrict CtC = (real_t*)calloc((size_t)square(k_user+k),
+                                               sizeof(real_t));
         if (CtC == NULL) return 1;
 
         cblas_tsyrk(CblasRowMajor, CblasUpper, CblasTrans,
@@ -8145,22 +8145,21 @@ int_t precompute_collective_implicit
                     w_user, C, k_user+k,
                     0., CtC, k_user+k);
         sum_mat(k_user+k, k_user+k,
-                BeTBe, k_totA,
-                CtC, k_user+k);
+                CtC, k_user+k,
+                BeTBe, k_totA);
         free(CtC);
-        for (int_t ix = 0; ix < k_user; ix++)
-            BeTBe[ix + ix*k_totA] += lam;
     }
 
     else
     {
         cblas_tsyrk(CblasRowMajor, CblasUpper, CblasTrans,
-                k_user+k, p,
-                w_user, C, k_user+k,
-                1., BeTBe, k_totA);
-        for (int_t ix = 0; ix < k_user; ix++)
-            BeTBe[ix + ix*k_totA] += lam;
+                    k_user+k, p,
+                    w_user, C, k_user+k,
+                    1., BeTBe, k_totA);
     }
+
+    for (int_t ix = 0; ix < k_user; ix++)
+            BeTBe[ix + ix*k_totA] += lam;
 
     /* BeTBeChol */
     if (BeTBeChol != NULL)
