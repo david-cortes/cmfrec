@@ -592,6 +592,13 @@ int_t offsets_factors_warm
     size_t size_buffer = 0;
     int_t cnt_NA = 0;
     bool append_bias = (Bm_plus_bias != NULL && a_bias != NULL);
+
+    real_t *restrict bufferX = NULL;
+    real_t *restrict bufferW = NULL;
+    real_t *restrict buffer_uc = NULL;
+    real_t *restrict buffer_remainder = NULL;
+    real_t *restrict bufferBtB = NULL;
+
     if (!implicit)
         preprocess_vec(Xa_dense, n, ixB, Xa, nnz,
                        glob_mean, lam_bias, biasB,
@@ -610,11 +617,6 @@ int_t offsets_factors_warm
                                        * sizeof(real_t));
         if (a_plus_bias == NULL) goto throw_oom;
     }
-
-    real_t *restrict bufferX = NULL;
-    real_t *restrict bufferW = NULL;
-    real_t *restrict buffer_uc = NULL;
-    real_t *restrict buffer_remainder = NULL;
 
     if ((!exact && k_sec == 0) || implicit)
     {
@@ -665,7 +667,19 @@ int_t offsets_factors_warm
                 *a_bias = a_plus_bias[k_sec+k+k_main];
             }
         }
-        else
+        else {
+
+            if (precomputedBtB == NULL) {
+                bufferBtB = (real_t*)malloc((size_t)square(k_sec+k+k_main)
+                                             * sizeof(double));
+                if (bufferBtB == NULL) goto throw_oom;
+                cblas_tsyrk(CblasRowMajor, CblasUpper, CblasTrans,
+                            k_sec+k+k_main, n,
+                            1., Bm, k_sec+k+k_main,
+                            0., bufferBtB, k_sec+k+k_main);
+                precomputedBtB = bufferBtB;
+            }
+
             factors_implicit_chol(
                 a_vec, k_sec+k+k_main,
                 Bm, k_sec+k+k_main,
@@ -676,6 +690,7 @@ int_t offsets_factors_warm
                 buffer_real_t,
                 false
             );
+        }
 
         /* If A is required instead of just Am, then calculate as
              A := Am - U*C */
@@ -802,6 +817,7 @@ int_t offsets_factors_warm
     cleanup:
         free(buffer_real_t);
         free(a_plus_bias);
+        free(bufferBtB);
         return retval;
     throw_oom:
     {
@@ -2135,6 +2151,9 @@ int_t factors_offsets_explicit_single
         for (int_t ix = 0; ix < k_sec+k+k_main; ix++)
             a_vec[ix] = NAN_;
         if (a_bias != NULL) *a_bias = NAN_;
+        if (output_a != NULL)
+            for (int_t ix = 0; ix < k+k_main; ix++)
+                output_a[ix] = NAN_;
         return 0;
     }
 
@@ -2479,6 +2498,7 @@ int_t factors_offsets_implicit_multiple
     
     bool free_U_csr = false;
     bool free_X_csr = false;
+    bool free_BtB = false;
     int_t *restrict ret = (int_t*)malloc(m*sizeof(int_t));
     if (ret == NULL) goto throw_oom;
 
@@ -2519,6 +2539,17 @@ int_t factors_offsets_implicit_multiple
             U_csr_p, U_csr_i, U_csr,
             (real_t*)NULL
         );
+    }
+
+    if (precomputedBtB == NULL && Xcsr_p != NULL)
+    {
+        free_BtB = true;
+        precomputedBtB = (real_t*)malloc((size_t)square(k)*sizeof(real_t));
+        if (precomputedBtB == NULL) goto throw_oom;
+        cblas_tsyrk(CblasRowMajor, CblasUpper, CblasTrans,
+                    k, n,
+                    1., Bm, k,
+                    0., precomputedBtB, k);
     }
 
     #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
@@ -2563,6 +2594,9 @@ int_t factors_offsets_implicit_multiple
             free(Xcsr);
             free(Xcsr_p);
             free(Xcsr_i);
+        }
+        if (free_BtB) {
+            free(precomputedBtB);
         }
         free(ret);
         return retval;
