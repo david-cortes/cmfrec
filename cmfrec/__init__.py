@@ -202,6 +202,8 @@ class _CMF:
         self._w_main_multiplier = 1.
 
         self.is_fitted_ = False
+        self._dense_U = False
+        self._dense_I = False
         self.nfev_ = None
         self.nupd_ = None
         self.user_mapping_ = np.array([], dtype=object)
@@ -1563,6 +1565,8 @@ class _CMF:
                           Ucsr_p, Ucsr_i, Ucsr,
                           n, m_u, m_x, p, pbin,
                           lambda_, lambda_bias):
+        if (Uval.shape[0] or Ucsr.shape[0]) and (self._dense_U) and (not self.NA_as_zero_user):
+            raise ValueError("Cannot pass sparse 'U' if model was fit to dense 'U'.")
         c_funs = wrapper_float if self.use_float else wrapper_double
         
         if (not self._implicit):
@@ -1641,6 +1645,8 @@ class _CMF:
             msg  = "Can only use this method when "
             msg += "fitting the model to item side info."
             raise ValueError(msg)
+        if (I_val.shape[0]) and (self._dense_I) and (not self.NA_as_zero_item):
+            raise ValueError("Cannot pass sparse 'I' if model was fit to dense 'I'.")
 
         if isinstance(self.lambda_, np.ndarray):
             lambda_ = self.lambda_[3]
@@ -1747,6 +1753,13 @@ class _CMF:
         Uarr, Urow, Ucol, Uval, Ucsr_p, Ucsr_i, Ucsr, m_u, p = \
             self._process_new_U_2d(U=U, is_I=is_I, allow_csr=True)
         Ub_arr, m_ub, pbin = self._process_new_Ub_2d(U_bin=U_bin, is_I=is_I)
+
+        if not is_I:
+            if (Uval.shape[0] or Ucsr.shape[0]) and (self._dense_U) and (not self.NA_as_zero_user):
+                raise ValueError("Cannot pass sparse 'U' if model was fit to dense 'U'.")
+        else:
+            if (Uval.shape[0] or Ucsr.shape[0]) and (self._dense_I) and (not self.NA_as_zero_item):
+                raise ValueError("Cannot pass sparse 'I' if model was fit to dense 'I'.")
 
         empty_arr = np.empty((0,0), dtype=self.dtype_)
 
@@ -2359,6 +2372,11 @@ class CMF(_CMF):
                 )
             self._n_orig = self.B_.shape[0] if (self.include_all_X or self.NA_as_zero) else n
 
+        if Uarr.shape[0]:
+            self._dense_U = True
+        if Iarr.shape[0]:
+            self._dense_I = True
+
         self._A_pred = self.A_
         self._B_pred = self.B_
         self.is_fitted_ = True
@@ -2738,6 +2756,8 @@ class CMF(_CMF):
 
     def _factors_warm(self, X, W_dense, X_val, X_col, W_sp,
                       U, U_val, U_col, U_bin, return_bias):
+        if (U_val.shape[0]) and (self._dense_U) and (not self.NA_as_zero_user):
+            raise ValueError("Cannot pass sparse 'U' if model was fit to dense 'U'.")
         if isinstance(self.lambda_, np.ndarray):
             lambda_ = self.lambda_[2]
             lambda_bias = self.lambda_[0]
@@ -3598,6 +3618,11 @@ class CMF_implicit(_CMF):
                 precompute_for_predictions=self.precompute_for_predictions
             )
 
+        if Uarr.shape[0]:
+            self._dense_U = True
+        if Iarr.shape[0]:
+            self._dense_I = True
+
         self._A_pred = self.A_
         self._B_pred = self.B_
         self._n_orig = self.B_.shape[0]
@@ -3924,6 +3949,8 @@ class CMF_implicit(_CMF):
 
     def _factors_warm(self, X, W_dense, X_val, X_col, W_sp,
                       U, U_val, U_col, U_bin, return_bias):
+        if (U_val.shape[0]) and (self._dense_U) and (not self.NA_as_zero_user):
+            raise ValueError("Cannot pass sparse 'U' if model was fit to dense 'U'.")
         if isinstance(self.lambda_, np.ndarray):
             lambda_ = self.lambda_[2]
         else:
