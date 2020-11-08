@@ -2569,9 +2569,9 @@ int_t factors_offsets_implicit_multiple
                 ((int_t*)NULL) : (U_csr_i + U_csr_p[ix]),
             (U_csr_p == NULL)?
                 ((size_t)0) : (U_csr_p[ix+1] - U_csr_p[ix]),
-            Xcsr + Xcsr_p[ix],
-            Xcsr_i + Xcsr_p[ix],
-            Xcsr_p[ix+1] - Xcsr_p[ix],
+            (Xcsr_p != NULL)? (Xcsr + Xcsr_p[ix]) : ((real_t*)NULL),
+            (Xcsr_p != NULL)? (Xcsr_i + Xcsr_p[ix]) : ((int_t*)NULL),
+            (Xcsr_p != NULL)? (Xcsr_p[ix+1] - Xcsr_p[ix]) : ((size_t)0),
             Bm, C,
             C_bias,
             k, n,
