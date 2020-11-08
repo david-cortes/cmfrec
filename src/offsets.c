@@ -3374,6 +3374,7 @@ int_t topN_new_content_based
     for (int_t ix = 0; ix < n_new; ix++)
         buffer_ix[ix] = ix;
 
+
     ptr_real_t_glob = scores_copy;
     if (n_top <= 50 || n_top >= (double)n_new*0.75)
     {

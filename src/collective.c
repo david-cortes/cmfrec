@@ -8410,8 +8410,8 @@ int_t factors_collective_explicit_multiple
     size_t m_max = max2(m, m_u);
     if (NA_as_zero_U && U == NULL) m_u = m_max;
     if (NA_as_zero_X && Xfull == NULL) m = m_max;
-    if (U == NULL && !nnz_U && !NA_as_zero_U) m_u = 0;
-    if (Xfull == NULL && !nnz && !NA_as_zero_X) m = 0;
+    if (U == NULL && (!nnz_U && U_csr_p == NULL) && !NA_as_zero_U) m_u = 0;
+    if (Xfull == NULL && (!nnz && Xcsr_p == NULL) && !NA_as_zero_X) m = 0;
     bool user_bias = (biasA != NULL);
     bool free_B_plus_bias = false;
 
@@ -8612,7 +8612,7 @@ int_t factors_collective_implicit_multiple
     int_t retval = 0;
     m = max2(m, m_u);
     if (NA_as_zero_U && U == NULL) m_u = m;
-    if (U == NULL && !nnz_U && !NA_as_zero_U) m_u = 0;
+    if (U == NULL && (!nnz_U && U_csr_p == NULL) && !NA_as_zero_U) m_u = 0;
 
     
     bool free_U_csr = false;
