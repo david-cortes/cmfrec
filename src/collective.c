@@ -8140,9 +8140,6 @@ int_t precompute_collective_implicit
                                                 * sizeof(real_t));
         if (CtC == NULL) return 1;
 
-        for (int_t ix = 0; ix < k_user; ix++)
-            BeTBe[ix + ix*k_totA] += lam;
-
         cblas_tsyrk(CblasRowMajor, CblasUpper, CblasTrans,
                     k_user+k, p,
                     w_user, C, k_user+k,
@@ -8151,16 +8148,18 @@ int_t precompute_collective_implicit
                 BeTBe, k_totA,
                 CtC, k_user+k);
         free(CtC);
+        for (int_t ix = 0; ix < k_user; ix++)
+            BeTBe[ix + ix*k_totA] += lam;
     }
 
     else
     {
-        for (int_t ix = 0; ix < k_user; ix++)
-            BeTBe[ix + ix*k_totA] += lam;
         cblas_tsyrk(CblasRowMajor, CblasUpper, CblasTrans,
                 k_user+k, p,
                 w_user, C, k_user+k,
-                0., BeTBe, k_totA);
+                1., BeTBe, k_totA);
+        for (int_t ix = 0; ix < k_user; ix++)
+            BeTBe[ix + ix*k_totA] += lam;
     }
 
     /* BeTBeChol */
