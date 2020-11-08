@@ -8858,6 +8858,7 @@ int_t impute_X_collective_explicit
                         cblas_tdot(k+k_main,
                                    A + row*lda + (size_t)k_main,1,
                                    B + col*ldb + (size_t)k_item, 1)
+                        + glob_mean
                         + (user_bias? biasA[row] : 0.)
                         + ((biasB != NULL)? biasB[col] : 0.)
                     );
@@ -8878,10 +8879,10 @@ int_t impute_X_collective_explicit
                     (Xfull[col + row*(size_t)n])
                         :
                     (Xpred[col + row*(size_t)n]
+                        + glob_mean
                         + (user_bias? biasA[row] : 0.)
                         + ((biasB != NULL)? biasB[col] : 0.));
     }
-
 
     cleanup:
         if (Xpred != Xfull)
