@@ -8771,6 +8771,7 @@ int_t impute_X_collective_explicit
     size_t lda = k_user + k + k_main;
     size_t ldb = k_item + k + k_main;
     size_t cnt_NA = 0;
+    bool free_B_plus_bias = false;
     bool dont_produce_full_X = false;
     real_t *restrict Xpred = NULL;
     real_t *restrict A = (real_t*)malloc(  (size_t)max2(m, m_u)
@@ -8784,6 +8785,7 @@ int_t impute_X_collective_explicit
 
     if (user_bias && B_plus_bias == NULL)
     {
+        free_B_plus_bias = true;
         B_plus_bias = (real_t*)malloc((size_t)n*(size_t)(k_item+k+k_main)
                                       * sizeof(real_t));
         if (B_plus_bias == NULL) goto throw_oom;
@@ -8886,7 +8888,7 @@ int_t impute_X_collective_explicit
             free(Xpred);
         free(A);
         free(biasA);
-        if (B_plus_bias != B)
+        if (free_B_plus_bias)
             free(B_plus_bias);
         return retval;
     throw_oom:
