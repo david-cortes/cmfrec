@@ -1386,6 +1386,8 @@ int_t fit_offsets_explicit_lbfgs_internal
                 k, k_sec, k_main,
                 w_user, nthreads
             );
+        else if (Am != NULL)
+            copy_arr_(A, Am, (size_t)m*(size_t)(k_sec+k+k_main), nthreads);
 
         if ((II != NULL || I_csr != NULL) && Bm != NULL)
             construct_Am(
@@ -1398,8 +1400,10 @@ int_t fit_offsets_explicit_lbfgs_internal
                 k, k_sec, k_main,
                 w_item, nthreads
             );
+        else if (Bm != NULL)
+            copy_arr_(B, Bm, (size_t)n*(size_t)(k_sec+k+k_main), nthreads);
 
-        if (Bm_plus_bias != NULL && user_bias)
+        if (Bm_plus_bias != NULL && user_bias && Bm != NULL)
             append_ones_last_col(
                 Bm,
                 n, k_sec+k+k_main,
@@ -2133,13 +2137,6 @@ int_t factors_offsets_explicit_single
     real_t *restrict Bm_plus_bias
 )
 {
-    if (exact && (k_sec || k_main)) {
-        fprintf(stderr, "Option 'exact' incompatible with 'k_sec'/'k_main'\n");
-        #ifndef _FOR_R
-        fflush(stderr);
-        #endif
-        return 2;
-    }
     int_t retval = 0;
 
     bool set_to_nan = check_sparse_indices(

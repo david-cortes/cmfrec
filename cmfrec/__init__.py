@@ -1321,7 +1321,7 @@ class _CMF:
 
     def _factors_warm_common(self, X=None, X_col=None, X_val=None, W=None,
                              U=None, U_bin=None, U_col=None, U_val=None,
-                             return_bias=False):
+                             return_bias=False, exact=False):
         assert self.is_fitted_
 
         if (return_bias) and (not self.user_bias):
@@ -1404,8 +1404,13 @@ class _CMF:
             else:
                 W_sp = np.empty(0, dtype=self.dtype_)
 
-        return self._factors_warm(X, W_dense, X_val, X_col, W_sp,
-                                  U, U_val, U_col, U_bin, return_bias)
+        if not isinstance(self, OMF_explicit):
+            return self._factors_warm(X, W_dense, X_val, X_col, W_sp,
+                                      U, U_val, U_col, U_bin, return_bias)
+        else:
+            return self._factors_warm(X, W_dense, X_val, X_col, W_sp,
+                                      U, U_val, U_col, U_bin, return_bias,
+                                      bool(exact))
 
     def _process_transform_inputs(self, X, U, U_bin, W, replace_existing):
         if (X is None) and (U is None) and (U_bin is None):
@@ -5057,7 +5062,7 @@ class OMF_explicit(_OMF):
 
     def factors_warm(self, X=None, X_col=None, X_val=None, W=None,
                      U=None, U_col=None, U_val=None,
-                     return_bias=False, return_raw_A=False):
+                     return_bias=False, return_raw_A=False, exact=False):
         """
         Determine user latent factors based on new ratings data
 
@@ -5108,6 +5113,10 @@ class OMF_explicit(_OMF):
             Whether to return the raw A factors (the free offset), or the
             factors used in the factorization, to which the attributes
             component has been added.
+        exact : bool
+            Whether to calculate "A" and "Am" with the regularization applied
+            to "A" instead of to "Am". This is usually a slower procedure.
+            Only relevant when passing "X" data.
 
         Returns
         -------
@@ -5119,8 +5128,6 @@ class OMF_explicit(_OMF):
         """
         if (U is None) and (U_col is None) and (U_val is None) \
             and (self.k_sec) and (self.C_.shape[0] > 0):
-            msg  = "Cannot use this method without side info "
-            msg += "when using k_sec>0."
             warnings.warn("Method not reliable with k_sec>0 and no user info.")
         if (self.k == 0) and (self.k_sec == 0) \
             and (X is None) and (X_val is None) \
@@ -5154,7 +5161,7 @@ class OMF_explicit(_OMF):
             return outp_a
 
     def _factors_warm(self, X, W_dense, X_val, X_col, W_sp,
-                      U, U_val, U_col, U_bin, return_bias):
+                      U, U_val, U_col, U_bin, return_bias, exact):
         if isinstance(self.lambda_, np.ndarray):
             lambda_ = self.lambda_[2]
             lambda_bias = self.lambda_[0]
@@ -5184,7 +5191,7 @@ class OMF_explicit(_OMF):
             lambda_, lambda_bias,
             self.w_user,
             self.user_bias,
-            0, 1
+            exact, 1
         )
 
         if return_bias:
