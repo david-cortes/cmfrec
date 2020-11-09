@@ -8122,6 +8122,7 @@ int_t precompute_collective_implicit
     }
 
     /* BtB */
+    set_to_zero(BtB, square(k+k_main));
     cblas_tsyrk(CblasRowMajor, CblasUpper, CblasTrans,
                 k+k_main, n,
                 1., B + k_item, k_item+k+k_main,
@@ -8331,8 +8332,21 @@ int_t factors_collective_implicit_single
     if (u_vec != NULL) R_nan_to_C_nan(u_vec, p);
     #endif
 
+    int retval = 0;
+    bool free_BtB = false;
+    if (BtB == NULL) {
+        free_BtB = true;
+        BtB = (real_t*)malloc((size_t)square(k+k_main)*sizeof(real_t));
+        if (BtB == NULL) return 1;
+        cblas_tsyrk(CblasRowMajor, CblasUpper, CblasTrans,
+                    k+k_main, n,
+                    1., B + k_item, k_item+k+k_main,
+                    0., BtB, k+k_main);
+        add_to_diag(BtB, lam, k+k_main);
+    }
+
     if (nnz)
-        return collective_factors_warm_implicit(
+        retval = collective_factors_warm_implicit(
             a_vec,
             u_vec, p,
             u_vec_sp, u_vec_ixB, nnz_u_vec,
@@ -8348,7 +8362,7 @@ int_t factors_collective_implicit_single
             BeTBeChol
         );
     else
-        return collective_factors_cold_implicit(
+        retval = collective_factors_cold_implicit(
             a_vec,
             u_vec, p,
             u_vec_sp, u_vec_ixB, nnz_u_vec,
@@ -8362,6 +8376,10 @@ int_t factors_collective_implicit_single
             lam, w_main, w_user, w_main_multiplier,
             NA_as_zero_U
         );
+
+    if (free_BtB)
+        free(BtB);
+    return retval;
 }
 
 /* TODO: these functions should call 'optimizeA' instead */
