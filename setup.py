@@ -78,10 +78,23 @@ if sys.platform[:3] != "dar":
 ### uncomment line below
 # use_omp = True
 
+
+force_openblas = (("openblas" in sys.argv)
+                  or ("-openblas" in sys.argv)
+                  or ("--openblas" in sys.argv))
+if force_openblas:
+    sys.argv = [a for a in sys.argv if a not in ("fopenblas", "-openblas", "--openblas")]
+if os.environ.get('USE_OPENBLAS') is not None:
+    force_openblas = True
+if (force_openblas):
+    custom_blas_link_args = ["-lopenblas"]
+    from Cython.Distutils import build_ext
+    build_ext_with_blas = build_ext
+
 setup(
     name  = "cmfrec",
     packages = ["cmfrec"],
-    version = '2.1.3',
+    version = '2.2.0',
     description = 'Collective matrix factorization',
     author = 'David Cortes',
     author_email = 'david.cortes.rivera@gmail.com',

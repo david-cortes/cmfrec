@@ -75,13 +75,15 @@ pip install cmfrec
 
 As it contains C code, it requires a C compiler. On Windows, this usually means it requires a Visual Studio Build Tools installation (with MSVC140 component for conda, or MinGW + GCC), and if using Anaconda, might also require configuring it to use said Visual Studio instead of MinGW.
 
-**Note for macOS users:** on macOS, this package will compile without multi-threading capabilities. This is due to default apple's redistribution of clang not providing OpenMP modules, and aliasing it to gcc which causes confusions in build scripts. If you have a non-apple version of clang with the OpenMP modules, or if you have gcc installed, you can compile this package with multi-threading enabled by setting up an environment variable ENABLE_OMP=1:
+**Note for macOS users:** on macOS, this package will compile without multi-threading capabilities. This is due to default apple's redistribution of clang not providing OpenMP modules, and aliasing it to gcc which causes confusions in build scripts. If you have a non-apple version of clang with the OpenMP modules, or if you have gcc installed, you can compile this package with multi-threading enabled by setting up an environment variable `ENABLE_OMP=1`:
 
 ```
 export ENABLE_OMP=1
 pip install cmfrec
 ```
-(Alternatively, can also pass argument enable-omp to the setup.py file: python setup.py install enable-omp)
+(Alternatively, can also pass argument enable-omp to the setup.py file: python `setup.py install enable-omp`)
+
+Will also by default use MKL if it finds it - for OpenBLAS can set an environment variable `USE_OPENBLAS=1` or pass argument `openblas` to `setup.py`.
 
 * C:
 

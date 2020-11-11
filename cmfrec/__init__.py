@@ -1863,6 +1863,12 @@ class CMF(_CMF):
     ``precompute_for_predictions=False``, ``produce_dicts=False``,
     and pass COO matrices or NumPy arrays instead of DataFrames to ``fit``.
 
+    Note
+    ----
+    The model optimization objective will not scale any of its terms according
+    to number of entries, so hyperparameters such as ``lambda_`` will require
+    more tuning than in other software and trying out values over a wider range.
+
     Parameters
     ----------
     k : int
@@ -3266,6 +3272,12 @@ class CMF_implicit(_CMF):
 
     Note
     ----
+    The model optimization objective will not scale any of its terms according
+    to number of entries, so hyperparameters such as ``lambda_`` will require
+    more tuning than in other software and trying out values over a wider range.
+
+    Note
+    ----
     This model is fit through the alternating least-squares method only,
     it does not offer a gradient-based approach like the explicit-feedback
     version.
@@ -4599,6 +4611,12 @@ class OMF_explicit(_OMF):
     and stopping earlier. Be aware that this model requires a lot more iterations
     to reach convergence compared to the classic and the collective models.
 
+    Note
+    ----
+    The model optimization objective will not scale any of its terms according
+    to number of entries, so hyperparameters such as ``lambda_`` will require
+    more tuning than in other software and trying out values over a wider range.
+
     Parameters
     ----------
     k : int
@@ -5543,6 +5561,12 @@ class OMF_implicit(_OMF):
     the parameters by least squares approximations, so when making warm-start
     predictions, the results will be exactly the same as if not using any
     side information (user/item attributes).
+
+    Note
+    ----
+    The model optimization objective will not scale any of its terms according
+    to number of entries, so hyperparameters such as ``lambda_`` will require
+    more tuning than in other software and trying out values over a wider range.
 
     Parameters
     ----------
