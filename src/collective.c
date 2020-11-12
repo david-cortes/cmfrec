@@ -9,7 +9,7 @@
     The reference papers are:
         (a) Cortes, David.
             "Cold-start recommendations in Collective Matrix Factorization."
-            arXiv preprint_t arXiv:1809.00366 (2018).
+            arXiv preprint arXiv:1809.00366 (2018).
         (b) Singh, Ajit P., and Geoffrey J. Gordon.
             "Relational learning via collective matrix factorization."
             Proceedings of the 14th ACM SIGKDD international conference on
@@ -1329,10 +1329,11 @@ void collective_closed_form_block
             }
         }
         
-        return tpotrs_(&lo, &k_totA, &one,
-                       precomputedBeTBeChol, &k_totA,
-                       a_vec, &k_totA,
-                       &ignore);
+        tpotrs_(&lo, &k_totA, &one,
+                precomputedBeTBeChol, &k_totA,
+                a_vec, &k_totA,
+                &ignore);
+        return;
     }
 
 
@@ -1362,7 +1363,8 @@ void collective_closed_form_block
     }
 
     if (use_cg && add_X && add_U)
-        return collective_block_cg(
+    {
+        collective_block_cg(
             a_vec,
             k, k_user, k_item, k_main,
             Xa_dense,
@@ -1382,6 +1384,8 @@ void collective_closed_form_block
             max_cg_steps,
             buffer_real_t
         );
+        return;
+    }
 
     real_t *restrict bufferBeTBe = buffer_real_t;
     set_to_zero(bufferBeTBe, square(k_totA));
@@ -8128,6 +8132,9 @@ int_t precompute_collective_implicit
                 1., B + k_item, k_item+k+k_main,
                 0., BtB, k+k_main);
     add_to_diag(BtB, lam, k+k_main);
+
+    if (!p)
+        return 0;
 
     /* BeTBe */
     int_t k_totA = k_user + k + k_main;
