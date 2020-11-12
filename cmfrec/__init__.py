@@ -1301,21 +1301,22 @@ class _CMF:
                     self.include_all_X
             )
         else:
-            a_vec = c_funs.call_factors_collective_cold_implicit(
+            a_vec = c_funs.call_factors_collective_implicit_single(
+                np.empty(0, dtype=self.dtype_),
+                np.empty(0, dtype=ctypes.c_int),
                 U,
                 U_val,
                 U_col,
+                self._U_colmeans,
                 self.B_,
                 self.C_,
                 self._BeTBe,
                 self._BtB,
                 self._BeTBeChol,
-                self._U_colmeans,
-                self.C_.shape[0], self.k,
-                self.k_user, self.k_item, self.k_main,
-                lambda_,
-                self.w_main, self.w_user,
+                self.k, self.k_user, self.k_item, self.k_main,
+                lambda_, self.alpha,
                 self._w_main_multiplier,
+                self.w_user, self.w_main,
                 self.NA_as_zero_user
             )
         return a_vec
@@ -1694,21 +1695,22 @@ class _CMF:
                 False
             )
         else:
-            b_vec = c_funs.call_factors_collective_cold_implicit(
+            b_vec = c_funs.call_factors_collective_implicit_single(
+                np.empty(0, dtype=self.dtype_),
+                np.empty(0, dtype=ctypes.c_int),
                 I,
                 I_val,
                 I_col,
+                self._I_colmeans,
                 self.A_,
                 self.D_,
                 np.empty((0,0), dtype=self.dtype_),
                 np.empty((0,0), dtype=self.dtype_),
                 np.empty((0,0), dtype=self.dtype_),
-                self._I_colmeans,
-                self.D_.shape[0], self.k,
-                self.k_item, self.k_user, self.k_main,
-                lambda_,
-                self.w_main, self.w_item,
+                self.k, self.k_item, self.k_user, self.k_main,
+                lambda_, self.alpha,
                 self._w_main_multiplier,
+                self.w_item, self.w_main,
                 self.NA_as_zero_item
             )
         return b_vec
@@ -4121,7 +4123,7 @@ class CMF_implicit(_CMF):
             lambda_ = self.lambda_
 
         c_funs = wrapper_float if self.use_float else wrapper_double
-        a_vec = c_funs.call_factors_collective_warm_implicit(
+        a_vec = c_funs.call_factors_collective_implicit_single(
             X_val,
             X_col,
             U,

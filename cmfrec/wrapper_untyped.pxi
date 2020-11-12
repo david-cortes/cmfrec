@@ -218,37 +218,6 @@ cdef extern from "cmfrec.h":
         real_t *BeTBeChol
     )
 
-    int_t collective_factors_cold_implicit(
-        real_t *a_vec,
-        real_t *u_vec, int_t p,
-        real_t *u_vec_sp, int_t u_vec_ixB[], size_t nnz_u_vec,
-        real_t *B, int_t n,
-        real_t *C,
-        real_t *BeTBe,
-        real_t *BtB,
-        real_t *BeTBeChol,
-        real_t *col_means,
-        int_t k, int_t k_user, int_t k_item, int_t k_main,
-        real_t lam, real_t w_main, real_t w_user, real_t w_main_multiplier,
-        bint NA_as_zero_U
-    )
-
-    int_t collective_factors_warm_implicit(
-        real_t *a_vec,
-        real_t *u_vec, int_t p,
-        real_t *u_vec_sp, int_t u_vec_ixB[], size_t nnz_u_vec,
-        bint NA_as_zero_U,
-        real_t *col_means,
-        real_t *B, int_t n, real_t *C,
-        real_t *Xa, int_t ixB[], size_t nnz,
-        int_t k, int_t k_user, int_t k_item, int_t k_main,
-        real_t lam, real_t alpha, real_t w_main, real_t w_user,
-        real_t w_main_multiplier,
-        real_t *BeTBe,
-        real_t *BtB,
-        real_t *BeTBeChol
-    )
-
     int_t offsets_factors_cold(
         real_t *a_vec,
         real_t *u_vec,
@@ -446,6 +415,22 @@ cdef extern from "cmfrec.h":
         real_t *CtCw,
         real_t *TransCtCinvCt,
         real_t *B_plus_bias
+    )
+
+    int_t factors_collective_implicit_single(
+        real_t *a_vec,
+        real_t *u_vec, int_t p,
+        real_t *u_vec_sp, int_t u_vec_ixB[], size_t nnz_u_vec,
+        bint NA_as_zero_U,
+        real_t *U_colmeans,
+        real_t *B, int_t n, real_t *C,
+        real_t *Xa, int_t ixB[], size_t nnz,
+        int_t k, int_t k_user, int_t k_item, int_t k_main,
+        real_t lam, real_t alpha, real_t w_main, real_t w_user,
+        real_t w_main_multiplier,
+        real_t *BeTBe,
+        real_t *BtB,
+        real_t *BeTBeChol
     )
 
     int_t factors_collective_explicit_multiple(
@@ -1748,76 +1733,6 @@ def precompute_matrices_collective_implicit(
 
     return BtB, BeTBe, BeTBeChol
 
-def call_factors_collective_cold_implicit(
-        np.ndarray[real_t, ndim=1] U,
-        np.ndarray[real_t, ndim=1] U_sp,
-        np.ndarray[int_t, ndim=1] U_sp_i,
-        np.ndarray[real_t, ndim=2] B,
-        np.ndarray[real_t, ndim=2] C,
-        np.ndarray[real_t, ndim=2] BeTBe,
-        np.ndarray[real_t, ndim=2] BtB,
-        np.ndarray[real_t, ndim=2] BeTBeChol,
-        np.ndarray[real_t, ndim=1] U_colmeans,
-        int_t p, int_t k,
-        int_t k_user = 0, int_t k_item = 0, int_t k_main = 0,
-        real_t lam = 1e2,
-        real_t w_main = 1., real_t w_user = 1.,
-        real_t w_main_multiplier = 1.,
-        bint NA_as_zero_U = 0
-    ):
-    cdef real_t *ptr_U = NULL
-    cdef real_t *ptr_U_sp = NULL
-    cdef int_t *ptr_U_sp_i = NULL
-    if U.shape[0]:
-        ptr_U = &U[0]
-    elif U_sp.shape[0]:
-        ptr_U_sp = &U_sp[0]
-        ptr_U_sp_i = &U_sp_i[0]
-
-    cdef real_t *ptr_B = NULL
-    if B.shape[0]:
-        ptr_B = &B[0,0]
-    
-    cdef real_t *ptr_C = NULL
-    if C.shape[0]:
-        ptr_C = &C[0,0]
-
-    cdef real_t *ptr_BeTBe = NULL
-    cdef real_t *ptr_BtB = NULL
-    cdef real_t *ptr_BeTBeChol = NULL
-    if BeTBe.shape[0]:
-        ptr_BeTBe = &BeTBe[0,0]
-    if BtB.shape[0]:
-        ptr_BtB = &BtB[0,0]
-    if BeTBeChol.shape[0]:
-        ptr_BeTBeChol = &BeTBeChol[0,0]
-
-    cdef real_t *ptr_U_colmeans = NULL
-    if U_colmeans.shape[0]:
-        ptr_U_colmeans = &U_colmeans[0]
-
-    cdef np.ndarray[real_t, ndim=1] A = np.empty(k_user+k+k_main, dtype=c_real_t)
-
-    cdef int_t retval = collective_factors_cold_implicit(
-        &A[0],
-        ptr_U, p,
-        ptr_U_sp, ptr_U_sp_i, <size_t> U_sp.shape[0],
-        ptr_B, B.shape[0],
-        ptr_C,
-        ptr_BeTBe,
-        ptr_BtB,
-        ptr_BeTBeChol,
-        ptr_U_colmeans,
-        k, k_user, k_item, k_main,
-        lam, w_main, w_user, w_main_multiplier,
-        NA_as_zero_U
-    )
-
-    if retval == 1:
-        raise MemoryError("Could not allocate sufficient memory.")
-
-    return A
-
 def call_factors_collective_explicit_single(
         np.ndarray[real_t, ndim=1] Xa_dense,
         np.ndarray[real_t, ndim=1] W_dense,
@@ -1971,7 +1886,7 @@ def call_factors_collective_explicit_single(
 
     return Abias, A
 
-def call_factors_collective_warm_implicit(
+def call_factors_collective_implicit_single(
         np.ndarray[real_t, ndim=1] Xa,
         np.ndarray[int_t, ndim=1] Xa_i,
         np.ndarray[real_t, ndim=1] U,
@@ -1984,7 +1899,7 @@ def call_factors_collective_warm_implicit(
         np.ndarray[real_t, ndim=2] BtB,
         np.ndarray[real_t, ndim=2] BeTBeChol,
         int_t k, int_t k_user = 0, int_t k_item = 0, int_t k_main = 0,
-        real_t lam = 1e2, real_t alpha = 40.,
+        real_t lam = 1e0, real_t alpha = 40.,
         real_t w_main_multiplier = 1.,
         real_t w_user = 1., real_t w_main = 1.,
         bint NA_as_zero_U = 0
@@ -1993,8 +1908,10 @@ def call_factors_collective_warm_implicit(
     cdef real_t *ptr_U = NULL
     cdef real_t *ptr_U_sp = NULL
     cdef int_t *ptr_U_sp_i = NULL
+    cdef int p = C.shape[0]
     if U.shape[0]:
         ptr_U = &U[0]
+        p = U.shape[0]
     elif U_sp.shape[0]:
         ptr_U_sp = &U_sp[0]
         ptr_U_sp_i = &U_sp_i[0]
@@ -2016,11 +1933,11 @@ def call_factors_collective_warm_implicit(
         ptr_BtB = &BtB[0,0]
     if BeTBeChol.shape[0]:
         ptr_BeTBeChol = &BeTBeChol[0,0]
-    
+
     cdef np.ndarray[real_t, ndim=1] A = np.empty(k_user+k+k_main, dtype=c_real_t)
-    cdef int_t retval = collective_factors_warm_implicit(
+    cdef int retval = factors_collective_implicit_single(
         &A[0],
-        ptr_U, C.shape[0],
+        ptr_U, p,
         ptr_U_sp, ptr_U_sp_i, U_sp.shape[0],
         NA_as_zero_U,
         ptr_U_colmeans,
