@@ -9,7 +9,7 @@
     The reference papers are:
         (a) Cortes, David.
             "Cold-start recommendations in Collective Matrix Factorization."
-            arXiv preprint_t arXiv:1809.00366 (2018).
+            arXiv preprint arXiv:1809.00366 (2018).
         (b) Singh, Ajit P., and Geoffrey J. Gordon.
             "Relational learning via collective matrix factorization."
             Proceedings of the 14th ACM SIGKDD international conference on

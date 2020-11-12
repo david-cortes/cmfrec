@@ -9,7 +9,7 @@
     The reference papers are:
         (a) Cortes, David.
             "Cold-start recommendations in Collective Matrix Factorization."
-            arXiv preprint_t arXiv:1809.00366 (2018).
+            arXiv preprint arXiv:1809.00366 (2018).
         (b) Singh, Ajit P., and Geoffrey J. Gordon.
             "Relational learning via collective matrix factorization."
             Proceedings of the 14th ACM SIGKDD international conference on
@@ -3535,11 +3535,11 @@ int_t predict_X_new_content_based
     #endif
 
     real_t *restrict Am = (real_t*)malloc((size_t)n_new *
-                                        (size_t)k *
-                                        sizeof(real_t));
+                                          (size_t)k *
+                                          sizeof(real_t));
     real_t *restrict Bm = (real_t*)malloc((size_t)n_new *
-                                        (size_t)k *
-                                        sizeof(real_t));
+                                          (size_t)k *
+                                          sizeof(real_t));
     int_t retval = 0;
     if (Am == NULL || Bm == NULL) goto throw_oom;
 
@@ -3580,7 +3580,7 @@ int_t predict_X_new_content_based
                              col[ix] >= n_new || col[ix] < 0)?
                                 (NAN_)
                                   :
-                                (cblas_tdot(k,Am + (size_t)row[ix]*(size_t)k,1,
+                                (cblas_tdot(k,Am + (size_t)row[ix]*(size_t)k, 1,
                                               Bm + (size_t)col[ix]*(size_t)k, 1)
                                  + glob_mean);
 

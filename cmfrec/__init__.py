@@ -2411,6 +2411,14 @@ class CMF(_CMF):
         will be considered as missing (unless using "NA_as_zero"), and it should
         not contain "NaN" values among the non-zero entries.
 
+        Note
+        ----
+        In order to avoid potential decimal differences in the factors obtained
+        when fitting the model and when calling the prediction functions on
+        new data, when the data is sparse, it's necessary to sort it beforehand
+        by columns and also pass the data data with indices sorted (by column)
+        to the prediction functions.
+
         Parameters
         ----------
         X : DataFrame(nnz, 3), DataFrame(nnz, 4), array(m, n), or sparse COO(m, n)
@@ -3725,6 +3733,14 @@ class CMF_implicit(_CMF):
         will be considered as missing (unless using "NA_as_zero", and except for
         "X" for which missing will always be treated as zero), and it should
         not contain "NaN" values among the non-zero entries.
+
+        Note
+        ----
+        In order to avoid potential decimal differences in the factors obtained
+        when fitting the model and when calling the prediction functions on
+        new data, when the data is sparse, it's necessary to sort it beforehand
+        by columns and also pass the data data with indices sorted (by column)
+        to the prediction functions.
 
         Parameters
         ----------
@@ -5106,6 +5122,14 @@ class OMF_explicit(_OMF):
         None of the side info inputs should have missing values. If passing side
         information 'U' and/or 'I', all entries (users/items) must be present
         in both the main matrix and the side info matrix.
+
+        Note
+        ----
+        In order to avoid potential decimal differences in the factors obtained
+        when fitting the model and when calling the prediction functions on
+        new data, when the data is sparse, it's necessary to sort it beforehand
+        by columns and also pass the data data with indices sorted (by column)
+        to the prediction functions.
         
         Parameters
         ----------
@@ -5933,6 +5957,14 @@ class OMF_implicit(_OMF):
         information 'U' and/or 'I', all entries (users/items) must be present
         in both the main matrix and the side info matrix.
 
+        Note
+        ----
+        In order to avoid potential decimal differences in the factors obtained
+        when fitting the model and when calling the prediction functions on
+        new data, when the data is sparse, it's necessary to sort it beforehand
+        by columns and also pass the data data with indices sorted (by column)
+        to the prediction functions.
+
         Parameters
         ----------
         X : DataFrame(nnz, 3), or sparse COO(m, n)
@@ -6423,6 +6455,14 @@ class ContentBased(_OMF_Base):
         ----
         None of the side info inputs should have missing values. All entries (users/items)
         must be present in both the main matrix and the side info matrix.
+
+        Note
+        ----
+        In order to avoid potential decimal differences in the factors obtained
+        when fitting the model and when calling the prediction functions on
+        new data, when the data is sparse, it's necessary to sort it beforehand
+        by columns and also pass the data data with indices sorted (by column)
+        to the prediction functions.
 
         Parameters
         ----------

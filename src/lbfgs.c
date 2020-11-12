@@ -566,7 +566,7 @@ int_t lbfgs(
 
         if (param.max_iterations != 0 && param.max_iterations < k+1) {
             /* Maximum number of iterations. */
-            setbuf(stdout, NULL);
+            // setbuf(stdout, NULL);
             ret = LBFGSERR_MAXIMUMITERATION;
             break;
         }
