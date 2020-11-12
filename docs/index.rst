@@ -38,6 +38,9 @@ About function descriptions:
  - 'new' -> the user/items was not present in the training data that was passed to 'fit'.
 
 
+Be aware that the package's functions are user-centric (e.g. it will recommend items for users, but not users for items). If predictions about new items are desired, it's recommended to use the method 'swap_users_and_items', as the item-based functions which are provided for convenience might run a lot slower than their user equivalents.
+
+
 .. toctree::
    :maxdepth: 3
    :caption: Contents:

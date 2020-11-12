@@ -190,6 +190,7 @@ class _CMF:
         self._BeTBeChol = np.empty((0,0), dtype=self.dtype_)
         self._BiTBi = np.empty((0,0), dtype=self.dtype_)
 
+        self._A_pred = np.empty((0,0), dtype=self.dtype_)
         self._B_pred = np.empty((0,0), dtype=self.dtype_)
         self._B_plus_bias = np.empty((0,0), dtype=self.dtype_)
 
@@ -1836,6 +1837,180 @@ class _CMF:
                 )
         return A
 
+    def swap_users_and_items(self, precompute = True):
+        """
+        Swap the users and items in a factorization model
+
+        This method will generate a new object that will have the users
+        and items of this object swapped, and such result can be used under
+        the same methods such as ``topN``, in which any mention of users will
+        now mean items and vice-versa.
+
+        Note
+        ----
+        The resulting object will not generate any deep copies of the
+        original model's objects.
+
+        Parameters
+        ----------
+        precompute : bool
+            Whether to produce the precomputed matrices which might help
+            to speed up predictions on new data.
+
+        Returns
+        -------
+        model : obj
+            An object of the same class as this one, but with the user
+            and items swapped.
+        """
+        assert self.is_fitted_
+
+        new_lambda = self.lambda_
+        if isinstance(new_lambda, np.ndarray) and (new_lambda.shape[0] == 6):
+            new_lambda = self.lambda_.copy()
+            new_lambda[0], new_lambda[1] = new_lambda[1], new_lambda[0]
+            new_lambda[2], new_lambda[3] = new_lambda[3], new_lambda[2]
+            new_lambda[4], new_lambda[5] = new_lambda[5], new_lambda[4]
+
+        if isinstance(self, CMF):
+            new_model = CMF(
+                k=self.k, lambda_=new_lambda, method=self.method, use_cg=self.use_cg,
+                user_bias=self.item_bias, item_bias=self.user_bias, add_implicit_features=self.add_implicit_features,
+                k_user=self.k_item, k_item=self.k_user, k_main=self.k_main,
+                w_main=self.w_main, w_user=self.w_item, w_item=self.w_user, w_implicit=self.w_implicit,
+                maxiter=self.maxiter, niter=self.niter, parallelize=self.parallelize, corr_pairs=self.corr_pairs,
+                max_cg_steps=self.max_cg_steps, finalize_chol=self.finalize_chol,
+                NA_as_zero=self.NA_as_zero, NA_as_zero_user=self.NA_as_zero_item, NA_as_zero_item=self.NA_as_zero_user,
+                precompute_for_predictions=precompute, include_all_X=True,
+                use_float=self.use_float,
+                random_state=self.random_state, verbose=self.verbose, print_every=self.print_every,
+                handle_interrupt=self.handle_interrupt, produce_dicts=self.produce_dicts,
+                copy_data=self.copy_data, nthreads=self.nthreads)
+        elif isinstance(self, CMF_implicit):
+            new_model = CMF_implicit(
+                k=self.k, lambda_=new_lambda, alpha=self.alpha, use_cg=self.use_cg,
+                k_user=self.k_item, k_item=self.k_user, k_main=self.k_main,
+                w_main=self.w_main, w_user=self.w_item, w_item=self.w_user,
+                niter=self.niter, NA_as_zero_user=self.NA_as_zero_item, NA_as_zero_item=self.NA_as_zero_user,
+                precompute_for_predictions=self.precompute_for_predictions, use_float=self.use_float,
+                max_cg_steps=self.max_cg_steps, finalize_chol=self.finalize_chol,
+                random_state=self.random_state, init=self.init, verbose=self.verbose,
+                produce_dicts=self.produce_dicts, handle_interrupt=self.handle_interrupt,
+                copy_data=self.copy_data, nthreads=self.nthreads)
+        elif isinstance(self, MostPopular):
+            if self.implicit:
+                raise ValueError("Cannot swap users and items for MostPopular-implicit.")
+            if not self.user_bias:
+                raise  ValueError("Swapping users/items not meaningful for MostPopular with 'user_bias=False'")
+            new_model = MostPopular(
+                implicit=self.implicit, user_bias=True, lambda_=new_lambda, alpha=self.alpha,
+                use_float=self.use_float, produce_dicts=self.produce_dicts,
+                copy_data=self.copy_data, nthreads=self.nthreads)
+        elif isinstance(self, ContentBased):
+            new_model = ContentBased(
+                k=self.k, lambda_=new_lambda, user_bias=self.user_bias, item_bias=self.item_bias,
+                add_intercepts=self.add_intercepts, maxiter=self.maxiter, corr_pairs=self.corr_pairs,
+                parallelize=self.parallelize, verbose=self.verbose, print_every=self.print_every,
+                random_state=self.random_state, use_float=self.use_float,
+                produce_dicts=self.produce_dicts, handle_interrupt=self.handle_interrupt, start_with_ALS=self.start_with_ALS,
+                copy_data=self.copy_data, nthreads=self.nthreads)
+        elif isinstance(self, OMF_explicit):
+            new_model = OMF_explicit(
+                k=self.k, lambda_=new_lambda, method=self.method, use_cg=self.use_cg,
+                user_bias=self.item_bias, item_bias=self.user_bias, k_sec=self.k_sec, k_main=self.k_main,
+                add_intercepts=self.add_intercepts, w_user=self.w_item, w_item=self.w_user,
+                maxiter=self.maxiter, niter=self.niter, parallelize=self.parallelize, corr_pairs=self.corr_pairs,
+                max_cg_steps=self.max_cg_steps, finalize_chol=self.finalize_chol,
+                NA_as_zero=self.NA_as_zero, use_float=self.use_float,
+                random_state=self.random_state, verbose=self.verbose, print_every=self.print_every,
+                produce_dicts=self.produce_dicts, handle_interrupt=self.handle_interrupt,
+                copy_data=self.copy_data, nthreads=self.nthreads)
+        elif isinstance(self, OMF_implicit):
+            new_model = OMF_implicit(
+                k=self.k, lambda_=new_lambda, alpha=self.alpha, use_cg=self.use_cg, downweight=self.downweight,
+                add_intercepts=self.add_intercepts, niter=self.niter, use_float=self.use_float,
+                max_cg_steps=self.max_cg_steps, finalize_chol=self.finalize_chol,
+                random_state=self.random_state, verbose=self.verbose,
+                produce_dicts=self.produce_dicts, handle_interrupt=self.handle_interrupt,
+                copy_data=self.copy_data, nthreads=self.nthreads)
+        else:
+            raise ValueError("Unexpected error.")
+
+
+        new_model.A_ = self.B_
+        new_model.B_ = self.A_
+        new_model.C_ = self.D_
+        new_model.D_ = self.C_
+        new_model.Cbin_ = self.Dbin_
+        new_model.Dbin_ = self.Cbin_
+        new_model.Ai_ = self.Bi_
+        new_model.Bi_ = self.Ai_
+        new_model.user_bias_ = self.item_bias_
+        new_model.item_bias_ = self.user_bias_
+        new_model.C_bias_ = self.D_bias_
+        new_model.D_bias_ = self.C_bias_
+        new_model.glob_mean_ = self.glob_mean_
+
+        new_model._U_cols = self._I_cols
+        new_model._I_cols = self._U_cols
+        new_model._Ub_cols = self._Ib_cols
+        new_model._Ib_cols = self._Ub_cols
+        new_model._U_colmeans = self._I_colmeans
+        new_model._I_colmeans = self._U_colmeans
+        new_model._w_main_multiplier = self._w_main_multiplier
+
+        new_model.is_fitted_ = True
+        new_model.nfev_ = self.nfev_
+        new_model.nupd_ = self.nupd_
+        new_model.user_mapping_ = self.item_mapping_
+        new_model.item_mapping_ = self.user_mapping_
+        new_model.reindex_ = self.reindex_
+        new_model.user_dict_ = self.item_dict_
+        new_model.item_dict_ = self.user_dict_
+
+        new_model._A_pred = self._B_pred
+        new_model._B_pred = self._A_pred
+        new_model._n_orig = self._A_pred.shape[0]
+
+        if precompute:
+            if isinstance(self, CMF) or isinstance(self, CMF_implicit):
+                self.force_precompute_for_predictions()
+            elif isinstance(self, OMF_explicit):
+                if new_lambda.shape[0] == 6:
+                    lambda_ = new_lambda[2]
+                    lam_bias = new_lambda[0]
+                else:
+                    lambda_ = new_lambda
+                    lam_bias = new_lambda
+                c_funs = wrapper_float if self.use_float else wrapper_double
+                new_model._B_plus_bias, new_model._BtB, new_model._TransBtBinvBt, \
+                _1, _2, _3, _4 = \
+                    c_funs.precompute_matrices_collective_explicit(
+                        new_model.B_,
+                        new_model.C_,
+                        new_model.Bi_,
+                        new_model.user_bias, False,
+                        new_model.n_orig,
+                        new_model.k_sec + new_model.k + new_model.k_main,
+                        0, 0, 0,
+                        lambda_, lam_bias,
+                        1., 1., 1.,
+                        include_all_X = True
+                    )
+            elif isinstance(self, OMF_implicit):
+                c_funs = wrapper_float if self.use_float else wrapper_double
+                new_model._BtB, _1, _2 = \
+                    c_funs.precompute_matrices_collective_implicit(
+                        new_model.B_,
+                        new_model.C_,
+                        new_model.k, 0, 0, 0,
+                        new_lambda, 1., 1.,
+                        1.
+                    )
+
+        return new_model
+
+
 
 class CMF(_CMF):
     """
@@ -3259,7 +3434,7 @@ class CMF_implicit(_CMF):
     For example, to match those of the package ``implicit``, the corresponding
     hyperparameters here would be ``use_cg=True``, ``finalize_chol=False``,
     ``k=100``, ``lambda_=0.01``, ``niter=15``, ``use_float=True``, `alpha=1.``,
-    ``downweight=False`` (see the individual documentation of each hyperarameter
+    (see the individual documentation of each hyperarameter
     for details).
 
     Note
@@ -3301,8 +3476,7 @@ class CMF_implicit(_CMF):
         Weighting parameter for the non-zero entries in the implicit-feedback
         model. See [3] for details. Note that, while the author's suggestion for
         this value is 40, other software such as ``implicit`` use a value of 1,
-        and values higher than 10 are unlikely to improve results. Recommended to
-        use ``downweight=True`` when using higher "alpha".
+        and values higher than 10 are unlikely to improve results.
     use_cg : bool
         In the ALS method, whether to use a conjugate gradient method to solve
         the closed-form least squares problems. This is a faster and more
@@ -4682,8 +4856,9 @@ class OMF_explicit(_OMF):
         then the B matrix will have an extra ``k_sec`` factors). Will be counted
         in addition to those already set by ``k``. Not supported when
         using ``method='als'``.
+        
         For a different model having only ``k_sec`` with ``k=0`` and ``k_main=0``,
-        the the ``ContentBased`` class.
+        see the ``ContentBased`` class.
     k_main : int
         Number of factors in the factorizing matrices which are determined
         without any user/item attributes. These will be at the end of the
@@ -5599,11 +5774,6 @@ class OMF_implicit(_OMF):
         Even if passing "True" here, will use the Cholesky method in cases in which
         it is faster (e.g. dense matrices with no missing values),
         and will not use the conjugate gradient method on new data.
-    downweight : bool
-        Whether to decrease the weight of the 'X' matrix being factorized
-        according to the number of present entries. This has the same effect
-        as rescaling (increasing) the regularization parameter.
-        Recommended to use when passing ``alpha``.
     add_intercepts : bool
         Whether to add intercepts/biases to the user/item attribute matrices.
     niter : int
@@ -5705,13 +5875,13 @@ class OMF_implicit(_OMF):
            "Applications of the conjugate gradient method for implicit feedback collaborative filtering."
            Proceedings of the fifth ACM conference on Recommender systems. 2011.
     """
-    def __init__(self, k=50, lambda_=1e0, alpha=1., use_cg=True, downweight=False,
+    def __init__(self, k=50, lambda_=1e0, alpha=1., use_cg=True,
                  add_intercepts=True, niter=10, use_float=False,
                  max_cg_steps=3, finalize_chol=True,
                  random_state=1, verbose=False,
                  produce_dicts=False, handle_interrupt=True,
                  copy_data=True, nthreads=-1):
-        self._take_params(implicit=True, alpha=alpha, downweight=downweight,
+        self._take_params(implicit=True, alpha=alpha, downweight=False,
                           k=k, lambda_=lambda_, method="als",
                           use_cg=use_cg, max_cg_steps=max_cg_steps,
                           finalize_chol=finalize_chol,
@@ -6578,7 +6748,7 @@ class MostPopular(_CMF):
         Whether to use the implicit-feedback model, in which the 'X' matrix is
         assumed to have only binary entries and each of them having a weight
         in the loss function given by the observer user-item interactions and
-        other parameters,
+        other parameters.
     user_bias : bool
         Whether to add user biases to the model. Not supported for implicit
         feedback (``implicit=True``).
@@ -6593,12 +6763,6 @@ class MostPopular(_CMF):
         model. See [2] for details. Note that, while the author's suggestion for
         this value is 40, other software such as ``implicit`` use a value of 1.
         See the documentation of ``CMF_implicit`` for more details.
-    downweight : bool
-        (Only when passing ``implicit=True``) Whether to decrease the weight
-        of the 'X' matrix being factorized according to the number of
-        present entries. This has the same effect as rescaling (increasing)
-        the regularization parameter. Provided for better comparability
-        against the personalized-recommender models in this package.
     use_float : bool
         Whether to use C float type for the model parameters (typically this is
         ``np.float32``). If passing ``False``, will use C double (typically this
@@ -6663,9 +6827,9 @@ class MostPopular(_CMF):
            2008 Eighth IEEE International Conference on Data Mining. Ieee, 2008.
     """
     def __init__(self, implicit=False, user_bias=False, lambda_=1e1, alpha=1.,
-                 downweight=False, use_float=False, produce_dicts=False,
+                 use_float=False, produce_dicts=False,
                  copy_data=True, nthreads=-1):
-        self._take_params(implicit=implicit, alpha=alpha, downweight=downweight,
+        self._take_params(implicit=implicit, alpha=alpha, downweight=False,
                           k=1, lambda_=lambda_, method="als", use_cg=False,
                           user_bias=user_bias, item_bias=True,
                           k_user=0, k_item=0, k_main=0,
