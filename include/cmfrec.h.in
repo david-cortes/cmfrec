@@ -822,6 +822,16 @@ int_t precompute_collective_implicit
     calculated with 'include_all_X'=true, or if not passing precomputed
     matrices, then 'n' here (in the new "X" data) can reach up to 'n_max'.
 
+    In order to avoid any potential differences between the factors obtained
+    when fitting the model and the factors obtained from the prediction API,
+    it's recommended to:
+        - Use the ALS method.
+        - Use 'finalize_chol=true' or 'use_cg=false'.
+        - Compile the library with the default 'double' type (vs. 'float').
+        - Sort the indices of the COO matrices *by columns*, and pass sparse
+          inputs also with the indices already sorted. Note that the package
+          does not sort the indices of sparse matrices.
+
     --- Parameters for single-row data ---
     @param a_vec  (out) Obtained factors.
                    Dimension: [k_user+k+k_main]
