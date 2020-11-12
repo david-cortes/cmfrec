@@ -8823,16 +8823,9 @@ int_t impute_X_collective_explicit
     dont_produce_full_X = (cnt_NA <= m_by_n / (size_t)10);
     if (cnt_NA == 0) goto cleanup;
 
-    if (!dont_produce_full_X || biasB != NULL)
-    {
-        Xpred = (real_t*)malloc(m_by_n*sizeof(real_t));
-        if (Xpred == NULL) goto throw_oom;
-        copy_arr_(Xfull, Xpred, m_by_n, nthreads);
-    }
-
-    else {
-        Xpred = Xfull;
-    }
+    Xpred = (real_t*)malloc(m_by_n*sizeof(real_t));
+    if (Xpred == NULL) goto throw_oom;
+    copy_arr_(Xfull, Xpred, m_by_n, nthreads);
 
     retval = factors_collective_explicit_multiple(
         A, biasA, m,
@@ -8870,14 +8863,20 @@ int_t impute_X_collective_explicit
 
     if (dont_produce_full_X)
     {
-        #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
+        #pragma omp parallel for collapse(2) \
+                schedule(dynamic) num_threads(nthreads) \
                 shared(m, n, Xfull, k, k_user, k_item, k_main, lda, ldb, \
                        glob_mean, user_bias, biasA, biasB, A, B)
         for (size_t_for row = 0; row < (size_t)m; row++)
             for (size_t col = 0; col < (size_t)n; col++)
                 Xfull[col + row*(size_t)n]
                     =
+                #ifndef _FOR_R
                 (!isnan(Xfull[col + row*(size_t)n]))?
+                #else
+                (!isnan(Xfull[col + row*(size_t)n]) &&
+                 !ISNAN(Xfull[col + row*(size_t)n]))?
+                #endif
                     (Xfull[col + row*(size_t)n])
                         :
                     (
@@ -8896,11 +8895,19 @@ int_t impute_X_collective_explicit
                     m, n, k+k_main,
                     1., A + k_user, lda, B + k_item, ldb,
                     0., Xpred, n);
+        #pragma omp parallel for collapse(2) \
+                schedule(dynamic) num_threads(nthreads) \
+                shared(m, n, Xfull, Xpred, glob_mean, user_bias, biasA, biasB)
         for (size_t_for row = 0; row < (size_t)m; row++)
             for (size_t col = 0; col < (size_t)n; col++)
                 Xfull[col + row*(size_t)n]
                     =
+                #ifndef _FOR_R
                 (!isnan(Xfull[col + row*(size_t)n]))?
+                #else
+                (!isnan(Xfull[col + row*(size_t)n]) &&
+                 !ISNAN(Xfull[col + row*(size_t)n]))?
+                #endif
                     (Xfull[col + row*(size_t)n])
                         :
                     (Xpred[col + row*(size_t)n]
