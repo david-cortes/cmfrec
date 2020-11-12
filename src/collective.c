@@ -8798,10 +8798,10 @@ int_t impute_X_collective_explicit
     bool dont_produce_full_X = false;
     real_t *restrict Xpred = NULL;
     real_t *restrict A = (real_t*)malloc(  (size_t)max2(m, m_u)
-                                         * (size_t)(k_user+k+k_main)
+                                         * (size_t)lda
                                          * sizeof(real_t));
     real_t *restrict biasA = NULL;
-    if (user_bias) biasA = (real_t*)malloc((size_t)m*sizeof(real_t));
+    if (user_bias) biasA = (real_t*)calloc((size_t)max2(m, m_u),sizeof(real_t));
 
     if (A == NULL || (biasA == NULL && user_bias))
         goto throw_oom;
@@ -8809,7 +8809,7 @@ int_t impute_X_collective_explicit
     if (user_bias && B_plus_bias == NULL)
     {
         free_B_plus_bias = true;
-        B_plus_bias = (real_t*)malloc((size_t)n*(size_t)(k_item+k+k_main)
+        B_plus_bias = (real_t*)malloc((size_t)n*(size_t)(ldb + (size_t)1)
                                       * sizeof(real_t));
         if (B_plus_bias == NULL) goto throw_oom;
         append_ones_last_col(
@@ -8820,7 +8820,7 @@ int_t impute_X_collective_explicit
 
     for (size_t ix = 0; ix < m_by_n; ix++)
         cnt_NA += isnan(Xfull[ix]);
-    dont_produce_full_X = (cnt_NA <= m_by_n / 10);
+    dont_produce_full_X = (cnt_NA <= m_by_n / (size_t)10);
     if (cnt_NA == 0) goto cleanup;
 
     if (!dont_produce_full_X || biasB != NULL)
@@ -8870,6 +8870,9 @@ int_t impute_X_collective_explicit
 
     if (dont_produce_full_X)
     {
+        #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
+                shared(m, n, Xfull, k, k_user, k_item, k_main, lda, ldb, \
+                       glob_mean, user_bias, biasA, biasB, A, B)
         for (size_t_for row = 0; row < (size_t)m; row++)
             for (size_t col = 0; col < (size_t)n; col++)
                 Xfull[col + row*(size_t)n]
@@ -8891,8 +8894,7 @@ int_t impute_X_collective_explicit
     {
         cblas_tgemm(CblasRowMajor, CblasNoTrans, CblasTrans,
                     m, n, k+k_main,
-                    1., A + k_user, lda, B_plus_bias + k_item,
-                    k_item+k+k_main+(int)user_bias,
+                    1., A + k_user, lda, B + k_item, ldb,
                     0., Xpred, n);
         for (size_t_for row = 0; row < (size_t)m; row++)
             for (size_t col = 0; col < (size_t)n; col++)
