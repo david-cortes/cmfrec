@@ -8879,7 +8879,7 @@ int_t impute_X_collective_explicit
                         :
                     (
                         cblas_tdot(k+k_main,
-                                   A + row*lda + (size_t)k_main,1,
+                                   A + row*lda + (size_t)k_user, 1,
                                    B + col*ldb + (size_t)k_item, 1)
                         + glob_mean
                         + (user_bias? biasA[row] : 0.)
