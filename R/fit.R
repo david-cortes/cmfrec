@@ -606,14 +606,14 @@ NULL
 #'               movie_names[rec],
 #'               " - Avg rating:", round(avg_ratings, 2),
 #'               ", #ratings: ", n_ratings,
-#'               collapse="\n", sep=""))
+#'               collapse="\n", sep=""), "\n")
 #'     
 #'     
 #'     ### Recommend assuming it is a new user,
 #'     ### based on its data (ratings + side info)
 #'     x_user <- as(X[10, , drop=FALSE], "sparseVector")
 #'     rec_new <- topN_new(model, n=5, X=x_user, exclude=seen_by_user)
-#'     identical(rec_new, rec)
+#'     cat("lists are identical: ", identical(rec_new, rec), "\n")
 #'     
 #'     ### (If there were user side info, could also recommend
 #'     ###  based on that side information alone)
@@ -625,14 +625,14 @@ NULL
 #'     factors_new <- factors_single(model, X=x_user)
 #'     
 #'     ### Should be very close, but due to numerical precision,
-#'     ### might not be exactly equal
-#'     factors_user - factors_new
+#'     ### might not be exactly equal (see section 'Details')
+#'     cat("diff: ", factors_user - factors_new, "\n")
 #'     
 #'     ### Can also calculate them in batch
 #'     ### (slicing is provided by package "rsparse")
 #'     Xslice <- as(X, "RsparseMatrix")[1:10, , drop=FALSE]
 #'     factors_multiple <- factors(model, X=Xslice)
-#'     factors_multiple[10, , drop=TRUE] - factors_new
+#'     cat("diff: ", factors_multiple[10, , drop=TRUE] - factors_new, "\n")
 #'     
 #'     ### Can make cold-start predictions, e.g.
 #'     ### predict how would users [1,2,3] rate a new item,
