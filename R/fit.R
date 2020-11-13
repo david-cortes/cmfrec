@@ -149,6 +149,8 @@ NULL
 #' Same as above, rows correspond to rows of `X` and columns to user
 #' attributes. If passed as sparse, the non-missing values cannot contain `NA`/`NaN` -
 #' see parameter `NA_as_zero_user` for how to interpret non-missing values.
+#' Sparse side info is not supported for `OMF_implicit`, nor for `OMF_explicit`
+#' with `method=als`.
 #' }
 #' If `X` is a `data.frame`, should be
 #' either a `data.frame` or `matrix`, containing row names matching to the first
@@ -172,6 +174,8 @@ NULL
 #' Same as above, rows correspond to columns of `X` and columns to item
 #' attributes. If passed as sparse, the non-missing values cannot contain `NA`/`NaN` -
 #' see parameter `NA_as_zero_item` for how to interpret non-missing values.
+#' Sparse side info is not supported for `OMF_implicit`, nor for `OMF_explicit`
+#' with `method=als`.
 #' }
 #' If `X` is a `data.frame`, should be
 #' either a `data.frame` or `matrix`, containing row names matching to the second
