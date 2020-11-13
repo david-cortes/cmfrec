@@ -212,7 +212,7 @@ topN(model, user=3, n=5)
 
 ### Top-5 highest predicted for user 3, if it were a new user
 topN_new(model, n=5,
-	     X_col=ratings$ItemId[ratings$UserId == 3],
+         X_col=ratings$ItemId[ratings$UserId == 3],
          X_val=ratings$Rating[ratings$UserId == 3],
          U=user_info[3,])
 
