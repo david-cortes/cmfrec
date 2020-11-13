@@ -4,6 +4,8 @@ __pycache__/
 *.so
 *.out
 *.o
+*.Rproj
+*.Rhistory
 
 # dist files
 dist/

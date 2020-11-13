@@ -10,7 +10,7 @@ For more information about the implementation here, or if you would like to cite
 
 For a similar package with Poisson distributions see [ctpfrec](https://github.com/david-cortes/ctpfrec).
 
-Written in C with a Python interface. R version to come in the future.
+Written in C with Python and R interfaces.
 
 ## Update 2020-03-20
 
@@ -85,6 +85,14 @@ pip install cmfrec
 
 Will also by default use MKL if it finds it - for OpenBLAS can set an environment variable `USE_OPENBLAS=1` or pass argument `openblas` to `setup.py`.
 
+* R:
+
+```r
+remotes::install_github("david-cortes/cmfrec")
+```
+(Coming to CRAN soon)
+
+
 * C:
 
 Package can be built as a shared library - see the CMake build file for options:
@@ -104,7 +112,8 @@ sudo ldconfig
 Linkage is then done with `-lcmfrec`.
 
 
-**Note:** this package relies heavily on BLAS and LAPACK functions for calculations. It's recommended to use MKL (comes by default in Anaconda) or OpenBLAS as backend for them, but note that, as of OpenBLAS 0.3.9, some of the functions used here might be significantly faster in MKL depending on CPU architecture.
+**Note:** this package relies heavily on BLAS and LAPACK functions for calculations. It's recommended to use MKL (in Python, comes by default in Anaconda, in R for Windows, can be gotten through Microsoft's R distribution) or OpenBLAS as backend for them, but note that, as of OpenBLAS 0.3.9, some of the functions used here might be significantly faster in MKL depending on CPU architecture.
+
 
 ## Sample Usage
 
@@ -161,9 +170,67 @@ model.factors_warm(X_col=ratings.ItemId.loc[ratings.UserId == 3],
                    U=user_info.iloc[[3]])
 ```
 
-Users and items can be reindexed internally (if passing data frames), so you can use strings or non-consecutive numbers as IDs when passing data to the object's methods.
+Users and items can be reindexed internally (if passing data frames, but not when pasing sparse or dense matrices), so you can use strings or non-consecutive numbers as IDs when passing data to the object's methods.
 
-* C: see file [example/c_example.c](https://github.com/david-cortes/cmfrec/blob/master/example/c_example.c)
+* R:
+
+(See `?fit_models` for a better and longer example with real data)
+
+```r
+library(cmfrec)
+
+n_users <- 4
+n_items <- 5
+n_ratings <- 10
+n_user_attr <- 4
+n_item_attr <- 5
+k <- 3
+set.seed(1)
+
+### 'X' matrix (can also pass it as TsparseMatrix, matrix.coo, etc.)
+ratings <- data.frame(
+    UserId = sample(n_users, n_ratings, replace=TRUE),
+    ItemId = sample(n_items, n_ratings, replace=TRUE),
+    Rating = rnorm(n_ratings, mean=3)
+)
+### 'U' matrix (can also pass it as TsparseMatrix, DF, etc.)
+user_info <- matrix(rnorm(n_users*n_user_attr), nrow=n_users)
+rownames(user_info) <- 1:n_users ## These denote which ID is each row
+### 'I' matrix (can also pass it as TsparseMatrix, DF, etc.)
+item_info <- matrix(rnorm(n_items*n_item_attr), nrow=n_items)
+rownames(item_info) <- 1:n_items ## These denote which ID is each row
+
+### Fit the model
+model <- CMF(X=ratings, U=user_info, I=item_info,
+             method="als", k=k)
+
+### Predict rating that user 3 would give to items 2 and 4
+predict(model, user=c(3, 3), item=c(2, 4))
+
+### Top-5 highest predicted for user 3
+topN(model, user=3, n=5)
+
+### Top-5 highest predicted for user 3, if it were a new user
+topN_new(model, n=5,
+	     X_col=ratings$ItemId[ratings$UserId == 3],
+         X_val=ratings$Rating[ratings$UserId == 3],
+         U=user_info[3,])
+
+### Top-5 highest predicted for user 3, based on side information
+topN_new(model, U=user_info[3,], n=5)
+
+### Calculating the latent factors
+factors_single(model,
+               X_col=ratings$ItemId[ratings$UserId == 3],
+               X_val=ratings$Rating[ratings$UserId == 3],
+               U=user_info[3,])
+```
+
+Users and items can be reindexed internally (if passing data frames, but not when pasing sparse or dense matrices), so you can use strings or non-consecutive numbers as IDs when passing data to the object's methods.
+
+* C:
+
+See file [example/c_example.c](https://github.com/david-cortes/cmfrec/blob/master/example/c_example.c)
 
 For more details see the online documentation.
 
@@ -176,6 +243,10 @@ For a longer example with real data see the notebook [MovieLens Recommender with
 * Python:
 
 Documentation is available at ReadTheDocs: [http://cmfrec.readthedocs.io/en/latest/](http://cmfrec.readthedocs.io/en/latest/).
+
+* R:
+
+Documentation is available inside the package (e.g. `?CMF`). PDF coming to CRAN soon.
 
 * C:
 
