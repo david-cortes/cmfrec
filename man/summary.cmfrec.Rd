@@ -14,7 +14,7 @@
 \item{...}{Extra arguments (not used).}
 }
 \description{
-Print basic properties of a `cmfrec` object (a superclass
+Print basic properties of a `cmfrec` object (a base class
 encompassing all the models in this package). Same as the `print.cmfrec` function.
 }
 \seealso{

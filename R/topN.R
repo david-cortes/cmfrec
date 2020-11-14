@@ -192,8 +192,9 @@ process.inputs.topN <- function(model, obj, user=NULL, a_vec=NULL, a_bias=NULL,
 #' For the \link{CMF} model, depending on parameter `include_all_X`, might recommend
 #' items which had only side information if their predictions are high enough.
 #' 
-#' For the \link{ContentBased} model, might be used to rank new items given their
-#' `U` data for new users given their `I` data. For the other models, will only
+#' For the \link{ContentBased} model, might be used to rank new items (not present
+#' in the `X` or `I` data to which the model was fit) given their
+#' `I` data, for new users given their `U` data. For the other models, will only
 #' rank existing items (columns of the `X` to which the model was fit) - see
 #' \link{predict_new_items} for an alternative for the other models.
 #' 
@@ -201,6 +202,10 @@ process.inputs.topN <- function(model, obj, user=NULL, a_vec=NULL, a_bias=NULL,
 #' as such, it might recommend items that were already seen/rated/consumed by the
 #' user. In order to avoid this, must manually pass the seen/rated/consumed entries
 #' to the argument `exclude` (see details below).
+#' @details Be aware that this function is multi-threaded. As such, if a large batch
+#' of top-N predictions is to be calculated in parallel for different users
+#' (through e.g. `mclapply` or similar), it's recommended to decrease the number
+#' of threads in the model to 1 (e.g. `model$info$nthreads <- 1L`).
 #' @param model A collective matrix factorization model from this package - see
 #' \link{fit_models} for details.
 #' @param user User (row of `X`) for which to rank items. If `X` to which the model

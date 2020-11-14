@@ -4,8 +4,8 @@
 #' @description Determine latent factors for new user(s)/row(s), given either `X` data
 #' (a.k.a. "warm-start"), or `U` data (a.k.a. "cold-start"), or both.
 #' 
-#' If passing both types of data (`X` and `U`), and the number of rows in each
-#' does not match, will be assumed that the shorter matrix has only missing values
+#' If passing both types of data (`X` and `U`), and the number of rows in them
+#' differs, will be assumed that the shorter matrix has only missing values
 #' for the unmatched entries in the other matrix.
 #' 
 #' Note: this function will not perform any internal re-indexing for the data.

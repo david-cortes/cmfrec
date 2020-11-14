@@ -45,10 +45,15 @@ NULL
 #' 
 #' The `CMF_implicit` model extends the collective factorization idea to the implicit-feedback
 #' case, based on reference [3]. While in `CMF` the values of `X` are taken at face value
-#' and the object is to minimize squared error over the non-missing entries, in the
+#' and the objective is to minimize squared error over the non-missing entries, in the
 #' implicit-feedback variants the matrix `X` is assumed to be binary (all entries are zero
 #' or one, with no unknown values), with the positive entries (those which are not
 #' missing in the data) having a weight determined by `X`.
+#' 
+#' `CMF` is intended for explicit feedback data (e.g. movie ratings, which contain both
+#' likes and dislikes), whereas `CMF_implicit` is intended for implicit feedback data
+#' (e.g. number of times each user watched each movie/series, which do not contain
+#' dislikes and the values are treated as confidence scores).
 #' 
 #' The `MostPopular` model is a simpler heuristic implemented for comparison purposes
 #' which is equivalent to either `CMF` or `CMF_implicit` with `k=1` (or alternatively,
@@ -82,15 +87,16 @@ NULL
 #' 
 #' (`OMF_explicit` and `OMF_implicit` were only implemented for research purposes for
 #' cold-start recommendations in cases in which there is side info about users but not about
-#' items or vice-versa, and are not recommended to use.)
+#' items or vice-versa - it is not recommended to rely on them.)
 #' 
 #' Some extra considerations about the parameters here: \itemize{
 #' \item None of the terms in the optimization objective is scaled by the number of entries,
 #' thus hyperparameters such as `lambda` will require more tuning than in other software and
 #' will require trying a wider range of values.
+#' \item The regularization applied to the matrices is the same for all users and for all items.
 #' \item The default hyperparameters are not geared towards speed - for faster fitting times,
 #' use `method='als'`, `use_cg=TRUE`, `finalize_chol=FALSE`, `precompute_for_predictions=FALSE`,
-#' `verbose=FALSE`, and pass `X` as a matrix (either dense or sparse).
+#' `verbose=FALSE`, and pass `X` as a matrix (either sparse or dense).
 #' \item The default hyperparameters are also very different than in other software - for example,
 #' for `CMF_implicit`, in order to match the Python package's `implicit` hyperparameters,
 #' one would have to use `k=100`, `lambda=0.01`, `niter=15`, `use_cg=TRUE`, `finalize_chol=FALSE`,
@@ -158,7 +164,7 @@ NULL
 #' denotes the user/row IDs of the non-zero entries). If `U` is sparse,
 #' `X` should be passed as sparse or dense matrix (not a `data.frame`).
 #' 
-#' Note that. if `U` is a `matrix` or `data.frame`, it should have the same
+#' Note that, if `U` is a `matrix` or `data.frame`, it should have the same
 #' number of rows as `X` in the `ContentBased`, `OMF_explicit`,
 #' and `OMF_implicit` models.
 #' 
@@ -183,7 +189,7 @@ NULL
 #' denotes the item/column IDs of the non-zero entries). If `I` is sparse,
 #' `X` should be passed as sparse or dense matrix (not a `data.frame`).
 #' 
-#' Note that. if `I` is a `matrix` or `data.frame`, it should have the same
+#' Note that, if `I` is a `matrix` or `data.frame`, it should have the same
 #' number of rows as there are columns in `X` in the `ContentBased`, `OMF_explicit`,
 #' and `OMF_implicit` models.
 #' 
@@ -218,12 +224,12 @@ NULL
 #' factorization) - these will be shared between the factorization of the
 #' `X` matrix and the side info matrices in the `CMF` and `CMF_implicit` models,
 #' and will be determined jointly by interactions and side info
-#' in the `OMF_explicit` model.
+#' in the `OMF_explicit` and `OMF_implicit` models.
 #' Additional non-shared components
 #' can also be specified through `k_user`, `k_item`, and `k_main`
 #' (also `k_sec` for `OMF_explicit`).
 #' Typical values are 30 to 100.
-#' @param lambda Regularization parameter.
+#' @param lambda Regularization parameter to apply on the squared L2 norms of the matrices.
 #' Some models (`CMF`, `CMF_implicit`, `ContentBased`, and `OMF_explicit` with the L-BFGS method)
 #' can use different regularization for each
 #' matrix, in which case it should be an array with 6 entries (regardless of the model),
@@ -233,8 +239,8 @@ NULL
 #' the loss/objective function is not divided by the number of entries anywhere,
 #' so this parameter needs good tuning.
 #' For example, a good value for the MovieLens10M would be `lambda=35`.
-#' Typical values are \eqn{10^-2} to \eqn{10^2}, with the implicit-feedback models requiring
-#' less regularization.
+#' Typical values are \eqn{10^{-2}}{0.01} to \eqn{10^2}{100}, with the
+#' implicit-feedback models requiring less regularization.
 #' @param method Optimization method used to fit the model. If passing `lbfgs`, will
 #' fit it through a gradient-based approach using an L-BFGS optimizer, and if
 #' passing `als`, will fit it through the ALS (alternating least-squares) method.
@@ -474,6 +480,9 @@ NULL
 #' `k_user+k+k_main` are used for the approximation of `X` (similar thing for `B` with
 #' `k_item`). The implicit factors matrices (\eqn{\mathbf{A}_i, \mathbf{B}_i}{Ai, Bi})
 #' always use the same components/factors as `X`.
+#' 
+#' Be aware that the functions for determining new factors will by default omit
+#' the bias term in the output.
 #' \item `CMF_implicit`: \eqn{\mathbf{X} \approx \mathbf{A} \mathbf{B}^T}{X ~ A * t(B)},
 #' while `U` and `I` remain the same as for `CMF`, and the ordering of the non-shared
 #' factors is the same.
@@ -488,10 +497,10 @@ NULL
 #' \item `OMF_explicit`: \eqn{
 #' \approx \mathbf{A}_m \mathbf{B}_m^T + \mu + \mathbf{b}_u + \mathbf{b}_i }{
 #' X ~ Am * t(Bm) + \mu + bias_u + bias_i}, where
-#' \eqn{\mathbf{A}_m = \mathbf{U} \mathbf{C} + \mathbf{b}_C + \mathbf{A}}{
-#' Am = U * C + C_bias + A} and \eqn{
-#' \mathbf{B}_m = \mathbf{I} \mathbf{D} + \mathbf{b}_D + \mathbf{B}}{
-#' Am = I * D + D_bias + B}. If passing `k_sec` and/or `k_main`, then columns
+#' \eqn{\mathbf{A}_m = w_u (\mathbf{U} \mathbf{C} + \mathbf{b}_C) + \mathbf{A}}{
+#' Am = w_user * U * C + C_bias + A} and \eqn{
+#' \mathbf{B}_m = w_i (\mathbf{I} \mathbf{D} + \mathbf{b}_D) + \mathbf{B}}{
+#' Am = w_item * (I * D + D_bias) + B}. If passing `k_sec` and/or `k_main`, then columns
 #' `1` through `k_sec` of \eqn{\mathbf{A}_m, \mathbf{B}_m}{Am, Bm} are determined
 #' as those same columns from \eqn{\mathbf{A}, \mathbf{B}}{A, B}, while
 #' \eqn{\mathbf{U} \mathbf{C} + \mathbf{b}_C, \mathbf{I} \mathbf{D} + \mathbf{b}_D}{
@@ -539,8 +548,6 @@ NULL
 #' derived by adding an extra column to `B` (at the end) consisting of all ones
 #' (this is how the user biases are calculated).
 #' 
-#' The regularization is always applied to the L2 norm of the matrices/vectors.
-#' 
 #' For the implicit-feedback models, the weights of the positive entries (defined
 #' as the non-missing entries in `X`) will be given by
 #' \eqn{W = 1 + \alpha \mathbf{X}}{W = 1 + \alpha * X}.
@@ -549,13 +556,18 @@ NULL
 #' equivalent `CMF` problem with no side information, and will then try to predict
 #' the resulting matrices given the user/item attributes, assigning the residuals
 #' as the free offsets. While this might sound reasonable, in practice it tends to
-#' give rather different results than when fit through the L-BFGS method.
+#' give rather different results than when fit through the L-BFGS method. Strictly
+#' speaking, the regularization parameter in this case is applied to the
+#' \eqn{\mathbf{A}_m, \mathbf{B}_m}{Am, Bm} matrices, and the prediction functions
+#' for new data will offer an option `exact` for determining whether to apply the
+#' regularization to the \eqn{\mathbf{A}, \mathbf{B}}{A, B} matrices instead.
 #' 
 #' Be aware that the optimization procedures rely heavily on BLAS and LAPACK function
 #' calls, and as such benefit from using optimized libraries for them such as
 #' MKL or OpenBLAS.
 #' 
-#' For reproducibility, the initializations of the model matrices can be controlled
+#' For reproducibility, the initializations of the model matrices (always initialized
+#' as `~ Normal(0, 1)`) can be controlled
 #' through `set.seed`, but if using parallelizations, there are potential sources
 #' of irreproducibility of random seeds due to parallelized aggregations and/or
 #' BLAS function calls, which is especially problematic for the L-BFGS method
@@ -605,12 +617,13 @@ NULL
 #'     movie_names <- colnames(X)
 #'     n_ratings <- colSums(as(MovieLense@data[, rec, drop=FALSE], "ngCMatrix"))
 #'     avg_ratings <- colSums(MovieLense@data[, rec, drop=FALSE]) / n_ratings
-#'     cat("Recommended for user_id=10:\n")
-#'     cat(paste(paste(1:length(rec), ". ", sep=""),
+#'     cat("Recommended for user_id=10:\n",
+#'         paste(paste(1:length(rec), ". ", sep=""),
 #'               movie_names[rec],
 #'               " - Avg rating:", round(avg_ratings, 2),
 #'               ", #ratings: ", n_ratings,
-#'               collapse="\n", sep=""), "\n")
+#'               collapse="\n", sep=""),
+#'          "\n", sep="")
 #'     
 #'     
 #'     ### Recommend assuming it is a new user,

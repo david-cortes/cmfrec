@@ -1,5 +1,5 @@
 #' @title Get information about factorization model
-#' @description Print basic properties of a `cmfrec` object (a superclass
+#' @description Print basic properties of a `cmfrec` object (a base class
 #' encompassing all the models in this package).
 #' @param x An object of class `cmfrec` as returned by functions \link{CMF},
 #' \link{CMF_implicit}, \link{MostPopular}, \link{ContentBased},
@@ -63,7 +63,7 @@ print.cmfrec <- function(x, ...) {
 }
 
 #' @title Get information about factorization model
-#' @description Print basic properties of a `cmfrec` object (a superclass
+#' @description Print basic properties of a `cmfrec` object (a base class
 #' encompassing all the models in this package). Same as the `print.cmfrec` function.
 #' @param object An object of class `cmfrec` as returned by functions \link{CMF},
 #' \link{CMF_implicit}, \link{MostPopular}, \link{ContentBased},

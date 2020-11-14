@@ -7,7 +7,7 @@
 #' If the `X` to which the data was fit was a `data.frame`, the numeration of the
 #' items will be under `model$info$item_mapping`. There is also a function
 #' \link{predict_new} which will let the model do the appropriate reindexing.
-#' @details if using the matrix factorization model as a general missing-value imputer,
+#' @details If using the matrix factorization model as a general missing-value imputer,
 #' it's recommended to:\itemize{
 #' \item Fit a model without user biases.
 #' \item Set a lower regularization for the item biases than for the matrices.
@@ -41,8 +41,8 @@
 #' model predictions.
 #' @examples
 #' library(cmfrec)
-#' ### Generate random data, set most values as NA
 #' if (require("MASS")) {
+#'     ### Generate random data, set most values as NA
 #'     set.seed(1)
 #'     n_rows <- 100
 #'     n_cols <- 50
@@ -62,6 +62,7 @@
 #'     }
 #'     
 #'     ### Impute missing values with model
+#'     set.seed(1)
 #'     model <- CMF(X_na, k=15, lambda=50, user_bias=FALSE,
 #'                  verbose=FALSE, nthreads=1L)
 #'     X_imputed <- imputeX(model, X_na)
