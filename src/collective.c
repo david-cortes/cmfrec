@@ -1779,15 +1779,15 @@ void collective_closed_form_block_implicit
         if (precomputedBeTBe != NULL)
             memcpy(BtB, precomputedBeTBe,(size_t)square(k_totA)*sizeof(real_t));
         else {
-            set_to_zero(BtB, offset_square);
-            cblas_tsyrk(CblasRowMajor, CblasUpper, CblasTrans,
-                        k+k_main, n,
-                        1., B + k_item, k_totB,
-                        0., BtB + offset_square, k_totA);
+            set_to_zero(BtB, square(k_totA));
             cblas_tsyrk(CblasRowMajor, CblasUpper, CblasTrans,
                         k_user+k, p,
                         w_user, C, k_totC,
-                        1., BtB, k_totA);
+                        0., BtB, k_totA);
+            cblas_tsyrk(CblasRowMajor, CblasUpper, CblasTrans,
+                        k+k_main, n,
+                        1., B + k_item, k_totB,
+                        1., BtB + offset_square, k_totA);
             add_to_diag(BtB, lam, k_totA);
         }
     }
@@ -1819,7 +1819,7 @@ void collective_closed_form_block_implicit
        Be*t(Xe), lower part (from U)  */
     if (u_vec == NULL)
     {
-        if (add_C)
+        if (add_C && !NA_as_zero_U)
             for (size_t ix = 0; ix < nnz_u_vec; ix++)
                 cblas_tsyr(CblasRowMajor, CblasUpper,
                            k_user+k, w_user,
@@ -1834,7 +1834,7 @@ void collective_closed_form_block_implicit
 
     else
     {
-        if (few_NAs && cnt_NA_u > 0 && !add_C)
+        if (few_NAs && cnt_NA_u > 0 && !add_C) /* TODO: is this reached? */
         {
             for (size_t ix = 0; ix < (size_t)p; ix++) {
                 if (isnan(u_vec[ix])) {
