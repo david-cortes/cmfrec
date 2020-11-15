@@ -3402,7 +3402,7 @@ int_t collective_factors_warm_implicit
             BtB, k+k_main,
             false,
             buffer_real_t,
-            true
+            false
         );
     }
 
@@ -9042,7 +9042,7 @@ int_t topN_new_collective_explicit
 {
     int_t retval = 0;
     real_t *restrict a_vec = (real_t*)malloc((size_t)(k_user+k+k_main)
-                                            * sizeof(real_t));
+                                             * sizeof(real_t));
     real_t a_bias = 0.;
     if (a_vec == NULL) goto throw_oom;
 
@@ -9125,7 +9125,7 @@ int_t topN_new_collective_implicit
 {
     int_t retval = 0;
     real_t *restrict a_vec = (real_t*)malloc((size_t)(k_user+k+k_main)
-                                            * sizeof(real_t));
+                                             * sizeof(real_t));
     if (a_vec == NULL) goto throw_oom;
 
     retval = factors_collective_implicit_single(
@@ -9258,7 +9258,7 @@ int_t predict_X_new_collective_explicit
     size_t m_max = max2(m_new, m_u);
     real_t *restrict biasA = NULL;
     real_t *restrict A = (real_t*)malloc(m_max * (size_t)(k_user+k+k_main)
-                                        * sizeof(real_t));
+                                         * sizeof(real_t));
     if (A == NULL) goto throw_oom;
     if (user_bias) {
         biasA = (real_t*)malloc(m_max * sizeof(real_t));
@@ -9346,7 +9346,7 @@ int_t predict_X_new_collective_implicit
     int_t retval = 0;
     size_t m_max = max2(m_new, m_u);
     real_t *restrict A = (real_t*)malloc(m_max * (size_t)(k_user+k+k_main)
-                                        * sizeof(real_t));
+                                         * sizeof(real_t));
     if (A == NULL) goto throw_oom;
 
     retval = factors_collective_implicit_multiple(
