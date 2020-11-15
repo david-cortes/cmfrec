@@ -3663,7 +3663,7 @@ class CMF_implicit(_CMF):
                  w_main=1., w_user=10., w_item=10.,
                  niter=10, NA_as_zero_user=False, NA_as_zero_item=False,
                  precompute_for_predictions=True, use_float=False,
-                 max_cg_steps=3, finalize_chol=True,
+                 max_cg_steps=3, finalize_chol=False,
                  random_state=1, init="normal", verbose=False,
                  produce_dicts=False, handle_interrupt=True,
                  copy_data=True, nthreads=-1):
@@ -5903,7 +5903,7 @@ class OMF_implicit(_OMF):
     """
     def __init__(self, k=50, lambda_=1e0, alpha=1., use_cg=True,
                  add_intercepts=True, niter=10, use_float=False,
-                 max_cg_steps=3, finalize_chol=True,
+                 max_cg_steps=3, finalize_chol=False,
                  random_state=1, verbose=False,
                  produce_dicts=False, handle_interrupt=True,
                  copy_data=True, nthreads=-1):

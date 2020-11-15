@@ -260,7 +260,8 @@ NULL
 #' memory-efficient alternative than the default Cholesky solver, but less
 #' exact, less numerically stable, and will require slightly more ALS
 #' iterations (`niter`) to reach a good optimum.
-#' In general, better results are achieved with `use_cg=FALSE`.
+#' In general, better results are achieved with `use_cg=FALSE` for the
+#' explicit-feedback models.
 #' Note that, if using this method, calculations after fitting which involve
 #' new data such as \link{factors},  might produce slightly different
 #' results from the factors obtained inside the fitted model with the same data,
@@ -1021,7 +1022,7 @@ CMF_implicit <- function(X, U=NULL, I=NULL,
                          k_user=0L, k_item=0L, k_main=0L,
                          w_main=1., w_user=1., w_item=1.,
                          niter=10L,
-                         max_cg_steps=3L, finalize_chol=TRUE,
+                         max_cg_steps=3L, finalize_chol=FALSE,
                          NA_as_zero_user=FALSE, NA_as_zero_item=FALSE,
                          precompute_for_predictions=TRUE,
                          verbose=TRUE,
@@ -1704,7 +1705,7 @@ OMF_explicit <- function(X, U=NULL, I=NULL, weight=NULL,
 OMF_implicit <- function(X, U=NULL, I=NULL,
                          k=50L, lambda=1e0, alpha=1., use_cg=TRUE,
                          add_intercepts=TRUE, niter=10L,
-                         max_cg_steps=3L, finalize_chol=TRUE,
+                         max_cg_steps=3L, finalize_chol=FALSE,
                          verbose=FALSE,
                          handle_interrupt=TRUE,
                          nthreads=parallel::detectCores()) {

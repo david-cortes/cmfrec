@@ -2217,6 +2217,7 @@ SEXP call_topN_new_offsets_implicit
 static const R_CallMethodDef callMethods [] = {
     {"deep_copy", (DL_FUNC) &deep_copy, 1},
     {"as_size_t", (DL_FUNC) &as_size_t, 1},
+    /* ---------------------------------------------------- */
     {"call_fit_collective_explicit_als", (DL_FUNC) &call_fit_collective_explicit_als, 62},
     {"call_fit_collective_explicit_lbfgs", (DL_FUNC) &call_fit_collective_explicit_lbfgs, 64},
     {"call_fit_collective_implicit_als", (DL_FUNC) &call_fit_collective_implicit_als, 47},

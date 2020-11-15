@@ -64,7 +64,7 @@ CMF_implicit(
   w_item = 1,
   niter = 10L,
   max_cg_steps = 3L,
-  finalize_chol = TRUE,
+  finalize_chol = FALSE,
   NA_as_zero_user = FALSE,
   NA_as_zero_item = FALSE,
   precompute_for_predictions = TRUE,
@@ -142,7 +142,7 @@ OMF_implicit(
   add_intercepts = TRUE,
   niter = 10L,
   max_cg_steps = 3L,
-  finalize_chol = TRUE,
+  finalize_chol = FALSE,
   verbose = FALSE,
   handle_interrupt = TRUE,
   nthreads = parallel::detectCores()
@@ -314,7 +314,8 @@ the closed-form least squares problems. This is a faster and more
 memory-efficient alternative than the default Cholesky solver, but less
 exact, less numerically stable, and will require slightly more ALS
 iterations (`niter`) to reach a good optimum.
-In general, better results are achieved with `use_cg=FALSE`.
+In general, better results are achieved with `use_cg=FALSE` for the
+explicit-feedback models.
 Note that, if using this method, calculations after fitting which involve
 new data such as \link{factors},  might produce slightly different
 results from the factors obtained inside the fitted model with the same data,
