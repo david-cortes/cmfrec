@@ -290,7 +290,8 @@ in this order, to: `user_bias`, `item_bias`, `A`, `B`, `C`, `D`. Note that the d
 value for `lambda` here is much higher than in other software, and that
 the loss/objective function is not divided by the number of entries anywhere,
 so this parameter needs good tuning.
-For example, a good value for the MovieLens10M would be `lambda=35`.
+For example, a good value for the MovieLens10M would be `lambda=35`, whereas for the
+LastFM-360K, a good value would be `lambda=5`.
 Typical values are \eqn{10^{-2}}{0.01} to \eqn{10^2}{100}, with the
 implicit-feedback models requiring less regularization.}
 
@@ -493,7 +494,9 @@ are used, the higher the memory consumption.}
 \item{alpha}{Weighting parameter for the non-zero entries in the implicit-feedback
 model. See [3] for details. Note that, while the author's suggestion for
 this value is 40, other software such as the Python package `implicit` use a value of 1,
-and values higher than 10 are unlikely to improve results.}
+and values higher than 10 are unlikely to improve results. If the data
+has very high values, might even be beneficial to put a very low value
+here - for example, for the LastFM-360K, values below 1 might give better results.}
 
 \item{implicit}{(Only selectable for the `MostPopular` model)
 Whether to use the implicit-feedback model, in which the `X` matrix is

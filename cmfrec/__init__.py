@@ -3481,12 +3481,16 @@ class CMF_implicit(_CMF):
         in this order, to: <ignored>, <ignored>, A, B, C, D. Note that the default
         value for ``lambda_`` here is much higher than in other software, and that
         the loss/objective function is not divided by the number of entries.
+        For example, a good number for the LastFM-360K could be ``lambda_=5``.
         Typical values are 10^-2 to 10^2.
     alpha : float
         Weighting parameter for the non-zero entries in the implicit-feedback
         model. See [3] for details. Note that, while the author's suggestion for
         this value is 40, other software such as ``implicit`` use a value of 1,
-        and values higher than 10 are unlikely to improve results.
+        and values higher than 10 are unlikely to improve results. If the data
+        has very high values, might even be beneficial to put a very low value
+        here - for example, for the LastFM-360K, values below 1 might
+        give better results.
     use_cg : bool
         In the ALS method, whether to use a conjugate gradient method to solve
         the closed-form least squares problems. This is a faster and more
@@ -4828,6 +4832,7 @@ class OMF_explicit(_OMF):
         Note that the default
         value for ``lambda_`` here is much higher than in other software, and that
         the loss/objective function is not divided by the number of entries.
+        For example, a good value for the MovieLens10M would be ``lambda_=35.``.
         Typical values are 10^-2 to 10^2.
         Passing different regularization for each matrix is not supported with
         ``method='als'``.
@@ -5779,11 +5784,16 @@ class OMF_implicit(_OMF):
         Regularization parameter. Note that the default
         value for ``lambda_`` here is much higher than in other software, and that
         the loss/objective function is not divided by the number of entries.
+        For example, a good number for the LastFM-360K could be ``lambda_=5``.
         Typical values are 10^-2 to 10^2.
     alpha : float
         Weighting parameter for the non-zero entries in the implicit-feedback
         model. See [2] for details. Note that, while the author's suggestion for
         this value is 40, other software such as ``implicit`` use a value of 1.
+        If the data
+        has very high values, might even be beneficial to put a very low value
+        here - for example, for the LastFM-360K, values below 1 might
+        give better results.
     use_cg : bool
         In the ALS method, whether to use a conjugate gradient method to solve
         the closed-form least squares problems. This is a faster and more

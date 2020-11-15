@@ -105,7 +105,7 @@ process.data.factors.single <- function(model, obj,
     
     if (model %in% c("CMF_implicit", "OMF_implicit")) {
         if (!is.null(X) && !("dsparseVector" %in% class(X)))
-            stop("Cannot pass dense 'X' for implicit-feedback models.")
+            stop("Cannot only pass 'X' as sparse vector for implicit-feedback models.")
     }
     
     if (output_bias && !NROW(obj$matrices$user_bias))
