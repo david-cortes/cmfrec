@@ -1780,15 +1780,28 @@ void collective_closed_form_block_implicit
             memcpy(BtB, precomputedBeTBe,(size_t)square(k_totA)*sizeof(real_t));
         else {
             set_to_zero(BtB, square(k_totA));
-            cblas_tsyrk(CblasRowMajor, CblasUpper, CblasTrans,
-                        k_user+k, p,
-                        w_user, C, k_totC,
-                        0., BtB, k_totA);
-            cblas_tsyrk(CblasRowMajor, CblasUpper, CblasTrans,
-                        k+k_main, n,
-                        1., B + k_item, k_totB,
-                        1., BtB + offset_square, k_totA);
-            add_to_diag(BtB, lam, k_totA);
+            if (precomputedCtCw == NULL)
+                cblas_tsyrk(CblasRowMajor, CblasUpper, CblasTrans,
+                            k_user+k, p,
+                            w_user, C, k_totC,
+                            0., BtB, k_totA);
+            else
+                copy_mat(k_user+k, k_user+k,
+                         precomputedCtCw, k_totC,
+                         BtB, k_totA);
+            if (precomputedBtB  == NULL) {
+                cblas_tsyrk(CblasRowMajor, CblasUpper, CblasTrans,
+                            k+k_main, n,
+                            1., B + k_item, k_totB,
+                            1., BtB + offset_square, k_totA);
+                add_to_diag(BtB, lam, k_totA);
+            } else {
+                sum_mat(k+k_main, k+k_main,
+                        precomputedBtB, k+k_main,
+                        BtB + offset_square, k_totA);
+                for (size_t ix = 0; ix < (size_t)k_user; ix++)
+                    BtB[ix + ix*k_totA] += lam;
+            }
         }
     }
     
