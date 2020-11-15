@@ -27,6 +27,8 @@
 #' \item A dense matrix from base R (class `matrix`), with missing entries set as `NA`/`NaN`.
 #' \item A dense row vector from base R (class `numeric`), with missing entries set as `NA`/`NaN`.
 #' }
+#' 
+#' Dense `X` data is not supported for `CMF_implicit` or `OMF_implicit`.
 #' @param weight Associated observation weights for entries in `X`. If passed, must
 #' have the same shape as `X` - that is, if `X` is a sparse matrix, should be a
 #' numeric vector with length equal to the non-missing elements, if `X` is a dense

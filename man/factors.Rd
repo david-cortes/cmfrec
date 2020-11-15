@@ -54,7 +54,9 @@ Passing the input as CSR is faster than COO as it will be converted internally.
 \item A sparse row vector from package `Matrix` (class `dsparseVector`).
 \item A dense matrix from base R (class `matrix`), with missing entries set as `NA`/`NaN`.
 \item A dense row vector from base R (class `numeric`), with missing entries set as `NA`/`NaN`.
-}}
+}
+
+Dense `X` data is not supported for `CMF_implicit` or `OMF_implicit`.}
 
 \item{U}{New `U` data, with rows denoting new users.
 Can be passed in the same formats as `X`, or additionally

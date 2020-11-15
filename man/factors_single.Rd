@@ -77,7 +77,8 @@ which the model was fit was a `data.frame`, the column/item indices will have
 been reindexed internally, and the numeration can be found under
 `model$info$item_mapping`. Alternatively, can instead pass the column indices
 and values and let the model reindex them (see `X_col` and `X_val`).
-Should pass at most one of `X` or `X_col`+`X_val`.}
+Should pass at most one of `X` or `X_col`+`X_val`.
+Dense `X` data is not supported for `CMF_implicit` or `OMF_implicit`.}
 
 \item{X_col}{New `X` data in sparse vector format, with `X_col` denoting the
 items/columns which are not missing. If the `X` to which the model was fit was

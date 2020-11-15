@@ -98,6 +98,8 @@ process.inputs.items <- function(model, obj, X=NULL, X_col=NULL, X_val=NULL, wei
 #' here the values are for one \bold{column} of `X`, not one \bold{row} like
 #' in e.g. \link{factors_single}.
 #' 
+#' Dense `X` data is not supported for `CMF_implicit` or `OMF_implicit`.
+#' 
 #' Not supported for the `ContentBased` model.
 #' @param X_col New `X` data in sparse vector format, with `X_col` denoting the
 #' users/rows which are not missing. If the `X` to which the model was fit was

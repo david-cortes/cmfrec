@@ -1347,7 +1347,7 @@ CMF_implicit <- function(X, U=NULL, I=NULL,
 #' @export
 #' @rdname fit
 MostPopular <- function(X, weight=NULL, implicit=FALSE,
-                        user_bias=FALSE, lambda=10., alpha=1.) {
+                        user_bias=ifelse(implicit, FALSE, TRUE), lambda=10., alpha=1.) {
     inputs <- validate.inputs(model = "MostPopular", implicit = implicit,
                               X = X, weight = weight,
                               user_bias = user_bias, lambda = lambda,

@@ -77,7 +77,7 @@ MostPopular(
   X,
   weight = NULL,
   implicit = FALSE,
-  user_bias = FALSE,
+  user_bias = ifelse(implicit, FALSE, TRUE),
   lambda = 10,
   alpha = 1
 )

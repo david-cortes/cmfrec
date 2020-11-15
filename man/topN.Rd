@@ -136,7 +136,9 @@ which the model was fit was a `data.frame`, the column/item indices will have
 been reindexed internally, and the numeration can be found under
 `model$info$item_mapping`. Alternatively, can instead pass the column indices
 and values and let the model reindex them (see `X_col` and `X_val`).
-Should pass at most one of `X` or `X_col`+`X_val`.}
+Should pass at most one of `X` or `X_col`+`X_val`.
+
+Dense `X` data is not supported for `CMF_implicit` or `OMF_implicit`.}
 
 \item{X_col}{`X` data for a new user for which to make recommendations,
 in sparse vector format, with `X_col` denoting the
@@ -245,7 +247,8 @@ to the argument `exclude` (see details below).
 Be aware that this function is multi-threaded. As such, if a large batch
 of top-N predictions is to be calculated in parallel for different users
 (through e.g. `mclapply` or similar), it's recommended to decrease the number
-of threads in the model to 1 (e.g. `model$info$nthreads <- 1L`).
+of threads in the model to 1 (e.g. `model$info$nthreads <- 1L`) and to set the
+number of BLAS threads to 1 (through e.g. `RhpcBLASctl` or environment variables).
 }
 \seealso{
 \link{factors_single} \link{predict.cmfrec} \link{predict_new}

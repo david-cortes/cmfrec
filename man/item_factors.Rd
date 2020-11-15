@@ -33,6 +33,8 @@ Be aware that, unlikely in pretty much every other function in this package,
 here the values are for one \bold{column} of `X`, not one \bold{row} like
 in e.g. \link{factors_single}.
 
+Dense `X` data is not supported for `CMF_implicit` or `OMF_implicit`.
+
 Not supported for the `ContentBased` model.}
 
 \item{X_col}{New `X` data in sparse vector format, with `X_col` denoting the
