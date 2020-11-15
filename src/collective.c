@@ -1795,9 +1795,9 @@ void collective_closed_form_block_implicit
     else
     {
         add_C = true;
+        if (ld_BtB != k_totA)
+            set_to_zero(BtB, square(k_totA));
         if (precomputedBtB != NULL) {
-            if (ld_BtB != k_totA)
-                set_to_zero(BtB, square(k_totA));
             copy_mat(ld_BtB, ld_BtB,
                      precomputedBtB, ld_BtB,
                      BtB + offset_square, k_totA);
@@ -1819,7 +1819,7 @@ void collective_closed_form_block_implicit
        Be*t(Xe), lower part (from U)  */
     if (u_vec == NULL)
     {
-        if (add_C && !NA_as_zero_U)
+        if (add_C)
             for (size_t ix = 0; ix < nnz_u_vec; ix++)
                 cblas_tsyr(CblasRowMajor, CblasUpper,
                            k_user+k, w_user,
@@ -1834,7 +1834,7 @@ void collective_closed_form_block_implicit
 
     else
     {
-        if (few_NAs && cnt_NA_u > 0 && !add_C) /* TODO: is this reached? */
+        if (few_NAs && cnt_NA_u > 0)
         {
             for (size_t ix = 0; ix < (size_t)p; ix++) {
                 if (isnan(u_vec[ix])) {
