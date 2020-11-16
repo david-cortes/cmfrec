@@ -493,20 +493,7 @@ void factors_implicit_chol
     real_t *restrict Xa, int_t ixB[], size_t nnz,
     real_t lam,
     real_t *restrict precomputedBtB, int_t ld_BtB,
-    bool zero_out,
-    real_t *restrict buffer_real_t,
-    bool force_add_diag
-);
-void factors_implicit
-(
-    real_t *restrict a_vec, int_t k,
-    real_t *restrict B, size_t ldb,
-    real_t *restrict Xa, int_t ixB[], size_t nnz,
-    real_t lam,
-    real_t *restrict precomputedBtB, int_t ld_BtB,
-    bool zero_out, bool use_cg, int_t max_cg_steps,
-    real_t *restrict buffer_real_t,
-    bool force_add_diag
+    real_t *restrict buffer_real_t
 );
 real_t fun_grad_Adense
 (

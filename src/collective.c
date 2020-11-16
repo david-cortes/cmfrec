@@ -3413,9 +3413,7 @@ int_t collective_factors_warm_implicit
             Xa, ixB, nnz,
             lam,
             BtB, k+k_main,
-            false,
-            buffer_real_t,
-            false
+            buffer_real_t
         );
     }
 

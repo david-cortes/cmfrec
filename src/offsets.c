@@ -679,6 +679,7 @@ int_t offsets_factors_warm
                             0., bufferBtB, k_sec+k+k_main);
                 precomputedBtB = bufferBtB;
             }
+            set_to_zero(a_vec, k_sec+k+k_main);
 
             factors_implicit_chol(
                 a_vec, k_sec+k+k_main,
@@ -686,9 +687,7 @@ int_t offsets_factors_warm
                 Xa, ixB, nnz,
                 lam,
                 precomputedBtB, k_sec+k+k_main,
-                true,
-                buffer_real_t,
-                false
+                buffer_real_t
             );
         }
 

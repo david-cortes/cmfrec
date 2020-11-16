@@ -1342,16 +1342,16 @@ void factors_implicit_chol
     real_t *restrict Xa, int_t ixB[], size_t nnz,
     real_t lam,
     real_t *restrict precomputedBtB, int_t ld_BtB,
-    bool zero_out,
-    real_t *restrict buffer_real_t,
-    bool force_add_diag
+    real_t *restrict buffer_real_t
 )
 {
     char lo = 'L';
     int_t one = 1;
     int_t ignore;
-    if (zero_out || nnz == 0) set_to_zero(a_vec, k);
-    if (nnz == 0) return;
+    if (nnz == 0) {
+        set_to_zero(a_vec, k);
+        return;
+    }
 
     real_t *restrict BtB = buffer_real_t;
     set_to_zero(BtB, square(k));
@@ -1368,58 +1368,15 @@ void factors_implicit_chol
             precomputedBtB, ld_BtB,
             BtB, k);
 
-    if (force_add_diag)
-        add_to_diag(BtB, lam, k);
-
     tposv_(&lo, &k, &one,
            BtB, &k,
            a_vec, &k,
            &ignore);
 }
 
-/* TODO: This is not used any longer, can delete it */
-void factors_implicit
-(
-    real_t *restrict a_vec, int_t k,
-    real_t *restrict B, size_t ldb,
-    real_t *restrict Xa, int_t ixB[], size_t nnz,
-    real_t lam,
-    real_t *restrict precomputedBtB, int_t ld_BtB,
-    bool zero_out, bool use_cg, int_t max_cg_steps,
-    real_t *restrict buffer_real_t,
-    bool force_add_diag
-)
-{
-    if (nnz == 0) {
-        set_to_zero(a_vec, k);
-        return;
-    }
-
-    if (use_cg)
-        factors_implicit_cg(
-            a_vec, k,
-            B, ldb,
-            Xa, ixB, nnz,
-            lam,
-            precomputedBtB, ld_BtB,
-            max_cg_steps,
-            buffer_real_t
-        );
-    else
-        factors_implicit_chol(
-            a_vec, k,
-            B, ldb,
-            Xa, ixB, nnz,
-            lam,
-            precomputedBtB, ld_BtB,
-            zero_out,
-            buffer_real_t,
-            force_add_diag
-        );
-}
 
 /* TODO: these functions for Adense or Bdense are no longer used,
-   should remove them. */
+   but should be used in 'factors_multiple' so do not delete yet. */
 real_t fun_grad_Adense
 (
     real_t *restrict g_A,
@@ -2163,9 +2120,7 @@ void optimizeA_implicit
                 Xcsr_p[ix+(size_t)1] - Xcsr_p[ix],
                 lam,
                 precomputedBtB, k,
-                false,
-                buffer_real_t + ((size_t)omp_get_thread_num() * size_buffer),
-                false
+                buffer_real_t + ((size_t)omp_get_thread_num() * size_buffer)
             );
 }
 
