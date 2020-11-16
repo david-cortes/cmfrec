@@ -494,6 +494,7 @@ are used, the higher the memory consumption.}
 \item{alpha}{Weighting parameter for the non-zero entries in the implicit-feedback
 model. See [3] for details. Note that, while the author's suggestion for
 this value is 40, other software such as the Python package `implicit` use a value of 1,
+whereas Spark uses a value of 0.01 by default,
 and values higher than 10 are unlikely to improve results. If the data
 has very high values, might even be beneficial to put a very low value
 here - for example, for the LastFM-360K, values below 1 might give better results.}
@@ -510,7 +511,8 @@ Whether to add intercepts/biases to the user/item attribute matrices.}
 \item{start_with_ALS}{(Only for `ContentBased`)
 Whether to determine the initial coefficients through an ALS procedure.
 This might help to speed up the procedure by starting closer to an
-optimum.}
+optimum. This option is not available when the side information is passed
+as sparse matrices.}
 
 \item{k_sec}{(Only for `OMF_explicit`)
 Number of factors in the factorizing matrices which are determined

@@ -3487,6 +3487,7 @@ class CMF_implicit(_CMF):
         Weighting parameter for the non-zero entries in the implicit-feedback
         model. See [3] for details. Note that, while the author's suggestion for
         this value is 40, other software such as ``implicit`` use a value of 1,
+        whereas Spark uses a value of 0.01 by default,
         and values higher than 10 are unlikely to improve results. If the data
         has very high values, might even be beneficial to put a very low value
         here - for example, for the LastFM-360K, values below 1 might
@@ -5789,7 +5790,8 @@ class OMF_implicit(_OMF):
     alpha : float
         Weighting parameter for the non-zero entries in the implicit-feedback
         model. See [2] for details. Note that, while the author's suggestion for
-        this value is 40, other software such as ``implicit`` use a value of 1.
+        this value is 40, other software such as ``implicit`` use a value of 1,
+        whereas Spark uses a value of 0.01 by default
         If the data
         has very high values, might even be beneficial to put a very low value
         here - for example, for the LastFM-360K, values below 1 might
@@ -6349,7 +6351,8 @@ class ContentBased(_OMF_Base):
     start_with_ALS : bool
         Whether to determine the initial coefficients through an ALS procedure.
         This might help to speed up the procedure by starting closer to an
-        optimum.
+        optimum. This option is not available when the side information is passed
+        as sparse matrices.
     copy_data : bool
         Whether to make copies of the input data that is passed to this
         object's methods (``fit``, ``predict``, etc.), in order to avoid
@@ -6517,6 +6520,11 @@ class ContentBased(_OMF_Base):
              m, n, m_u, n_i, p, q,
              m_ub, n_ib, pbin, qbin):
         c_funs = wrapper_float if self.use_float else wrapper_double
+
+        if self.start_with_ALS:
+            if (not Uarr.shape[0]) or (not Iarr.shape[0]):
+                warnings.warn("Option 'start_with_ALS' not available for sparse data.")
+                self.start_with_ALS = False
 
         self.user_bias_, self.item_bias_, \
         self.C_, self.D_, self.C_bias_, self.D_bias_, \
@@ -6813,7 +6821,8 @@ class MostPopular(_CMF):
     alpha : float
         Weighting parameter for the non-zero entries in the implicit-feedback
         model. See [2] for details. Note that, while the author's suggestion for
-        this value is 40, other software such as ``implicit`` use a value of 1.
+        this value is 40, other software such as ``implicit`` use a value of 1,
+        whereas Spark uses a value of 0.01 by default
         See the documentation of ``CMF_implicit`` for more details.
     use_float : bool
         Whether to use C float type for the model parameters (typically this is

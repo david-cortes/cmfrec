@@ -355,6 +355,7 @@ NULL
 #' @param alpha Weighting parameter for the non-zero entries in the implicit-feedback
 #' model. See [3] for details. Note that, while the author's suggestion for
 #' this value is 40, other software such as the Python package `implicit` use a value of 1,
+#' whereas Spark uses a value of 0.01 by default,
 #' and values higher than 10 are unlikely to improve results. If the data
 #' has very high values, might even be beneficial to put a very low value
 #' here - for example, for the LastFM-360K, values below 1 might give better results.
@@ -368,7 +369,8 @@ NULL
 #' @param start_with_ALS (Only for `ContentBased`)
 #' Whether to determine the initial coefficients through an ALS procedure.
 #' This might help to speed up the procedure by starting closer to an
-#' optimum.
+#' optimum. This option is not available when the side information is passed
+#' as sparse matrices.
 #' @param NA_as_zero Whether to take missing entries in the `X` matrix as zeros (only
 #' when the `X` matrix is passed as a sparse matrix or as a `data.frame`)
 #' instead of ignoring them. This is a different model from the
@@ -671,7 +673,7 @@ validate.inputs <- function(model, implicit=FALSE,
                             alpha=1., downweight=FALSE,
                             add_implicit_features=FALSE,
                             add_intercepts=TRUE,
-                            start_with_ALS=TRUE,
+                            start_with_ALS=FALSE,
                             maxiter=800L, niter=10L, parallelize="separate", corr_pairs=4L,
                             max_cg_steps=3L, finalize_chol=TRUE,
                             NA_as_zero=FALSE, NA_as_zero_user=FALSE, NA_as_zero_item=FALSE,
@@ -896,6 +898,12 @@ validate.inputs <- function(model, implicit=FALSE,
         }
         if (!processed_I$m || !processed_I$p) {
             stop("'I' cannot be empty.")
+        }
+        if (start_with_ALS) {
+            if (!NROW(processed_U$Uarr) || !NROW(processed_I$Uarr)) {
+                warning("Option 'start_with_ALS' not available for sparse data.")
+                start_with_ALS <- FALSE
+            }
         }
     }
     

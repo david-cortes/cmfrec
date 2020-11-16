@@ -3071,6 +3071,9 @@ int_t fit_content_based_lbfgs
     else if (user_bias && !item_bias && C != biasA + m)
         free_values = true;
 
+    if (U == NULL || II == NULL)
+        start_with_ALS = false;
+
     if (start_with_ALS)
     {
         tempA = (real_t*)malloc((size_t)m*(size_t)k*sizeof(real_t));
