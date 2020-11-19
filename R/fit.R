@@ -371,6 +371,8 @@ NULL
 #' This might help to speed up the procedure by starting closer to an
 #' optimum. This option is not available when the side information is passed
 #' as sparse matrices.
+#' @param apply_log_transf Whether to apply a logarithm transformation on the values of `X`
+#' (i.e. `X := log(X)`)
 #' @param NA_as_zero Whether to take missing entries in the `X` matrix as zeros (only
 #' when the `X` matrix is passed as a sparse matrix or as a `data.frame`)
 #' instead of ignoring them. This is a different model from the
@@ -674,6 +676,7 @@ validate.inputs <- function(model, implicit=FALSE,
                             add_implicit_features=FALSE,
                             add_intercepts=TRUE,
                             start_with_ALS=FALSE,
+                            apply_log_transf=FALSE,
                             maxiter=800L, niter=10L, parallelize="separate", corr_pairs=4L,
                             max_cg_steps=3L, finalize_chol=TRUE,
                             NA_as_zero=FALSE, NA_as_zero_user=FALSE, NA_as_zero_item=FALSE,
@@ -708,6 +711,7 @@ validate.inputs <- function(model, implicit=FALSE,
     implicit         <-  check.bool(implicit, "implicit")
     add_intercepts   <-  check.bool(add_intercepts, "add_intercepts")
     start_with_ALS   <-  check.bool(start_with_ALS, "start_with_ALS")
+    apply_log_transf <-  check.bool(apply_log_transf, "apply_log_transf")
     precompute_for_predictions  <-  check.bool(precompute_for_predictions, "precompute_for_predictions")
     add_implicit_features       <-  check.bool(add_implicit_features, "add_implicit_features")
     
@@ -938,6 +942,19 @@ validate.inputs <- function(model, implicit=FALSE,
         }
     }
     
+    if (apply_log_transf) {
+        if (model == "MostPopular" && !implicit)
+            stop("Option 'apply_log_transf' only available with 'implicit=TRUE'.")
+        msg_small <- "Cannot pass values below 1 with 'apply_log_transf=TRUE'."
+        if (NROW(processed_X$Xarr)) {
+            if (min(processed_X$Xarr, na.rm=TRUE) < 1)
+                stop(msg_small)
+        } else if (NROW(processed_X$Xval)) {
+            if (min(processed_X$Xval) < 1)
+                stop(msg_small)
+        }
+    }
+    
     return(list(
         processed_X = processed_X,
         processed_U = processed_U,
@@ -957,6 +974,7 @@ validate.inputs <- function(model, implicit=FALSE,
         add_implicit_features = add_implicit_features,
         add_intercepts = add_intercepts,
         start_with_ALS = start_with_ALS,
+        apply_log_transf = apply_log_transf,
         maxiter = maxiter, niter = niter, parallelize = parallelize, corr_pairs = corr_pairs,
         max_cg_steps = max_cg_steps, finalize_chol = finalize_chol,
         NA_as_zero = NA_as_zero, NA_as_zero_user = NA_as_zero_user, NA_as_zero_item = NA_as_zero_item,
@@ -1035,6 +1053,7 @@ CMF_implicit <- function(X, U=NULL, I=NULL,
                          niter=10L,
                          max_cg_steps=3L, finalize_chol=FALSE,
                          NA_as_zero_user=FALSE, NA_as_zero_item=FALSE,
+                         apply_log_transf=FALSE,
                          precompute_for_predictions=TRUE,
                          verbose=TRUE,
                          handle_interrupt=TRUE,
@@ -1050,6 +1069,7 @@ CMF_implicit <- function(X, U=NULL, I=NULL,
                               max_cg_steps = max_cg_steps, finalize_chol = finalize_chol,
                               NA_as_zero_user = NA_as_zero_user,
                               NA_as_zero_item = NA_as_zero_item,
+                              apply_log_transf = apply_log_transf,
                               precompute_for_predictions = precompute_for_predictions,
                               verbose = verbose,
                               handle_interrupt = handle_interrupt,
@@ -1065,6 +1085,7 @@ CMF_implicit <- function(X, U=NULL, I=NULL,
                          max_cg_steps = inputs$max_cg_steps, finalize_chol = inputs$finalize_chol,
                          NA_as_zero_user = inputs$NA_as_zero_user,
                          NA_as_zero_item = inputs$NA_as_zero_item,
+                         apply_log_transf = inputs$apply_log_transf,
                          precompute_for_predictions = inputs$precompute_for_predictions,
                          verbose = inputs$verbose,
                          handle_interrupt = inputs$handle_interrupt,
@@ -1265,6 +1286,7 @@ CMF_implicit <- function(X, U=NULL, I=NULL,
                           niter=10L,
                           max_cg_steps=3L, finalize_chol=TRUE,
                           NA_as_zero_user=FALSE, NA_as_zero_item=FALSE,
+                          apply_log_transf=FALSE,
                           precompute_for_predictions=TRUE,
                           verbose=TRUE,
                           handle_interrupt=TRUE,
@@ -1294,6 +1316,8 @@ CMF_implicit <- function(X, U=NULL, I=NULL,
     this$info$I_cols           <-  I_cols
     this$info$NA_as_zero_user  <-  NA_as_zero_user
     this$info$NA_as_zero_item  <-  NA_as_zero_item
+    this$info$implicit         <-  TRUE
+    this$info$apply_log_transf <-  apply_log_transf
     this$info$nthreads         <-  nthreads
     
     ### Allocate matrices
@@ -1343,7 +1367,7 @@ CMF_implicit <- function(X, U=NULL, I=NULL,
                       w_main, w_user, w_item,
                       niter, nthreads, verbose, handle_interrupt,
                       use_cg, max_cg_steps, finalize_chol,
-                      this$info$alpha, downweight,
+                      this$info$alpha, downweight, this$info$apply_log_transf,
                       precompute_for_predictions,
                       this$precomputed$BtB,
                       this$precomputed$BeTBe,
@@ -1358,10 +1382,11 @@ CMF_implicit <- function(X, U=NULL, I=NULL,
 
 #' @export
 #' @rdname fit
-MostPopular <- function(X, weight=NULL, implicit=FALSE,
+MostPopular <- function(X, weight=NULL, implicit=FALSE, apply_log_transf=FALSE,
                         user_bias=ifelse(implicit, FALSE, TRUE), lambda=10., alpha=1.) {
     inputs <- validate.inputs(model = "MostPopular", implicit = implicit,
                               X = X, weight = weight,
+                              apply_log_transf = apply_log_transf,
                               user_bias = user_bias, lambda = lambda,
                               alpha = alpha, downweight = FALSE)
     if (inputs$downweight && !inputs$implicit)
@@ -1371,13 +1396,14 @@ MostPopular <- function(X, weight=NULL, implicit=FALSE,
                         implicit = inputs$implicit,
                         user_bias = inputs$user_bias,
                         lambda = inputs$lambda, alpha = inputs$alpha,
-                        downweight = inputs$downweight))
+                        downweight = inputs$downweight,
+                        apply_log_transf = inputs$apply_log_transf))
 }
 
 .MostPopular <- function(processed_X,
                          user_mapping, item_mapping,
                          implicit=FALSE, user_bias=FALSE, lambda=10., alpha=1.,
-                         downweight=FALSE) {
+                         downweight=FALSE, apply_log_transf=FALSE) {
     
     this <- list(
         info = get.empty.info(),
@@ -1390,7 +1416,8 @@ MostPopular <- function(X, weight=NULL, implicit=FALSE,
     this$info$alpha   <-  alpha
     this$info$user_mapping  <-  user_mapping
     this$info$item_mapping  <-  item_mapping
-    this$info$implicit <- implicit
+    this$info$implicit          <-  implicit
+    this$info$apply_log_transf  <-  apply_log_transf
     
     ### Allocate matrices
     this$matrices$item_bias <- numeric(processed_X$n)
@@ -1411,7 +1438,7 @@ MostPopular <- function(X, weight=NULL, implicit=FALSE,
                       processed_X$Xrow, processed_X$Xcol, processed_X$Xval,
                       processed_X$Xarr,
                       processed_X$Warr, processed_X$Wsp,
-                      implicit, downweight,
+                      implicit, downweight, apply_log_transf,
                       w_main_multiplier,
                       1L)
     
@@ -1716,6 +1743,7 @@ OMF_explicit <- function(X, U=NULL, I=NULL, weight=NULL,
 OMF_implicit <- function(X, U=NULL, I=NULL,
                          k=50L, lambda=1e0, alpha=1., use_cg=TRUE,
                          add_intercepts=TRUE, niter=10L,
+                         apply_log_transf=FALSE,
                          max_cg_steps=3L, finalize_chol=FALSE,
                          verbose=FALSE,
                          handle_interrupt=TRUE,
@@ -1726,6 +1754,7 @@ OMF_implicit <- function(X, U=NULL, I=NULL,
                               k = k, lambda = lambda, alpha = alpha, use_cg = use_cg,
                               add_intercepts = add_intercepts, niter = niter,
                               max_cg_steps = max_cg_steps, finalize_chol = finalize_chol,
+                              apply_log_transf = apply_log_transf,
                               verbose = verbose,
                               handle_interrupt = handle_interrupt,
                               nthreads = nthreads)
@@ -1734,7 +1763,9 @@ OMF_implicit <- function(X, U=NULL, I=NULL,
                          inputs$U_cols, inputs$I_cols,
                          k = inputs$k, lambda = inputs$lambda, alpha = inputs$alpha,
                          use_cg = inputs$use_cg,
-                         add_intercepts = inputs$add_intercepts, niter = inputs$niter,
+                         add_intercepts = inputs$add_intercepts,
+                         niter = inputs$niter,
+                         apply_log_transf = inputs$apply_log_transf,
                          max_cg_steps = inputs$max_cg_steps, finalize_chol = inputs$finalize_chol,
                          verbose = inputs$verbose,
                          handle_interrupt = inputs$handle_interrupt,
@@ -1747,6 +1778,7 @@ OMF_implicit <- function(X, U=NULL, I=NULL,
                           U_cols, I_cols,
                           k=50L, lambda=1e0, alpha=1., use_cg=TRUE,
                           add_intercepts=TRUE, niter=10L,
+                          apply_log_transf=FALSE,
                           max_cg_steps=3L, finalize_chol=TRUE,
                           verbose=FALSE,
                           handle_interrupt=TRUE,
@@ -1764,6 +1796,8 @@ OMF_implicit <- function(X, U=NULL, I=NULL,
     this$info$alpha   <-  alpha
     this$info$user_mapping  <-  user_mapping
     this$info$item_mapping  <-  item_mapping
+    this$info$implicit          <-  TRUE
+    this$info$apply_log_transf  <-  apply_log_transf
     this$info$U_cols    <-  U_cols
     this$info$I_cols    <-  I_cols
     this$info$nthreads  <-  nthreads
@@ -1798,7 +1832,7 @@ OMF_implicit <- function(X, U=NULL, I=NULL,
                       this$info$lambda,
                       processed_U$Uarr, processed_U$p,
                       processed_I$Uarr, processed_I$p,
-                      this$info$alpha,
+                      this$info$alpha, this$info$apply_log_transf,
                       niter,
                       this$info$nthreads, use_cg,
                       max_cg_steps, finalize_chol,

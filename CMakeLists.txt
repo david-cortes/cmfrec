@@ -1,5 +1,5 @@
 cmake_minimum_required (VERSION 3.9)
-project (cmfrec VERSION 2.2.2)
+project (cmfrec VERSION 2.2.5)
 set(CMAKE_BUILD_TYPE Release)
 
 ### Note: this build script allows configuring 4 things manually:
@@ -112,7 +112,8 @@ if (LAPACK_LIBRARIES STREQUAL "")
 endif()
 
 # https://stackoverflow.com/questions/59578248/how-do-i-manipulate-cmake-lists-as-sets
-list(APPEND union_list ${BLAS_LIBRARIES} ${LAPACK_LIBRARIES})
+
+list(APPEND union_list ${LAPACK_LIBRARIES} ${BLAS_LIBRARIES})
 list(REMOVE_DUPLICATES union_list)
 target_link_libraries(cmfrec PUBLIC ${union_list})
 

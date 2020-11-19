@@ -290,6 +290,10 @@ extern "C" {
                         with the "NA_as_zero_I" option, but must still be passed
                         whenever there is "I" data.
                         Dimension: [n_i]
+    @param w_main_multiplier  (out) Number to multiply 'w_main' with, if
+                               passing 'adjust_weight=true'. Must be passed
+                               regardless.
+                               Dimension: [1]
     
     
     --- Problem dimensions ---
@@ -358,6 +362,9 @@ extern "C" {
                           in the "X" matrix according to the number of present
                           entries.
                           Recommended value: false
+    @param apply_log_transf  Whether to apply a logarithm transformation to the
+                             values in "X" (i.e. X := log(X)).
+                             Recommended value: false
 
 
     --- "X" data ---
@@ -653,7 +660,7 @@ struct CollectiveImplicitModel {
     real_t *U_colmeans; real_t *I_colmeans;
 
     /* Other parameters */
-    real_t w_main_multiplier;
+    real_t w_main_multiplier; bool apply_log_transf;
 
     /* Optional (for predictions) */
     real_t *B_plus_bias;
@@ -751,7 +758,7 @@ int_t fit_collective_implicit_als
     int_t k_main, int_t k_user, int_t k_item,
     real_t w_main, real_t w_user, real_t w_item,
     real_t *w_main_multiplier,
-    real_t alpha, bool adjust_weight,
+    real_t alpha, bool adjust_weight, bool apply_log_transf,
     int_t niter, int_t nthreads, bool verbose, bool handle_interrupt,
     bool use_cg, int_t max_cg_steps, bool finalize_chol,
     bool precompute_for_predictions,
@@ -933,6 +940,7 @@ int_t factors_collective_implicit_single
     int_t k, int_t k_user, int_t k_item, int_t k_main,
     real_t lam, real_t alpha, real_t w_main, real_t w_user,
     real_t w_main_multiplier,
+    bool apply_log_transf,
     real_t *BeTBe,
     real_t *BtB,
     real_t *BeTBeChol
@@ -982,6 +990,7 @@ int_t factors_collective_implicit_multiple
     int_t k, int_t k_user, int_t k_item, int_t k_main,
     real_t lam, real_t alpha, real_t w_main, real_t w_user,
     real_t w_main_multiplier,
+    bool apply_log_transf,
     real_t *BeTBe,
     real_t *BtB,
     real_t *BeTBeChol,
@@ -1175,6 +1184,7 @@ int_t topN_new_collective_implicit
     int_t k, int_t k_user, int_t k_item, int_t k_main,
     real_t lam, real_t alpha, real_t w_main, real_t w_user,
     real_t w_main_multiplier,
+    bool apply_log_transf,
     real_t *BeTBe,
     real_t *BtB,
     real_t *BeTBeChol,
@@ -1257,6 +1267,7 @@ int_t predict_X_new_collective_implicit
     int_t k, int_t k_user, int_t k_item, int_t k_main,
     real_t lam, real_t alpha, real_t w_main, real_t w_user,
     real_t w_main_multiplier,
+    bool apply_log_transf,
     real_t *BeTBe,
     real_t *BtB,
     real_t *BeTBeChol
@@ -1295,7 +1306,7 @@ int_t fit_most_popular
     int_t X_row[], int_t X_col[], real_t *X, size_t nnz,
     real_t *Xfull,
     real_t *weight,
-    bool implicit, bool adjust_weight,
+    bool implicit, bool adjust_weight, bool apply_log_transf,
     real_t *w_main_multiplier,
     int_t nthreads
 );
@@ -1362,7 +1373,8 @@ int_t predict_X_old_most_popular
                            procedure and get a solution through a least-squares
                            problem with respect to the ALS solution. This 
                            might reduce fitting times due to starting closer
-                           to a local optimum.
+                           to a local optimum. Sparse inputs for 'U' and 'I'
+                           are not supported with this option.
                            Recommended value: true
 
     --- For prediction functionality ---
@@ -1635,6 +1647,7 @@ struct OffsetsImplicitModel {
     real_t *C; real_t *C_bias; int_t p;
     real_t *D; real_t *D_bias; int_t q;
     int_t k;
+    bool apply_log_transf;
 
     /* Optional (for predictions) */
     real_t *Am; real_t *Bm;
@@ -1797,6 +1810,7 @@ int_t factors_offsets_implicit_single
     real_t *C_bias,
     int_t k, int_t n,
     real_t lam, real_t alpha,
+    bool apply_log_transf,
     real_t *precomputedBtB,
     real_t *output_a
 );
@@ -1835,6 +1849,7 @@ int_t factors_offsets_implicit_multiple
     real_t *C_bias,
     int_t k, int_t n,
     real_t lam, real_t alpha,
+    bool apply_log_transf,
     real_t *precomputedBtB,
     int_t nthreads
 );
@@ -1899,6 +1914,7 @@ int_t topN_new_offsets_implicit
     real_t *C_bias,
     int_t k,
     real_t lam, real_t alpha,
+    bool apply_log_transf,
     real_t *precomputedBtB,
     /* inputs for topN */
     int_t *include_ix, int_t n_include,
@@ -1966,6 +1982,7 @@ int_t predict_X_new_offsets_implicit
     real_t *C_bias,
     int_t k,
     real_t lam, real_t alpha,
+    bool apply_log_transf,
     real_t *precomputedBtB
 );
 

@@ -153,7 +153,7 @@ cdef extern from "cmfrec.h":
         int_t k_main, int_t k_user, int_t k_item,
         real_t w_main, real_t w_user, real_t w_item,
         real_t *w_main_multiplier,
-        real_t alpha, bint adjust_weight,
+        real_t alpha, bint adjust_weight, bint apply_log_transf,
         int_t niter, int_t nthreads, bint verbose, bint handle_interrupt,
         bint use_cg, int_t max_cg_steps, bint finalize_chol,
         bint precompute_for_predictions,
@@ -177,7 +177,8 @@ cdef extern from "cmfrec.h":
         real_t lam,
         real_t *U, int_t p,
         real_t *II, int_t q,
-        bint implicit, bint NA_as_zero_X, real_t alpha,
+        bint implicit, bint NA_as_zero_X,
+        real_t alpha, bint apply_log_transf,
         int_t niter,
         int_t nthreads, bint use_cg,
         int_t max_cg_steps, bint finalize_chol,
@@ -228,26 +229,6 @@ cdef extern from "cmfrec.h":
         real_t w_user
     )
 
-    int_t offsets_factors_warm(
-        real_t *a_vec, real_t *a_bias,
-        real_t *u_vec,
-        int_t u_vec_ixB[], real_t *u_vec_sp, size_t nnz_u_vec,
-        int_t ixB[], real_t *Xa, size_t nnz,
-        real_t *Xa_dense, int_t n,
-        real_t *weight,
-        real_t *Bm, real_t *C,
-        real_t *C_bias,
-        real_t glob_mean, real_t *biasB,
-        int_t k, int_t k_sec, int_t k_main,
-        int_t p, real_t w_user,
-        real_t lam, bint exact, real_t lam_bias,
-        bint implicit, real_t alpha,
-        real_t *precomputedTransBtBinvBt,
-        real_t *precomputedBtBw,
-        real_t *output_a,
-        real_t *Bm_plus_bias
-    )
-
     void predict_multiple(
         real_t *A, int_t k_user,
         real_t *B, int_t k_item,
@@ -295,7 +276,7 @@ cdef extern from "cmfrec.h":
         int_t ixA[], int_t ixB[], real_t *X, size_t nnz,
         real_t *Xfull,
         real_t *weight,
-        bint implicit, bint adjust_weight,
+        bint implicit, bint adjust_weight, bint apply_log_transf,
         real_t *w_main_multiplier,
         int_t nthreads
     )
@@ -428,6 +409,7 @@ cdef extern from "cmfrec.h":
         int_t k, int_t k_user, int_t k_item, int_t k_main,
         real_t lam, real_t alpha, real_t w_main, real_t w_user,
         real_t w_main_multiplier,
+        bint apply_log_transf,
         real_t *BeTBe,
         real_t *BtB,
         real_t *BeTBeChol
@@ -477,10 +459,44 @@ cdef extern from "cmfrec.h":
         int_t k, int_t k_user, int_t k_item, int_t k_main,
         real_t lam, real_t alpha, real_t w_main, real_t w_user,
         real_t w_main_multiplier,
+        bint apply_log_transf,
         real_t *BeTBe,
         real_t *BtB,
         real_t *BeTBeChol,
         int_t nthreads
+    )
+
+    int_t factors_offsets_explicit_single(
+        real_t *a_vec, real_t *a_bias, real_t *output_a,
+        real_t *u_vec, int_t p,
+        real_t *u_vec_sp, int_t u_vec_ixB[], size_t nnz_u_vec,
+        real_t *Xa, int_t ixB[], size_t nnz,
+        real_t *Xa_dense, int_t n,
+        real_t *weight,
+        real_t *Bm, real_t *C,
+        real_t *C_bias,
+        real_t glob_mean, real_t *biasB,
+        int_t k, int_t k_sec, int_t k_main,
+        real_t w_user,
+        real_t lam, real_t *lam_unique,
+        bint exact,
+        real_t *precomputedTransBtBinvBt,
+        real_t *precomputedBtB,
+        real_t *Bm_plus_bias
+    )
+
+    int_t factors_offsets_implicit_single(
+        real_t *a_vec,
+        real_t *u_vec, int_t p,
+        real_t *u_vec_sp, int_t u_vec_ixB[], size_t nnz_u_vec,
+        real_t *Xa, int_t ixB[], size_t nnz,
+        real_t *Bm, real_t *C,
+        real_t *C_bias,
+        int_t k, int_t n,
+        real_t lam, real_t alpha,
+        bint apply_log_transf,
+        real_t *precomputedBtB,
+        real_t *output_a
     )
 
     int_t factors_offsets_explicit_multiple(
@@ -517,6 +533,7 @@ cdef extern from "cmfrec.h":
         real_t *C_bias,
         int_t k, int_t n,
         real_t lam, real_t alpha,
+        bint apply_log_transf,
         real_t *precomputedBtB,
         int_t nthreads
     )
@@ -1169,7 +1186,8 @@ def call_fit_collective_implicit_als(
         int_t m, int_t n, int_t m_u, int_t n_i, int_t p, int_t q,
         int_t k=50, int_t k_user=0, int_t k_item=0, int_t k_main=0,
         real_t w_main=1., real_t w_user=1., real_t w_item=1.,
-        real_t lam=1e2, real_t alpha=1., bint adjust_weight=1,
+        real_t lam=1e2, real_t alpha=1.,
+        bint adjust_weight=1, bint apply_log_transf=0,
         np.ndarray[real_t, ndim=1] lam_unique=np.empty(0, dtype=c_real_t),
         bint verbose=1, int_t niter=10,
         int_t nthreads=1, bint use_cg=1,
@@ -1316,7 +1334,7 @@ def call_fit_collective_implicit_als(
         k_main, k_user, k_item,
         w_main, w_user, w_item,
         &w_main_multiplier,
-        alpha, adjust_weight,
+        alpha, adjust_weight, apply_log_transf,
         niter, nthreads, verbose, handle_interrupt,
         use_cg, max_cg_steps, finalize_chol,
         precompute_for_predictions,
@@ -1462,7 +1480,7 @@ def call_fit_offsets_explicit_als(
         lam,
         ptr_U, p,
         ptr_I, q,
-        0, NA_as_zero_X, 0.,
+        0, NA_as_zero_X, 0., 0,
         niter,
         nthreads,
         use_cg, max_cg_steps, finalize_chol,
@@ -1491,7 +1509,7 @@ def call_fit_offsets_implicit_als(
         np.ndarray[real_t, ndim=2] I,
         int_t m, int_t n, int_t p, int_t q,
         int_t k=50, bint add_intercepts=1,
-        real_t lam=1e2, real_t alpha=40.,
+        real_t lam=1e2, real_t alpha=40., bint apply_log_transf=0,
         bint verbose=1, int_t nthreads=1,
         bint use_cg=0, int_t max_cg_steps=3,
         bint finalize_chol=0,
@@ -1577,7 +1595,8 @@ def call_fit_offsets_implicit_als(
         lam,
         ptr_U, p,
         ptr_I, q,
-        1, 0, alpha,
+        1, 0,
+        alpha, apply_log_transf,
         niter,
         nthreads, use_cg,
         max_cg_steps, finalize_chol,
@@ -1902,6 +1921,7 @@ def call_factors_collective_implicit_single(
         real_t lam = 1e0, real_t alpha = 40.,
         real_t w_main_multiplier = 1.,
         real_t w_user = 1., real_t w_main = 1.,
+        bint apply_log_transf = 0,
         bint NA_as_zero_U = 0
     ):
 
@@ -1946,6 +1966,7 @@ def call_factors_collective_implicit_single(
         k, k_user, k_item, k_main,
         lam, alpha, w_main, w_user,
         w_main_multiplier,
+        apply_log_transf,
         ptr_BeTBe,
         ptr_BtB,
         ptr_BeTBeChol
@@ -1994,7 +2015,7 @@ def call_factors_offsets_cold(
 
     return A
 
-def call_factors_offsets_warm_explicit(
+def call_factors_offsets_explicit_single(
         np.ndarray[real_t, ndim=1] Xa_dense,
         np.ndarray[real_t, ndim=1] W_dense,
         np.ndarray[real_t, ndim=1] Xa,
@@ -2075,24 +2096,35 @@ def call_factors_offsets_warm_explicit(
     if C_bias.shape[0]:
         ptr_C_bias = &C_bias[0]
 
+    cdef int_t p = 0
+    if C.shape[0]:
+        p = C.shape[0]
+
+    cdef np.ndarray[real_t, ndim=1] lam_unique
+    cdef real_t *ptr_lam_unique = NULL
+    if lam != lam_bias:
+        lam_unique = np.zeros(6, dtype=c_real_t)
+        lam_unique[0] = lam_bias
+        lam_unique[2] = lam
+        ptr_lam_unique = &lam_unique[0]
+
     cdef np.ndarray[real_t, ndim=1] Am = np.empty(k_sec+k+k_main, dtype=c_real_t)
-    cdef int_t retval = offsets_factors_warm(
-        &Am[0], ptr_Amean,
-        ptr_U,
-        ptr_U_sp_i, ptr_U_sp, U_sp.shape[0],
-        ptr_Xa_i, ptr_Xa, Xa.shape[0],
+    cdef int_t retval = factors_offsets_explicit_single(
+        &Am[0], ptr_Amean, ptr_A,
+        ptr_U, p,
+        ptr_U_sp, ptr_U_sp_i, U_sp.shape[0],
+        ptr_Xa, ptr_Xa_i, Xa.shape[0],
         ptr_Xa_dense, Bm.shape[0],
         ptr_weight,
         &Bm[0,0], ptr_C,
         ptr_C_bias,
         glob_mean, ptr_biasB,
         k, k_sec, k_main,
-        C.shape[0], w_user,
-        lam, exact, lam_bias,
-        0, 0.,
+        w_user,
+        lam, ptr_lam_unique,
+        exact,
         ptr_TransBtBinvBt,
         ptr_BtB,
-        ptr_A,
         ptr_Bm_plus_bias
     )
     if retval == 1:
@@ -2100,7 +2132,7 @@ def call_factors_offsets_warm_explicit(
 
     return Amean, Am, A
 
-def call_factors_offsets_warm_implicit(
+def call_factors_offsets_implicit_single(
         np.ndarray[real_t, ndim=1] Xa,
         np.ndarray[int_t, ndim=1] Xa_i,
         np.ndarray[real_t, ndim=1] U,
@@ -2111,11 +2143,17 @@ def call_factors_offsets_warm_implicit(
         np.ndarray[real_t, ndim=1] C_bias,
         np.ndarray[real_t, ndim=2] TransBtBinvBt,
         np.ndarray[real_t, ndim=2] BtB,
-        int_t k, int_t k_sec = 0, int_t k_main = 0,
+        int_t k,
         real_t lam = 1e2, real_t alpha = 40.,
-        bint user_bias = 1,
+        bint apply_log_transf = 1,
         bint output_a = 1
     ):
+
+    cdef real_t *ptr_Xa = NULL
+    cdef int_t *ptr_Xa_i = NULL
+    if Xa.shape[0]:
+        ptr_Xa = &Xa[0]
+        ptr_Xa_i = &Xa_i[0]
 
     cdef real_t *ptr_U = NULL
     cdef real_t *ptr_U_sp = NULL
@@ -2140,32 +2178,30 @@ def call_factors_offsets_warm_implicit(
     cdef np.ndarray[real_t, ndim=1] A = np.empty(0, dtype=c_real_t)
     cdef real_t *ptr_A = NULL
     if output_a:
-        A = np.empty(k+k_main, dtype=c_real_t)
+        A = np.empty(k, dtype=c_real_t)
         ptr_A = &A[0]
 
     cdef real_t *ptr_C_bias = NULL
     if C_bias.shape[0]:
         ptr_C_bias = &C_bias[0]
 
-    cdef np.ndarray[real_t, ndim=1] Am = np.empty(k_sec+k+k_main, dtype=c_real_t)
-    cdef int_t retval = offsets_factors_warm(
-        &Am[0], <real_t*>NULL,
-        ptr_U,
-        ptr_U_sp_i, ptr_U_sp, U_sp.shape[0],
-        &Xa_i[0], &Xa[0], Xa.shape[0],
-        <real_t*>NULL, Bm.shape[0],
-        <real_t*>NULL,
+    cdef int_t p = 0
+    if C.shape[0]:
+        p = C.shape[0]
+
+    cdef np.ndarray[real_t, ndim=1] Am = np.empty(k, dtype=c_real_t)
+    cdef int_t retval = factors_offsets_implicit_single(
+        &Am[0],
+        ptr_U, p,
+        ptr_U_sp, ptr_U_sp_i, U_sp.shape[0],
+        ptr_Xa, ptr_Xa_i, Xa.shape[0],
         &Bm[0,0], ptr_C,
         ptr_C_bias,
-        0., <real_t*>NULL,
-        k, k_sec, k_main,
-        C.shape[0], 1.,
-        lam, 0, lam,
-        1, alpha,
-        ptr_TransBtBinvBt,
+        Am.shape[1], Bm.shape[0],
+        lam, alpha,
+        apply_log_transf,
         ptr_BtB,
-        ptr_A,
-        <real_t*>NULL
+        ptr_A
     )
     if retval == 1:
         raise MemoryError("Could not allocate sufficient memory.")
@@ -2546,6 +2582,7 @@ def call_fit_most_popular(
         real_t alpha = 40.,
         bint user_bias = 0,
         bint implicit = 0, bint adjust_weight = 1,
+        bint apply_log_transf = 0,
         int_t nthreads = 1
     ):
     cdef real_t *ptr_Xfull = NULL
@@ -2590,7 +2627,7 @@ def call_fit_most_popular(
         ptr_ixA, ptr_ixB, ptr_X, nnz,
         ptr_Xfull,
         ptr_weight,
-        implicit, adjust_weight,
+        implicit, adjust_weight, apply_log_transf,
         &w_main_multiplier,
         nthreads
     )
@@ -2960,6 +2997,7 @@ def call_factors_collective_implicit_multiple(
         real_t lam = 1e2, real_t alpha = 40.,
         real_t w_main_multiplier = 1.,
         real_t w_user = 1., real_t w_main = 1.,
+        bint apply_log_transf = 0,
         bint NA_as_zero_U = 0,
         int_t nthreads = 1
     ):
@@ -3039,6 +3077,7 @@ def call_factors_collective_implicit_multiple(
         k, k_user, k_item, k_main,
         lam, alpha, w_main, w_user,
         w_main_multiplier,
+        apply_log_transf,
         ptr_BeTBe,
         ptr_BtB,
         ptr_BeTBeChol,
@@ -3225,6 +3264,7 @@ def call_factors_offsets_implicit_multiple(
         int_t m, int_t n,
         int_t k,
         real_t lam = 1e2, real_t alpha = 1.,
+        bint apply_log_transf = 0,
         bint output_a = 1,
         int_t nthreads = 1
     ):
@@ -3303,6 +3343,7 @@ def call_factors_offsets_implicit_multiple(
         ptr_C_bias,
         k, n,
         lam, alpha,
+        apply_log_transf,
         ptr_BtB,
         nthreads
     )

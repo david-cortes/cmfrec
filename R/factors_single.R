@@ -123,6 +123,13 @@ process.data.factors.single <- function(model, obj,
                                            obj$info$user_mapping, NCOL(obj$matrices$Cb),
                                            obj$info$U_bin_cols)
     
+    if (obj$info$apply_log_transf) {
+        if (NROW(processed_X$X_val)) {
+            if (min(processed_X$X_val) < 1)
+                stop("Cannot pass values below 1 with 'apply_log_transf=TRUE'.")
+        }
+    }
+    
     
     return(list(
         processed_X = processed_X,
@@ -203,6 +210,7 @@ factors_single.CMF_implicit <- function(model, X = NULL, X_col = NULL, X_val = N
                       model$info$k, model$info$k_user, model$info$k_item, model$info$k_main,
                       lambda, model$info$alpha, model$info$w_main, model$info$w_user,
                       model$info$w_main_multiplier,
+                      model$info$apply_log_transf,
                       model$precomputed$BeTBe,
                       model$precomputed$BtB,
                       model$precomputed$BeTBeChol)
@@ -334,6 +342,7 @@ factors_single.OMF_implicit <- function(model, X = NULL, X_col = NULL, X_val = N
                       model$matrices$C_bias,
                       model$info$k, NCOL(model$matrices$Bm),
                       model$info$lambda, model$info$alpha,
+                      model$info$apply_log_transf,
                       model$precomputed$BtB,
                       a_orig)
     

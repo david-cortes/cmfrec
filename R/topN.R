@@ -58,7 +58,7 @@ process.inputs.topN <- function(model, obj, user=NULL, a_vec=NULL, a_bias=NULL,
         }
         
         include <- include - 1L
-        if (any(include < 0L) || any(is.na(include)))
+        if (any(include < 0L) || anyNA(include))
             stop("'include' contains invalid entries.")
         
         if (NROW(include) < n)
@@ -80,7 +80,7 @@ process.inputs.topN <- function(model, obj, user=NULL, a_vec=NULL, a_bias=NULL,
         }
         
         exclude <- exclude - 1L
-        if (any(exclude < 0L) || any(is.na(exclude)))
+        if (any(exclude < 0L) || anyNA(exclude))
             stop("'exclude' contains invalid entries.")
     }
     

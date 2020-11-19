@@ -1644,7 +1644,8 @@ int_t fit_offsets_als
     real_t lam,
     real_t *restrict U, int_t p,
     real_t *restrict II, int_t q,
-    bool implicit, bool NA_as_zero_X, real_t alpha,
+    bool implicit, bool NA_as_zero_X,
+    real_t alpha, bool apply_log_transf,
     int_t niter,
     int_t nthreads, bool use_cg,
     int_t max_cg_steps, bool finalize_chol,
@@ -1757,7 +1758,7 @@ int_t fit_offsets_als
                     0, 0, 0,
                     1., 1., 1.,
                     &placeholder,
-                    alpha, false,
+                    alpha, false, apply_log_transf,
                     niter, nthreads, verbose, handle_interrupt,
                     use_cg, max_cg_steps,
                     finalize_chol,
@@ -1988,7 +1989,7 @@ int_t fit_offsets_explicit_als
         lam,
         U, p,
         II, q,
-        false, NA_as_zero_X, 1.,
+        false, NA_as_zero_X, 1., false,
         niter,
         nthreads, use_cg,
         max_cg_steps, finalize_chol,
@@ -2013,7 +2014,7 @@ int_t fit_offsets_implicit_als
     real_t lam,
     real_t *restrict U, int_t p,
     real_t *restrict II, int_t q,
-    real_t alpha,
+    real_t alpha, bool apply_log_transf,
     int_t niter,
     int_t nthreads, bool use_cg,
     int_t max_cg_steps, bool finalize_chol,
@@ -2038,7 +2039,8 @@ int_t fit_offsets_implicit_als
         lam,
         U, p,
         II, q,
-        true, false, alpha,
+        true, false,
+        alpha, apply_log_transf,
         niter,
         nthreads, use_cg,
         max_cg_steps, finalize_chol,
@@ -2235,6 +2237,7 @@ int_t factors_offsets_implicit_single
     real_t *restrict C_bias,
     int_t k, int_t n,
     real_t lam, real_t alpha,
+    bool apply_log_transf,
     real_t *restrict precomputedBtB,
     real_t *restrict output_a
 )
@@ -2260,7 +2263,11 @@ int_t factors_offsets_implicit_single
             k, 0, 0,
             1.
         );
-    else
+    else {
+        if (apply_log_transf)
+            for (size_t ix = 0; ix < nnz; ix++)
+                Xa[ix] = log_t(Xa[ix]);
+
         return offsets_factors_warm(
             a_vec, (real_t*)NULL,
             u_vec,
@@ -2280,6 +2287,7 @@ int_t factors_offsets_implicit_single
             output_a,
             (real_t*)NULL
         );
+    }
 }
 
 int_t factors_offsets_explicit_multiple
@@ -2480,6 +2488,7 @@ int_t factors_offsets_implicit_multiple
     real_t *restrict C_bias,
     int_t k, int_t n,
     real_t lam, real_t alpha,
+    bool apply_log_transf,
     real_t *restrict precomputedBtB,
     int_t nthreads
 )
@@ -2572,6 +2581,7 @@ int_t factors_offsets_implicit_multiple
             C_bias,
             k, n,
             lam, alpha,
+            apply_log_transf,
             precomputedBtB,
             (A == NULL)? ((real_t*)NULL) : (A + ix*(size_t)k)
         );
@@ -2773,6 +2783,7 @@ int_t topN_new_offsets_implicit
     real_t *restrict C_bias,
     int_t k,
     real_t lam, real_t alpha,
+    bool apply_log_transf,
     real_t *restrict precomputedBtB,
     /* inputs for topN */
     int_t *restrict include_ix, int_t n_include,
@@ -2794,6 +2805,7 @@ int_t topN_new_offsets_implicit
         C_bias,
         k, n,
         lam, alpha,
+        apply_log_transf,
         precomputedBtB,
         (real_t*)NULL
     );
@@ -2975,6 +2987,7 @@ int_t predict_X_new_offsets_implicit
     real_t *restrict C_bias,
     int_t k,
     real_t lam, real_t alpha,
+    bool apply_log_transf,
     real_t *restrict precomputedBtB
 )
 {
@@ -2996,6 +3009,7 @@ int_t predict_X_new_offsets_implicit
         C_bias,
         k, n_orig,
         lam, alpha,
+        apply_log_transf,
         precomputedBtB,
         nthreads
     );

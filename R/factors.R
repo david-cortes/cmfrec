@@ -212,6 +212,7 @@ factors.CMF_implicit <- function(model, X=NULL, U=NULL, ...) {
                       model$info$k, model$info$k_user, model$info$k_item, model$info$k_main,
                       lambda, model$info$alpha, model$info$w_main, model$info$w_user,
                       model$info$w_main_multiplier,
+                      model$info$apply_log_transf,
                       model$precomputed$BeTBe,
                       model$precomputed$BtB,
                       model$precomputed$BeTBeChol,
@@ -347,6 +348,7 @@ factors.OMF_implicit <- function(model, X=NULL, U=NULL, output_A=FALSE, ...) {
                       model$matrices$C_bias,
                       model$info$k, NCOL(model$matrices$Bm),
                       model$info$lambda, model$info$alpha,
+                      model$info$apply_log_transf,
                       model$precomputed$BtB,
                       model$info$nthreads)
     

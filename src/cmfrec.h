@@ -146,6 +146,7 @@ extern "C" {
     #define LBFGS_FLOAT 64
     #define real_t double
     #define exp_t exp
+    #define log_t log
     #define cblas_tdot cblas_ddot
     #define cblas_tcopy cblas_dcopy
     #define cblas_taxpy cblas_daxpy
@@ -166,6 +167,7 @@ extern "C" {
     #define LBFGS_FLOAT 32
     #define real_t float
     #define exp_t expf
+    #define log_t logf
     #define cblas_tdot cblas_sdot
     #define cblas_tcopy cblas_scopy
     #define cblas_taxpy cblas_saxpy
@@ -660,7 +662,7 @@ int_t fit_most_popular
     int_t ixA[], int_t ixB[], real_t *restrict X, size_t nnz,
     real_t *restrict Xfull,
     real_t *restrict weight,
-    bool implicit, bool adjust_weight,
+    bool implicit, bool adjust_weight, bool apply_log_transf,
     real_t *restrict w_main_multiplier,
     int_t nthreads
 );
@@ -1253,7 +1255,7 @@ int_t fit_collective_implicit_als
     int_t k_main, int_t k_user, int_t k_item,
     real_t w_main, real_t w_user, real_t w_item,
     real_t *restrict w_main_multiplier,
-    real_t alpha, bool adjust_weight,
+    real_t alpha, bool adjust_weight, bool apply_log_transf,
     int_t niter, int_t nthreads, bool verbose, bool handle_interrupt,
     bool use_cg, int_t max_cg_steps, bool finalize_chol,
     bool precompute_for_predictions,
@@ -1328,6 +1330,7 @@ int_t factors_collective_implicit_single
     int_t k, int_t k_user, int_t k_item, int_t k_main,
     real_t lam, real_t alpha, real_t w_main, real_t w_user,
     real_t w_main_multiplier,
+    bool apply_log_transf,
     real_t *restrict BeTBe,
     real_t *restrict BtB,
     real_t *restrict BeTBeChol
@@ -1377,6 +1380,7 @@ int_t factors_collective_implicit_multiple
     int_t k, int_t k_user, int_t k_item, int_t k_main,
     real_t lam, real_t alpha, real_t w_main, real_t w_user,
     real_t w_main_multiplier,
+    bool apply_log_transf,
     real_t *restrict BeTBe,
     real_t *restrict BtB,
     real_t *restrict BeTBeChol,
@@ -1480,6 +1484,7 @@ int_t topN_new_collective_implicit
     int_t k, int_t k_user, int_t k_item, int_t k_main,
     real_t lam, real_t alpha, real_t w_main, real_t w_user,
     real_t w_main_multiplier,
+    bool apply_log_transf,
     real_t *restrict BeTBe,
     real_t *restrict BtB,
     real_t *restrict BeTBeChol,
@@ -1561,6 +1566,7 @@ int_t predict_X_new_collective_implicit
     int_t k, int_t k_user, int_t k_item, int_t k_main,
     real_t lam, real_t alpha, real_t w_main, real_t w_user,
     real_t w_main_multiplier,
+    bool apply_log_transf,
     real_t *restrict BeTBe,
     real_t *restrict BtB,
     real_t *restrict BeTBeChol
@@ -1809,7 +1815,8 @@ int_t fit_offsets_als
     real_t lam,
     real_t *restrict U, int_t p,
     real_t *restrict II, int_t q,
-    bool implicit, bool NA_as_zero_X, real_t alpha,
+    bool implicit, bool NA_as_zero_X,
+    real_t alpha, bool apply_log_transf,
     int_t niter,
     int_t nthreads, bool use_cg,
     int_t max_cg_steps, bool finalize_chol,
@@ -1819,7 +1826,6 @@ int_t fit_offsets_als
     real_t *restrict Bm_plus_bias,
     real_t *restrict precomputedBtB,
     real_t *restrict precomputedTransBtBinvBt
-
 );
 int_t fit_offsets_explicit_als
 (
@@ -1860,7 +1866,7 @@ int_t fit_offsets_implicit_als
     real_t lam,
     real_t *restrict U, int_t p,
     real_t *restrict II, int_t q,
-    real_t alpha,
+    real_t alpha, bool apply_log_transf,
     int_t niter,
     int_t nthreads, bool use_cg,
     int_t max_cg_steps, bool finalize_chol,
@@ -1908,6 +1914,7 @@ int_t factors_offsets_implicit_single
     real_t *restrict C_bias,
     int_t k, int_t n,
     real_t lam, real_t alpha,
+    bool apply_log_transf,
     real_t *restrict precomputedBtB,
     real_t *restrict output_a
 );
@@ -1946,6 +1953,7 @@ int_t factors_offsets_implicit_multiple
     real_t *restrict C_bias,
     int_t k, int_t n,
     real_t lam, real_t alpha,
+    bool apply_log_transf,
     real_t *restrict precomputedBtB,
     int_t nthreads
 );
@@ -2008,6 +2016,7 @@ int_t topN_new_offsets_implicit
     real_t *restrict C_bias,
     int_t k,
     real_t lam, real_t alpha,
+    bool apply_log_transf,
     real_t *restrict precomputedBtB,
     /* inputs for topN */
     int_t *restrict include_ix, int_t n_include,
@@ -2075,6 +2084,7 @@ int_t predict_X_new_offsets_implicit
     real_t *restrict C_bias,
     int_t k,
     real_t lam, real_t alpha,
+    bool apply_log_transf,
     real_t *restrict precomputedBtB
 );
 int_t fit_content_based_lbfgs

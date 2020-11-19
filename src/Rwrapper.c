@@ -308,7 +308,7 @@ SEXP call_fit_collective_implicit_als
     SEXP w_main, SEXP w_user, SEXP w_item,
     SEXP niter, SEXP nthreads, SEXP verbose, SEXP handle_interrupt,
     SEXP use_cg, SEXP max_cg_steps, SEXP finalize_chol,
-    SEXP alpha, SEXP adjust_weight,
+    SEXP alpha, SEXP adjust_weight, SEXP apply_log_transf,
     SEXP precompute,
     SEXP BtB,
     SEXP BeTBe,
@@ -340,6 +340,7 @@ SEXP call_fit_collective_implicit_als
         Rf_asReal(w_main), Rf_asReal(w_user), Rf_asReal(w_item),
         REAL(w_main_multiplier),
         Rf_asReal(alpha), (bool) Rf_asLogical(adjust_weight),
+        (bool) Rf_asLogical(apply_log_transf),
         Rf_asInteger(niter), Rf_asInteger(nthreads), (bool) Rf_asLogical(verbose), (bool) Rf_asLogical(handle_interrupt),
         (bool) Rf_asLogical(use_cg), Rf_asInteger(max_cg_steps), (bool) Rf_asLogical(finalize_chol),
         (bool) Rf_asLogical(precompute),
@@ -368,6 +369,7 @@ SEXP call_fit_most_popular
     SEXP Wfull,
     SEXP Wsp,
     SEXP implicit, SEXP adjust_weight,
+    SEXP apply_log_transf,
     SEXP w_main_multiplier,
     SEXP nthreads
 )
@@ -401,7 +403,9 @@ SEXP call_fit_most_popular
         get_ptr_int(ixA), get_ptr_int(ixB), get_ptr(X), (size_t)Rf_xlength(X),
         get_ptr(Xfull),
         weight,
-        (bool) Rf_asLogical(implicit), (bool) Rf_asLogical(adjust_weight),
+        (bool) Rf_asLogical(implicit),
+        (bool) Rf_asLogical(adjust_weight),
+        (bool) Rf_asLogical(apply_log_transf),
         REAL(w_main_multiplier),
         Rf_asInteger(nthreads)
     );
@@ -640,7 +644,7 @@ SEXP call_fit_offsets_implicit_als
     SEXP lam,
     SEXP U, SEXP p,
     SEXP II, SEXP q,
-    SEXP alpha,
+    SEXP alpha, SEXP apply_log_transf,
     SEXP niter,
     SEXP nthreads, SEXP use_cg,
     SEXP max_cg_steps, SEXP finalize_chol,
@@ -661,7 +665,7 @@ SEXP call_fit_offsets_implicit_als
         Rf_asReal(lam),
         get_ptr(U), Rf_asInteger(p),
         get_ptr(II), Rf_asInteger(q),
-        Rf_asReal(alpha),
+        Rf_asReal(alpha), (bool) Rf_asLogical(apply_log_transf),
         Rf_asInteger(niter),
         Rf_asInteger(nthreads), (bool) Rf_asLogical(use_cg),
         Rf_asInteger(max_cg_steps), (bool) Rf_asLogical(finalize_chol),
@@ -836,6 +840,7 @@ SEXP call_factors_collective_implicit_single
     SEXP k, SEXP k_user, SEXP k_item, SEXP k_main,
     SEXP lam, SEXP alpha, SEXP w_main, SEXP w_user,
     SEXP w_main_multiplier,
+    SEXP apply_log_transf,
     SEXP BeTBe,
     SEXP BtB,
     SEXP BeTBeChol
@@ -852,6 +857,7 @@ SEXP call_factors_collective_implicit_single
         Rf_asInteger(k), Rf_asInteger(k_user), Rf_asInteger(k_item), Rf_asInteger(k_main),
         Rf_asReal(lam), Rf_asReal(alpha), Rf_asReal(w_main), Rf_asReal(w_user),
         Rf_asReal(w_main_multiplier),
+        (bool) Rf_asLogical(apply_log_transf),
         get_ptr(BeTBe),
         get_ptr(BtB),
         get_ptr(BeTBeChol)
@@ -944,6 +950,7 @@ SEXP call_factors_offsets_implicit_single
     SEXP C_bias,
     SEXP k, SEXP n,
     SEXP lam, SEXP alpha,
+    SEXP apply_log_transf,
     SEXP precomputedBtB,
     SEXP output_a
 )
@@ -957,6 +964,7 @@ SEXP call_factors_offsets_implicit_single
         get_ptr(C_bias),
         Rf_asInteger(k), Rf_asInteger(n),
         Rf_asReal(lam), Rf_asReal(alpha),
+        (bool) Rf_asLogical(apply_log_transf),
         get_ptr(precomputedBtB),
         get_ptr(output_a)
     );
@@ -1063,6 +1071,7 @@ SEXP call_factors_collective_implicit_multiple
     SEXP k, SEXP k_user, SEXP k_item, SEXP k_main,
     SEXP lam, SEXP alpha, SEXP w_main, SEXP w_user,
     SEXP w_main_multiplier,
+    SEXP apply_log_transf,
     SEXP BeTBe,
     SEXP BtB,
     SEXP BeTBeChol,
@@ -1083,6 +1092,7 @@ SEXP call_factors_collective_implicit_multiple
         Rf_asInteger(k), Rf_asInteger(k_user), Rf_asInteger(k_item), Rf_asInteger(k_main),
         Rf_asReal(lam), Rf_asReal(alpha), Rf_asReal(w_main), Rf_asReal(w_user),
         Rf_asReal(w_main_multiplier),
+        (bool) Rf_asLogical(apply_log_transf),
         get_ptr(BeTBe),
         get_ptr(BtB),
         get_ptr(BeTBeChol),
@@ -1194,6 +1204,7 @@ SEXP call_factors_offsets_implicit_multiple
     SEXP C_bias,
     SEXP k, SEXP n,
     SEXP lam, SEXP alpha,
+    SEXP apply_log_transf,
     SEXP precomputedBtB,
     SEXP nthreads
 )
@@ -1210,6 +1221,7 @@ SEXP call_factors_offsets_implicit_multiple
         get_ptr(C_bias),
         Rf_asInteger(k), Rf_asInteger(n),
         Rf_asReal(lam), Rf_asReal(alpha),
+        (bool) Rf_asLogical(apply_log_transf),
         get_ptr(precomputedBtB),
         Rf_asInteger(nthreads)
     );
@@ -1562,6 +1574,7 @@ SEXP call_predict_X_new_collective_implicit
     SEXP k, SEXP k_user, SEXP k_item, SEXP k_main,
     SEXP lam, SEXP alpha, SEXP w_main, SEXP w_user,
     SEXP w_main_multiplier,
+    SEXP apply_log_transf,
     SEXP BeTBe,
     SEXP BtB,
     SEXP BeTBeChol
@@ -1585,6 +1598,7 @@ SEXP call_predict_X_new_collective_implicit
         Rf_asInteger(k), Rf_asInteger(k_user), Rf_asInteger(k_item), Rf_asInteger(k_main),
         Rf_asReal(lam), Rf_asReal(alpha), Rf_asReal(w_main), Rf_asReal(w_user),
         Rf_asReal(w_main_multiplier),
+        (bool) Rf_asLogical(apply_log_transf),
         get_ptr(BeTBe),
         get_ptr(BtB),
         get_ptr(BeTBeChol)
@@ -1717,6 +1731,7 @@ SEXP call_predict_X_new_offsets_implicit
     SEXP C_bias,
     SEXP k,
     SEXP lam, SEXP alpha,
+    SEXP apply_log_transf,
     SEXP precomputedBtB
 )
 {
@@ -1736,6 +1751,7 @@ SEXP call_predict_X_new_offsets_implicit
         get_ptr(C_bias),
         Rf_asInteger(k),
         Rf_asReal(lam), Rf_asReal(alpha),
+        (bool) Rf_asLogical(apply_log_transf),
         get_ptr(precomputedBtB)
     );
 
@@ -2027,6 +2043,7 @@ SEXP call_topN_new_collective_implicit
     SEXP k, SEXP k_user, SEXP k_item, SEXP k_main,
     SEXP lam, SEXP alpha, SEXP w_main, SEXP w_user,
     SEXP w_main_multiplier,
+    SEXP apply_log_transf,
     SEXP BeTBe,
     SEXP BtB,
     SEXP BeTBeChol,
@@ -2049,6 +2066,7 @@ SEXP call_topN_new_collective_implicit
         Rf_asInteger(k), Rf_asInteger(k_user), Rf_asInteger(k_item), Rf_asInteger(k_main),
         Rf_asReal(lam), Rf_asReal(alpha), Rf_asReal(w_main), Rf_asReal(w_user),
         Rf_asReal(w_main_multiplier),
+        (bool) Rf_asLogical(apply_log_transf),
         get_ptr(BeTBe),
         get_ptr(BtB),
         get_ptr(BeTBeChol),
@@ -2181,6 +2199,7 @@ SEXP call_topN_new_offsets_implicit
     SEXP C_bias,
     SEXP k,
     SEXP lam, SEXP alpha,
+    SEXP apply_log_transf,
     SEXP precomputedBtB,
     /* inputs for topN */
     SEXP include_ix,
@@ -2198,6 +2217,7 @@ SEXP call_topN_new_offsets_implicit
         get_ptr(C_bias),
         Rf_asInteger(k),
         Rf_asReal(lam), Rf_asReal(alpha),
+        (bool) Rf_asLogical(apply_log_transf),
         get_ptr(precomputedBtB),
         /* inputs for topN */
         get_ptr_int(include_ix), (int) Rf_xlength(include_ix),
@@ -2220,27 +2240,27 @@ static const R_CallMethodDef callMethods [] = {
     /* ---------------------------------------------------- */
     {"call_fit_collective_explicit_als", (DL_FUNC) &call_fit_collective_explicit_als, 62},
     {"call_fit_collective_explicit_lbfgs", (DL_FUNC) &call_fit_collective_explicit_lbfgs, 64},
-    {"call_fit_collective_implicit_als", (DL_FUNC) &call_fit_collective_implicit_als, 47},
-    {"call_fit_most_popular", (DL_FUNC) &call_fit_most_popular, 17},
+    {"call_fit_collective_implicit_als", (DL_FUNC) &call_fit_collective_implicit_als, 48},
+    {"call_fit_most_popular", (DL_FUNC) &call_fit_most_popular, 18},
     {"call_fit_content_based_lbfgs", (DL_FUNC) &call_fit_content_based_lbfgs, 42},
     {"call_fit_offsets_explicit_lbfgs", (DL_FUNC) &call_fit_offsets_explicit_lbfgs, 51},
     {"call_fit_offsets_explicit_als", (DL_FUNC) &call_fit_offsets_explicit_als, 40},
-    {"call_fit_offsets_implicit_als", (DL_FUNC) &call_fit_offsets_implicit_als, 30},
+    {"call_fit_offsets_implicit_als", (DL_FUNC) &call_fit_offsets_implicit_als, 31},
     /* ---------------------------------------------------- */
     {"call_precompute_collective_explicit", (DL_FUNC) &call_precompute_collective_explicit, 24},
     {"call_precompute_collective_implicit", (DL_FUNC) &call_precompute_collective_implicit, 16},
     /* ---------------------------------------------------- */
     {"call_factors_collective_explicit_single", (DL_FUNC) &call_factors_collective_explicit_single, 40},
-    {"call_factors_collective_implicit_single", (DL_FUNC) &call_factors_collective_implicit_single, 24},
+    {"call_factors_collective_implicit_single", (DL_FUNC) &call_factors_collective_implicit_single, 25},
     {"call_factors_content_based_single", (DL_FUNC) &call_factors_content_based_single, 8},
     {"call_factors_offsets_explicit_single", (DL_FUNC) &call_factors_offsets_explicit_single, 26},
-    {"call_factors_offsets_implicit_single", (DL_FUNC) &call_factors_offsets_implicit_single, 16},
+    {"call_factors_offsets_implicit_single", (DL_FUNC) &call_factors_offsets_implicit_single, 17},
     /* ---------------------------------------------------- */
     {"call_factors_collective_explicit_multiple", (DL_FUNC) &call_factors_collective_explicit_multiple, 53},
-    {"call_factors_collective_implicit_multiple", (DL_FUNC) &call_factors_collective_implicit_multiple, 35},
+    {"call_factors_collective_implicit_multiple", (DL_FUNC) &call_factors_collective_implicit_multiple, 36},
     {"call_factors_content_based_mutliple", (DL_FUNC) &call_factors_content_based_mutliple, 14},
     {"call_factors_offsets_explicit_multiple", (DL_FUNC) &call_factors_offsets_explicit_multiple, 37},
-    {"call_factors_offsets_implicit_multiple", (DL_FUNC) &call_factors_offsets_implicit_multiple, 26},
+    {"call_factors_offsets_implicit_multiple", (DL_FUNC) &call_factors_offsets_implicit_multiple, 27},
     /* ---------------------------------------------------- */
     {"call_impute_X_collective_explicit", (DL_FUNC) &call_impute_X_collective_explicit, 44},
     /* ---------------------------------------------------- */
@@ -2252,10 +2272,10 @@ static const R_CallMethodDef callMethods [] = {
     {"call_predict_X_old_offsets_implicit", (DL_FUNC) &call_predict_X_old_offsets_implicit, 9},
     /* ---------------------------------------------------- */
     {"call_predict_X_new_collective_explicit", (DL_FUNC) &call_predict_X_new_collective_explicit, 55},
-    {"call_predict_X_new_collective_implicit", (DL_FUNC) &call_predict_X_new_collective_implicit, 37},
+    {"call_predict_X_new_collective_implicit", (DL_FUNC) &call_predict_X_new_collective_implicit, 38},
     {"call_predict_X_new_content_based", (DL_FUNC) &call_predict_X_new_content_based, 28},
     {"call_predict_X_new_offsets_explicit", (DL_FUNC) &call_predict_X_new_offsets_explicit, 38},
-    {"call_predict_X_new_offsets_implicit", (DL_FUNC) &call_predict_X_new_offsets_implicit, 27},
+    {"call_predict_X_new_offsets_implicit", (DL_FUNC) &call_predict_X_new_offsets_implicit, 28},
     /* ---------------------------------------------------- */
     {"call_topN_old_collective_explicit", (DL_FUNC) &call_topN_old_collective_explicit, 17},
     {"call_topN_old_collective_implicit", (DL_FUNC) &call_topN_old_collective_implicit, 12},
@@ -2265,10 +2285,10 @@ static const R_CallMethodDef callMethods [] = {
     {"call_topN_old_offsets_implicit", (DL_FUNC) &call_topN_old_offsets_implicit, 9},
     /* ---------------------------------------------------- */
     {"call_topN_new_collective_explicit", (DL_FUNC) &call_topN_new_collective_explicit, 45},
-    {"call_topN_new_collective_implicit", (DL_FUNC) &call_topN_new_collective_implicit, 28},
+    {"call_topN_new_collective_implicit", (DL_FUNC) &call_topN_new_collective_implicit, 29},
     {"call_topN_new_content_based", (DL_FUNC) &call_topN_new_content_based, 22},
     {"call_topN_new_offsets_explicit", (DL_FUNC) &call_topN_new_offsets_explicit, 30},
-    {"call_topN_new_offsets_implicit", (DL_FUNC) &call_topN_new_offsets_implicit, 19},
+    {"call_topN_new_offsets_implicit", (DL_FUNC) &call_topN_new_offsets_implicit, 20},
     /* ---------------------------------------------------- */
     {NULL, NULL, 0}
 }; 

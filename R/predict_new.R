@@ -189,6 +189,7 @@ predict_new.CMF_implicit <- function(model, items, rows=NULL,
                       model$info$k, model$info$k_user, model$info$k_item, model$info$k_main,
                       lambda, model$info$alpha, model$info$w_main, model$info$w_user,
                       model$info$w_main_multiplier,
+                      model$info$apply_log_transf,
                       model$precomputed$BeTBe,
                       model$precomputed$BtB,
                       model$precomputed$BeTBeChol)
@@ -256,6 +257,7 @@ predict_new.OMF_implicit <- function(model, items, rows=NULL,
                       model$matrices$C_bias,
                       model$info$k,
                       model$info$lambda, model$info$alpha,
+                      model$info$apply_log_transf,
                       model$precomputed$BtB)
     check.ret.code(ret_code)
     return(scores)

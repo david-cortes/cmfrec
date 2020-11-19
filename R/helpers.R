@@ -5,7 +5,7 @@ check.lambda <- function(lambda, allow_multiple=TRUE) {
     if (!(NROW(lambda) %in% accepted_nrow))
         stop("Invalid 'lambda'.")
     lambda <- as.numeric(lambda)
-    if (any(is.na(lambda)))
+    if (anyNA(lambda))
         stop("'lambda' cannot have missing values.")
     if (any(lambda < 0.))
         stop("'lambda' must be non-negative")
@@ -16,7 +16,7 @@ check.pos.int <- function(k, var="k", pos=FALSE) {
     if (NROW(k) != 1L)
         stop(sprintf("'%s' must be a positive integer", var))
     k <- as.integer(k)
-    if (is.nan(k))
+    if (is.na(k))
         stop(sprintf("Invalid '%s'", k))
     if (pos) {
         if (k <= 0L)
@@ -31,7 +31,7 @@ check.bool <- function(x, var="x") {
     if (NROW(x) != 1L)
         stop(sprintf("'%s' must be a single boolean/logical.", var))
     x <- as.logical(x)
-    if (is.nan(x))
+    if (is.na(x))
         stop(sprintf("'%s' cannot be missing.", var))
     return(x)
 }
@@ -40,7 +40,7 @@ check.pos.real <- function(x, var="x") {
     if (NROW(x) != 1L)
         stop(sprintf("'%s' must be a single boolean/logical.", var))
     x <- as.numeric(x)
-    if (is.nan(x))
+    if (is.na(x))
         stop(sprintf("'%s' cannot be missing.", var))
     if (x < 0.)
         stop(sprintf("'%s' must be non-negative.", var))
@@ -51,7 +51,7 @@ check.str.option <- function(x, var="x", allowed=c()) {
     if (NROW(x) != 1L)
         stop(sprintf("'%s' must be a single string/character.", var))
     x <- as.character(x)
-    if (is.nan(x))
+    if (is.na(x))
         stop(sprintf("'%s' cannot be missing.", var))
     if (!(x %in% allowed))
         stop(sprintf("'%s' must be one of: %s", var, paste(allowed, collapse=", ")))
@@ -247,7 +247,7 @@ process.X <- function(X, weight=NULL) {
     }
     
     if (NROW(out$Xval)) {
-        if (any(is.na(out$Xval)))
+        if (anyNA(out$Xval))
             stop("'X' cannot have NAN values if passed as sparse.")
     }
     
@@ -264,11 +264,11 @@ process.X <- function(X, weight=NULL) {
     }
     
     if (NROW(out$Wsp)) {
-        if (any(is.na(out$Wsp)))
+        if (anyNA(out$Wsp))
             stop("'weight' cannot have NAN values.")
     }
     if (NROW(out$Warr)) {
-        if (any(is.na(out$Warr)))
+        if (anyNA(out$Warr))
             stop("'weight' cannot have NAN values.")
     }
     
@@ -309,12 +309,12 @@ process.side.info <- function(U, name="U", allow_missing=TRUE) {
     
     if (!allow_missing) {
         if (NROW(out$Uarr)) {
-            if (any(is.na(out$Uarr)))
+            if (anyNA(out$Uarr))
                 stop(sprintf("'%s' cannot have missing values.", name))
         }
     }
     if (NROW(out$Uval)) {
-        if (any(is.na(out$Uval)))
+        if (anyNA(out$Uval))
             stop(sprintf("'%s' cannot have NAN values if passed as sparse.", name))
     }
     
@@ -381,6 +381,7 @@ get.empty.info <- function() {
         U_bin_cols = character(),
         I_bin_cols = character(),
         implicit = FALSE,
+        apply_log_transf = FALSE,
         NA_as_zero = FALSE,
         NA_as_zero_user = FALSE,
         NA_as_zero_item = FALSE,
@@ -437,13 +438,13 @@ process.new.X.single <- function(X, X_col, X_val, weight, info, n_max) {
         if (NROW(intersect(class(X_col), c("numeric", "character", "matrix"))))
             X_col <- as.integer(X_col)
         X_col <- X_col - 1L
-        if (any(is.na(X_col)))
+        if (anyNA(X_col))
             stop("'X_col' cannot have missing values or new columns.")
         if (any(X_col > n_use))
             stop("'X_col' cannot contain new columns.")
         if (any(X_col < 0L))
             stop("'X_col' cannot contain negative indices.")
-        if (any(is.na(X_val)))
+        if (anyNA(X_val))
             stop("'X_val' cannot have NAN values.")
         if (("integer" %in% class(X_val)) || ("matrix" %in% class(X_val)))
             X_val <- as.numeric(X_val)
@@ -525,7 +526,7 @@ process.new.U.single <- function(U, U_col, U_val, name, mapping, p, colnames,
         if ("numeric" %in% class(U)) {
             if (exact_shapes && NROW(U) != p)
                 stop(sprintf("'%s' has different number of columns than model was fit to.", name))
-            if (!allow_na && any(is.nan(U)))
+            if (!allow_na && anyNA(U))
                 stop(sprintf("'%s' cannot have NAN values.", name))
             out$U <- .Call("deep_copy", U)
             out$p <- NROW(U)
@@ -544,13 +545,13 @@ process.new.U.single <- function(U, U_col, U_val, name, mapping, p, colnames,
         if (NROW(intersect(class(U_col), c("numeric", "character", "matrix"))))
             U_col <- as.integer(U_col)
         U_col <- U_col - 1L
-        if (any(is.na(U_col)))
+        if (anyNA(U_col))
             stop(sprintf("'%s_col' cannot have missing values or new columns.", name))
         if (any(U_col >= p))
             stop(sprintf("'%s_col' cannot contain new columns.", name))
         if (any(U_col < 0L))
             stop(sprintf("%s_col' cannot contain negative indices.", name))
-        if (any(is.na(U_val)))
+        if (anyNA(U_val))
             stop(sprintf("'%s_val' cannot have NAN values.", name))
         if (("integer" %in% class(U_val)) || ("matrix" %in% class(U_val)))
             U_val <- as.numeric(U_val)
@@ -619,7 +620,7 @@ process.new.X <- function(obj, X, weight=NULL,
         }
         X[[1L]] <- X[[1L]] - 1L
         X[[2L]] <- X[[2L]] - 1L
-        if (any(is.na(X[[1L]])) || any(is.na(X[[2L]])) || any(X[[1L]] < 0L) || any(X[[2L]] < 0L))
+        if (anyNA(X[[1L]]) || anyNA(X[[2L]]) || any(X[[1L]] < 0L) || any(X[[2L]] < 0L))
             stop("'X' contains invalid indices.")
         out$m <- max(X[[1L]]) + 1L
         out$n <- max(X[[2L]]) + 1L
@@ -675,11 +676,11 @@ process.new.X <- function(obj, X, weight=NULL,
         stop("'X' contains columns that were not passed to 'fit'.")
     
     if (NROW(out$Xval)) {
-        if (any(is.na(out$Xval)))
+        if (anyNA(out$Xval))
             stop("Values of sparse 'X' cannot be NAN.")
     }
     if (NROW(out$Xcsr)) {
-        if (any(is.na(out$Xcsr)))
+        if (anyNA(out$Xcsr))
             stop("Values of sparse 'X' cannot be NAN.")
     }
     
@@ -706,11 +707,11 @@ process.new.X <- function(obj, X, weight=NULL,
     }
     
     if (NROW(out$Wfull)) {
-        if (any(is.na(out$Wfull)))
+        if (anyNA(out$Wfull))
             stop("weights cannot be NAN.")
     }
     if (NROW(out$Wsp)) {
-        if (any(is.na(out$Wsp)))
+        if (anyNA(out$Wsp))
             stop("weights cannot be NAN.")
     }
     
@@ -821,12 +822,12 @@ process.new.U <- function(U, U_cols, p, name="U",
     if (!NROW(out$Uarr))
         out$p <- p
     if (!allow_na) {
-        if (NROW(out$Uarr) && any(is.na(out$Uarr)))
+        if (NROW(out$Uarr) && anyNA(out$Uarr))
             stop(sprintf("'%s' cannot have NAN values.", name))
     }
-    if (NROW(out$Uval) && any(is.na(out$Uval)))
+    if (NROW(out$Uval) && anyNA(out$Uval))
         stop("Sparse inputs cannot have NAN values.")
-    if (NROW(out$Ucsr) && any(is.na(out$Ucsr)))
+    if (NROW(out$Ucsr) && anyNA(out$Ucsr))
         stop("Sparse inputs cannot have NAN values.")
     
     return(out)

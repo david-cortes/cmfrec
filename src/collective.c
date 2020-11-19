@@ -3202,6 +3202,7 @@ int_t collective_factors_warm
             else
                 set_to_zero(a_plus_bias, k_user);
         }
+
         if (!append_bias)
             factors_closed_form(a_vec + k_user, k+k_main,
                                 B + k_item, n, k_item+k+k_main,
@@ -3224,7 +3225,7 @@ int_t collective_factors_warm
                                 buffer_real_t,
                                 lam, lam_bias,
                                 TransBtBinvBt, BtB,
-                                cnt_NA_x, k+k_main,
+                                cnt_NA_x, k+k_main+1,
                                 false, false, 1., include_all_X? n_max : n,
                                 (real_t*)NULL, NA_as_zero_X,
                                 false, 0, true);
@@ -6127,7 +6128,7 @@ int_t fit_collective_explicit_als
                 ixA, ixB, X, nnz,
                 Xfull,
                 weight,
-                false, false,
+                false, false, false,
                 (real_t*)NULL,
                 nthreads
             );
@@ -7295,7 +7296,7 @@ int_t fit_collective_implicit_als
     int_t k_main, int_t k_user, int_t k_item,
     real_t w_main, real_t w_user, real_t w_item,
     real_t *restrict w_main_multiplier,
-    real_t alpha, bool adjust_weight,
+    real_t alpha, bool adjust_weight, bool apply_log_transf,
     int_t niter, int_t nthreads, bool verbose, bool handle_interrupt,
     bool use_cg, int_t max_cg_steps, bool finalize_chol,
     bool precompute_for_predictions,
@@ -7424,6 +7425,9 @@ int_t fit_collective_implicit_als
     if (II != NULL) R_nan_to_C_nan(II, (size_t)n_i*(size_t)q);
     #endif
 
+    if (apply_log_transf)
+        for (size_t ix = 0; ix < nnz; ix++)
+            X[ix] = log_t(X[ix]);
     if (alpha != 1.)
         tscal_large(X, alpha, nnz, nthreads);
     coo_to_csr_and_csc(
@@ -8336,6 +8340,7 @@ int_t factors_collective_implicit_single
     int_t k, int_t k_user, int_t k_item, int_t k_main,
     real_t lam, real_t alpha, real_t w_main, real_t w_user,
     real_t w_main_multiplier,
+    bool apply_log_transf,
     real_t *restrict BeTBe,
     real_t *restrict BtB,
     real_t *restrict BeTBeChol
@@ -8368,6 +8373,10 @@ int_t factors_collective_implicit_single
                     0., BtB, k+k_main);
         add_to_diag(BtB, lam, k+k_main);
     }
+
+    if (apply_log_transf)
+        for (size_t ix = 0; ix < nnz; ix++)
+            Xa[ix] = log_t(Xa[ix]);
 
     if (nnz)
         retval = collective_factors_warm_implicit(
@@ -8635,6 +8644,7 @@ int_t factors_collective_implicit_multiple
     int_t k, int_t k_user, int_t k_item, int_t k_main,
     real_t lam, real_t alpha, real_t w_main, real_t w_user,
     real_t w_main_multiplier,
+    bool apply_log_transf,
     real_t *restrict BeTBe,
     real_t *restrict BtB,
     real_t *restrict BeTBeChol,
@@ -8736,6 +8746,7 @@ int_t factors_collective_implicit_multiple
             k, k_user, k_item, k_main,
             lam, alpha, w_main, w_user,
             w_main_multiplier,
+            apply_log_transf,
             BeTBe,
             BtB,
             BeTBeChol
@@ -8805,6 +8816,10 @@ int_t impute_X_collective_explicit
                 )
     long long row;
     #endif
+
+    /* TODO: this function should first check which rows have missing values,
+       and calculate the factors only for them. The imputation loop should
+       also make a pre-check on the whole row to see if it has missing values.*/
 
     int_t retval = 0;
     size_t m_by_n = (size_t)m*(size_t)n;
@@ -9124,6 +9139,7 @@ int_t topN_new_collective_implicit
     int_t k, int_t k_user, int_t k_item, int_t k_main,
     real_t lam, real_t alpha, real_t w_main, real_t w_user,
     real_t w_main_multiplier,
+    bool apply_log_transf,
     real_t *restrict BeTBe,
     real_t *restrict BtB,
     real_t *restrict BeTBeChol,
@@ -9150,6 +9166,7 @@ int_t topN_new_collective_implicit
         k, k_user, k_item, k_main,
         lam, alpha, w_main, w_user,
         w_main_multiplier,
+        apply_log_transf,
         BeTBe,
         BtB,
         BeTBeChol
@@ -9349,6 +9366,7 @@ int_t predict_X_new_collective_implicit
     int_t k, int_t k_user, int_t k_item, int_t k_main,
     real_t lam, real_t alpha, real_t w_main, real_t w_user,
     real_t w_main_multiplier,
+    bool apply_log_transf,
     real_t *restrict BeTBe,
     real_t *restrict BtB,
     real_t *restrict BeTBeChol
@@ -9374,6 +9392,7 @@ int_t predict_X_new_collective_implicit
         k, k_user, k_item, k_main,
         lam, alpha, w_main, w_user,
         w_main_multiplier,
+        apply_log_transf,
         BeTBe,
         BtB,
         BeTBeChol,

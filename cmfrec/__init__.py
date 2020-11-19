@@ -29,7 +29,8 @@ class _CMF:
                 setattr(self, k, v)
         return self
 
-    def _take_params(self, implicit=False, alpha=40., downweight=True,
+    def _take_params(self, implicit=False, alpha=40., downweight=False,
+                     apply_log_transf=False,
                      k=50, lambda_=1e2, method="als", add_implicit_features=False,
                      use_cg=False, max_cg_steps=3, finalize_chol=False,
                      user_bias=True, item_bias=True, k_user=0, k_item=0, k_main=0,
@@ -135,6 +136,7 @@ class _CMF:
         self.item_bias = bool(item_bias)
         self.method = method
         self.add_implicit_features = bool(add_implicit_features)
+        self.apply_log_transf = bool(apply_log_transf)
         self.use_cg = bool(use_cg)
         self.max_cg_steps = int(max_cg_steps)
         self.finalize_chol = bool(finalize_chol)
@@ -634,6 +636,10 @@ class _CMF:
         if n > self._n_orig:
             raise ValueError("'X' has more columns than what was passed to 'fit'.")
 
+        if self.apply_log_transf:
+            if Xval.min() < 1:
+                raise ValueError("Cannot pass values below 1 with 'apply_log_transf=True'.")
+
         return Xarr, Xrow, Xcol, Xval, Xcsr_p, Xcsr_i, Xcsr, m, n, W_dense, W_sp
 
     def _process_users_items(self, user, item, include, exclude, allows_no_item=True):
@@ -967,6 +973,16 @@ class _CMF:
             warnings.warn("No item side info provided, will set 'k_item' to zero.")
         if (m == 0) or (n == 0):
             raise ValueError("'X' must have at least one row and column.")
+
+        if self.apply_log_transf:
+            msg_small = "Cannot pass values below 1 with 'apply_log_transf=True'."
+            if Xarr.shape[0]:
+                if np.nanmin(Xarr) < 1:
+                    raise ValueError(msg_small)
+            elif Xval.shape[0]:
+                if Xval.min() < 1:
+                    raise ValueError(msg_small)
+
 
 
         return self._fit(Xrow, Xcol, Xval, W_sp, Xarr, W_dense,
@@ -1317,13 +1333,14 @@ class _CMF:
                 lambda_, self.alpha,
                 self._w_main_multiplier,
                 self.w_user, self.w_main,
+                self.apply_log_transf,
                 self.NA_as_zero_user
             )
         return a_vec
 
     def _factors_warm_common(self, X=None, X_col=None, X_val=None, W=None,
                              U=None, U_bin=None, U_col=None, U_val=None,
-                             return_bias=False, exact=False):
+                             return_bias=False, exact=False, output_a=False):
         assert self.is_fitted_
 
         if (return_bias) and (not self.user_bias):
@@ -1406,13 +1423,20 @@ class _CMF:
             else:
                 W_sp = np.empty(0, dtype=self.dtype_)
 
-        if not isinstance(self, OMF_explicit):
+        if self.apply_log_transf:
+            if Xval.min() < 1:
+                raise ValueError("Cannot pass values below 1 with 'apply_log_transf=True'.")
+
+        if not isinstance(self, OMF_explicit) and not isinstance(self, OMF_implicit):
             return self._factors_warm(X, W_dense, X_val, X_col, W_sp,
                                       U, U_val, U_col, U_bin, return_bias)
+        elif isinstance(self, OMF_implicit):
+            return self._factors_warm(X, W_dense, X_val, X_col, W_sp,
+                                      U, U_val, U_col, U_bin, bool(output_a))
         else:
             return self._factors_warm(X, W_dense, X_val, X_col, W_sp,
                                       U, U_val, U_col, U_bin, return_bias,
-                                      bool(exact))
+                                      bool(exact), bool(output_a))
 
     def _process_transform_inputs(self, X, U, U_bin, W, replace_existing):
         if (X is None) and (U is None) and (U_bin is None):
@@ -1535,6 +1559,15 @@ class _CMF:
             lambda_ = self.lambda_
             lambda_bias = self.lambda_
 
+        if self.apply_log_transf:
+            msg_small ="Cannot pass values below 1 with 'apply_log_transf=True'."
+            if Xval.shape[0]:
+                if Xval.min() < 1:
+                    raise ValueError(msg_small)
+            if Xcsr.shape[0]:
+                if Xcsr.min() < 1:
+                    raise ValueError(msg_small)
+
         return Xrow, Xcol, Xval, W_sp, \
                Xcsr_p, Xcsr_i, Xcsr, \
                Xarr, W_dense, \
@@ -1636,6 +1669,7 @@ class _CMF:
                 lambda_, self.alpha,
                 self._w_main_multiplier,
                 self.w_user, self.w_main,
+                self.apply_log_transf,
                 self.NA_as_zero_user,
                 self.nthreads
             )
@@ -1711,6 +1745,7 @@ class _CMF:
                 lambda_, self.alpha,
                 self._w_main_multiplier,
                 self.w_item, self.w_main,
+                self.apply_log_transf,
                 self.NA_as_zero_item
             )
         return b_vec
@@ -1834,6 +1869,7 @@ class _CMF:
                     lambda_, self.alpha,
                     self._w_main_multiplier,
                     self.w_user if not is_I else self.w_item, self.w_main,
+                    self.apply_log_transf,
                     self.NA_as_zero_user if not is_I else self.NA_as_zero_item,
                     self.nthreads
                 )
@@ -1894,6 +1930,7 @@ class _CMF:
                 k_user=self.k_item, k_item=self.k_user, k_main=self.k_main,
                 w_main=self.w_main, w_user=self.w_item, w_item=self.w_user,
                 niter=self.niter, NA_as_zero_user=self.NA_as_zero_item, NA_as_zero_item=self.NA_as_zero_user,
+                apply_log_transf=self.apply_log_transf,
                 precompute_for_predictions=self.precompute_for_predictions, use_float=self.use_float,
                 max_cg_steps=self.max_cg_steps, finalize_chol=self.finalize_chol,
                 random_state=self.random_state, init=self.init, verbose=self.verbose,
@@ -1906,6 +1943,7 @@ class _CMF:
                 raise  ValueError("Swapping users/items not meaningful for MostPopular with 'user_bias=False'")
             new_model = MostPopular(
                 implicit=self.implicit, user_bias=True, lambda_=new_lambda, alpha=self.alpha,
+                apply_log_transf=self.apply_log_transf,
                 use_float=self.use_float, produce_dicts=self.produce_dicts,
                 copy_data=self.copy_data, nthreads=self.nthreads)
         elif isinstance(self, ContentBased):
@@ -1930,7 +1968,9 @@ class _CMF:
         elif isinstance(self, OMF_implicit):
             new_model = OMF_implicit(
                 k=self.k, lambda_=new_lambda, alpha=self.alpha, use_cg=self.use_cg, downweight=self.downweight,
-                add_intercepts=self.add_intercepts, niter=self.niter, use_float=self.use_float,
+                add_intercepts=self.add_intercepts, niter=self.niter,
+                apply_log_transf=self.apply_log_transf,
+                use_float=self.use_float,
                 max_cg_steps=self.max_cg_steps, finalize_chol=self.finalize_chol,
                 random_state=self.random_state, verbose=self.verbose,
                 produce_dicts=self.produce_dicts, handle_interrupt=self.handle_interrupt,
@@ -3562,6 +3602,9 @@ class CMF_implicit(_CMF):
     NA_as_zero_item : bool
         Whether to take missing entries in the 'I' matrix as zeros (only
         when the 'I' matrix is passed as sparse COO matrix) instead of ignoring them.
+    apply_log_transf : bool
+        Whether to apply a logarithm transformation on the values of 'X'
+        (i.e. 'X := log(X)')
     precompute_for_predictions : bool
         Whether to precompute some of the matrices that are used when making
         predictions from the model. If 'False', it will take longer to generate
@@ -3667,6 +3710,7 @@ class CMF_implicit(_CMF):
                  k_user=0, k_item=0, k_main=0,
                  w_main=1., w_user=10., w_item=10.,
                  niter=10, NA_as_zero_user=False, NA_as_zero_item=False,
+                 apply_log_transf=False,
                  precompute_for_predictions=True, use_float=False,
                  max_cg_steps=3, finalize_chol=False,
                  random_state=1, init="normal", verbose=False,
@@ -3676,6 +3720,7 @@ class CMF_implicit(_CMF):
                           k=k, lambda_=lambda_, method="als",
                           use_cg=use_cg, max_cg_steps=max_cg_steps,
                           finalize_chol=finalize_chol,
+                          apply_log_transf=apply_log_transf,
                           user_bias=False, item_bias=False,
                           k_user=k_user, k_item=k_item, k_main=k_main,
                           w_main=w_main, w_user=w_user, w_item=w_item,
@@ -3802,7 +3847,7 @@ class CMF_implicit(_CMF):
                 self.k, self.k_user, self.k_item, self.k_main,
                 self.w_main, self.w_user, self.w_item,
                 self.lambda_ if isinstance(self.lambda_, float) else 0.,
-                self.alpha, self.downweight,
+                self.alpha, self.downweight, self.apply_log_transf,
                 self.lambda_ if isinstance(self.lambda_, np.ndarray) else np.empty(0, dtype=self.dtype_),
                 self.verbose, self.niter,
                 self.nthreads, self.use_cg,
@@ -4160,6 +4205,7 @@ class CMF_implicit(_CMF):
             lambda_, self.alpha,
             self._w_main_multiplier,
             self.w_user, self.w_main,
+            self.apply_log_transf,
             self.NA_as_zero_user
         )
 
@@ -4394,6 +4440,7 @@ class CMF_implicit(_CMF):
             lambda_, self.alpha,
             self._w_main_multiplier,
             self.w_user, self.w_main,
+            self.apply_log_transf,
             self.NA_as_zero_user,
             self.nthreads
         )
@@ -4687,6 +4734,7 @@ class _OMF(_OMF_Base):
                         m_u, 0,
                         self.k,
                         lambda_, self.alpha,
+                        self.apply_log_transf,
                         0,
                         self.nthreads
                     )
@@ -5365,15 +5413,17 @@ class OMF_explicit(_OMF):
             if (U is not None) or (U_col is not None) or (U_val is not None):
                 msg  = "User side info is not used for warm-start predictions "
                 msg += "with this combination of hyperparameters."
-                warnings.warn(msg) 
+                warnings.warn(msg)
             outp = self._factors_warm_common(X=X, X_col=X_col, X_val=X_val, W=W,
                                              U=None, U_bin=None,
                                              U_col=None, U_val=None,
-                                             return_bias=return_bias)
+                                             return_bias=return_bias,
+                                             output_a=return_raw_A)
         else:
             outp = self._factors_warm_common(X=X, X_col=X_col, X_val=X_val, W=W,
                                              U=U, U_bin=None, U_col=U_col, U_val=U_val,
-                                             return_bias=return_bias)
+                                             return_bias=return_bias,
+                                             output_a=return_raw_A)
         a_bias = 0.
         if return_bias:
             a_vec, a_pred, a_bias = outp
@@ -5386,7 +5436,8 @@ class OMF_explicit(_OMF):
             return outp_a
 
     def _factors_warm(self, X, W_dense, X_val, X_col, W_sp,
-                      U, U_val, U_col, U_bin, return_bias, exact):
+                      U, U_val, U_col, U_bin, return_bias,
+                      exact, output_a):
         if isinstance(self.lambda_, np.ndarray):
             lambda_ = self.lambda_[2]
             lambda_bias = self.lambda_[0]
@@ -5416,7 +5467,7 @@ class OMF_explicit(_OMF):
             lambda_, lambda_bias,
             self.w_user,
             self.user_bias,
-            exact, 1
+            exact, output_a
         )
 
         if return_bias:
@@ -5820,6 +5871,9 @@ class OMF_implicit(_OMF):
         an update of a single matrix. In general, the more iterations, the better
         the end result.
         Typical values are 6 to 30.
+    apply_log_transf : bool
+        Whether to apply a logarithm transformation on the values of 'X'
+        (i.e. 'X := log(X)')
     use_float : bool
         Whether to use C float type for the model parameters (typically this is
         ``np.float32``). If passing ``False``, will use C double (typically this
@@ -5914,13 +5968,15 @@ class OMF_implicit(_OMF):
            Proceedings of the fifth ACM conference on Recommender systems. 2011.
     """
     def __init__(self, k=50, lambda_=1e0, alpha=1., use_cg=True,
-                 add_intercepts=True, niter=10, use_float=False,
+                 add_intercepts=True, niter=10,
+                 apply_log_transf=False, use_float=False,
                  max_cg_steps=3, finalize_chol=False,
                  random_state=1, verbose=False,
                  produce_dicts=False, handle_interrupt=True,
                  copy_data=True, nthreads=-1):
         self._take_params(implicit=True, alpha=alpha, downweight=False,
                           k=k, lambda_=lambda_, method="als",
+                          apply_log_transf=apply_log_transf,
                           use_cg=use_cg, max_cg_steps=max_cg_steps,
                           finalize_chol=finalize_chol,
                           user_bias=False, item_bias=False,
@@ -6028,10 +6084,11 @@ class OMF_implicit(_OMF):
                 Iarr,
                 m, n, p, q,
                 self.k, self.add_intercepts,
-                self.lambda_, self.alpha,
+                self.lambda_, self.alpha, self.apply_log_transf,
                 self.verbose, self.nthreads, self.use_cg,
                 self.max_cg_steps, self.finalize_chol,
                 self.downweight,
+                self.apply_log_transf,
                 self.random_state, self.niter,
                 self.handle_interrupt
             )
@@ -6039,7 +6096,7 @@ class OMF_implicit(_OMF):
         self.is_fitted_ = True
         return self
 
-    def factors_warm(self, X_col, X_val):
+    def factors_warm(self, X_col, X_val, return_raw_A=False):
         """
         Determine user latent factors based on new interactions data
 
@@ -6055,6 +6112,10 @@ class OMF_implicit(_OMF):
             Observed new 'X' data for a given user, in sparse format.
             'X_val' should contain the values in the columns/items given by
             'X_col'.
+        return_raw_A : bool
+            Whether to return the raw A factors (the free offset), or the
+            factors used in the factorization, to which the attributes
+            component has been added.
 
         Returns
         -------
@@ -6065,12 +6126,12 @@ class OMF_implicit(_OMF):
             raise ValueError("Must pass 'X_col' and 'X_val'.")
         return self._factors_warm_common(X=None, X_col=X_col, X_val=X_val, W=None,
                                          U=None, U_bin=None, U_col=None, U_val=None,
-                                         return_bias=False)
+                                         output_a=return_raw_A)
 
     def _factors_warm(self, X, W_dense, X_val, X_col, W_sp,
-                      U, U_val, U_col, U_bin, return_bias):
+                      U, U_val, U_col, U_bin, output_a):
         c_funs = wrapper_float if self.use_float else wrapper_double
-        a_pred, a_vec = c_funs.call_factors_offsets_warm_implicit(
+        a_pred, a_vec = c_funs.call_factors_offsets_implicit_single(
             X_val,
             X_col,
             U,
@@ -6081,12 +6142,15 @@ class OMF_implicit(_OMF):
             self.C_bias_,
             self._TransBtBinvBt,
             self._BtB,
-            self.k, 0, 0,
+            self.k,
             self.lambda_, self.alpha,
-            0,
-            0
+            self.apply_log_transf,
+            output_a
         )
-        return a_pred
+        if output_a:
+            return a_vec
+        else:
+            return a_pred
 
     def predict_warm(self, items, X_col, X_val):
         """
@@ -6173,6 +6237,7 @@ class OMF_implicit(_OMF):
                     m_x, n,
                     self.k,
                     lambda_, self.alpha,
+                    self.apply_log_transf,
                     0,
                     self.nthreads
                 )
@@ -6824,6 +6889,9 @@ class MostPopular(_CMF):
         this value is 40, other software such as ``implicit`` use a value of 1,
         whereas Spark uses a value of 0.01 by default
         See the documentation of ``CMF_implicit`` for more details.
+    apply_log_transf : bool
+        Whether to apply a logarithm transformation on the values of 'X'
+        (i.e. 'X := log(X)'). This is only available with ``implicit=True``.
     use_float : bool
         Whether to use C float type for the model parameters (typically this is
         ``np.float32``). If passing ``False``, will use C double (typically this
@@ -6888,10 +6956,11 @@ class MostPopular(_CMF):
            2008 Eighth IEEE International Conference on Data Mining. Ieee, 2008.
     """
     def __init__(self, implicit=False, user_bias=False, lambda_=1e1, alpha=1.,
-                 use_float=False, produce_dicts=False,
+                 apply_log_transf=False, use_float=False, produce_dicts=False,
                  copy_data=True, nthreads=-1):
         self._take_params(implicit=implicit, alpha=alpha, downweight=False,
                           k=1, lambda_=lambda_, method="als", use_cg=False,
+                          apply_log_transf=apply_log_transf,
                           user_bias=user_bias, item_bias=True,
                           k_user=0, k_item=0, k_main=0,
                           w_main=1., w_user=1., w_item=1.,
@@ -6911,6 +6980,8 @@ class MostPopular(_CMF):
         self.implicit = bool(implicit)
         if self.implicit and self.user_bias:
             raise ValueError("'user_bias' not supported for implicit-feedback.")
+        if (not self.implicit) and (self.apply_log_transf):
+            warnings.warn("Option 'apply_log_transf' only available for 'implicit=True'.")
 
     def __str__(self):
         msg  = "Most-Popular recommendation model\n"
@@ -6988,6 +7059,8 @@ class MostPopular(_CMF):
                 self.alpha,
                 self.user_bias,
                 self.implicit,
+                False,
+                self.apply_log_transf,
                 self.nthreads
             )
 

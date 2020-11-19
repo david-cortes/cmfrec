@@ -67,6 +67,7 @@ CMF_implicit(
   finalize_chol = FALSE,
   NA_as_zero_user = FALSE,
   NA_as_zero_item = FALSE,
+  apply_log_transf = FALSE,
   precompute_for_predictions = TRUE,
   verbose = TRUE,
   handle_interrupt = TRUE,
@@ -77,6 +78,7 @@ MostPopular(
   X,
   weight = NULL,
   implicit = FALSE,
+  apply_log_transf = FALSE,
   user_bias = ifelse(implicit, FALSE, TRUE),
   lambda = 10,
   alpha = 1
@@ -141,6 +143,7 @@ OMF_implicit(
   use_cg = TRUE,
   add_intercepts = TRUE,
   niter = 10L,
+  apply_log_transf = FALSE,
   max_cg_steps = 3L,
   finalize_chol = FALSE,
   verbose = FALSE,
@@ -498,6 +501,9 @@ whereas Spark uses a value of 0.01 by default,
 and values higher than 10 are unlikely to improve results. If the data
 has very high values, might even be beneficial to put a very low value
 here - for example, for the LastFM-360K, values below 1 might give better results.}
+
+\item{apply_log_transf}{Whether to apply a logarithm transformation on the values of `X`
+(i.e. `X := log(X)`)}
 
 \item{implicit}{(Only selectable for the `MostPopular` model)
 Whether to use the implicit-feedback model, in which the `X` matrix is

@@ -2766,7 +2766,7 @@ int_t fit_most_popular
     int_t ixA[], int_t ixB[], real_t *restrict X, size_t nnz,
     real_t *restrict Xfull,
     real_t *restrict weight,
-    bool implicit, bool adjust_weight,
+    bool implicit, bool adjust_weight, bool apply_log_transf,
     real_t *restrict w_main_multiplier,
     int_t nthreads
 )
@@ -2782,6 +2782,22 @@ int_t fit_most_popular
         cnt_by_col = (int_t*)calloc((size_t)n, sizeof(int_t));
         sum_by_col = (real_t*)calloc((size_t)n, sizeof(real_t));
         if (cnt_by_col == NULL || sum_by_col == NULL) goto throw_oom;
+
+        if (apply_log_transf)
+        {
+            if (Xfull != NULL) {
+                for (size_t row = 0; row < (size_t)m; row++)
+                    for (size_t col = 0; col < (size_t)n; col++)
+                        Xfull[col + row*(size_t)n]
+                            =
+                        log_t(Xfull[col + row*(size_t)n]);
+            }
+
+            else {
+                for (size_t ix = 0; ix < nnz; ix++)
+                    X[ix] = log_t(X[ix]);
+            }
+        }
 
         if (Xfull != NULL)
         {

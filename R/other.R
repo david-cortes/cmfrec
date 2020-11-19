@@ -88,6 +88,7 @@ swap.users.and.items <- function(model, precompute = TRUE) {
             U_bin_cols = model$info$I_bin_cols,
             I_bin_cols = model$info$U_bin_cols,
             implicit = model$info$implicit,
+            apply_log_transf = model$info$apply_log_transf,
             NA_as_zero = model$info$NA_as_zero,
             NA_as_zero_user = model$info$NA_as_zero_item,
             NA_as_zero_item = model$info$NA_as_zero_user,

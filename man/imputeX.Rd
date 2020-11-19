@@ -59,8 +59,19 @@ provided for experimentation purposes.
 }
 \examples{
 library(cmfrec)
+
+### Simplest example
+SeqMat <- matrix(1:50, nrow=10)
+SeqMat[2,1] <- NaN
+SeqMat[8,3] <- NaN
+set.seed(123)
+m <- CMF(SeqMat, k=1, lambda=1e-10)
+imputeX(m, SeqMat)
+
+
+### Better example with multivariate normal data
 if (require("MASS")) {
-    ### Generate random data, set most values as NA
+    ### Generate random data, set some values as NA
     set.seed(1)
     n_rows <- 100
     n_cols <- 50
@@ -69,7 +80,7 @@ if (require("MASS")) {
     S <- t(S) \%*\% S + diag(1, n_cols)
     X <- MASS::mvrnorm(n_rows, mu, S)
     X_na <- X
-    values_NA <- matrix(runif(n_rows*n_cols) < .95, nrow=n_rows)
+    values_NA <- matrix(runif(n_rows*n_cols) < .25, nrow=n_rows)
     X_na[values_NA] <- NaN
     
     ### In the event that any column is fully missing
