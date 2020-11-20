@@ -13,6 +13,9 @@
 
 \item{...}{Extra arguments (not used).}
 }
+\value{
+No return value (information is printed).
+}
 \description{
 Print basic properties of a `cmfrec` object (a base class
 encompassing all the models in this package). Same as the `print.cmfrec` function.

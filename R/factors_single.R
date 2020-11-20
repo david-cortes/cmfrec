@@ -61,7 +61,7 @@
 #' entries: \itemize{
 #' \item `factors`, which will contain the obtained factors for this new user.
 #' \item `bias`, which will contain the obtained bias for this new user
-#' (if passing `output_bias=TRUE`).
+#' (if passing `output_bias=TRUE`) (this will be a single number).
 #' \item `A` (if passing `output_A=TRUE`), which will contain the raw `A` vector
 #' (which is added to the factors determined from user attributes in order to
 #' obtain the factorization parameters).

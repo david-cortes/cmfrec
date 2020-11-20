@@ -536,13 +536,22 @@ see the `ContentBased` model}
 \value{
 Returns a model object (class named just like the function that produced it,
 plus general class `cmfrec`) on which methods such as \link{topN} and \link{factors} can be called.
-The obtained model matrices (see section `Description` for the naming) will be under
-`model$matrices`, but note that they will be transposed (due to R's column-major
+The returned object will have the following fields:\itemize{
+\item `info`: will contain the hyperparameters, problem dimensions, and other information
+such as the number of threads, as passed to the function that produced the model.
+The number of threads (`nthreads`) might be modified after-the-fact.
+If `X` is a `data.frame`, will also contain the re-indexing of users and items under
+`user_mapping` and `item_mapping`, respectively. For the L-BFGS method, will also
+contain the number of function evaluations (`nfev`) and number of updates (`nupd`)
+that were performed.
+\item `matrices`: will contain the fitted model matrices (see section `Description`
+for the naming and for details on what they represent),
+but note that they will be transposed (due to R's column-major
 representation of matrices) and it is recommended to use the package's prediction
 functionality instead of taking the matrices directly.
-Some additional information such as the re-indexing (if `X` was a `data.frame`)
-or number of L-BFGS updates will be available under `model$info`. The attributes
-under `model$info` should not be modified after-the-fact, except for `nthreads`.
+\item `precomputed`: will contain some pre-computed calculations based on the model
+matrices which might help speed up predictions on new data.
+}
 }
 \description{
 Models for collective matrix factorization (also known as multi-view or
@@ -693,11 +702,11 @@ X ~ Am * t(Bm) + \mu + bias_u + bias_i}, where
 \eqn{\mathbf{A}_m = w_u (\mathbf{U} \mathbf{C} + \mathbf{b}_C) + \mathbf{A}}{
 Am = w_user * U * C + C_bias + A} and \eqn{
 \mathbf{B}_m = w_i (\mathbf{I} \mathbf{D} + \mathbf{b}_D) + \mathbf{B}}{
-Am = w_item * (I * D + D_bias) + B}. If passing `k_sec` and/or `k_main`, then columns
+Bm = w_item * (I * D + D_bias) + B}. If passing `k_sec` and/or `k_main`, then columns
 `1` through `k_sec` of \eqn{\mathbf{A}_m, \mathbf{B}_m}{Am, Bm} are determined
 as those same columns from \eqn{\mathbf{A}, \mathbf{B}}{A, B}, while
 \eqn{\mathbf{U} \mathbf{C} + \mathbf{b}_C, \mathbf{I} \mathbf{D} + \mathbf{b}_D}{
-U*C, I*D} will be shorter by `k_sec`
+U*C + C_bias, I*D + D_bias} will be shorter by `k_sec`
 columns (alternatively, can be though of as having those columns artificially set to
 zeros), and columns `k_sec+k+1` through `k_sec+k+k_main` of
 \eqn{\mathbf{A}_m, \mathbf{B}_m}{Am, Bm}
@@ -858,5 +867,6 @@ if (require("recommenderlab") && require("Matrix") && require("rsparse")) {
 \item Hu, Yifan, Yehuda Koren, and Chris Volinsky. "Collaborative filtering for implicit feedback datasets." 2008 Eighth IEEE International Conference on Data Mining. Ieee, 2008.
 \item Takacs, Gabor, Istvan Pilaszy, and Domonkos Tikk. "Applications of the conjugate gradient method for implicit feedback collaborative filtering." Proceedings of the fifth ACM conference on Recommender systems. 2011.
 \item Rendle, Steffen, Li Zhang, and Yehuda Koren. "On the difficulty of evaluating baselines: A study on recommender systems." arXiv preprint arXiv:1905.01395 (2019).
+\item Franc, Vojtech, Vaclav Hlavac, and Mirko Navara. "Sequential coordinate-wise algorithm for the non-negative least squares problem." International Conference on Computer Analysis of Images and Patterns. Springer, Berlin, Heidelberg, 2005.
 }
 }
