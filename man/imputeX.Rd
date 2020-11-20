@@ -65,7 +65,7 @@ SeqMat <- matrix(1:50, nrow=10)
 SeqMat[2,1] <- NaN
 SeqMat[8,3] <- NaN
 set.seed(123)
-m <- CMF(SeqMat, k=1, lambda=1e-10, nthreads=1L)
+m <- CMF(SeqMat, k=1, lambda=1e-10, nthreads=1L, verbose=FALSE)
 imputeX(m, SeqMat)
 
 
