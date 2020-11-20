@@ -33,6 +33,7 @@ The package can now automatically generate so-called "implicit features" for the
 * For the explicit-feedback model, can automatically add implicit features (created from the same "X" data).
 * Can be used for cold-start recommendations (when using side information).
 * Supports user and item biases in the explicit-feedback models (these are not just pre-estimated beforehand as in other software).
+* Can fit models with non-negativity constraints on the factors.
 * Provides an API for top-N recommended lists and for calculating latent factors from new data.
 * Can work with both sparse and dense matrices for each input (e.g. can also be used as a general missing-value imputer for 2-d data), and can work efficiently with a mix of dense and sparse inputs.
 * Can produce factorizations for variations of the problem such as sparse inputs with missing-as-zero instead of missing-as-unknown (e.g. when used for dimensionality reduction).
@@ -269,3 +270,4 @@ For any installation problems or errors encountered with this software, please o
 * [3] Hu, Yifan, Yehuda Koren, and Chris Volinsky. "Collaborative filtering for implicit feedback datasets." 2008 Eighth IEEE International Conference on Data Mining. Ieee, 2008.
 * [4] Takács, Gábor, István Pilászy, and Domonkos Tikk. "Applications of the conjugate gradient method for implicit feedback collaborative filtering." Proceedings of the fifth ACM conference on Recommender systems. 2011.
 * [5] Rendle, Steffen, Li Zhang, and Yehuda Koren. "On the difficulty of evaluating baselines: A study on recommender systems." arXiv preprint arXiv:1905.01395 (2019).
+* [6] Franc, Vojtěch, Václav Hlaváč, and Mirko Navara. "Sequential coordinate-wise algorithm for the non-negative least squares problem." International Conference on Computer Analysis of Images and Patterns. Springer, Berlin, Heidelberg, 2005.

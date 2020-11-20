@@ -27,6 +27,11 @@
             "On the difficulty of evaluating baselines:
             A study on recommender systems."
             arXiv preprint arXiv:1905.01395 (2019).
+        (f) Franc, Vojtech, Vaclav Hlavac, and Mirko Navara.
+            "Sequential coordinate-wise algorithm for the
+            non-negative least squares problem."
+            International Conference on Computer Analysis of Images
+            and Patterns. Springer, Berlin, Heidelberg, 2005.
 
     For information about the models offered here and how they are fit to
     the data, see the files 'collective.c' and 'offsets.c'.
@@ -648,7 +653,8 @@ int_t offsets_factors_warm
                                     precomputedBtB, cnt_NA, k_sec+k+k_main,
                                     false, false, 1., n,
                                     (real_t*)NULL, false,
-                                    false, 0, false);
+                                    false, 0, false, 0, (real_t*)NULL,
+                                    false);
             else {
                 factors_closed_form(a_plus_bias, k_sec+k+k_main+1,
                                     Bm_plus_bias, n, k_sec+k+k_main+1,
@@ -661,7 +667,8 @@ int_t offsets_factors_warm
                                     precomputedBtB, cnt_NA, k_sec+k+k_main+1,
                                     false, false, 1., n,
                                     (real_t*)NULL, false,
-                                    false, 0, false);
+                                    false, 0, false, 0, (real_t*)NULL,
+                                    false);
                 memcpy(a_vec, a_plus_bias,
                        (size_t)(k_sec+k+k_main)*sizeof(real_t));
                 *a_bias = a_plus_bias[k_sec+k+k_main];
@@ -687,6 +694,7 @@ int_t offsets_factors_warm
                 Xa, ixB, nnz,
                 lam,
                 precomputedBtB, k_sec+k+k_main,
+                false, 0, (real_t*)NULL,
                 buffer_real_t
             );
         }
@@ -785,7 +793,8 @@ int_t offsets_factors_warm
                                     (real_t*)NULL, 0, 0,
                                     false, false, 1., n,
                                     (real_t*)NULL, false,
-                                    false, 0, false);
+                                    false, 0, false, 0, (real_t*)NULL,
+                                    false);
             else {
                 factors_closed_form(a_plus_bias + k_sec, k+k_main+1,
                                     Bm_plus_bias + k_sec, n, k_sec+k+k_main+1,
@@ -798,7 +807,8 @@ int_t offsets_factors_warm
                                     (real_t*)NULL, 0, 0,
                                     false, false, 1., n,
                                     (real_t*)NULL, false,
-                                    false, 0, false);
+                                    false, 0, false, 0, (real_t*)NULL,
+                                    false);
                 memcpy(a_vec + k_sec, a_plus_bias + k_sec,
                        (size_t)(k+k_main)*sizeof(real_t));
                 *a_bias = a_plus_bias[k_sec+k+k_main];
@@ -919,6 +929,7 @@ int_t precompute_offsets_both
             (real_t*)NULL, false,
             k_sec+k+k_main, 0, 0, 0,
             user_bias,
+            false,
             lam, lam_unique,
             1., 1., 1.,
             Bm_plus_bias,
@@ -935,6 +946,7 @@ int_t precompute_offsets_both
             (real_t*)NULL, 0,
             k, 0, 0, 0, /* <- cannot have 'k_sec' or 'k_main' with 'implicit' */
             lam, 1., 1., 1., /* <- cannot have different 'lambda' either */
+            false,
             true,
             BtB,
             (real_t*)NULL,
@@ -1253,7 +1265,7 @@ int_t fit_offsets_explicit_lbfgs_internal
             &U_csc_p, &U_csc_i, &U_csc,
             (int_t**)NULL, (int_t**)NULL,
             (bool*)NULL, (bool*)NULL, (bool*)NULL,
-            false, nthreads
+            false, false, nthreads
         );
         if (retval != 0) goto cleanup;
     }
@@ -1268,7 +1280,7 @@ int_t fit_offsets_explicit_lbfgs_internal
             &I_csc_p, &I_csc_i, &I_csc,
             (int_t**)NULL, (int_t**)NULL,
             (bool*)NULL, (bool*)NULL, (bool*)NULL,
-            false, nthreads
+            false, false, nthreads
         );
         if (retval != 0) goto cleanup;
     }
@@ -1284,6 +1296,7 @@ int_t fit_offsets_explicit_lbfgs_internal
         Xfull, (real_t*)NULL,
         Xcsr_p, Xcsr_i, Xcsr,
         Xcsc_p, Xcsc_i, Xcsc,
+        false,
         nthreads
     );
     if (retval != 0) goto cleanup;
@@ -1603,6 +1616,7 @@ int_t fit_offsets_explicit_lbfgs
             (real_t*)NULL, false,
             k_sec+k+k_main, 0, 0, 0,
             user_bias,
+            false,
             lam, lam_unique,
             1., 1., 1.,
             Bm_plus_bias,
@@ -1732,6 +1746,7 @@ int_t fit_offsets_als
                     1., 1., 1., 1.,
                     niter, nthreads, verbose, handle_interrupt,
                     use_cg, max_cg_steps, finalize_chol,
+                    false, 0, false, false,
                     precompute_for_predictions,
                     true,
                     Bm_plus_bias,
@@ -1760,8 +1775,8 @@ int_t fit_offsets_als
                     &placeholder,
                     alpha, false, apply_log_transf,
                     niter, nthreads, verbose, handle_interrupt,
-                    use_cg, max_cg_steps,
-                    finalize_chol,
+                    use_cg, max_cg_steps, finalize_chol,
+                    false, 0, false, false,
                     precompute_for_predictions,
                     precomputedBtB,
                     (real_t*)NULL, (real_t*)NULL

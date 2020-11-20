@@ -255,6 +255,10 @@ NULL
 #' \item `ContentBased` can only be fitted through the L-BFGS method.
 #' \item `MostPopular` can only use an ALS-like procedure, but which will ignore
 #' parameters such as `niter`.
+#' \item Models with non-negativity constraints can only be fitted through the ALS method,
+#' and the matrices to which the constraints apply can only be determined through a
+#' coordinate descent procedure (which will ignore what is passed to
+#' `use_cg` and `finalize_chol`).
 #' }
 #' @param use_cg In the ALS method, whether to use a conjugate gradient method to solve
 #' the closed-form least squares problems. This is a faster and more
@@ -396,6 +400,28 @@ NULL
 #' when the `I` matrix is passed as a sparse matrix) instead of ignoring them.
 #' This option is always assumed `TRUE` for the `ContentBased`, `OMF_explicit`,
 #' and `OMF_implicit` models.
+#' @param nonneg Whether to constrain the `A` and `B` matrices to be non-negative.
+#' In order for this to work correctly, the `X` input data must also be
+#' non-negative. This constraint will also be applied to the `Ai`
+#' and `Bi` matrices if passing `add_implicit_features=TRUE`.
+#' This option is not available when using the L-BFGS method.
+#' Note that, when determining non-negative factors, it will always
+#' use a coordinate descent method, regardless of the value passed
+#' for `use_cg` and `finalize_chol`.
+#' When used for recommender systems, one usually wants to pass `FALSE` here.
+#' For better results, do not use biases alongside this option,
+#' and use a higher regularization coupled with more iterations..
+#' @param nonneg_C Whether to constrain the `C` matrix to be non-negative.
+#' In order for this to work correctly, the `U` input data must also be
+#' non-negative.
+#' @param nonneg_D Whether to constrain the `D` matrix to be non-negative.
+#' In order for this to work correctly, the `I` input data must also be
+#' non-negative.
+#' @param max_cd_steps Maximum number of coordinate descent updates to perform per iteration
+#' when determining factors with non-negativity constraints.
+#' Pass zero for no limit.
+#' Ignored when not having non-negativity constraints.
+#' This number should usually be larger than `k`.
 #' @param precompute_for_predictions Whether to precompute some of the matrices that are used when making
 #' predictions from the model. If `FALSE`, it will take longer to generate
 #' predictions or top-N lists, but will use less memory and will be faster
@@ -687,6 +713,8 @@ validate.inputs <- function(model, implicit=FALSE,
                             add_intercepts=TRUE,
                             start_with_ALS=FALSE,
                             apply_log_transf=FALSE,
+                            nonneg=FALSE, nonneg_C=FALSE, nonneg_D=FALSE,
+                            max_cd_steps=100L,
                             maxiter=800L, niter=10L, parallelize="separate", corr_pairs=4L,
                             max_cg_steps=3L, finalize_chol=TRUE,
                             NA_as_zero=FALSE, NA_as_zero_user=FALSE, NA_as_zero_item=FALSE,
@@ -704,6 +732,7 @@ validate.inputs <- function(model, implicit=FALSE,
     niter    <-  check.pos.int(niter, "niter", TRUE)
     corr_pairs    <-  check.pos.int(corr_pairs, "corr_pairs", TRUE)
     max_cg_steps  <-  check.pos.int(max_cg_steps, "max_cg_steps", TRUE)
+    max_cd_steps  <-  check.pos.int(max_cd_steps, "max_cd_steps", FALSE)
     print_every   <-  check.pos.int(print_every, "print_every", TRUE)
     nthreads      <-  check.pos.int(nthreads, "nthreads", TRUE)
     
@@ -714,6 +743,9 @@ validate.inputs <- function(model, implicit=FALSE,
     NA_as_zero       <-  check.bool(NA_as_zero, "NA_as_zero")
     NA_as_zero_user  <-  check.bool(NA_as_zero_user, "NA_as_zero_user")
     NA_as_zero_item  <-  check.bool(NA_as_zero_item, "NA_as_zero_item")
+    nonneg           <-  check.bool(nonneg, "nonneg")
+    nonneg_C         <-  check.bool(nonneg_C, "nonneg_C")
+    nonneg_D         <-  check.bool(nonneg_D, "nonneg_D")
     include_all_X    <-  check.bool(include_all_X, "include_all_X")
     verbose          <-  check.bool(verbose, "verbose")
     handle_interrupt <-  check.bool(handle_interrupt, "handle_interrupt")
@@ -754,9 +786,11 @@ validate.inputs <- function(model, implicit=FALSE,
     if ((k_user+k+k_main+1)^2 > .Machine$integer.max)
         stop("Number of factors is too large.")
     if ((method == "lbfgs") && (NA_as_zero || NA_as_zero_user || NA_as_zero_item))
-        stop("Option 'NA_as_zero' not supported with 'method='lbfgs'.")
+        stop("Option 'NA_as_zero' not supported with 'method=\"lbfgs\"'.")
     if ((method == "lbfgs") && add_implicit_features)
-        stop("Option 'add_implicit_features' not supported with 'method='lbfgs'.")
+        stop("Option 'add_implicit_features' not supported with 'method=\"lbfgs\"'.")
+    if ((method == "lbfgs") && (nonneg || nonneg_C || nonneg_D))
+        stop("Non-negativity constraints not supported with 'method=\"lbfgs\".")
     if (nthreads < 1L)
         nthreads <- parallel::detectCores()
     
@@ -988,6 +1022,8 @@ validate.inputs <- function(model, implicit=FALSE,
         maxiter = maxiter, niter = niter, parallelize = parallelize, corr_pairs = corr_pairs,
         max_cg_steps = max_cg_steps, finalize_chol = finalize_chol,
         NA_as_zero = NA_as_zero, NA_as_zero_user = NA_as_zero_user, NA_as_zero_item = NA_as_zero_item,
+        nonneg = nonneg, nonneg_C = nonneg_C, nonneg_D = nonneg_D,
+        max_cd_steps = max_cd_steps,
         precompute_for_predictions = precompute_for_predictions, include_all_X = include_all_X,
         verbose = verbose, print_every = print_every,
         handle_interrupt = handle_interrupt,
@@ -1005,6 +1041,7 @@ CMF <- function(X, U=NULL, I=NULL, U_bin=NULL, I_bin=NULL, weight=NULL,
                 maxiter=800L, niter=10L, parallelize="separate", corr_pairs=4L,
                 max_cg_steps=3L, finalize_chol=TRUE,
                 NA_as_zero=FALSE, NA_as_zero_user=FALSE, NA_as_zero_item=FALSE,
+                nonneg=FALSE, nonneg_C=FALSE, nonneg_D=FALSE, max_cd_steps=100L,
                 precompute_for_predictions=TRUE, include_all_X=TRUE,
                 verbose=TRUE, print_every=10L,
                 handle_interrupt=TRUE,
@@ -1024,6 +1061,8 @@ CMF <- function(X, U=NULL, I=NULL, U_bin=NULL, I_bin=NULL, weight=NULL,
                               NA_as_zero = NA_as_zero,
                               NA_as_zero_user = NA_as_zero_user,
                               NA_as_zero_item = NA_as_zero_item,
+                              nonneg = nonneg, nonneg_C = nonneg_C, nonneg_D = nonneg_D,
+                              max_cd_steps = max_cd_steps,
                               precompute_for_predictions = precompute_for_predictions,
                               include_all_X = include_all_X,
                               verbose = verbose, print_every = print_every,
@@ -1046,6 +1085,8 @@ CMF <- function(X, U=NULL, I=NULL, U_bin=NULL, I_bin=NULL, weight=NULL,
                 NA_as_zero = inputs$NA_as_zero,
                 NA_as_zero_user = inputs$NA_as_zero_user,
                 NA_as_zero_item = inputs$NA_as_zero_item,
+                nonneg = inputs$nonneg, nonneg_C = inputs$nonneg_C, nonneg_D = inputs$nonneg_D,
+                max_cd_steps = inputs$max_cd_steps,
                 precompute_for_predictions = inputs$precompute_for_predictions,
                 include_all_X = inputs$include_all_X,
                 verbose = inputs$verbose, print_every = inputs$print_every,
@@ -1063,6 +1104,7 @@ CMF_implicit <- function(X, U=NULL, I=NULL,
                          niter=10L,
                          max_cg_steps=3L, finalize_chol=FALSE,
                          NA_as_zero_user=FALSE, NA_as_zero_item=FALSE,
+                         nonneg=FALSE, nonneg_C=FALSE, nonneg_D=FALSE, max_cd_steps=100L,
                          apply_log_transf=FALSE,
                          precompute_for_predictions=TRUE,
                          verbose=TRUE,
@@ -1079,6 +1121,8 @@ CMF_implicit <- function(X, U=NULL, I=NULL,
                               max_cg_steps = max_cg_steps, finalize_chol = finalize_chol,
                               NA_as_zero_user = NA_as_zero_user,
                               NA_as_zero_item = NA_as_zero_item,
+                              nonneg = nonneg, nonneg_C = nonneg_C, nonneg_D = nonneg_D,
+                              max_cd_steps = max_cd_steps,
                               apply_log_transf = apply_log_transf,
                               precompute_for_predictions = precompute_for_predictions,
                               verbose = verbose,
@@ -1095,6 +1139,8 @@ CMF_implicit <- function(X, U=NULL, I=NULL,
                          max_cg_steps = inputs$max_cg_steps, finalize_chol = inputs$finalize_chol,
                          NA_as_zero_user = inputs$NA_as_zero_user,
                          NA_as_zero_item = inputs$NA_as_zero_item,
+                         nonneg = inputs$nonneg, nonneg_C = inputs$nonneg_C, nonneg_D = inputs$nonneg_D,
+                         max_cd_steps = inputs$max_cd_steps,
                          apply_log_transf = inputs$apply_log_transf,
                          precompute_for_predictions = inputs$precompute_for_predictions,
                          verbose = inputs$verbose,
@@ -1116,6 +1162,7 @@ CMF_implicit <- function(X, U=NULL, I=NULL,
                  maxiter=800L, niter=10L, parallelize="separate", corr_pairs=4L,
                  max_cg_steps=3L, finalize_chol=TRUE,
                  NA_as_zero=FALSE, NA_as_zero_user=FALSE, NA_as_zero_item=FALSE,
+                 nonneg=FALSE, nonneg_C=FALSE, nonneg_D=FALSE, max_cd_steps=100L,
                  precompute_for_predictions=TRUE, include_all_X=TRUE,
                  verbose=TRUE, print_every=10L,
                  handle_interrupt=TRUE,
@@ -1148,6 +1195,7 @@ CMF_implicit <- function(X, U=NULL, I=NULL,
     this$info$NA_as_zero       <-  NA_as_zero
     this$info$NA_as_zero_user  <-  NA_as_zero_user
     this$info$NA_as_zero_item  <-  NA_as_zero_item
+    this$info$nonneg           <-  nonneg
     this$info$include_all_X    <-  include_all_X
     this$info$nthreads         <-  nthreads
     this$info$add_implicit_features  <-  add_implicit_features
@@ -1189,14 +1237,16 @@ CMF_implicit <- function(X, U=NULL, I=NULL,
             this$precomputed$B_plus_bias <- matrix(0., ncol=n_max, nrow=k_item+k+k_main+1L)
         }
         this$precomputed$BtB <- matrix(0., nrow=k+k_main+user_bias, ncol=k+k_main+user_bias)
-        this$precomputed$TransBtBinvBt <- matrix(0., ncol=n_max, nrow=k+k_main+user_bias)
+        if (!add_implicit_features && !nonneg)
+            this$precomputed$TransBtBinvBt <- matrix(0., ncol=n_max, nrow=k+k_main+user_bias)
         if (add_implicit_features)
             this$precompted$BiTBi <- matrix(0., ncol=k+k_main, nrow=k+k_main)
         if (processed_U$p) {
             this$precomputed$CtC <- matrix(0., ncol=k_user+k, nrow=k_user+k)
-            this$precomputed$TransCtCinvCt <- matrix(0., ncol=processed_U$p, nrow=k_user+k)
+            if (!add_implicit_features && !nonneg)
+                this$precomputed$TransCtCinvCt <- matrix(0., ncol=processed_U$p, nrow=k_user+k)
         }
-        if (add_implicit_features || processed_U$p) {
+        if ((add_implicit_features || processed_U$p) && !nonneg) {
             this$precomputed$BeTBeChol <- matrix(0., nrow=k_user+k+k_main+user_bias,
                                                  ncol=k_user+k+k_main+user_bias)
         }
@@ -1209,6 +1259,9 @@ CMF_implicit <- function(X, U=NULL, I=NULL,
     nfev <- integer(1L)
     
     if (method == "als") {
+        ### Note: R's '.Call' has a limit of 65 arguments - this one exceeds it
+        ### so some parameters have to be merged.
+        nonneg_CD <- as.logical(c(nonneg_C, nonneg_D))
         ret_code <- .Call("call_fit_collective_explicit_als",
                           this$matrices$user_bias, this$matrices$item_bias,
                           this$matrices$A, this$matrices$B,
@@ -1231,6 +1284,7 @@ CMF_implicit <- function(X, U=NULL, I=NULL,
                           w_main, w_user, w_item, w_implicit,
                           niter, nthreads, verbose, handle_interrupt,
                           use_cg, max_cg_steps, finalize_chol,
+                          nonneg, max_cd_steps, nonneg_CD,
                           precompute_for_predictions,
                           add_implicit_features,
                           include_all_X,
@@ -1296,6 +1350,7 @@ CMF_implicit <- function(X, U=NULL, I=NULL,
                           niter=10L,
                           max_cg_steps=3L, finalize_chol=TRUE,
                           NA_as_zero_user=FALSE, NA_as_zero_item=FALSE,
+                          nonneg=FALSE, nonneg_C=FALSE, nonneg_D=FALSE, max_cd_steps=100L,
                           apply_log_transf=FALSE,
                           precompute_for_predictions=TRUE,
                           verbose=TRUE,
@@ -1326,6 +1381,7 @@ CMF_implicit <- function(X, U=NULL, I=NULL,
     this$info$I_cols           <-  I_cols
     this$info$NA_as_zero_user  <-  NA_as_zero_user
     this$info$NA_as_zero_item  <-  NA_as_zero_item
+    this$info$nonneg           <-  nonneg
     this$info$implicit         <-  TRUE
     this$info$apply_log_transf <-  apply_log_transf
     this$info$nthreads         <-  nthreads
@@ -1350,9 +1406,10 @@ CMF_implicit <- function(X, U=NULL, I=NULL,
         this$precomputed$BtB <- matrix(0., nrow=k+k_main, ncol=k+k_main)
         if (processed_U$p) {
             this$precomputed$BeTBe <- matrix(0., nrow=k_user+k+k_main,
-                                                ncol=k_user+k+k_main)
-            this$precomputed$BeTBeChol <- matrix(0., nrow=k_user+k+k_main,
-                                                    ncol=k_user+k+k_main)
+                                                 ncol=k_user+k+k_main)
+            if (!nonneg)
+                this$precomputed$BeTBeChol <- matrix(0., nrow=k_user+k+k_main,
+                                                         ncol=k_user+k+k_main)
         }
     }
     
@@ -1377,6 +1434,7 @@ CMF_implicit <- function(X, U=NULL, I=NULL,
                       w_main, w_user, w_item,
                       niter, nthreads, verbose, handle_interrupt,
                       use_cg, max_cg_steps, finalize_chol,
+                      nonneg, max_cd_steps, nonneg_C, nonneg_D,
                       this$info$alpha, downweight, this$info$apply_log_transf,
                       precompute_for_predictions,
                       this$precomputed$BtB,
@@ -1392,11 +1450,12 @@ CMF_implicit <- function(X, U=NULL, I=NULL,
 
 #' @export
 #' @rdname fit
-MostPopular <- function(X, weight=NULL, implicit=FALSE, apply_log_transf=FALSE,
+MostPopular <- function(X, weight=NULL, implicit=FALSE, apply_log_transf=FALSE, nonneg=FALSE,
                         user_bias=ifelse(implicit, FALSE, TRUE), lambda=10., alpha=1.) {
     inputs <- validate.inputs(model = "MostPopular", implicit = implicit,
                               X = X, weight = weight,
                               apply_log_transf = apply_log_transf,
+                              nonneg = nonneg,
                               user_bias = user_bias, lambda = lambda,
                               alpha = alpha, downweight = FALSE)
     if (inputs$downweight && !inputs$implicit)
@@ -1407,13 +1466,14 @@ MostPopular <- function(X, weight=NULL, implicit=FALSE, apply_log_transf=FALSE,
                         user_bias = inputs$user_bias,
                         lambda = inputs$lambda, alpha = inputs$alpha,
                         downweight = inputs$downweight,
-                        apply_log_transf = inputs$apply_log_transf))
+                        apply_log_transf = inputs$apply_log_transf,
+                        nonneg = inputs$nonneg))
 }
 
 .MostPopular <- function(processed_X,
                          user_mapping, item_mapping,
                          implicit=FALSE, user_bias=FALSE, lambda=10., alpha=1.,
-                         downweight=FALSE, apply_log_transf=FALSE) {
+                         downweight=FALSE, apply_log_transf=FALSE, nonneg=FALSE) {
     
     this <- list(
         info = get.empty.info(),
@@ -1427,6 +1487,7 @@ MostPopular <- function(X, weight=NULL, implicit=FALSE, apply_log_transf=FALSE,
     this$info$user_mapping  <-  user_mapping
     this$info$item_mapping  <-  item_mapping
     this$info$implicit          <-  implicit
+    this$info$nonneg            <-  nonneg
     this$info$apply_log_transf  <-  apply_log_transf
     
     ### Allocate matrices
@@ -1449,6 +1510,7 @@ MostPopular <- function(X, weight=NULL, implicit=FALSE, apply_log_transf=FALSE,
                       processed_X$Xarr,
                       processed_X$Warr, processed_X$Wsp,
                       implicit, downweight, apply_log_transf,
+                      nonneg,
                       w_main_multiplier,
                       1L)
     
@@ -1891,14 +1953,16 @@ precompute.for.predictions <- function(model) {
             model$precomputed$B_plus_bias <- matrix(0., ncol=n_max, nrow=k_item+k+k_main+1L)
         }
         model$precomputed$BtB <- matrix(0., nrow=k+k_main+user_bias, ncol=k+k_main+user_bias)
-        model$precomputed$TransBtBinvBt <- matrix(0., ncol=n_use, nrow=k+k_main+user_bias)
+        if (!model$info$nonneg && !add_implicit_features)
+            model$precomputed$TransBtBinvBt <- matrix(0., ncol=n_use, nrow=k+k_main+user_bias)
         if (add_implicit_features)
             model$precompted$BiTBi <- matrix(0., ncol=k+k_main, nrow=k+k_main)
         if (has_U) {
             model$precomputed$CtC <- matrix(0., ncol=k_user+k, nrow=k_user+k)
-            model$precomputed$TransCtCinvCt <- matrix(0., ncol=p, nrow=k_user+k)
+            if (!model$info$nonneg && !add_implicit_features)
+                model$precomputed$TransCtCinvCt <- matrix(0., ncol=p, nrow=k_user+k)
         }
-        if (add_implicit_features || has_U) {
+        if ((add_implicit_features || has_U) && !model$info$nonneg) {
             model$precomputed$BeTBeChol <- matrix(0., nrow=k_user+k+k_main+user_bias,
                                                   ncol=k_user+k+k_main+user_bias)
         }
@@ -1909,6 +1973,7 @@ precompute.for.predictions <- function(model) {
                           model$matrices$Bi, add_implicit_features,
                           model$info$k, model$info$k_user, model$info$k_item, model$info$k_main,
                           user_bias,
+                          model$info$nonneg,
                           model$info$lambda,
                           model$info$w_main, model$info$w_user, model$info$w_implicit,
                           model$precomputed$B_plus_bias,
@@ -1924,8 +1989,9 @@ precompute.for.predictions <- function(model) {
         if (has_U) {
             model$precomputed$BeTBe <- matrix(0., nrow=k_user+k+k_main,
                                               ncol=k_user+k+k_main)
-            model$precomputed$BeTBeChol <- matrix(0., nrow=k_user+k+k_main,
-                                                  ncol=k_user+k+k_main)
+            if (!model$info$nonneg)
+                model$precomputed$BeTBeChol <- matrix(0., nrow=k_user+k+k_main,
+                                                      ncol=k_user+k+k_main)
         }
         
         ret_code <- .Call("call_precompute_collective_implicit",
@@ -1934,6 +2000,7 @@ precompute.for.predictions <- function(model) {
                           model$info$k, model$info$k_user, model$info$k_item, model$info$k_main,
                           model$info$lambda, model$info$w_main, model$info$w_user,
                           model$info$w_main_multiplier,
+                          model$info$nonneg,
                           TRUE,
                           model$precomputed$BtB,
                           model$precomputed$BeTBe,

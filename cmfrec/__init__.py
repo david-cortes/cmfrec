@@ -12,9 +12,6 @@ __all__ = ["CMF", "CMF_implicit",
 ### using the new designated C functions for each type of prediction.
 
 class _CMF:
-    def __init__(self):
-        pass
-
     def __repr__(self):
         return self.__str__()
 
@@ -31,6 +28,8 @@ class _CMF:
 
     def _take_params(self, implicit=False, alpha=40., downweight=False,
                      apply_log_transf=False,
+                     nonneg=False, nonneg_C=False, nonneg_D=False,
+                     max_cd_steps=100,
                      k=50, lambda_=1e2, method="als", add_implicit_features=False,
                      use_cg=False, max_cg_steps=3, finalize_chol=False,
                      user_bias=True, item_bias=True, k_user=0, k_item=0, k_main=0,
@@ -101,9 +100,18 @@ class _CMF:
                 raise ValueError("Option 'NA_as_zero' not supported with method='lbfgs'.")
             if add_implicit_features:
                 raise ValueError("Option 'add_implicit_features' not supported with method='lbfgs'.")
+            if (nonneg) or (nonneg_C) or (nonneg_D):
+                raise ValueError("non-negativity constraints not supported with method='lbfgs'.")
 
         if method == "als":
             assert max_cg_steps > 0
+
+        if max_cd_steps is None:
+            max_cd_steps = 0
+        if isinstance(max_cd_steps, float):
+            max_cd_steps = int(max_cd_steps)
+        assert max_cd_steps >= 0
+        assert isinstance(max_cd_steps, int)
 
         w_main = float(w_main) if isinstance(w_main, int) else w_main
         w_user = float(w_user) if isinstance(w_user, int) else w_user
@@ -139,6 +147,7 @@ class _CMF:
         self.apply_log_transf = bool(apply_log_transf)
         self.use_cg = bool(use_cg)
         self.max_cg_steps = int(max_cg_steps)
+        self.max_cd_steps = int(max_cd_steps)
         self.finalize_chol = bool(finalize_chol)
         self.maxiter = maxiter
         self.niter = niter
@@ -146,6 +155,9 @@ class _CMF:
         self.NA_as_zero = bool(NA_as_zero)
         self.NA_as_zero_user = bool(NA_as_zero_user)
         self.NA_as_zero_item = bool(NA_as_zero_item)
+        self.nonneg = bool(nonneg)
+        self.nonneg_C = bool(nonneg_C)
+        self.nonneg_D = bool(nonneg_D)
         self.precompute_for_predictions = bool(precompute_for_predictions)
         self.include_all_X = True
         self.use_float = bool(use_float)
@@ -1313,6 +1325,7 @@ class _CMF:
                     self.w_user, self.w_main, self.w_implicit,
                     self.user_bias,
                     self.NA_as_zero_user, self.NA_as_zero,
+                    self.nonneg,
                     self.add_implicit_features,
                     self.include_all_X
             )
@@ -1334,7 +1347,8 @@ class _CMF:
                 self._w_main_multiplier,
                 self.w_user, self.w_main,
                 self.apply_log_transf,
-                self.NA_as_zero_user
+                self.NA_as_zero_user,
+                self.nonneg
             )
         return a_vec
 
@@ -1641,6 +1655,7 @@ class _CMF:
                 self.w_user, self.w_main, self.w_implicit,
                 self.user_bias,
                 self.NA_as_zero_user, self.NA_as_zero,
+                self.nonneg,
                 self.add_implicit_features,
                 self.include_all_X,
                 self.nthreads
@@ -1671,6 +1686,7 @@ class _CMF:
                 self.w_user, self.w_main,
                 self.apply_log_transf,
                 self.NA_as_zero_user,
+                self.nonneg,
                 self.nthreads
             )
 
@@ -1725,6 +1741,7 @@ class _CMF:
                 self.w_item, self.w_main, self.w_implicit,
                 self.item_bias,
                 self.NA_as_zero_item, self.NA_as_zero,
+                self.nonneg,
                 self.add_implicit_features,
                 False
             )
@@ -1746,7 +1763,8 @@ class _CMF:
                 self._w_main_multiplier,
                 self.w_item, self.w_main,
                 self.apply_log_transf,
-                self.NA_as_zero_item
+                self.NA_as_zero_item,
+                self.nonneg
             )
         return b_vec
 
@@ -1838,6 +1856,7 @@ class _CMF:
                 self.user_bias if not is_I else self.item_bias,
                 self.NA_as_zero_user if not is_I else self.NA_as_zero_item,
                 self.NA_as_zero,
+                self.nonneg,
                 self.add_implicit_features,
                 self.include_all_X if not is_I else True,
                 self.nthreads
@@ -1871,6 +1890,7 @@ class _CMF:
                     self.w_user if not is_I else self.w_item, self.w_main,
                     self.apply_log_transf,
                     self.NA_as_zero_user if not is_I else self.NA_as_zero_item,
+                    self.nonneg,
                     self.nthreads
                 )
         return A
@@ -1919,6 +1939,7 @@ class _CMF:
                 maxiter=self.maxiter, niter=self.niter, parallelize=self.parallelize, corr_pairs=self.corr_pairs,
                 max_cg_steps=self.max_cg_steps, finalize_chol=self.finalize_chol,
                 NA_as_zero=self.NA_as_zero, NA_as_zero_user=self.NA_as_zero_item, NA_as_zero_item=self.NA_as_zero_user,
+                nonneg=self.nonneg,
                 precompute_for_predictions=precompute, include_all_X=True,
                 use_float=self.use_float,
                 random_state=self.random_state, verbose=self.verbose, print_every=self.print_every,
@@ -1930,6 +1951,7 @@ class _CMF:
                 k_user=self.k_item, k_item=self.k_user, k_main=self.k_main,
                 w_main=self.w_main, w_user=self.w_item, w_item=self.w_user,
                 niter=self.niter, NA_as_zero_user=self.NA_as_zero_item, NA_as_zero_item=self.NA_as_zero_user,
+                nonneg=self.nonneg,
                 apply_log_transf=self.apply_log_transf,
                 precompute_for_predictions=self.precompute_for_predictions, use_float=self.use_float,
                 max_cg_steps=self.max_cg_steps, finalize_chol=self.finalize_chol,
@@ -2037,6 +2059,7 @@ class _CMF:
                         0, 0, 0,
                         lambda_, lam_bias,
                         1., 1., 1.,
+                        self.nonneg,
                         include_all_X = True
                     )
             elif isinstance(self, OMF_implicit):
@@ -2047,7 +2070,7 @@ class _CMF:
                         new_model.C_,
                         new_model.k, 0, 0, 0,
                         new_lambda, 1., 1.,
-                        1.
+                        1., False
                     )
 
         return new_model
@@ -2242,6 +2265,32 @@ class CMF(_CMF):
         Whether to take missing entries in the 'I' matrix as zeros (only
         when the 'I' matrix is passed as sparse COO matrix) instead of ignoring them.
         Can be changed after the model has already been fit to data.
+    nonneg : bool
+        Whether to constrain the 'A' and 'B' matrices to be non-negative.
+        In order for this to work correctly, the 'X' input data must also be
+        non-negative. This constraint will also be applied to the 'Ai'
+        and 'Bi' matrices if passing ``add_implicit_features=True``.
+        This option is not available when using the L-BFGS method.
+        Note that, when determining non-negative factors, it will always
+        use a coordinate descent method, regardless of the value passed
+        for ``use_cg`` and ``finalize_chol``.
+        When used for recommender systems, one usually wants to pass 'False' here.
+        For better results, do not use biases alongside this option,
+        and use a higher regularization coupled with more iterations.
+    nonneg_C: bool
+        Whether to constrain the 'C' matrix to be non-negative.
+        In order for this to work correctly, the 'U' input data must also be
+        non-negative.
+    nonneg_D: bool
+        Whether to constrain the 'D' matrix to be non-negative.
+        In order for this to work correctly, the 'I' input data must also be
+        non-negative.
+    max_cd_steps : int
+        Maximum number of coordinate descent updates to perform per iteration
+        when determining factors with non-negativity constraints.
+        Pass zero for no limit.
+        Ignored when not having non-negativity constraints.
+        This number should usually be larger than ``k``.
     precompute_for_predictions : bool
         Whether to precompute some of the matrices that are used when making
         predictions from the model. If 'False', it will take longer to generate
@@ -2365,6 +2414,11 @@ class CMF(_CMF):
     .. [5] Rendle, Steffen, Li Zhang, and Yehuda Koren.
            "On the difficulty of evaluating baselines: A study on recommender systems."
            arXiv preprint arXiv:1905.01395 (2019).
+    .. [6] Franc, Vojtěch, Václav Hlaváč, and Mirko Navara.
+           "Sequential coordinate-wise algorithm for the
+           non-negative least squares problem."
+           International Conference on Computer Analysis of Images and Patterns.
+           Springer, Berlin, Heidelberg, 2005.
     """
     def __init__(self, k=40, lambda_=1e+1, method="als", use_cg=True,
                  user_bias=True, item_bias=True, add_implicit_features=False,
@@ -2373,6 +2427,7 @@ class CMF(_CMF):
                  maxiter=800, niter=10, parallelize="separate", corr_pairs=4,
                  max_cg_steps=3, finalize_chol=True,
                  NA_as_zero=False, NA_as_zero_user=False, NA_as_zero_item=False,
+                 nonneg=False, nonneg_C=False, nonneg_D=False, max_cd_steps=100,
                  precompute_for_predictions=True, include_all_X=True,
                  use_float=False,
                  random_state=1, verbose=True, print_every=10,
@@ -2381,7 +2436,9 @@ class CMF(_CMF):
         self._take_params(implicit=False, alpha=0., downweight=False,
                           k=k, lambda_=lambda_, method=method,
                           add_implicit_features=add_implicit_features,
+                          nonneg=nonneg, nonneg_C=nonneg_C, nonneg_D=nonneg_D,
                           use_cg=use_cg, max_cg_steps=max_cg_steps,
+                          max_cd_steps=max_cd_steps,
                           finalize_chol=finalize_chol,
                           user_bias=user_bias, item_bias=item_bias,
                           k_user=k_user, k_item=k_item, k_main=k_main,
@@ -2587,6 +2644,7 @@ class CMF(_CMF):
                     self.verbose, self.nthreads,
                     self.use_cg, self.max_cg_steps,
                     self.finalize_chol,
+                    self.nonneg, self.nonneg_C, self.nonneg_D, self.max_cd_steps,
                     self.random_state, self.niter,
                     self.handle_interrupt,
                     precompute_for_predictions=self.precompute_for_predictions,
@@ -3012,6 +3070,7 @@ class CMF(_CMF):
             self.w_user, self.w_main, self.w_implicit,
             self.user_bias,
             self.NA_as_zero_user, self.NA_as_zero,
+            self.nonneg,
             self.add_implicit_features,
             self.include_all_X
         )
@@ -3231,6 +3290,7 @@ class CMF(_CMF):
                 self.w_user, self.w_main, self.w_implicit,
                 self.user_bias,
                 self.NA_as_zero_user, self.NA_as_zero,
+                self.nonneg,
                 self.add_implicit_features,
                 self.include_all_X,
                 self.nthreads
@@ -3423,6 +3483,7 @@ class CMF(_CMF):
             self.w_user, self.w_main, self.w_implicit,
             self.user_bias,
             self.NA_as_zero_user,
+            self.nonneg,
             self.add_implicit_features,
             self.include_all_X,
             self.nthreads
@@ -3463,6 +3524,7 @@ class CMF(_CMF):
                 self.k, self.k_user, self.k_item, self.k_main,
                 lambda_, lambda_bias,
                 self.w_main, self.w_user, self.w_implicit,
+                self.nonneg,
                 self.include_all_X
             )
         return self
@@ -3602,6 +3664,31 @@ class CMF_implicit(_CMF):
     NA_as_zero_item : bool
         Whether to take missing entries in the 'I' matrix as zeros (only
         when the 'I' matrix is passed as sparse COO matrix) instead of ignoring them.
+    nonneg : bool
+        Whether to constrain the 'A' and 'B' matrices to be non-negative.
+        In order for this to work correctly, the 'X' input data must also be
+        non-negative. This constraint will also be applied to the 'Ai'
+        and 'Bi' matrices if passing ``add_implicit_features=True``.
+        This option is not available when using the L-BFGS method.
+        Note that, when determining non-negative factors, it will always
+        use a coordinate descent method, regardless of the value passed
+        for ``use_cg`` and ``finalize_chol``.
+        When used for recommender systems, one usually wants to pass 'False' here.
+        For better results, use a higher regularization and more iterations.
+    nonneg_C: bool
+        Whether to constrain the 'C' matrix to be non-negative.
+        In order for this to work correctly, the 'U' input data must also be
+        non-negative.
+    nonneg_D: bool
+        Whether to constrain the 'D' matrix to be non-negative.
+        In order for this to work correctly, the 'I' input data must also be
+        non-negative.
+    max_cd_steps : int
+        Maximum number of coordinate descent updates to perform per iteration
+        when determining factors with non-negativity constraints.
+        Pass zero for no limit.
+        Ignored when not having non-negativity constraints.
+        This number should usually be larger than ``k``.
     apply_log_transf : bool
         Whether to apply a logarithm transformation on the values of 'X'
         (i.e. 'X := log(X)')
@@ -3705,11 +3792,17 @@ class CMF_implicit(_CMF):
     .. [4] Takacs, Gabor, Istvan Pilaszy, and Domonkos Tikk.
            "Applications of the conjugate gradient method for implicit feedback collaborative filtering."
            Proceedings of the fifth ACM conference on Recommender systems. 2011.
+    .. [5] Franc, Vojtěch, Václav Hlaváč, and Mirko Navara.
+           "Sequential coordinate-wise algorithm for the
+           non-negative least squares problem."
+           International Conference on Computer Analysis of Images and Patterns.
+           Springer, Berlin, Heidelberg, 2005.
     """
     def __init__(self, k=50, lambda_=1e0, alpha=1., use_cg=True,
                  k_user=0, k_item=0, k_main=0,
                  w_main=1., w_user=10., w_item=10.,
                  niter=10, NA_as_zero_user=False, NA_as_zero_item=False,
+                 nonneg=False, nonneg_C=False, nonneg_D=False, max_cd_steps=100,
                  apply_log_transf=False,
                  precompute_for_predictions=True, use_float=False,
                  max_cg_steps=3, finalize_chol=False,
@@ -3721,6 +3814,8 @@ class CMF_implicit(_CMF):
                           use_cg=use_cg, max_cg_steps=max_cg_steps,
                           finalize_chol=finalize_chol,
                           apply_log_transf=apply_log_transf,
+                          nonneg=nonneg, nonneg_C=nonneg_C, nonneg_D=nonneg_D,
+                          max_cd_steps=max_cd_steps,
                           user_bias=False, item_bias=False,
                           k_user=k_user, k_item=k_item, k_main=k_main,
                           w_main=w_main, w_user=w_user, w_item=w_item,
@@ -3852,6 +3947,7 @@ class CMF_implicit(_CMF):
                 self.verbose, self.niter,
                 self.nthreads, self.use_cg,
                 self.max_cg_steps, self.finalize_chol,
+                self.nonneg, self.nonneg_C, self.nonneg_D, self.max_cd_steps,
                 self.random_state, init=self.init,
                 handle_interrupt=self.handle_interrupt,
                 precompute_for_predictions=self.precompute_for_predictions
@@ -3890,7 +3986,8 @@ class CMF_implicit(_CMF):
                 self.k, self.k_main, self.k_user, self.k_item,
                 lambda_,
                 self.w_main, self.w_user,
-                self._w_main_multiplier
+                self._w_main_multiplier,
+                self.nonneg
             )
         return self
 
@@ -4206,7 +4303,8 @@ class CMF_implicit(_CMF):
             self._w_main_multiplier,
             self.w_user, self.w_main,
             self.apply_log_transf,
-            self.NA_as_zero_user
+            self.NA_as_zero_user,
+            self.nonneg
         )
 
         return a_vec
@@ -4442,6 +4540,7 @@ class CMF_implicit(_CMF):
             self.w_user, self.w_main,
             self.apply_log_transf,
             self.NA_as_zero_user,
+            self.nonneg,
             self.nthreads
         )
 
@@ -5299,6 +5398,7 @@ class OMF_explicit(_OMF):
                         self.k_sec+self.k+self.k_main,
                         0, 0, 0,
                         lambda_, lambda_bias, 1., 1., 1.,
+                        False,
                         True
                     )
 
@@ -7061,6 +7161,7 @@ class MostPopular(_CMF):
                 self.implicit,
                 False,
                 self.apply_log_transf,
+                self.nonneg,
                 self.nthreads
             )
 

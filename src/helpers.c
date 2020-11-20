@@ -27,6 +27,11 @@
             "On the difficulty of evaluating baselines:
             A study on recommender systems."
             arXiv preprint arXiv:1905.01395 (2019).
+        (f) Franc, Vojtech, Vaclav Hlavac, and Mirko Navara.
+            "Sequential coordinate-wise algorithm for the
+            non-negative least squares problem."
+            International Conference on Computer Analysis of Images
+            and Patterns. Springer, Berlin, Heidelberg, 2005.
 
     For information about the models offered here and how they are fit to
     the data, see the files 'collective.c' and 'offsets.c'.

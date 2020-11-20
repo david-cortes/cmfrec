@@ -27,6 +27,11 @@
             "On the difficulty of evaluating baselines:
             A study on recommender systems."
             arXiv preprint arXiv:1905.01395 (2019).
+        (f) Franc, Vojtech, Vaclav Hlavac, and Mirko Navara.
+            "Sequential coordinate-wise algorithm for the
+            non-negative least squares problem."
+            International Conference on Computer Analysis of Images
+            and Patterns. Springer, Berlin, Heidelberg, 2005.
 
     For information about the models offered here and how they are fit to
     the data, see the files 'collective.c' and 'offsets.c'.
@@ -627,6 +632,7 @@ void factors_closed_form
     bool BtB_has_diag, bool BtB_is_scaled, real_t scale_BtB, int_t n_BtB,
     real_t *restrict precomputedBtBchol, bool NA_as_zero,
     bool use_cg, int_t max_cg_steps,/* <- 'cg' should not be used for new data*/
+    bool nonneg, int_t max_cd_steps, real_t *restrict a_prev,
     bool force_add_diag
 )
 {
@@ -653,11 +659,13 @@ void factors_closed_form
         return;
     }
 
+    if (nonneg) use_cg = false;
+
     /* If inv(t(B)*B + diag(lam))*B is already given, use it as a shortcut.
        The intended use-case for this is for cold-start recommendations
        for the collective model with no missing values, given that the
        C matrix is already fixed and is the same for all users. */
-    if (precomputedTransBtBinvBt != NULL && weight == NULL &&
+    if (precomputedTransBtBinvBt != NULL && weight == NULL && !nonneg &&
         ((full_dense && Xa_dense != NULL && n_BtB == n) ||
          (Xa_dense == NULL && NA_as_zero)))
     {
@@ -712,7 +720,7 @@ void factors_closed_form
     /* If the input is sparse and it's assumed that the non-present
        entries are zero, with no missing values, it's still possible
        to use the precomputed and pre-factorized matrix. */
-    else if (NA_as_zero && weight == NULL &&
+    else if (NA_as_zero && weight == NULL && !nonneg &&
              Xa_dense == NULL && precomputedBtBchol != NULL)
     {
         set_to_zero(a_vec, k);
@@ -909,10 +917,20 @@ void factors_closed_form
         if (lam_last != lam) bufferBtB[square(k)-1] += (lam_last - lam);
     }
 
-    tposv_(&lo, &k, &one,
-           bufferBtB, &k,
-           a_vec, &k,
-           &ignore);
+    if (!nonneg)
+        tposv_(&lo, &k, &one,
+               bufferBtB, &k,
+               a_vec, &k,
+               &ignore);
+    else
+        solve_nonneg(
+            bufferBtB,
+            a_vec,
+            a_prev,
+            k,
+            max_cd_steps,
+            true
+        );
     /* Note: Function 'posv' is taken from LAPACK for FORTRAN.
        If using LAPACKE for C with with Row-Major parameter,
        some implementations will copy the matrix to transpose it
@@ -1342,6 +1360,7 @@ void factors_implicit_chol
     real_t *restrict Xa, int_t ixB[], size_t nnz,
     real_t lam,
     real_t *restrict precomputedBtB, int_t ld_BtB,
+    bool nonneg, int_t max_cd_steps, real_t *restrict a_prev,
     real_t *restrict buffer_real_t
 )
 {
@@ -1368,10 +1387,96 @@ void factors_implicit_chol
             precomputedBtB, ld_BtB,
             BtB, k);
 
-    tposv_(&lo, &k, &one,
-           BtB, &k,
-           a_vec, &k,
-           &ignore);
+    if (!nonneg)
+        tposv_(&lo, &k, &one,
+               BtB, &k,
+               a_vec, &k,
+               &ignore);
+    else
+        solve_nonneg(
+            BtB,
+            a_vec,
+            a_prev,
+            k,
+            max_cd_steps,
+            true
+        );
+}
+
+void solve_nonneg
+(
+    real_t *restrict BtB,
+    real_t *restrict BtX, /* <- solution will be here */
+    real_t *restrict a_prev,
+    int_t k,
+    size_t max_cd_steps,
+    bool fill_lower
+)
+{
+    real_t diff_iter = 0.;
+    real_t diff_val = 0.;
+    real_t newval = 0;
+    if (fill_lower)
+        fill_lower_triangle(BtB, k, k);
+    
+    if (max_cd_steps == 0) max_cd_steps = INT_MAX;
+    size_t incr = max_cd_steps > 0;
+    for (size_t iter = 0; iter < max_cd_steps; iter += incr)
+    {
+        diff_iter = 0;
+        for (int ix = 0; ix < k; ix++)
+        {
+            newval = a_prev[ix] + BtX[ix] / BtB[ix + ix*k];
+            newval = max2(newval, 0.);
+            diff_val = newval - a_prev[ix];
+            if (fabs_t(diff_val) > 1e-8) {
+                diff_iter += fabs_t(diff_val);
+                cblas_taxpy(k, -diff_val, BtB + ix*k, 1, BtX, 1);
+                a_prev[ix] = newval;
+            }
+        }
+        if (isnan(diff_iter) || !isfinite(diff_iter) || diff_iter < 1e-10)
+            break;
+    }
+    copy_arr(a_prev, BtX, k);
+}
+
+void solve_nonneg_batch
+(
+    real_t *restrict BtB,
+    real_t *restrict BtX, /* <- solution will be here */
+    real_t *restrict A_prev,
+    int_t m, int_t k, size_t lda,
+    size_t max_cd_steps,
+    int nthreads
+)
+{
+    #if defined(_OPENMP) && \
+                ( (_OPENMP < 200801)  /* OpenMP < 3.0 */ \
+                  || defined(_WIN32) || defined(_WIN64) \
+                )
+    long long ix;
+    #endif
+
+    fill_lower_triangle(BtB, k, k);
+
+    #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
+            shared(BtB, BtX, A_prev, m, lda, k, max_cd_steps)
+    for (size_t_for ix = 0; ix < (size_t)m; ix++)
+    {
+        for (size_t ii = 0; ii < (size_t)k; ii++) {
+            if (isnan(BtX[ii + ix*lda]))
+                continue;
+        }
+        solve_nonneg(
+            BtB,
+            BtX + ix*lda,
+            A_prev + ix*lda,
+            k,
+            max_cd_steps,
+            false
+        );
+    }
 }
 
 
@@ -1696,6 +1801,7 @@ void optimizeA
     bool do_B, bool is_first_iter,
     int_t nthreads,
     bool use_cg, int_t max_cg_steps,
+    bool nonneg, int_t max_cd_steps, real_t *restrict A_prev,
     bool keep_precomputedBtB,
     real_t *restrict precomputedBtB, bool *filled_BtB,
     real_t *restrict buffer_real_t
@@ -1790,7 +1896,7 @@ void optimizeA
 
         
         #ifdef FORCE_NO_NAN_PROPAGATION
-        if (!full_dense)
+        if (!full_dense && !nonneg)
             #pragma omp parallel for schedule(static) \
                     num_threads(min2(4, nthreads)) \
                     shared(A, m, lda)
@@ -1802,10 +1908,20 @@ void optimizeA
         /* A = t( inv(t(B)*B + diag(lam)) * t(B)*t(X) )
            Note: don't try to flip the equation as the 'posv'
            function assumes only the LHS is symmetric. */
-        tposv_(&uplo, &k, &m,
-               bufferBtB, &k,
-               A, &lda,
-               &ignore);
+        if (!nonneg)
+            tposv_(&uplo, &k, &m,
+                   bufferBtB, &k,
+                   A, &lda,
+                   &ignore);
+        else
+            solve_nonneg_batch(
+                bufferBtB,
+                A,
+                A_prev,
+                m, k, lda,
+                max_cd_steps,
+                nthreads
+            );
         /* If there are some few rows with missing values, now do a
            post-hoc pass over them only */
         if (!full_dense)
@@ -1817,7 +1933,7 @@ void optimizeA
             #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
                     shared(A, lda, B, ldb, ldX, m, n, k, lam, lam_last, weight,\
                            cnt_NA, Xfull, buffer_remainder, bufferBtBcopy, \
-                           nthreads, use_cg) \
+                           nthreads, use_cg, nonneg, max_cd_steps, A_prev) \
                     firstprivate(bufferX)
             for (size_t_for ix = 0; ix < (size_t)m; ix++)
                 if (cnt_NA[ix] > 0)
@@ -1854,6 +1970,7 @@ void optimizeA
                         true, false, 1., n,
                         (real_t*)NULL, false,
                         use_cg, k, /* <- A was reset to zero, need more steps */
+                        nonneg, max_cd_steps, A_prev + ix*(size_t)lda,
                         false
                     );
                 }
@@ -1909,7 +2026,7 @@ void optimizeA
         #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
                 shared(Xfull, weight, do_B, m, n, k, A, lda, B, ldb, ldX, \
                        lam, lam_last, bufferBtB, cnt_NA, buffer_remainder, \
-                       use_cg, max_cg_steps) \
+                       use_cg, max_cg_steps, nonneg, max_cd_steps, A_prev) \
                 firstprivate(bufferX, bufferW)
         for (size_t_for ix = 0; ix < (size_t)m; ix++)
         {
@@ -1947,6 +2064,7 @@ void optimizeA
                 true, false, 1., n,
                 (real_t*)NULL, false,
                 use_cg, max_cg_steps,
+                nonneg, max_cd_steps, A_prev + ix*(size_t)lda,
                 false
             );
         }
@@ -1985,10 +2103,20 @@ void optimizeA
             A, (size_t)lda,
             nthreads
         );
-        tposv_(&uplo, &k, &m,
-               bufferBtB, &k,
-               A, &lda,
-               &ignore);
+        if (!nonneg)
+            tposv_(&uplo, &k, &m,
+                   bufferBtB, &k,
+                   A, &lda,
+                   &ignore);
+        else
+            solve_nonneg_batch(
+                    bufferBtB,
+                    A,
+                    A_prev,
+                    m, k, lda,
+                    max_cd_steps,
+                    nthreads
+                );
     }
 
     /* Case 4: X is sparse, with non-present as NA, or with weights.
@@ -2037,7 +2165,8 @@ void optimizeA
         #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
                 shared(A, lda, B, ldb, m, n, k, lam, lam_last, weight, cnt_NA, \
                        Xcsr_p, Xcsr_i, Xcsr, buffer_real_t, NA_as_zero, \
-                       bufferBtB, size_buffer, use_cg)
+                       bufferBtB, size_buffer, use_cg, \
+                       nonneg, max_cd_steps, A_prev)
         for (size_t_for ix = 0; ix < (size_t)m; ix++)
             if (Xcsr_p[ix+(size_t)1] > Xcsr_p[ix])
                 factors_closed_form(
@@ -2054,6 +2183,7 @@ void optimizeA
                     add_diag_to_BtB, false, 1., n,
                     (real_t*)NULL, NA_as_zero,
                     use_cg, max_cg_steps,
+                    nonneg, max_cd_steps, A_prev + ix*(size_t)lda,
                     false
                 );
     }
@@ -2068,10 +2198,12 @@ void optimizeA_implicit
     real_t lam,
     int_t nthreads,
     bool use_cg, int_t max_cg_steps, bool force_set_to_zero,
+    bool nonneg, int_t max_cd_steps, real_t *restrict A_prev,
     real_t *restrict precomputedBtB, /* <- will be calculated if not passed */
     real_t *restrict buffer_real_t
 )
 {
+    if (nonneg) use_cg = false;
     if (precomputedBtB == NULL)
     {
         precomputedBtB = buffer_real_t;
@@ -2088,6 +2220,7 @@ void optimizeA_implicit
     if (!use_cg || force_set_to_zero)
         set_to_zero_(A, (size_t)m*(size_t)k - (lda-(size_t)k), nthreads);
     size_t size_buffer = use_cg? (3 * k) : (square(k));
+
 
     int_t ix = 0;
 
@@ -2111,7 +2244,7 @@ void optimizeA_implicit
         #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
                 shared(A, B, lda, ldb, m, n, k, lam, \
                        Xcsr, Xcsr_i, Xcsr_p, precomputedBtB, buffer_real_t, \
-                       size_buffer)
+                       size_buffer, nonneg, max_cd_steps, A_prev)
         for (ix = 0; ix < m; ix++)
             factors_implicit_chol(
                 A + (size_t)ix*lda, k,
@@ -2120,6 +2253,7 @@ void optimizeA_implicit
                 Xcsr_p[ix+(size_t)1] - Xcsr_p[ix],
                 lam,
                 precomputedBtB, k,
+                nonneg, max_cd_steps, A_prev + (size_t)ix*lda,
                 buffer_real_t + ((size_t)omp_get_thread_num() * size_buffer)
             );
 }
@@ -2135,6 +2269,7 @@ int_t initialize_biases
     real_t *restrict Xfull, real_t *restrict Xtrans,
     size_t Xcsr_p[], int_t Xcsr_i[], real_t *restrict Xcsr,
     size_t Xcsc_p[], int_t Xcsc_i[], real_t *restrict Xcsc,
+    bool nonneg,
     int_t nthreads
 )
 {
@@ -2146,76 +2281,84 @@ int_t initialize_biases
     long long ix, row, col;
     #endif
 
+    if (nonneg && glob_mean != NULL)
+        *glob_mean = 0.;
+
     size_t *buffer_cnt = (size_t*)calloc(max2(m,n), sizeof(size_t));
     if (buffer_cnt == NULL && (Xfull != NULL || Xcsr == NULL)) return 1;
 
     /* First calculate the global mean */
     double xsum = 0.;
     size_t cnt = 0;
-    if (Xfull != NULL)
+    if (!nonneg)
     {
-        #ifdef _OPENMP
-        if (nthreads >= 8)
+        if (Xfull != NULL)
         {
-            #pragma omp parallel for schedule(static) num_threads(nthreads) \
-                    reduction(+:xsum,cnt) shared(Xfull, m_by_n)
-            for (size_t_for ix = 0; ix < m_by_n; ix++) {
-                xsum += (!isnan(Xfull[ix]))? (Xfull[ix]) : (0);
-                cnt += !isnan(Xfull[ix]);
-            }
-            *glob_mean = (real_t)(xsum / (double)cnt);
-        }
-
-        else
-        #endif
-        {
-            for (size_t ix = 0; ix < m_by_n; ix++) {
-                if (!isnan(Xfull[ix])) {
-                    xsum += (Xfull[ix] - xsum) / (double)(++cnt);
+            #ifdef _OPENMP
+            if (nthreads >= 8)
+            {
+                #pragma omp parallel for schedule(static) num_threads(nthreads)\
+                        reduction(+:xsum,cnt) shared(Xfull, m_by_n)
+                for (size_t_for ix = 0; ix < m_by_n; ix++) {
+                    xsum += (!isnan(Xfull[ix]))? (Xfull[ix]) : (0);
+                    cnt += !isnan(Xfull[ix]);
                 }
+                *glob_mean = (real_t)(xsum / (double)cnt);
             }
-            *glob_mean = xsum;
-        }
-    }
 
-    else
-    {
-        #ifdef _OPENMP
-        if (nthreads >= 4)
-        {
-            #pragma omp parallel for schedule(static) num_threads(nthreads) \
-                    reduction(+:xsum) shared(X, nnz)
-            for (size_t_for ix = 0; ix < nnz; ix++)
-                xsum += X[ix];
-            *glob_mean = (real_t)(xsum / (double)nnz);
+            else
+            #endif
+            {
+                for (size_t ix = 0; ix < m_by_n; ix++) {
+                    if (!isnan(Xfull[ix])) {
+                        xsum += (Xfull[ix] - xsum) / (double)(++cnt);
+                    }
+                }
+                *glob_mean = xsum;
+            }
         }
 
         else
-        #endif
         {
-            for (size_t ix = 0; ix < nnz; ix++) {
-                xsum += (X[ix] - xsum) / (double)(++cnt);
+            #ifdef _OPENMP
+            if (nthreads >= 4)
+            {
+                #pragma omp parallel for schedule(static) num_threads(nthreads)\
+                        reduction(+:xsum) shared(X, nnz)
+                for (size_t_for ix = 0; ix < nnz; ix++)
+                    xsum += X[ix];
+                *glob_mean = (real_t)(xsum / (double)nnz);
             }
-            *glob_mean = xsum;
-        }
-    }
 
-    /* Now center X in-place */
-    if (Xfull != NULL) {
-        for (size_t_for ix = 0; ix < m_by_n; ix++)
-            Xfull[ix] = isnan(Xfull[ix])? (NAN_) : (Xfull[ix] - *glob_mean);
-        if (Xtrans != NULL) {
+            else
+            #endif
+            {
+                for (size_t ix = 0; ix < nnz; ix++) {
+                    xsum += (X[ix] - xsum) / (double)(++cnt);
+                }
+                *glob_mean = xsum;
+            }
+        }
+
+        /* Now center X in-place */
+        if (Xfull != NULL) {
             for (size_t_for ix = 0; ix < m_by_n; ix++)
-                Xtrans[ix] = isnan(Xtrans[ix])? (NAN_):(Xtrans[ix]-*glob_mean);
+                Xfull[ix] = isnan(Xfull[ix])?
+                                (NAN_) : (Xfull[ix] - *glob_mean);
+            if (Xtrans != NULL) {
+                for (size_t_for ix = 0; ix < m_by_n; ix++)
+                    Xtrans[ix] = isnan(Xtrans[ix])?
+                                    (NAN_):(Xtrans[ix]-*glob_mean);
+            }
+        } else if (Xcsr != NULL) {
+            for (size_t_for ix = 0; ix < nnz; ix++) {
+                Xcsr[ix] -= *glob_mean;
+                Xcsc[ix] -= *glob_mean;
+            }
+        } else {
+            for (size_t_for ix = 0; ix < nnz; ix++)
+                X[ix] -= *glob_mean;
         }
-    } else if (Xcsr != NULL) {
-        for (size_t_for ix = 0; ix < nnz; ix++) {
-            Xcsr[ix] -= *glob_mean;
-            Xcsc[ix] -= *glob_mean;
-        }
-    } else {
-        for (size_t_for ix = 0; ix < nnz; ix++)
-            X[ix] -= *glob_mean;
     }
 
     /* Note: the original papers suggested starting these values by
@@ -2278,6 +2421,12 @@ int_t initialize_biases
 
         for (int_t ix = 0; ix < n; ix++)
             biasB[ix] = (!isnan(biasB[ix]))? biasB[ix] : 0.;
+
+        if (nonneg)
+        {
+            for (int_t ix = 0; ix < n; ix++)
+                biasB[ix] = (biasB[ix] >= 0.)? biasB[ix] : 0.;
+        }
     }
 
     /* Finally, user biases */
@@ -2327,6 +2476,12 @@ int_t initialize_biases
 
         for (int_t ix = 0; ix < m; ix++)
             biasA[ix] = (!isnan(biasA[ix]))? biasA[ix] : 0.;
+
+        if (nonneg)
+        {
+            for (int_t ix = 0; ix < m; ix++)
+                biasA[ix] = (biasA[ix] >= 0.)? biasA[ix] : 0.;
+        }
     }
 
     free(buffer_cnt);
@@ -2767,6 +2922,7 @@ int_t fit_most_popular
     real_t *restrict Xfull,
     real_t *restrict weight,
     bool implicit, bool adjust_weight, bool apply_log_transf,
+    bool nonneg,
     real_t *restrict w_main_multiplier,
     int_t nthreads
 )
@@ -2776,6 +2932,7 @@ int_t fit_most_popular
     int_t *restrict cnt_by_row = NULL;
     real_t *restrict sum_by_col = NULL;
     real_t *restrict sum_by_row = NULL;
+    int_t maxiter = 5;
 
     if (implicit)
     {
@@ -2864,6 +3021,7 @@ int_t fit_most_popular
         Xfull, (real_t*)NULL,
         (size_t*)NULL, (int_t*)NULL, (real_t*)NULL,
         (size_t*)NULL, (int_t*)NULL, (real_t*)NULL,
+        nonneg,
         nthreads
     );
     if (retval == 1) goto throw_oom;
@@ -2911,7 +3069,8 @@ int_t fit_most_popular
     set_to_zero(biasA, m);
     set_to_zero(biasB, n);
 
-    for (int_t iter = 0; iter <= 5; iter++)
+    maxiter = nonneg? 15 : 5;
+    for (int_t iter = 0; iter <= maxiter; iter++)
     {
         if (Xfull != NULL)
         {
@@ -2943,6 +3102,10 @@ int_t fit_most_popular
             for (int_t ix = 0; ix < n; ix++)
                 biasB[ix] = (!isnan(biasB[ix]))? biasB[ix] : 0.;
 
+            if (nonneg)
+                for (int_t ix = 0; ix < n; ix++)
+                    biasB[ix] = (biasB[ix] >= 0.)? biasB[ix] : 0.;
+
             set_to_zero(biasA, m);
 
             if (weight == NULL)
@@ -2969,6 +3132,10 @@ int_t fit_most_popular
 
             for (int_t ix = 0; ix < m; ix++)
                 biasA[ix] = (!isnan(biasA[ix]))? biasA[ix] : 0.;
+
+            if (nonneg)
+                for (int_t ix = 0; ix < m; ix++)
+                    biasA[ix] = (biasA[ix] >= 0.)? biasA[ix] : 0.;
         }
 
         else
@@ -2995,6 +3162,10 @@ int_t fit_most_popular
             for (int_t ix = 0; ix < n; ix++)
                 biasB[ix] = (!isnan(biasB[ix]))? biasB[ix] : 0.;
 
+            if (nonneg)
+                for (int_t ix = 0; ix < n; ix++)
+                    biasB[ix] = (biasB[ix] >= 0.)? biasB[ix] : 0.;
+
             set_to_zero(biasA, m);
 
             if (weight == NULL)
@@ -3015,6 +3186,10 @@ int_t fit_most_popular
 
             for (int_t ix = 0; ix < m; ix++)
                 biasA[ix] = (!isnan(biasA[ix]))? biasA[ix] : 0.;
+
+            if (nonneg)
+                for (int_t ix = 0; ix < m; ix++)
+                    biasA[ix] = (biasA[ix] >= 0.)? biasA[ix] : 0.;
         }
     }
 

@@ -104,6 +104,7 @@ imputeX <- function(model, X, weight = NULL, U = NULL, U_bin = NULL) {
                       inputs$processed_X$m, as.logical(NROW(model$matrices$user_bias)),
                       inputs$processed_U$Uarr, inputs$processed_U$m, inputs$processed_U$p,
                       model$info$NA_as_zero_user,
+                      model$info$nonneg,
                       inputs$processed_U$Urow, inputs$processed_U$Ucol, inputs$processed_U$Uval,
                       inputs$processed_U$Ucsr_p, inputs$processed_U$Ucsr_i, inputs$processed_U$Ucsr,
                       inputs$processed_U_bin$Uarr, inputs$processed_U_bin$m, inputs$processed_U_bin$p,

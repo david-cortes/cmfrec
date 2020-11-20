@@ -83,7 +83,7 @@ int main()
     printf("\tX ~ A * t(B) + mean\n\n");
 
     /* Now factorize it */
-    int k = 3;
+    int k = 2;
     double *A = (double*)malloc(m*k*sizeof(double));
     double *B = (double*)malloc(n*k*sizeof(double));
     double glob_mean;
@@ -124,6 +124,7 @@ int main()
         1., 0., 0., 0.,
         10, 1, false, false,
         use_cg, max_cg_steps, finalize_chol,
+        false, 0, false, false,
         false,
         false,
         NULL,

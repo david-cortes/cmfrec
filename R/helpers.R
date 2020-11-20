@@ -385,6 +385,7 @@ get.empty.info <- function() {
         NA_as_zero = FALSE,
         NA_as_zero_user = FALSE,
         NA_as_zero_item = FALSE,
+        nonneg = FALSE,
         add_implicit_features = FALSE,
         include_all_X = TRUE,
         nthreads = 1L

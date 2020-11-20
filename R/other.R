@@ -92,6 +92,7 @@ swap.users.and.items <- function(model, precompute = TRUE) {
             NA_as_zero = model$info$NA_as_zero,
             NA_as_zero_user = model$info$NA_as_zero_item,
             NA_as_zero_item = model$info$NA_as_zero_user,
+            nonneg = model$info$nonneg,
             add_implicit_features = model$info$add_implicit_features,
             include_all_X = model$info$include_all_X,
             nthreads = model$info$nthreads
@@ -140,6 +141,7 @@ swap.users.and.items <- function(model, precompute = TRUE) {
                               new_model$info$k_sec + new_model$info$k + new_model$info$k_main,
                               0L, 0L, 0L,
                               as.logical(NROW(new_model$matries$user_bias)),
+                              FALSE,
                               new_model$info$lambda,
                               1., 1., 1.,
                               new_model$precomputed$Bm_plus_bias,
@@ -157,6 +159,7 @@ swap.users.and.items <- function(model, precompute = TRUE) {
                               numeric(), 0L,
                               new_model$info$k, 0L, 0L, 0L,
                               new_model$info$lambda, 1., 1., 1.,
+                              FALSE,
                               TRUE,
                               new_model$precomputed$BtB,
                               numeric(),

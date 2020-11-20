@@ -27,6 +27,11 @@
             "On the difficulty of evaluating baselines:
             A study on recommender systems."
             arXiv preprint arXiv:1905.01395 (2019).
+        (f) Franc, Vojtech, Vaclav Hlavac, and Mirko Navara.
+            "Sequential coordinate-wise algorithm for the
+            non-negative least squares problem."
+            International Conference on Computer Analysis of Images
+            and Patterns. Springer, Berlin, Heidelberg, 2005.
 
     For information about the models offered here and how they are fit to
     the data, see the files 'collective.c' and 'offsets.c'.
@@ -365,6 +370,18 @@ extern "C" {
     @param apply_log_transf  Whether to apply a logarithm transformation to the
                              values in "X" (i.e. X := log(X)).
                              Recommended value: false
+    @param nonneg  Whether to make the matrices A and B non-negative. The
+                   matrix 'X' must also be non-negative in order for this to
+                   work. Under this option, will use a coordinate descent
+                   solver instead of Cholesky or CG, whose maximum number of
+                   iterations is controlled through 'max_cd_steps'.
+                   Recommended value: false
+    @param nonneg_C  Whether to make the matrix C non-negative. The matrix 'U'
+                     must also be non-negative in order for this to work.
+                     Recommended value: false
+    @param nonneg_D  Whether to make the matrix D non-negative. The matrix 'I'
+                     must also be non-negative in order for this to work.
+                     Recommended value: false
 
 
     --- "X" data ---
@@ -479,15 +496,22 @@ extern "C" {
                    require more iterations to converge. Note that it will be
                    ignored in cases in which the Cholesky approach is faster,
                    such as when ussing missing-as-zero with no weights.
+                   In general, the Cholesky solver tends to lead to better
+                   results for the explicit-feedback models.
                    Recommended value: true
     @param max_cg_steps  Maximum number of CG updates to perform per iteration.
                          Recommended values: something much smaller than k, >=2
+    @param max_cd_steps  Maximum number of coordinate descent updates to perform
+                         per iteration when applying non-negativity constraints.
+                         Pass zero for no maximum.
+                         Recommended values: at least 2x higher than k
     @param finalize_chol  Whether to perform the last iteration with the
                           Cholesky solver. Note that, under the CG method,
                           the factors obtained by calling the prediction
                           functionality might differ slightly from those
                           obtained from the 'fit' functionality. This option
-                          solves such problem.
+                          solves such problem. Ignored for matrices which have
+                          non-negativity constraints.
                           Recommended value: true
 
     --- For the L-BFGS procedures ---
@@ -560,7 +584,9 @@ extern "C" {
                                       This is only used for warm-start
                                       predictions with no "U" data and "X" data
                                       with no missing values or with
-                                      "NA_as_zero_X" and no implicit features.
+                                      "NA_as_zero_X". This matrix is ignored
+                                      when using implicit features or
+                                      non-negativity constraints.
                                       This matrix is optional even if passing
                                       'precompute_for_predictions' = true.
                                       If passing 'include_all_X', will need to
@@ -574,6 +600,8 @@ extern "C" {
                                   Where Be is the extended block matrix from
                                   reference (a), and will contain information
                                   from 'Bi' if adding implicit features.
+                                  This matrix is ignored when using
+                                  non-negativity constraints.
                                   This matrix is optional even if 
                                   passing 'precompute_for_predictions' = true.
                                   Dimension: [k_user+k+k_main+user_bias,
@@ -591,7 +619,9 @@ extern "C" {
                                       This is only used for cold-start
                                       predictions with no "X" data plus "U" data
                                       with no missing values or with
-                                      "NA_as_zero_U", and no implicit features.
+                                      "NA_as_zero_U". This matrix is ignored
+                                      when using implicit features or
+                                      non-negativity constraints.
                                       This matrix is optional even if passing
                                       'precompute_for_predictions' = true.
                                       Dimension: [k_user+k, p]
@@ -632,7 +662,7 @@ struct CollectiveExplicitModel {
     real_t *Db; int_t n_ibin; int_t qbin;
     real_t *Ai; real_t *Bi;
     int_t k; int_t k_user; int_t k_item; int_t k_main;
-    bool add_implicit_features; bool user_bias;
+    bool add_implicit_features; bool user_bias; bool nonneg;
 
     /* Means used to center data */
     real_t glob_mean;
@@ -660,7 +690,7 @@ struct CollectiveImplicitModel {
     real_t *U_colmeans; real_t *I_colmeans;
 
     /* Other parameters */
-    real_t w_main_multiplier; bool apply_log_transf;
+    real_t w_main_multiplier; bool apply_log_transf; bool nonneg;
 
     /* Optional (for predictions) */
     real_t *B_plus_bias;
@@ -731,6 +761,7 @@ int_t fit_collective_explicit_als
     real_t w_main, real_t w_user, real_t w_item, real_t w_implicit,
     int_t niter, int_t nthreads, bool verbose, bool handle_interrupt,
     bool use_cg, int_t max_cg_steps, bool finalize_chol,
+    bool nonneg, int_t max_cd_steps, bool nonneg_C, bool nonneg_D,
     bool precompute_for_predictions,
     bool include_all_X,
     real_t *B_plus_bias,
@@ -761,6 +792,7 @@ int_t fit_collective_implicit_als
     real_t alpha, bool adjust_weight, bool apply_log_transf,
     int_t niter, int_t nthreads, bool verbose, bool handle_interrupt,
     bool use_cg, int_t max_cg_steps, bool finalize_chol,
+    bool nonneg, int_t max_cd_steps, bool nonneg_C, bool nonneg_D,
     bool precompute_for_predictions,
     real_t *precomputedBtB,
     real_t *precomputedBeTBe,
@@ -777,6 +809,7 @@ int_t precompute_collective_explicit
     real_t *Bi, bool add_implicit_features,
     int_t k, int_t k_user, int_t k_item, int_t k_main,
     bool user_bias,
+    bool nonneg,
     real_t lam, real_t *lam_unique,
     real_t w_main, real_t w_user, real_t w_implicit,
     real_t *B_plus_bias,
@@ -793,6 +826,7 @@ int_t precompute_collective_implicit
     real_t *C, int_t p,
     int_t k, int_t k_user, int_t k_item, int_t k_main,
     real_t lam, real_t w_main, real_t w_user, real_t w_main_multiplier,
+    bool nonneg,
     bool extra_precision,
     real_t *BtB,
     real_t *BeTBe,
@@ -908,6 +942,7 @@ int_t factors_collective_explicit_single
     real_t *u_vec_sp, int_t u_vec_X_col[], size_t nnz_u_vec,
     real_t *u_bin_vec, int_t pbin,
     bool NA_as_zero_U, bool NA_as_zero_X,
+    bool nonneg,
     real_t *C, real_t *Cb,
     real_t glob_mean, real_t *biasB,
     real_t *U_colmeans,
@@ -934,6 +969,7 @@ int_t factors_collective_implicit_single
     real_t *u_vec, int_t p,
     real_t *u_vec_sp, int_t u_vec_X_col[], size_t nnz_u_vec,
     bool NA_as_zero_U,
+    bool nonneg,
     real_t *U_colmeans,
     real_t *B, int_t n, real_t *C,
     real_t *Xa, int_t X_col[], size_t nnz,
@@ -950,6 +986,7 @@ int_t factors_collective_explicit_multiple
     real_t *A, real_t *biasA, int_t m,
     real_t *U, int_t m_u, int_t p,
     bool NA_as_zero_U, bool NA_as_zero_X,
+    bool nonneg,
     int_t U_row[], int_t U_col[], real_t *U_sp, size_t nnz_U,
     size_t U_csr_p[], int_t U_csr_i[], real_t *U_csr,
     real_t *Ub, int_t m_ubin, int_t pbin,
@@ -980,6 +1017,7 @@ int_t factors_collective_implicit_multiple
     real_t *A, int_t m,
     real_t *U, int_t m_u, int_t p,
     bool NA_as_zero_U,
+    bool nonneg,
     int_t U_row[], int_t U_col[], real_t *U_sp, size_t nnz_U,
     size_t U_csr_p[], int_t U_csr_i[], real_t *U_csr,
     real_t *X, int_t X_row[], int_t X_col[], size_t nnz,
@@ -1091,6 +1129,7 @@ int_t impute_X_collective_explicit
     int_t m, bool user_bias,
     real_t *U, int_t m_u, int_t p,
     bool NA_as_zero_U,
+    bool nonneg,
     int_t U_row[], int_t U_col[], real_t *U_sp, size_t nnz_U,
     size_t U_csr_p[], int_t U_csr_i[], real_t *U_csr,
     real_t *Ub, int_t m_ubin, int_t pbin,
@@ -1146,6 +1185,7 @@ int_t topN_new_collective_explicit
     real_t *u_vec_sp, int_t u_vec_X_col[], size_t nnz_u_vec,
     real_t *u_bin_vec, int_t pbin,
     bool NA_as_zero_U, bool NA_as_zero_X,
+    bool nonneg,
     real_t *C, real_t *Cb,
     real_t glob_mean, real_t *biasB,
     real_t *U_colmeans,
@@ -1178,6 +1218,7 @@ int_t topN_new_collective_implicit
     real_t *u_vec, int_t p,
     real_t *u_vec_sp, int_t u_vec_X_col[], size_t nnz_u_vec,
     bool NA_as_zero_U,
+    bool nonneg,
     real_t *U_colmeans,
     real_t *B, real_t *C,
     real_t *Xa, int_t X_col[], size_t nnz,
@@ -1224,6 +1265,7 @@ int_t predict_X_new_collective_explicit
     bool user_bias,
     real_t *U, int_t m_u, int_t p,
     bool NA_as_zero_U, bool NA_as_zero_X,
+    bool nonneg,
     int_t U_row[], int_t U_col[], real_t *U_sp, size_t nnz_U,
     size_t U_csr_p[], int_t U_csr_i[], real_t *U_csr,
     real_t *Ub, int_t m_ubin, int_t pbin,
@@ -1257,6 +1299,7 @@ int_t predict_X_new_collective_implicit
     /* inputs for factors */
     real_t *U, int_t m_u, int_t p,
     bool NA_as_zero_U,
+    bool nonneg,
     int_t U_row[], int_t U_col[], real_t *U_sp, size_t nnz_U,
     size_t U_csr_p[], int_t U_csr_i[], real_t *U_csr,
     real_t *X, int_t X_row[], int_t X_col[], size_t nnz,
@@ -1307,6 +1350,7 @@ int_t fit_most_popular
     real_t *Xfull,
     real_t *weight,
     bool implicit, bool adjust_weight, bool apply_log_transf,
+    bool nonneg,
     real_t *w_main_multiplier,
     int_t nthreads
 );

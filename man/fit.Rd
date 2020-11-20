@@ -40,6 +40,10 @@ CMF(
   NA_as_zero = FALSE,
   NA_as_zero_user = FALSE,
   NA_as_zero_item = FALSE,
+  nonneg = FALSE,
+  nonneg_C = FALSE,
+  nonneg_D = FALSE,
+  max_cd_steps = 100L,
   precompute_for_predictions = TRUE,
   include_all_X = TRUE,
   verbose = TRUE,
@@ -67,6 +71,10 @@ CMF_implicit(
   finalize_chol = FALSE,
   NA_as_zero_user = FALSE,
   NA_as_zero_item = FALSE,
+  nonneg = FALSE,
+  nonneg_C = FALSE,
+  nonneg_D = FALSE,
+  max_cd_steps = 100L,
   apply_log_transf = FALSE,
   precompute_for_predictions = TRUE,
   verbose = TRUE,
@@ -79,6 +87,7 @@ MostPopular(
   weight = NULL,
   implicit = FALSE,
   apply_log_transf = FALSE,
+  nonneg = FALSE,
   user_bias = ifelse(implicit, FALSE, TRUE),
   lambda = 10,
   alpha = 1
@@ -311,6 +320,10 @@ Note that not all models allow choosing the optimizer: \itemize{
 \item `ContentBased` can only be fitted through the L-BFGS method.
 \item `MostPopular` can only use an ALS-like procedure, but which will ignore
 parameters such as `niter`.
+\item Models with non-negativity constraints can only be fitted through the ALS method,
+and the matrices to which the constraints apply can only be determined through a
+coordinate descent procedure (which will ignore what is passed to
+`use_cg` and `finalize_chol`).
 }}
 
 \item{use_cg}{In the ALS method, whether to use a conjugate gradient method to solve
@@ -453,6 +466,32 @@ and `OMF_implicit` models.}
 when the `I` matrix is passed as a sparse matrix) instead of ignoring them.
 This option is always assumed `TRUE` for the `ContentBased`, `OMF_explicit`,
 and `OMF_implicit` models.}
+
+\item{nonneg}{Whether to constrain the `A` and `B` matrices to be non-negative.
+In order for this to work correctly, the `X` input data must also be
+non-negative. This constraint will also be applied to the `Ai`
+and `Bi` matrices if passing `add_implicit_features=TRUE`.
+This option is not available when using the L-BFGS method.
+Note that, when determining non-negative factors, it will always
+use a coordinate descent method, regardless of the value passed
+for `use_cg` and `finalize_chol`.
+When used for recommender systems, one usually wants to pass `FALSE` here.
+For better results, do not use biases alongside this option,
+and use a higher regularization coupled with more iterations..}
+
+\item{nonneg_C}{Whether to constrain the `C` matrix to be non-negative.
+In order for this to work correctly, the `U` input data must also be
+non-negative.}
+
+\item{nonneg_D}{Whether to constrain the `D` matrix to be non-negative.
+In order for this to work correctly, the `I` input data must also be
+non-negative.}
+
+\item{max_cd_steps}{Maximum number of coordinate descent updates to perform per iteration
+when determining factors with non-negativity constraints.
+Pass zero for no limit.
+Ignored when not having non-negativity constraints.
+This number should usually be larger than `k`.}
 
 \item{precompute_for_predictions}{Whether to precompute some of the matrices that are used when making
 predictions from the model. If `FALSE`, it will take longer to generate
