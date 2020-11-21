@@ -7420,12 +7420,12 @@ int_t fit_collective_explicit_als
 
     cleanup:
         free(buffer_real_t); buffer_real_t = NULL;
-        free(A_prev);
-        free(B_prev);
-        free(C_prev);
-        free(D_prev);
-        free(Ai_prev);
-        free(Bi_prev);
+        free(A_prev); A_prev = NULL;
+        free(B_prev); B_prev = NULL;
+        free(C_prev); C_prev = NULL;
+        free(D_prev); D_prev = NULL;
+        free(Ai_prev); Ai_prev = NULL;
+        free(Bi_prev); Bi_prev = NULL;
         free(Xtrans); Xtrans = NULL;
         free(Wtrans); Wtrans = NULL;
         free(Xcsr_p); Xcsr_p = NULL;
