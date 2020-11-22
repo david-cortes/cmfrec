@@ -4141,6 +4141,10 @@ void optimizeA_collective
     if (!use_cg || is_first_iter)
         set_to_zero_(A, (size_t)max2(m, m_u)*(size_t)lda - (size_t)(lda-k_totA),
                      nthreads);
+    if (nonneg)
+        set_to_zero_(A_prev,
+                     (size_t)max2(m, m_u)*(size_t)lda - (size_t)(lda-k_totA),
+                     nthreads);
 
     /* If one of the matrices has more rows than the other, the rows
        for the larger matrix will be independent and can be obtained
@@ -5013,6 +5017,8 @@ void optimizeA_collective_implicit
 
     if (!use_cg || is_first_iter)
         set_to_zero_(A, (size_t)max2(m, m_u)*(size_t)k_totA, nthreads);
+    if (nonneg)
+        set_to_zero_(A_prev, (size_t)max2(m, m_u)*(size_t)k_totA, nthreads);
 
     /* TODO: BtB can be skipped when using NA_as_zero_U */
     if (precomputedBtB == NULL)
