@@ -4218,7 +4218,10 @@ void optimizeA_collective
                 nthreads,
                 use_cg, max_cg_steps,
                 nonneg, max_cd_steps,
-                A_prev + (size_t)k_user + (size_t)m_u*(size_t)lda,
+                (A_prev == NULL)?
+                    ((real_t*)NULL)
+                        :
+                    (A_prev + (size_t)k_user + (size_t)m_u*(size_t)lda),
                 keep_precomputed || will_use_BtB_here,
                 precomputedBtB,
                 (keep_precomputed || will_use_BtB_here)?
@@ -4262,7 +4265,9 @@ void optimizeA_collective
                 do_B,
                 nthreads,
                 use_cg, max_cg_steps, is_first_iter,
-                nonneg, max_cd_steps, A_prev + (size_t)m_u*(size_t)lda,
+                nonneg, max_cd_steps,
+                (A_prev == NULL)?
+                    ((real_t*)NULL) : (A_prev + (size_t)m_u*(size_t)lda),
                 keep_precomputed,
                 precomputedBtB,
                 (real_t*)NULL,
@@ -4325,7 +4330,9 @@ void optimizeA_collective
             false, false,
             nthreads,
             use_cg, max_cg_steps,
-            nonneg, max_cd_steps, A_prev + (size_t)m*(size_t)lda,
+            nonneg, max_cd_steps,
+            (A_prev == NULL)?
+                ((real_t*)NULL) : (A_prev + (size_t)m*(size_t)lda),
             keep_precomputed || will_use_CtC_here,
             precomputedCtCw,
             (keep_precomputed || will_use_CtC_here)? filled_CtCw : &ignore_bool,
@@ -4659,7 +4666,9 @@ void optimizeA_collective
                         is_first_iter?
                             max_cg_steps
                             : k_pred, /* <- more steps to reach optimum */
-                        nonneg, max_cd_steps, A_prev + ix*(size_t)lda,
+                        nonneg, max_cd_steps,
+                        (A_prev == NULL)?
+                            ((real_t*)NULL) : (A_prev + ix*(size_t)lda),
                         buffer_remainder
                           + (size_buffer*(size_t)omp_get_thread_num())
                     );
@@ -4965,7 +4974,9 @@ void optimizeA_collective
                 (Xfull == NULL)? (add_X) : (add_X || cnt_NA_x[ix] > 0),
                 (U == NULL)? (add_U) : (add_U || cnt_NA_u[ix] > 0),
                 use_cg, max_cg_steps,
-                nonneg, max_cd_steps, A_prev + ix*(size_t)lda,
+                nonneg, max_cd_steps,
+                (A_prev == NULL)?
+                    ((real_t*)NULL) : (A_prev + ix*(size_t)lda),
                 buffer_remainder + (size_buffer*(size_t)omp_get_thread_num())
             );
         }
@@ -5047,7 +5058,10 @@ void optimizeA_collective_implicit
                 lam,
                 nthreads, use_cg, max_cg_steps, false,
                 nonneg, max_cd_steps,
-                A_prev + (size_t)k_user + (size_t)m_u*(size_t)k_totA,
+                (A_prev == NULL)?
+                    ((real_t*)NULL)
+                        :
+                    (A_prev + (size_t)k_user + (size_t)m_u*(size_t)k_totA),
                 precomputedBtB,
                 buffer_real_t
             );
@@ -5216,7 +5230,9 @@ void optimizeA_collective_implicit
             precomputedBeTBeChol,
             precomputedCtC,
             false, true, use_cg, max_cg_steps,
-            nonneg, max_cd_steps, A_prev + (size_t)ix*(size_t)k_totA,
+            nonneg, max_cd_steps,
+            (A_prev == NULL)?
+                ((real_t*)NULL) : (A_prev + (size_t)ix*(size_t)k_totA),
             buffer_remainder + ((size_t)omp_get_thread_num() * size_buffer)
         );
 
