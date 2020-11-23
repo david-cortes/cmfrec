@@ -89,10 +89,8 @@ Will also by default use MKL if it finds it - for OpenBLAS can set an environmen
 * R:
 
 ```r
-remotes::install_github("david-cortes/cmfrec")
+install.packages("cmfrec")
 ```
-(Coming to CRAN soon)
-
 
 * C:
 
@@ -247,7 +245,7 @@ Documentation is available at ReadTheDocs: [http://cmfrec.readthedocs.io/en/late
 
 * R:
 
-Documentation is available inside the package (e.g. `?CMF`). PDF coming to CRAN soon.
+Documentation is available inside the package (e.g. `?CMF`) and at [CRAN](https://cran.r-project.org/web/packages/cmfrec/index.html).
 
 * C:
 

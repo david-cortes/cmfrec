@@ -1973,7 +1973,9 @@ void optimizeA
                         true, false, 1., n,
                         (real_t*)NULL, false,
                         use_cg, k, /* <- A was reset to zero, need more steps */
-                        nonneg, max_cd_steps, A_prev + ix*(size_t)lda,
+                        nonneg, max_cd_steps,
+                        (A_prev == NULL)?
+                            ((real_t*)NULL) : (A_prev + ix*(size_t)lda),
                         false
                     );
                 }
@@ -2067,7 +2069,9 @@ void optimizeA
                 true, false, 1., n,
                 (real_t*)NULL, false,
                 use_cg, max_cg_steps,
-                nonneg, max_cd_steps, A_prev + ix*(size_t)lda,
+                nonneg, max_cd_steps,
+                (A_prev == NULL)?
+                    ((real_t*)NULL) : (A_prev + ix*(size_t)lda),
                 false
             );
         }
@@ -2186,7 +2190,9 @@ void optimizeA
                     add_diag_to_BtB, false, 1., n,
                     (real_t*)NULL, NA_as_zero,
                     use_cg, max_cg_steps,
-                    nonneg, max_cd_steps, A_prev + ix*(size_t)lda,
+                    nonneg, max_cd_steps,
+                    (A_prev == NULL)?
+                        ((real_t*)NULL) : (A_prev + ix*(size_t)lda),
                     false
                 );
     }
@@ -2258,7 +2264,9 @@ void optimizeA_implicit
                 Xcsr_p[ix+(size_t)1] - Xcsr_p[ix],
                 lam,
                 precomputedBtB, k,
-                nonneg, max_cd_steps, A_prev + (size_t)ix*lda,
+                nonneg, max_cd_steps,
+                (A_prev == NULL)?
+                    ((real_t*)NULL) : (A_prev + ix*(size_t)lda),
                 buffer_real_t + ((size_t)omp_get_thread_num() * size_buffer)
             );
 }
