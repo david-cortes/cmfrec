@@ -6154,12 +6154,8 @@ int_t fit_collective_explicit_als
     real_t *restrict Xfull_orig = NULL;
     real_t *restrict Xtrans_orig = NULL;
 
-    real_t *restrict A_prev = NULL;
-    real_t *restrict B_prev = NULL;
-    real_t *restrict C_prev = NULL;
-    real_t *restrict D_prev = NULL;
-    real_t *restrict Ai_prev = NULL;
-    real_t *restrict Bi_prev = NULL;
+    real_t *restrict buffer_nonneg = NULL;
+    size_t size_largest_mat = 0;
 
     real_t *restrict buffer_real_t = NULL;
     size_t size_bufferA = 0;
@@ -6267,37 +6263,30 @@ int_t fit_collective_explicit_als
         if (precomputedBiTBi == NULL) goto throw_oom;
     }
 
-    if (nonneg)
+    if (nonneg || nonneg_C || nonneg_D)
     {
-        precomputedTransBtBinvBt = NULL;
-        precomputedBeTBeChol = NULL;
-        precomputedTransCtCinvCt = NULL;
-        A_prev = (real_t*)calloc((size_t)m_max
-                                 *(size_t)(k_user+k+k_main+has_bias),
-                                 sizeof(real_t));
-        B_prev = (real_t*)calloc((size_t)n_max
-                                 *(size_t)(k_item+k+k_main+has_bias),
-                                 sizeof(real_t));
-        if (A_prev == NULL || B_prev == NULL) goto throw_oom;
-        if (add_implicit_features)
+        if (nonneg)
         {
-            Ai_prev = (real_t*)calloc((size_t)m*(size_t)(k+k_main),
-                                      sizeof(real_t));
-            Bi_prev = (real_t*)calloc((size_t)n*(size_t)(k+k_main),
-                                      sizeof(real_t));
-            if (Ai_prev == NULL || Bi_prev == NULL) goto throw_oom;
+            size_largest_mat = max2(size_largest_mat,
+                                    (size_t)m_max
+                                    *(size_t)(k_user+k+k_main+has_bias));
+            size_largest_mat = max2(size_largest_mat,
+                                    (size_t)n_max
+                                    *(size_t)(k_item+k+k_main+has_bias));
         }
-    }
+        if (nonneg_C)
+        {
+            size_largest_mat = max2(size_largest_mat,
+                                    (size_t)m_u*(size_t)(k_user+k));
+        }
 
-    if (nonneg_C)
-    {
-        C_prev = (real_t*)calloc((size_t)m_u*(size_t)(k_user+k),sizeof(real_t));
-        if (C_prev == NULL) goto throw_oom;
-    }
-    if (nonneg_D)
-    {
-        D_prev = (real_t*)calloc((size_t)n_i*(size_t)(k_item+k),sizeof(real_t));
-        if (D_prev == NULL) goto throw_oom;
+        if (nonneg_D)
+        {
+            size_largest_mat = max2(size_largest_mat,
+                                    (size_t)n_i*(size_t)(k_item+k));
+        }
+
+        buffer_nonneg = (real_t*)malloc(size_largest_mat*sizeof(real_t));
     }
 
     #ifdef _FOR_R
@@ -6775,7 +6764,7 @@ int_t fit_collective_explicit_als
                 iter == 0,
                 nthreads,
                 use_cg && !nonneg_C, max_cg_steps,
-                nonneg_C, max_cd_steps, C_prev,
+                nonneg_C, max_cd_steps, buffer_nonneg,
                 false,
                 ((size_t)n*(size_t)(k_user+k+k_main+user_bias)
                     >=
@@ -6827,7 +6816,7 @@ int_t fit_collective_explicit_als
                 iter == 0,
                 nthreads,
                 use_cg && !nonneg_D, max_cg_steps,
-                nonneg_D, max_cd_steps, D_prev,
+                nonneg_D, max_cd_steps, buffer_nonneg,
                 false,
                 ((size_t)n*(size_t)(k_user+k+k_main+user_bias)
                     >=
@@ -6878,7 +6867,7 @@ int_t fit_collective_explicit_als
                 Xfull != NULL, niter == 0,
                 nthreads,
                 false, 0,
-                nonneg, max_cd_steps, Bi_prev,
+                nonneg, max_cd_steps, buffer_nonneg,
                 false,
                 precomputedBtB, &ignore,
                 buffer_real_t
@@ -6918,7 +6907,7 @@ int_t fit_collective_explicit_als
                 false, niter == 0,
                 nthreads,
                 false, 0,
-                nonneg, max_cd_steps, Bi_prev,
+                nonneg, max_cd_steps, buffer_nonneg,
                 false,
                 precomputedBtB, &ignore,
                 buffer_real_t
@@ -7022,7 +7011,7 @@ int_t fit_collective_explicit_als
                 Xfull != NULL && Xtrans == NULL,
                 nthreads,
                 use_cg_B && !nonneg, max_cg_steps, iter == 0,
-                nonneg, max_cd_steps, B_prev,
+                nonneg, max_cd_steps, buffer_nonneg,
                 false,
                 (item_bias <= user_bias)?
                     (precomputedBtB) : ((real_t*)NULL),
@@ -7051,7 +7040,7 @@ int_t fit_collective_explicit_als
                 Xfull != NULL && Xtrans == NULL, iter == 0,
                 nthreads,
                 use_cg && !nonneg, max_cg_steps,
-                nonneg, max_cd_steps, B_prev,
+                nonneg, max_cd_steps, buffer_nonneg,
                 false,
                 ((size_t)n*(size_t)(k_user+k+k_main+user_bias)
                     >=
@@ -7139,7 +7128,7 @@ int_t fit_collective_explicit_als
                 false,
                 nthreads,
                 use_cg_B && !nonneg, max_cg_steps, iter == 0,
-                nonneg, max_cd_steps, A_prev,
+                nonneg, max_cd_steps, buffer_nonneg,
                 precompute_for_predictions,
                 precomputedBtB, precomputedCtCw, precomputedBeTBeChol,
                 precomputedBiTBi,
@@ -7162,7 +7151,7 @@ int_t fit_collective_explicit_als
                 false, iter == 0,
                 nthreads,
                 use_cg && !nonneg, max_cg_steps,
-                nonneg, max_cd_steps, A_prev,
+                nonneg, max_cd_steps, buffer_nonneg,
                 iter == niter - 1,
                 precomputedBtB, &filled_BtB,
                 buffer_real_t
@@ -7442,12 +7431,7 @@ int_t fit_collective_explicit_als
 
     cleanup:
         free(buffer_real_t); buffer_real_t = NULL;
-        free(A_prev); A_prev = NULL;
-        free(B_prev); B_prev = NULL;
-        free(C_prev); C_prev = NULL;
-        free(D_prev); D_prev = NULL;
-        free(Ai_prev); Ai_prev = NULL;
-        free(Bi_prev); Bi_prev = NULL;
+        free(buffer_nonneg); buffer_nonneg = NULL;
         free(Xtrans); Xtrans = NULL;
         free(Wtrans); Wtrans = NULL;
         free(Xcsr_p); Xcsr_p = NULL;
@@ -7592,10 +7576,8 @@ int_t fit_collective_implicit_als
     size_t size_bufferD = 0;
     size_t size_buffer = 0;
 
-    real_t *restrict A_prev = NULL;
-    real_t *restrict B_prev = NULL;
-    real_t *restrict C_prev = NULL;
-    real_t *restrict D_prev = NULL;
+    real_t *restrict buffer_nonneg = NULL;
+    size_t size_largest_mat = 0;
 
     size_t *Xcsr_p = (size_t*)malloc(((size_t)m+(size_t)1)*sizeof(size_t));
     int_t *Xcsr_i = (int_t*)malloc(nnz*sizeof(int_t));
@@ -7663,25 +7645,29 @@ int_t fit_collective_implicit_als
         allocated_CtC = true;
     }
 
-    if (nonneg)
+    if (nonneg || nonneg_C || nonneg_D)
     {
-        precomputedBeTBeChol = NULL;
-        A_prev = (real_t*)calloc((size_t)m_max*(size_t)(k_user+k+k_main),
-                                 sizeof(real_t));
-        B_prev = (real_t*)calloc((size_t)n_max*(size_t)(k_item+k+k_main),
-                                 sizeof(real_t));
-        if (A_prev == NULL || B_prev == NULL) goto throw_oom;
-    }
+        if (nonneg)
+        {
+            size_largest_mat = max2(size_largest_mat,
+                                    (size_t)m_max*(size_t)(k_user+k+k_main));
+            size_largest_mat = max2(size_largest_mat,
+                                    (size_t)n_max*(size_t)(k_item+k+k_main));
+        }
 
-    if (nonneg_C)
-    {
-        C_prev = (real_t*)calloc((size_t)m_u*(size_t)(k_user+k),sizeof(real_t));
-        if (C_prev == NULL) goto throw_oom;
-    }
-    if (nonneg_D)
-    {
-        D_prev = (real_t*)calloc((size_t)n_i*(size_t)(k_item+k),sizeof(real_t));
-        if (D_prev == NULL) goto throw_oom;
+        if (nonneg_C)
+        {
+            size_largest_mat = max2(size_largest_mat,
+                                    (size_t)m_u*(size_t)(k_user+k));
+        }
+
+        if (nonneg_D)
+        {
+            size_largest_mat = max2(size_largest_mat,
+                                    (size_t)n_i*(size_t)(k_item+k));
+        }
+
+        buffer_nonneg = (real_t*)malloc(size_largest_mat*sizeof(real_t));
     }
 
     #ifdef _FOR_R
@@ -7906,7 +7892,7 @@ int_t fit_collective_implicit_als
                 iter == 0,
                 nthreads,
                 use_cg && !nonneg_C, max_cg_steps,
-                nonneg_C, max_cd_steps, C_prev,
+                nonneg_C, max_cd_steps, buffer_nonneg,
                 false,
                 precomputedBeTBeChol,
                 &ignore,
@@ -7949,7 +7935,7 @@ int_t fit_collective_implicit_als
                 iter == 0,
                 nthreads,
                 use_cg && !nonneg_D, max_cg_steps,
-                nonneg_D, max_cd_steps, D_prev,
+                nonneg_D, max_cd_steps, buffer_nonneg,
                 false,
                 (k_item+k <= k_user+k+k_main)?
                     (precomputedBeTBeChol) : ((real_t*)NULL),
@@ -7992,7 +7978,7 @@ int_t fit_collective_implicit_als
                 (lam_unique == NULL)? (lam) : (lam_unique[3]),
                 w_item,
                 nthreads, use_cg && !nonneg, max_cg_steps, iter == 0,
-                nonneg, max_cd_steps, B_prev,
+                nonneg, max_cd_steps, buffer_nonneg,
                 precomputedBtB,
                 (k_item <= k_user)? (precomputedBeTBe) : ((real_t*)NULL),
                 (k_item <= k_user)? (precomputedBeTBeChol) : ((real_t*)NULL),
@@ -8008,7 +7994,7 @@ int_t fit_collective_implicit_als
                 Xcsc_p, Xcsc_i, Xcsc,
                 (lam_unique == NULL)? (lam) : (lam_unique[3]),
                 nthreads, use_cg && !nonneg, max_cg_steps, iter == 0,
-                nonneg, max_cd_steps, B_prev,
+                nonneg, max_cd_steps, buffer_nonneg,
                 precomputedBtB,
                 buffer_real_t
             );
@@ -8041,7 +8027,7 @@ int_t fit_collective_implicit_als
                 (lam_unique == NULL)? (lam) : (lam_unique[2]),
                 w_user,
                 nthreads, use_cg && !nonneg, max_cg_steps, iter == 0,
-                nonneg, max_cd_steps, A_prev,
+                nonneg, max_cd_steps, buffer_nonneg,
                 precomputedBtB,
                 precomputedBeTBe,
                 precomputedBeTBeChol,
@@ -8059,7 +8045,7 @@ int_t fit_collective_implicit_als
                 (lam_unique == NULL)? (lam) : (lam_unique[2]),
                 nthreads,
                 use_cg && !nonneg, max_cg_steps, iter == 0,
-                nonneg, max_cd_steps, A_prev,
+                nonneg, max_cd_steps, buffer_nonneg,
                 precomputedBtB,
                 buffer_real_t
             );
@@ -8175,10 +8161,7 @@ int_t fit_collective_implicit_als
 
     cleanup:
         free(buffer_real_t);
-        free(A_prev);
-        free(B_prev);
-        free(C_prev);
-        free(D_prev);
+        free(buffer_nonneg);
         free(Xcsr_p);
         free(Xcsr_i);
         free(Xcsr);
