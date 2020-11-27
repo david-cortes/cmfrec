@@ -1995,7 +1995,6 @@ void collective_block_cg
     bool prefer_CtC = (cnt_NA_u < 2*(k+k_user)) ||
                       (nnz_u_vec > (size_t)(2*(k+k_user))) ||
                       (NA_as_zero_U);
-        prefer_CtC = true;
     if (precomputedBtB == NULL)
         prefer_BtB = false;
     if (precomputedCtC == NULL || (!p && !nnz_u_vec))
