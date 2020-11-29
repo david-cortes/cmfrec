@@ -10,7 +10,7 @@ For more information about the implementation here, or if you would like to cite
 
 For a similar package with Poisson distributions see [ctpfrec](https://github.com/david-cortes/ctpfrec).
 
-Written in C with Python and R interfaces.
+Written in C with Python and R interfaces. An additional Ruby interface can be found [here](github.com/ankane/cmfrec).
 
 ## Update 2020-03-20
 
@@ -91,6 +91,10 @@ Will also by default use MKL if it finds it - for OpenBLAS can set an environmen
 ```r
 install.packages("cmfrec")
 ```
+
+* Ruby:
+
+See [external repository](github.com/ankane/cmfrec).
 
 * C:
 
@@ -227,6 +231,10 @@ factors_single(model,
 
 Users and items can be reindexed internally (if passing data frames, but not when pasing sparse or dense matrices), so you can use strings or non-consecutive numbers as IDs when passing data to the object's methods.
 
+* Ruby:
+
+See [external repository](github.com/ankane/cmfrec).
+
 * C:
 
 See file [example/c_example.c](https://github.com/david-cortes/cmfrec/blob/master/example/c_example.c)
@@ -246,6 +254,10 @@ Documentation is available at ReadTheDocs: [http://cmfrec.readthedocs.io/en/late
 * R:
 
 Documentation is available inside the package (e.g. `?CMF`) and at [CRAN](https://cran.r-project.org/web/packages/cmfrec/index.html).
+
+* Ruby:
+
+See [external repository](github.com/ankane/cmfrec) for syntax and [Python docs](http://cmfrec.readthedocs.io/en/latest/) for details about each parameter.
 
 * C:
 
