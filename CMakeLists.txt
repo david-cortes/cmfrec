@@ -78,6 +78,7 @@ set(SRC_FILES ${PROJECT_SOURCE_DIR}/src/cblas_wrappers.c
               ${PROJECT_SOURCE_DIR}/src/lbfgs.c
               ${PROJECT_SOURCE_DIR}/src/offsets.c)
 set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
+set(BUILD_SHARED_LIBS True)
 add_library(cmfrec SHARED ${SRC_FILES})
 
 # Adding the internal headers
