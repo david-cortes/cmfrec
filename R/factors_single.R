@@ -173,11 +173,13 @@ factors_single.CMF <- function(model, X = NULL, X_col = NULL, X_val = NULL,
                       model$matrices$B,
                       model$matrices$Bi, model$info$add_implicit_features,
                       model$info$k, model$info$k_user, model$info$k_item, model$info$k_main,
-                      model$info$lambda,
+                      model$info$lambda, model$info$l1_lambda,
+                      model$info$scale_lam, model$info$scale_lam_sideinfo,
                       model$info$w_main, model$info$w_user, model$info$w_implicit,
                       NCOL(model$matrices$B), model$info$include_all_X,
-                      model$precomputed$TransBtBinvBt,
                       model$precomputed$BtB,
+                      model$precomputed$TransBtBinvBt,
+                      model$precomputed$BtXbias,
                       model$precomputed$BeTBeChol,
                       model$precomputed$BiTBi,
                       model$precomputed$CtC,
@@ -200,6 +202,7 @@ factors_single.CMF_implicit <- function(model, X = NULL, X_col = NULL, X_val = N
                                           U = U, U_col = U_col, U_val = U_val)
     a_vec <- numeric(model$info$k_user + model$info$k + model$info$k_main)
     lambda <- ifelse(NROW(model$info$lambda) > 1L, model$info$lambda[3L], model$info$lambda)
+    l1_lambda <- ifelse(NROW(model$info$l1_lambda) > 1L, model$info$l1_lambda[3L], model$info$l1_lambda)
     ret_code <- .Call("call_factors_collective_implicit_single",
                       a_vec,
                       inputs$processed_U$U, inputs$processed_U$p,
@@ -210,7 +213,7 @@ factors_single.CMF_implicit <- function(model, X = NULL, X_col = NULL, X_val = N
                       model$matrices$B, NCOL(model$matrices$B), model$matrices$C,
                       inputs$processed_X$X_val, inputs$processed_X$X_col,
                       model$info$k, model$info$k_user, model$info$k_item, model$info$k_main,
-                      lambda, model$info$alpha, model$info$w_main, model$info$w_user,
+                      lambda, l1_lambda, model$info$alpha, model$info$w_main, model$info$w_user,
                       model$info$w_main_multiplier,
                       model$info$apply_log_transf,
                       model$precomputed$BeTBe,

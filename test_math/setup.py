@@ -20,7 +20,10 @@ class build_ext_subclass( build_ext_with_blas ):
                 
                 # e.extra_compile_args += ['-O2', '-march=native', '-std=c99', "-ggdb"]
 
-                # e.extra_compile_args += ["-fsanitize=address", "-static-libasan"]
+                # e.extra_compile_args += ["-fsanitize=address", "-static-libasan", "-ggdb"]
+                # e.extra_link_args += ["-fsanitize=address", "-static-libasan"]
+                
+                # e.extra_compile_args += ["-fsanitize=address", "-static-libsan"]
                 # e.extra_link_args += ["-fsanitize=address", "-static-libasan"]
         build_ext_with_blas.build_extensions(self)
 
@@ -37,7 +40,7 @@ setup(
           include_dirs=[np.get_include(), "../src"],
           define_macros = [("_FOR_PYTHON", None),
                            ("USE_DOUBLE", None),
-                           # ("TEST_CG", None)
+                           ("TEST_CG", None)
                           ]
           ),
         ]

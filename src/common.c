@@ -32,6 +32,10 @@
             non-negative least squares problem."
             International Conference on Computer Analysis of Images
             and Patterns. Springer, Berlin, Heidelberg, 2005.
+        (e) Zhou, Yunhong, et al.
+            "Large-scale parallel collaborative filtering for the netflix prize."
+            International conference on algorithmic applications in management.
+            Springer, Berlin, Heidelberg, 2008.
 
     For information about the models offered here and how they are fit to
     the data, see the files 'collective.c' and 'offsets.c'.
@@ -618,6 +622,7 @@ real_t fun_grad_cannonical_form
 
 
 *******************************************************************************/
+#define printf 
 void factors_closed_form
 (
     real_t *restrict a_vec, int_t k,
@@ -633,6 +638,7 @@ void factors_closed_form
     real_t *restrict precomputedBtBchol, bool NA_as_zero,
     bool use_cg, int_t max_cg_steps,/* <- 'cg' should not be used for new data*/
     bool nonneg, int_t max_cd_steps, real_t *restrict a_prev,
+    real_t *restrict bias_BtX, real_t *restrict bias_X,
     bool force_add_diag
 )
 {
@@ -652,8 +658,9 @@ void factors_closed_form
     /* Note: if passing 'NA_as_zero', 'n' and 'n_BtB' cannot be different */
 
     /* Potential bad inputs */
-    if ((Xa_dense != NULL && cnt_NA == n) ||
-        (Xa_dense == NULL && nnz == 0))
+    if ((   (Xa_dense != NULL && cnt_NA == n) ||
+            (Xa_dense == NULL && nnz == 0)  )
+        && !(NA_as_zero && bias_BtX != NULL))
     {
         set_to_zero(a_vec, k);
         return;
@@ -667,8 +674,9 @@ void factors_closed_form
        C matrix is already fixed and is the same for all users. */
     if (precomputedTransBtBinvBt != NULL && weight == NULL && !nonneg &&
         ((full_dense && Xa_dense != NULL && n_BtB == n) ||
-         (Xa_dense == NULL && NA_as_zero)))
+         (Xa_dense == NULL && NA_as_zero && bias_BtX == NULL)))
     {
+        printf("case1\n");
         if (Xa_dense != NULL)
             cblas_tgemv(CblasRowMajor, CblasTrans,
                         n, k,
@@ -693,6 +701,7 @@ void factors_closed_form
     else if (Xa_dense != NULL && precomputedBtB != NULL && weight == NULL &&
              prefer_BtB)
     {
+        printf("case2\n");
         add_diag = false;
         copy_mat(k, k,
                  precomputedBtB, ld_BtB,
@@ -723,11 +732,14 @@ void factors_closed_form
     else if (NA_as_zero && weight == NULL && !nonneg &&
              Xa_dense == NULL && precomputedBtBchol != NULL)
     {
+        printf("case3\n");
         set_to_zero(a_vec, k);
         tgemv_dense_sp(n, k,
                        1., B, (size_t)ldb,
                        ixB, Xa, nnz,
                        a_vec);
+        if (bias_BtX != NULL)
+            cblas_taxpy(k, 1., bias_BtX, 1, a_vec, 1);
         tpotrs_(&lo, &k, &one,
                 precomputedBtBchol, &k,
                 a_vec, &k,
@@ -739,37 +751,29 @@ void factors_closed_form
        of NAs - here the already-factorized BtBchol should be passed,
        but if for some reason it wasn't, will construct the usual
        matrices on-the-fly.
-       This is however slow, and there is no intended use case that
-       should end up here.
-       If it has weights, could still use the precomputed transpose,
+       If it has weights, could still use the precomputed matrix,
        then adjust by substracting from it again. */
     else if (Xa_dense == NULL && NA_as_zero && !use_cg)
     {
+        printf("case4 - [weight:%p]\n", weight);
         set_to_zero(a_vec, k);
-        if (precomputedBtB == NULL)
-            cblas_tsyrk(CblasRowMajor, CblasUpper, CblasTrans,
-                        k, max2(n, n_BtB),
-                        1., B, ldb,
-                        0., bufferBtB, k);
-        else {
-            copy_mat(k, k,
-                     precomputedBtB, ld_BtB,
-                     bufferBtB, k);
-            if (BtB_is_scaled && scale_BtB != 1.)
-                cblas_tscal(square(k), 1./scale_BtB, bufferBtB, 1);
-            add_diag = !BtB_has_diag;
-        }
+        set_to_zero(bufferBtB, square(k));
 
         if (weight != NULL)
         {
             for (size_t ix = 0; ix < nnz; ix++)
             {
+                // printf("[ix:%d] [ixB[ix]:%d] [weight:%.2f] [Xa:%.2f] [nnz:%d] [bias_X:%p]\n",
+                    // (int)ix, (int)ixB[ix], weight[ix], Xa[ix], (int)nnz, bias_X);
                 cblas_tsyr(CblasRowMajor, CblasUpper,
-                           k, weight[ix] - 1.,
+                           k, (weight[ix] - 1.),
                            B + (size_t)ixB[ix]*(size_t)ldb, 1,
                            bufferBtB, k);
                 cblas_taxpy(k,
-                            weight[ix] * Xa[ix],
+                            (weight[ix] * Xa[ix])
+                                -
+                            ((bias_X == NULL)?
+                                (0.) : ((weight[ix]-1.) * bias_X[ixB[ix]])),
                             B + (size_t)ixB[ix]*(size_t)ldb, 1,
                             a_vec, 1);
             }
@@ -781,6 +785,25 @@ void factors_closed_form
                            ixB, Xa, nnz,
                            a_vec);
         }
+
+
+        if (precomputedBtB == NULL)
+            cblas_tsyrk(CblasRowMajor, CblasUpper, CblasTrans,
+                        k, max2(n, n_BtB),
+                        1., B, ldb,
+                        1., bufferBtB, k);
+        else {
+            if (BtB_is_scaled && scale_BtB != 1.)
+                cblas_taxpy(square(k), 1./scale_BtB, precomputedBtB, 1,
+                            bufferBtB, 1);
+            else
+                sum_mat(k, k,
+                        precomputedBtB, ld_BtB,
+                        bufferBtB, k);
+            add_diag = !BtB_has_diag;
+            printf("copied BtB [k:%d] [add_diag:%d]\n", k, (int)add_diag);
+        }
+
     }
 
     /* If none of the above apply, it's faster to get an approximate
@@ -789,6 +812,7 @@ void factors_closed_form
        not need to calculate the Cholesky. */
     else if (use_cg)
     {
+        printf("case5\n");
         if (Xa_dense != NULL)
             factors_explicit_cg_dense(
                 a_vec, k,
@@ -807,6 +831,7 @@ void factors_closed_form
                 Xa, ixB, nnz,
                 weight,
                 precomputedBtB, ld_BtB,
+                bias_BtX, bias_X,
                 buffer_real_t,
                 lam, lam_last,
                 max_cg_steps
@@ -836,6 +861,7 @@ void factors_closed_form
 
     else if (Xa_dense == NULL)
     {
+        printf("case6\n");
         /* Sparse X - obtain t(B)*B through SR1 updates, avoiding a full
            matrix-matrix multiplication. This is the expected scenario for
            most use-cases. */
@@ -869,6 +895,7 @@ void factors_closed_form
 
     else
     {
+        printf("case7\n");
         /* Dense X - in this case, re-construct t(B)*B without the missing
            entries - at once if possible, or one-by-one if not.
            Note that, if B0 is the B matrix with the rows set to zero
@@ -916,6 +943,8 @@ void factors_closed_form
         add_to_diag(bufferBtB, lam, k);
         if (lam_last != lam) bufferBtB[square(k)-1] += (lam_last - lam);
     }
+    if (bias_BtX != NULL && NA_as_zero)
+        cblas_taxpy(k, 1., bias_BtX, 1, a_vec, 1);
 
     if (!nonneg)
         tposv_(&lo, &k, &one,
@@ -957,19 +986,9 @@ void factors_explicit_cg
     real_t a;
     real_t r_old, r_new;
 
-    if (weight == NULL)
-        tgemv_dense_sp(n, k,
-                       1., B, (size_t)ldb,
-                       ixB, Xa, nnz,
-                       r);
-    else
-        tgemv_dense_sp_weighted(n, k,
-                                weight, B, (size_t)ldb,
-                                ixB, Xa, nnz,
-                                r);
-
     for (size_t ix = 0; ix < nnz; ix++) {
-        coef = cblas_tdot(k, B + (size_t)ixB[ix]*(size_t)ldb, 1, a_vec, 1);
+        coef  = cblas_tdot(k, B + (size_t)ixB[ix]*(size_t)ldb, 1, a_vec, 1);
+        coef -= Xa[ix];
         coef *= (weight == NULL)? 1. : weight[ix];
         cblas_taxpy(k, -coef, B + (size_t)ixB[ix]*ldb, 1, r, 1);
     }
@@ -1025,8 +1044,8 @@ void factors_explicit_cg_NA_as_zero_weighted
     real_t *restrict B, int_t n, int_t ldb,
     real_t *restrict Xa, int_t ixB[], size_t nnz,
     real_t *restrict weight,
-    real_t *restrict precomputedBtB,
-    int_t ld_BtB,
+    real_t *restrict precomputedBtB, int_t ld_BtB,
+    real_t *restrict bias_BtX, real_t *restrict bias_X,
     real_t *restrict buffer_real_t,
     real_t lam, real_t lam_last,
     int_t max_cg_steps
@@ -1040,25 +1059,26 @@ void factors_explicit_cg_NA_as_zero_weighted
     real_t a;
     real_t r_old, r_new, coef;
 
-    bool prefer_BtB = nnz < (size_t)(2*k);
+    bool prefer_BtB = k < n;
+    if (precomputedBtB == NULL)
+        prefer_BtB = false;
 
-    tgemv_dense_sp_weighted(n, k,
-                            weight, B, (size_t)ldb,
-                            ixB, Xa, nnz,
-                            r);
-    if (precomputedBtB != NULL && prefer_BtB)
+    if (prefer_BtB)
     {
         cblas_tsymv(CblasRowMajor, CblasUpper, k,
                     -1., precomputedBtB, ld_BtB,
                     a_vec, 1,
-                    1., r, 1);
+                    0., r, 1);
         for (size_t ix = 0; ix < nnz; ix++)
         {
-            coef = cblas_tdot(k,
-                              B + (size_t)ixB[ix]*(size_t)ldb, 1,
-                              a_vec, 1);
-            cblas_taxpy(k, -((weight[ix]-1.) * coef),
-                        B + ix*(size_t)ldb, 1,
+            coef = cblas_tdot(k, B + (size_t)ixB[ix]*(size_t)ldb, 1, a_vec, 1);
+            cblas_taxpy(k,
+                        -(weight[ix]-1.)
+                            *
+                        (coef + ((bias_X == NULL)? (0.) : (bias_X[ixB[ix]])))
+                            +
+                        (weight[ix] * Xa[ix]),
+                        B + (size_t)ixB[ix]*(size_t)ldb, 1,
                         r, 1);
         }
     }
@@ -1071,7 +1091,11 @@ void factors_explicit_cg_NA_as_zero_weighted
                     a_vec, 1,
                     0., wr, 1);
         for (size_t ix = 0; ix < nnz; ix++)
-            wr[ixB[ix]] *= weight[ix];
+            wr[ixB[ix]] = weight[ix] * (wr[ixB[ix]] + Xa[ix]);
+        if (bias_X != NULL) {
+            for (size_t ix = 0; ix < nnz; ix++)
+                wr[ixB[ix]] -= (weight[ix] - 1.) * bias_X[ixB[ix]];
+        }
         cblas_tgemv(CblasRowMajor, CblasTrans,
                     n, k,
                     1., B, ldb,
@@ -1079,6 +1103,10 @@ void factors_explicit_cg_NA_as_zero_weighted
                     1., r, 1);
     }
 
+    if (bias_BtX != NULL)
+    {
+        cblas_taxpy(k, 1., bias_BtX, 1, r, 1);
+    }
 
     cblas_taxpy(k, -lam, a_vec, 1, r, 1);
     if (lam != lam_last)
@@ -1200,12 +1228,12 @@ void factors_explicit_cg_dense
         {
             if (!isnan(Xa_dense[ix]))
             {
-                w_this = (weight == NULL)? 1. : weight[ix];
-                cblas_taxpy(k,
-                            w_this * Xa_dense[ix], B + ix*(size_t)ldb, 1,
-                            r, 1);
                 coef = cblas_tdot(k, B + ix*(size_t)ldb, 1, a_vec, 1);
-                cblas_taxpy(k, -w_this * coef, B + ix*(size_t)ldb, 1, r, 1);
+                cblas_taxpy(k,
+                            (-coef + Xa_dense[ix])
+                                *
+                            ((weight == NULL)? 1. : weight[ix]),
+                            B + ix*(size_t)ldb, 1, r, 1);
             }
         }
     }
@@ -1789,6 +1817,7 @@ size_t buffer_size_optimizeA_implicit
             + nthreads * size_thread_buffer;
 }
 
+#undef printf 
 void optimizeA
 (
     real_t *restrict A, int_t lda,
@@ -1802,6 +1831,7 @@ void optimizeA
     int_t nthreads,
     bool use_cg, int_t max_cg_steps,
     bool nonneg, int_t max_cd_steps, real_t *restrict A_prev,
+    real_t *restrict bias_BtX, real_t *restrict bias_X,
     bool keep_precomputedBtB,
     real_t *restrict precomputedBtB, bool *filled_BtB,
     real_t *restrict buffer_real_t
@@ -1836,6 +1866,7 @@ void optimizeA
        solutions individually. */
     if (Xfull != NULL && (full_dense || near_dense) && weight == NULL)
     {
+        printf("optimizeA case1\n");
         real_t *restrict bufferBtBcopy = NULL;
         if (near_dense)
         {
@@ -1886,7 +1917,7 @@ void optimizeA
            swapped, so what here says 'A' will be 'B', what says
            'm' will be 'n', and so on. But the matrix 'X' remains
            the same, so the inputs need to be transposed for B. */
-        if (!do_B) 
+        if (!do_B)
             cblas_tgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,
                         m, k, n,
                         1., Xfull, n, B, ldb,
@@ -1976,6 +2007,7 @@ void optimizeA
                         nonneg, max_cd_steps,
                         (A_prev == NULL)?
                             ((real_t*)NULL) : (A_prev + ix*(size_t)lda),
+                        bias_BtX, bias_X,
                         false
                     );
                 }
@@ -1989,6 +2021,7 @@ void optimizeA
        in case some rows have few missing values. */
     else if (Xfull != NULL)
     {
+        printf("optimizeA case2\n");
         real_t *restrict bufferBtB = NULL;
         if (weight == NULL) {
             if (precomputedBtB != NULL && !keep_precomputedBtB)
@@ -2072,6 +2105,7 @@ void optimizeA
                 nonneg, max_cd_steps,
                 (A_prev == NULL)?
                     ((real_t*)NULL) : (A_prev + ix*(size_t)lda),
+                bias_BtX, bias_X,
                 false
             );
         }
@@ -2081,6 +2115,7 @@ void optimizeA
        Here can also use one Cholesky for all rows at once. */
     else if (Xfull == NULL && NA_as_zero && weight == NULL)
     {
+        printf("optimizeA case3\n");
         real_t *restrict bufferBtB = NULL;
         if (precomputedBtB != NULL && !keep_precomputedBtB)
             bufferBtB = precomputedBtB;
@@ -2110,6 +2145,10 @@ void optimizeA
             A, (size_t)lda,
             nthreads
         );
+        if (bias_BtX != NULL)
+            for (size_t row = 0; row < (size_t)m; row++)
+                cblas_taxpy(k, 1., bias_BtX, 1, A + row*(size_t)lda, 1);
+
         if (!nonneg)
             tposv_(&uplo, &k, &m,
                    bufferBtB, &k,
@@ -2130,6 +2169,7 @@ void optimizeA
        This is the expected case for most situations. */
     else
     {
+        printf("optimizeA case4\n");
         /* When NAs are treated as zeros, can use a precomputed t(B)*B */
         real_t *restrict bufferBtB = NULL;
         bool add_diag_to_BtB = !(use_cg && Xfull == NULL && NA_as_zero);
@@ -2173,9 +2213,12 @@ void optimizeA
                 shared(A, lda, B, ldb, m, n, k, lam, lam_last, weight, cnt_NA, \
                        Xcsr_p, Xcsr_i, Xcsr, buffer_real_t, NA_as_zero, \
                        bufferBtB, size_buffer, use_cg, \
-                       nonneg, max_cd_steps, A_prev)
+                       nonneg, max_cd_steps, A_prev, bias_BtX)
         for (size_t_for ix = 0; ix < (size_t)m; ix++)
-            if (Xcsr_p[ix+(size_t)1] > Xcsr_p[ix])
+        {
+            if ((Xcsr_p[ix+(size_t)1] > Xcsr_p[ix]) ||
+                (NA_as_zero && bias_BtX != NULL))
+            {
                 factors_closed_form(
                     A + ix*(size_t)lda, k,
                     B, n, ldb,
@@ -2193,8 +2236,11 @@ void optimizeA
                     nonneg, max_cd_steps,
                     (A_prev == NULL)?
                         ((real_t*)NULL) : (A_prev + ix*(size_t)lda),
+                    bias_BtX, bias_X,
                     false
                 );
+            }
+        }
     }
 }
 
@@ -2276,6 +2322,7 @@ int_t initialize_biases
     real_t *restrict glob_mean, real_t *restrict biasA, real_t *restrict biasB,
     bool user_bias, bool item_bias,
     real_t lam_user, real_t lam_item,
+    bool scale_lam,
     int_t m, int_t n,
     int_t m_bias, int_t n_bias,
     int_t ixA[], int_t ixB[], real_t *restrict X, size_t nnz,
@@ -2929,6 +2976,7 @@ int_t fit_most_popular
     real_t *restrict biasA, real_t *restrict biasB,
     real_t *restrict glob_mean,
     real_t lam_user, real_t lam_item,
+    bool scale_lam,
     real_t alpha,
     int_t m, int_t n,
     int_t ixA[], int_t ixB[], real_t *restrict X, size_t nnz,
@@ -3028,6 +3076,7 @@ int_t fit_most_popular
         glob_mean, biasA, biasB,
         false, biasA == NULL,
         lam_user, lam_item,
+        scale_lam,
         m, n,
         m, n,
         ixA, ixB, X, nnz,

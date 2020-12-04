@@ -13,4 +13,6 @@ They are **not** intended as unit tests - some might take very long to run, and 
 
 # TODO
 
-The tests for implicit features are currently failing. Need to find out why, and whether it's the tests or the functions that are wrong.
+* Need to add tests for cases with non-negativity constraints.
+* Need to add tests for the case of missing as zero + centering + bias (should look very different from the current tests).
+* Need to add tests for dynamic regularization and L1 regularization.

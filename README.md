@@ -33,12 +33,13 @@ The package can now automatically generate so-called "implicit features" for the
 * For the explicit-feedback model, can automatically add implicit features (created from the same "X" data).
 * Can be used for cold-start recommendations (when using side information).
 * Supports user and item biases in the explicit-feedback models (these are not just pre-estimated beforehand as in other software).
-* Can fit models with non-negativity constraints on the factors.
+* Can fit models with non-negativity constraints on the factors and/or with L1 regularization.
 * Provides an API for top-N recommended lists and for calculating latent factors from new data.
 * Can work with both sparse and dense matrices for each input (e.g. can also be used as a general missing-value imputer for 2-d data), and can work efficiently with a mix of dense and sparse inputs.
 * Can produce factorizations for variations of the problem such as sparse inputs with missing-as-zero instead of missing-as-unknown (e.g. when used for dimensionality reduction).
 * Can use either an alternating least-squares procedure (ALS) or a gradient-based procedure using an L-BFGS optimizer for the explicit-feedback models (the package bundles a modified version of [Okazaki's C implementation](https://github.com/chokkan/liblbfgs)).
 * For the ALS option, can use either the exact Cholesky method or the faster conjugate gradient method (see [4]).
+* Can produce models with constant regularization or with dynamically-adjusted regularization as in [7].
 * Provides a content-based model and other models aimed at better cold-start recommendations.
 * Provides an intercepts-only "most-popular" model for non-personalized recommendations, which can be used as a benchmark as it uses the same hyperparameters as the other models.
 * Allows variations of the original collective factorization models such as setting some factors to be used only for one factorization, setting different weights for the errors on each matrix, or setting different regularization parameters for each matrix.
@@ -88,6 +89,12 @@ Will also by default use MKL if it finds it - for OpenBLAS can set an environmen
 
 * R:
 
+Latest version (recommended):
+```r
+remotes::install_github("david-cortes/cmfrec")
+```
+
+Older version from CRAN (has some minor bugs):
 ```r
 install.packages("cmfrec")
 ```
@@ -281,3 +288,4 @@ For any installation problems or errors encountered with this software, please o
 * [4] Takács, Gábor, István Pilászy, and Domonkos Tikk. "Applications of the conjugate gradient method for implicit feedback collaborative filtering." Proceedings of the fifth ACM conference on Recommender systems. 2011.
 * [5] Rendle, Steffen, Li Zhang, and Yehuda Koren. "On the difficulty of evaluating baselines: A study on recommender systems." arXiv preprint arXiv:1905.01395 (2019).
 * [6] Franc, Vojtěch, Václav Hlaváč, and Mirko Navara. "Sequential coordinate-wise algorithm for the non-negative least squares problem." International Conference on Computer Analysis of Images and Patterns. Springer, Berlin, Heidelberg, 2005.
+* [7] Zhou, Yunhong, et al. "Large-scale parallel collaborative filtering for the netflix prize." International conference on algorithmic applications in management. Springer, Berlin, Heidelberg, 2008.

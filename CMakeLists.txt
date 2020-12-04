@@ -1,5 +1,5 @@
 cmake_minimum_required (VERSION 3.9)
-project (cmfrec VERSION 2.3.2)
+project (cmfrec VERSION 2.4.0)
 set(CMAKE_BUILD_TYPE Release)
 
 ### Note: this build script allows configuring 4 things manually:

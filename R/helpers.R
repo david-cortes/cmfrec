@@ -325,6 +325,7 @@ get.empty.precomputed <- function() {
     return(list(
         TransBtBinvBt = matrix(numeric(), nrow=0L, ncol=0L),
         BtB = matrix(numeric(), nrow=0L, ncol=0L),
+        BtXbias = matrix(numeric(), nrow=0L, ncol=0L),
         TransCtCinvCt = matrix(numeric(), nrow=0L, ncol=0L),
         CtC = matrix(numeric(), nrow=0L, ncol=0L),
         BeTBe = matrix(numeric(), nrow=0L, ncol=0L),
@@ -371,6 +372,7 @@ get.empty.info <- function() {
         k_main = 0L,
         k_sec = 0L,
         lambda = 1.,
+        l1_lambda = 0.,
         alpha = 1.,
         nfev = 0L,
         nupd = 0L,
@@ -388,6 +390,9 @@ get.empty.info <- function() {
         nonneg = FALSE,
         add_implicit_features = FALSE,
         include_all_X = TRUE,
+        center = FALSE,
+        scale_lam = FALSE,
+        scale_lam_sideinfo = FALSE,
         nthreads = 1L
     ))
 }
@@ -463,7 +468,7 @@ process.new.X.single <- function(X, X_col, X_val, weight, info, n_max) {
         if (!("numeric" %in% class(weight)))
             stop("'weight' must be a numeric vector.")
         
-        if (!is.null(X)) {
+        if (!is.null(X) && !("dsparseVector" %in% class(X))) {
             if (NROW(X) != NROW(weight))
                 stop("'weight' must have the same number of entries as 'X'.")
         } else if (!is.null(X_col)) {

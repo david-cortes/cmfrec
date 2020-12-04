@@ -33,7 +33,6 @@ def gen_data():
     D = np.random.normal(size = (q,k_item+k))
     Ai = np.empty((0,0), dtype="float64")
     Bi = np.empty((0,0), dtype="float64")
-    Xones = np.empty((0,0), dtype="float64")
     if nzX > 0:
         X[np.random.randint(m,size=nzX),np.random.randint(n,size=nzX)] = np.nan
         all_NA_row = (np.isnan(X).sum(axis=1) == X.shape[1]).astype(bool)
@@ -55,9 +54,8 @@ def gen_data():
     if i_f:
         Ai = np.random.normal(size = (m,k+k_main))
         Bi = np.random.normal(size = (n,k+k_main))
-        Xones = (~np.isnan(X)).astype("float64")
         
-    return X, W, U, I, A, B, C, D, Ai, Bi, Xones
+    return X, W, U, I, A, B, C, D, Ai, Bi
 
 def dense_to_sp(X, W):
     m = X.shape[0]
@@ -129,7 +127,10 @@ def get_solA():
         )
 def get_solB():
     B = np.empty((max(n,n_i),k_item+k+k_main), dtype=ctypes.c_double)
-    if n <= n_i:
+    if xtype!="dense":
+        pass_isB = False
+        pass_W = Wpass
+    elif n <= n_i:
         pass_isB = True
         pass_X = X
         pass_W = Wpass
@@ -179,7 +180,8 @@ def py_evalA(x):
     else:
         X_use = X
     E = X_use - A[:m,k_user:].dot(B[:n,k_item:].T)
-    E[np.isnan(X_use)] = 0
+    if not NA_as_zero_X:
+        E[np.isnan(X)] = 0
     if wtype:
         res += w_main * (Wuse * (E ** 2)).sum()
     else:
@@ -191,11 +193,14 @@ def py_evalA(x):
     else:
         U_use = U
     E2 = U_use - A[:m_u,:k+k_user].dot(C.T)
-    E2[np.isnan(U_use)] = 0
+    if not NA_as_zero_U:
+        E2[np.isnan(U)] = 0
     res += w_user * E2.reshape(-1).dot(E2.reshape(-1))
     if i_f:
-        Eones = A[:m,k_user:].dot(Bi.T) - Xones
+        Eones = A[:m,k_user:].dot(Bi.T) - (~np.isnan(X))
         res += w_implicit * Eones.reshape(-1).dot(Eones.reshape(-1))
+        if (m_u > m):
+            res += w_implicit * ((A[m:,k_user:].dot(Bi.T))**2).sum()
     return res / 2
 
 def py_evalB(x):
@@ -211,7 +216,8 @@ def py_evalB(x):
     else:
         X_use = X
     E = X_use - A[:m,k_user:].dot(B[:n,k_item:].T)
-    E[np.isnan(X_use)] = 0
+    if not NA_as_zero_X:
+        E[np.isnan(X)] = 0
     if wtype:
         res += w_main * (Wuse * (E ** 2)).sum()
     else:
@@ -223,11 +229,14 @@ def py_evalB(x):
     else:
         I_use = I
     E2 = I_use - B[:n_i,:k+k_item].dot(D.T)
-    E2[np.isnan(I_use)] = 0
+    if not NA_as_zero_U:
+        E2[np.isnan(I)] = 0
     res += w_item * E2.reshape(-1).dot(E2.reshape(-1))
     if i_f:
-        Eones = Ai.dot(B[:n,k_item:].T) - Xones
+        Eones = Ai.dot(B[:n,k_item:].T) - (~np.isnan(X))
         res += w_implicit * Eones.reshape(-1).dot(Eones.reshape(-1))
+        if (n_i > n):
+            res += w_implicit * ((Ai.dot(B[n:,k_item:].T))**2).sum()
     return res / 2
 
 xtry = ["dense", "sparse"]
@@ -268,6 +277,8 @@ for xtype in xtry:
                                                             continue
                                                         if (as_near_dense_u) and (utype!="dense"):
                                                             continue
+                                                        if (NA_as_zero_U or NA_as_zero_X) and (xlen!="even"):
+                                                            continue
 
                                                         if xlen == "even":
                                                             m = m1
@@ -283,7 +294,7 @@ for xtype in xtry:
                                                             n_i = n2
                                                         n = n0
                                                             
-                                                        X, W, U, I, A, B, C, D, Ai, Bi, Xones = gen_data()
+                                                        X, W, U, I, A, B, C, D, Ai, Bi = gen_data()
                                                         Xcsr_p, Xcsr_i, Xcsr, Wcsr, \
                                                         Xcsc_p, Xcsc_i, Xcsc, Wcsc = dense_to_sp(X, W)
                                                         U_csr_p, U_csr_i, U_csr = dense_to_sp_simple(U)
@@ -311,7 +322,7 @@ for xtype in xtry:
                                                         else:
                                                             n = n1
                                                         m = m0
-                                                        X, W, U, I, A, B, C, D, Ai, Bi, Xones = gen_data()
+                                                        X, W, U, I, A, B, C, D, Ai, Bi = gen_data()
                                                         Xcsr_p, Xcsr_i, Xcsr, Wcsr, \
                                                         Xcsc_p, Xcsc_i, Xcsc, Wcsc = dense_to_sp(X, W)
                                                         I_csr_p, I_csr_i, I_csr = dense_to_sp_simple(I)

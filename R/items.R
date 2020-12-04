@@ -152,6 +152,7 @@ item_factors <- function(model, X=NULL, X_col=NULL, X_val=NULL,
                                    I = I, I_col = I_col, I_val = I_val, I_bin = I_bin)
     if ("CMF" %in% class(model)) {
         lambda <- swap.lambda(model$info$lambda)
+        l1_lambda <- swap.lambda(model$info$l1_lambda)
         b_vec <- numeric(model$info$k_item + model$info$k + model$info$k_main)
         b_bias <- numeric()
         if (NROW(model$matrices$item_bias))
@@ -172,9 +173,11 @@ item_factors <- function(model, X=NULL, X_col=NULL, X_val=NULL,
                           model$matrices$A,
                           model$matrices$Ai, model$info$add_implicit_features,
                           model$info$k, model$info$k_item, model$info$k_user, model$info$k_main,
-                          lambda,
+                          lambda, l1_lambda,
+                          model$info$scale_lam, model$info$scale_lam_sideinfo,
                           model$info$w_main, model$info$w_item, model$info$w_implicit,
                           NCOL(model$matrices$A), TRUE,
+                          numeric(),
                           numeric(),
                           numeric(),
                           numeric(),
@@ -185,6 +188,7 @@ item_factors <- function(model, X=NULL, X_col=NULL, X_val=NULL,
     } else if ("CMF_implicit" %in% class(model)) {
         b_vec <- numeric(model$info$k_item + model$info$k + model$info$k_main)
         lambda <- ifelse(NROW(model$info$lambda) == 6L, model$info$lambda[4L], model$info$lambda)
+        l1_lambda <- ifelse(NROW(model$info$l1_lambda) == 6L, model$info$l1_lambda[4L], model$info$l1_lambda)
         ret_code <- .Call("call_factors_collective_implicit_single",
                           b_vec,
                           inputs$processed_I$U, inputs$processed_I$p,
@@ -195,7 +199,7 @@ item_factors <- function(model, X=NULL, X_col=NULL, X_val=NULL,
                           model$matrices$A, NCOL(model$matrices$A),model$matrices$D,
                           inputs$processed_X$X_val, inputs$processed_X$X_col,
                           model$info$k, model$info$k_item, model$info$k_user, model$info$k_main,
-                          lambda, model$info$alpha, model$info$w_main, model$info$w_item,
+                          lambda, l1_lambda, model$info$alpha, model$info$w_main, model$info$w_item,
                           model$info$w_main_multiplier,
                           model$info$apply_log_transf,
                           numeric(),
@@ -434,9 +438,11 @@ predict_new_items <- function(model, user, item=NULL,
                           model$matrices$A,
                           model$matrices$Ai, model$info$add_implicit_features,
                           model$info$k, model$info$k_item, model$info$k_user, model$info$k_main,
-                          swap.lambda(model$info$lambda),
+                          swap.lambda(model$info$lambda), swap.lambda(model$info$l1_lambda),
+                          model$info$scale_lam, model$info$scale_lam_sideinfo,
                           model$info$w_main, model$info$w_item, model$info$w_implicit,
                           NCOL(model$matrices$A), model$info$include_all_X,
+                          numeric(),
                           numeric(),
                           numeric(),
                           numeric(),
@@ -456,6 +462,7 @@ predict_new_items <- function(model, user, item=NULL,
                           model$info$nthreads)
     } else if ("CMF_implicit" %in% model_class) {
         lambda <- ifelse(NROW(model$info$lambda) == 6L, model$info$lambda[3L], model$info$lambda)
+        l1_lambda <- ifelse(NROW(model$info$l1_lambda) == 6L, model$info$l1_lambda[3L], model$info$l1_lambda)
         B <- matrix(0., ncol = n_max, nrow = model$info$k_item + model$info$k + model$info$k_main)
         ret_code <- .Call("call_factors_collective_implicit_multiple",
                           B, n_max,
@@ -470,7 +477,7 @@ predict_new_items <- function(model, user, item=NULL,
                           model$matrices$D,
                           model$matrices$I_colmeans,
                           model$info$k, model$info$k_item, model$info$k_user, model$info$k_main,
-                          lambda, model$info$alpha, model$info$w_main, model$info$w_item,
+                          lambda, l1_lambda, model$info$alpha, model$info$w_main, model$info$w_item,
                           model$info$w_main_multiplier,
                           model$info$apply_log_transf,
                           numeric(),

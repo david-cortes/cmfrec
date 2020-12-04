@@ -31,9 +31,12 @@ class _CMF:
                      nonneg=False, nonneg_C=False, nonneg_D=False,
                      max_cd_steps=100,
                      k=50, lambda_=1e2, method="als", add_implicit_features=False,
+                     scale_lam=False, scale_lam_sideinfo=False,
                      use_cg=False, max_cg_steps=3, finalize_chol=False,
-                     user_bias=True, item_bias=True, k_user=0, k_item=0, k_main=0,
+                     user_bias=True, item_bias=True, center=False,
+                     k_user=0, k_item=0, k_main=0,
                      w_main=1., w_user=1., w_item=1., w_implicit=0.5,
+                     l1_lambda=0.,
                      maxiter=400, niter=10, parallelize="separate", corr_pairs=4,
                      NA_as_zero=False, NA_as_zero_user=False, NA_as_zero_item=False,
                      precompute_for_predictions=True, use_float=False,
@@ -67,6 +70,15 @@ class _CMF:
             assert np.all(lambda_ >= 0.)
         else:
             assert isinstance(lambda_, float) and lambda_ >= 0.
+
+        l1_lambda = float(l1_lambda) if isinstance(l1_lambda, int) else l1_lambda
+        l1_lambda = np.array(l1_lambda) if l1_lambda.__class__.__name__ in ["list", "Series", "tuple"] else l1_lambda
+        if l1_lambda.__class__.__name__ == "ndarray":
+            l1_lambda = l1_lambda.reshape(-1)
+            assert l1_lambda.shape[0] == 6
+            assert np.all(l1_lambda >= 0.)
+        else:
+            assert isinstance(l1_lambda, float) and l1_lambda >= 0.
 
         
         niter = int(niter) if isinstance(niter, float) else niter
@@ -102,6 +114,10 @@ class _CMF:
                 raise ValueError("Option 'add_implicit_features' not supported with method='lbfgs'.")
             if (nonneg) or (nonneg_C) or (nonneg_D):
                 raise ValueError("non-negativity constraints not supported with method='lbfgs'.")
+            if (scale_lam) or (scale_lam_sideinfo):
+                raise ValueError("'scale_lam' not supported with method='lbfgs'.")
+            if max(l1_lambda) > 0.:
+                raise ValueError("L1 regularization not supported with method='lbfgs'.")
 
         if method == "als":
             assert max_cg_steps > 0
@@ -126,14 +142,14 @@ class _CMF:
             alpha = float(alpha) if isinstance(alpha, int) else alpha
             assert isinstance(alpha, float) and alpha > 0.
 
-        if NA_as_zero and (user_bias or item_bias):
-            raise ValueError("Biases are not supported when using 'NA_as_zero'.")
-
         self.k = k
         self.k_user = k_user
         self.k_item = k_item
         self.k_main = k_main
         self.lambda_ = lambda_
+        self.l1_lambda = l1_lambda
+        self.scale_lam = bool(scale_lam)
+        self.scale_lam_sideinfo = bool(scale_lam_sideinfo) or self.scale_lam
         self.alpha = alpha
         self.w_main = w_main
         self.w_user = w_user
@@ -142,6 +158,7 @@ class _CMF:
         self.downweight = bool(downweight)
         self.user_bias = bool(user_bias)
         self.item_bias = bool(item_bias)
+        self.center = bool(center)
         self.method = method
         self.add_implicit_features = bool(add_implicit_features)
         self.apply_log_transf = bool(apply_log_transf)
@@ -197,6 +214,7 @@ class _CMF:
         self._TransBtBinvBt = np.empty((0,0), dtype=self.dtype_)
         ## will have lambda added for implicit but not for explicit, dim is k+k_main
         self._BtB = np.empty((0,0), dtype=self.dtype_)
+        self._BtXbias = np.empty(0, dtype=self.dtype_)
         self._TransCtCinvCt = np.empty((0,0), dtype=self.dtype_)
         ## will be multiplied by w_user already
         self._CtC = np.empty((0,0), dtype=self.dtype_)
@@ -1289,10 +1307,16 @@ class _CMF:
         if isinstance(self.lambda_, np.ndarray):
             lambda_ = self.lambda_[2]
             lambda_bias = self.lambda_[0]
-
         else:
             lambda_ = self.lambda_
             lambda_bias = self.lambda_
+
+        if isinstance(self.l1_lambda, np.ndarray):
+            l1_lambda = self.l1_lambda[2]
+            l1_lambda_bias = self.l1_lambda[0]
+        else:
+            l1_lambda = self.l1_lambda
+            l1_lambda_bias = self.l1_lambda
         
         if not self._implicit:
             _, a_vec = c_funs.call_factors_collective_explicit_single(
@@ -1312,8 +1336,9 @@ class _CMF:
                     self.C_,
                     self.Cbin_,
                     self.Bi_,
-                    self._TransBtBinvBt,
                     self._BtB,
+                    self._TransBtBinvBt,
+                    self._BtXbias,
                     self._BeTBeChol,
                     self._BiTBi,
                     self._CtC,
@@ -1322,6 +1347,8 @@ class _CMF:
                     self._n_orig,
                     self.k, self.k_user, self.k_item, self.k_main,
                     lambda_, lambda_bias,
+                    l1_lambda, l1_lambda_bias,
+                    self.scale_lam, self.scale_lam_sideinfo,
                     self.w_user, self.w_main, self.w_implicit,
                     self.user_bias,
                     self.NA_as_zero_user, self.NA_as_zero,
@@ -1343,7 +1370,7 @@ class _CMF:
                 self._BtB,
                 self._BeTBeChol,
                 self.k, self.k_user, self.k_item, self.k_main,
-                lambda_, self.alpha,
+                lambda_, l1_lambda, self.alpha,
                 self._w_main_multiplier,
                 self.w_user, self.w_main,
                 self.apply_log_transf,
@@ -1515,13 +1542,21 @@ class _CMF:
             lambda_ = self.lambda_
             lambda_bias = self.lambda_
 
+        if isinstance(self.l1_lambda, np.ndarray):
+            l1_lambda = self.l1_lambda[2]
+            l1_lambda_bias = self.l1_lambda[0]
+        else:
+            l1_lambda = self.l1_lambda
+            l1_lambda_bias = self.l1_lambda
+
         return Xrow, Xcol, Xval, W_sp, Xarr, \
                Xcsr_p, Xcsr_i, Xcsr, \
                W_dense, Xorig, mask_take, \
                Uarr, Urow, Ucol, Uval, Ub_arr, \
                Ucsr_p, Ucsr_i, Ucsr, \
                n, m_u, m_x, p, pbin, \
-               lambda_, lambda_bias
+               lambda_, lambda_bias, \
+               l1_lambda, l1_lambda_bias
 
     def _transform_step(self, A, A_bias, mask_take, Xorig):
         outp = A[:, self.k_user:].dot(self._B_pred[:, self.k_item:].T) \
@@ -1573,6 +1608,13 @@ class _CMF:
             lambda_ = self.lambda_
             lambda_bias = self.lambda_
 
+        if isinstance(self.l1_lambda, np.ndarray):
+            l1_lambda = self.l1_lambda[2]
+            l1_lambda_bias = self.l1_lambda[0]
+        else:
+            l1_lambda = self.l1_lambda
+            l1_lambda_bias = self.l1_lambda
+
         if self.apply_log_transf:
             msg_small ="Cannot pass values below 1 with 'apply_log_transf=True'."
             if Xval.shape[0]:
@@ -1588,7 +1630,8 @@ class _CMF:
                Uarr, Urow, Ucol, Uval, Ub_arr, \
                Ucsr_p, Ucsr_i, Ucsr, \
                n, m_u, m_x, p, pbin, \
-               lambda_, lambda_bias
+               lambda_, lambda_bias, \
+               l1_lambda, l1_lambda_bias
 
     def _factors_multiple_common(self, X, U, U_bin, W):
         Xrow, Xcol, Xval, W_sp, \
@@ -1597,7 +1640,8 @@ class _CMF:
         Uarr, Urow, Ucol, Uval, Ub_arr, \
         Ucsr_p, Ucsr_i, Ucsr, \
         n, m_u, m_x, p, pbin, \
-        lambda_, lambda_bias = self._process_multiple_common(X, U, U_bin, W)
+        lambda_, lambda_bias, \
+        l1_lambda, l1_lambda_bias = self._process_multiple_common(X, U, U_bin, W)
         A, A_bias = self._factors_multiple(
             Xrow, Xcol, Xval, W_sp,
             Xcsr_p, Xcsr_i, Xcsr,
@@ -1605,7 +1649,8 @@ class _CMF:
             Uarr, Urow, Ucol, Uval, Ub_arr,
             Ucsr_p, Ucsr_i, Ucsr,
             n, m_u, m_x, p, pbin,
-            lambda_, lambda_bias
+            lambda_, lambda_bias,
+            l1_lambda, l1_lambda_bias
         )
         return A, A_bias
 
@@ -1616,7 +1661,8 @@ class _CMF:
                           Uarr, Urow, Ucol, Uval, Ub_arr,
                           Ucsr_p, Ucsr_i, Ucsr,
                           n, m_u, m_x, p, pbin,
-                          lambda_, lambda_bias):
+                          lambda_, lambda_bias,
+                          l1_lambda, l1_lambda_bias):
         c_funs = wrapper_float if self.use_float else wrapper_double
         
         if (not self._implicit):
@@ -1641,8 +1687,9 @@ class _CMF:
                 self.Bi_,
                 self.C_,
                 self.Cbin_,
-                self._TransBtBinvBt,
                 self._BtB,
+                self._TransBtBinvBt,
+                self._BtXbias,
                 self._BeTBeChol,
                 self._BiTBi,
                 self._TransCtCinvCt,
@@ -1652,6 +1699,8 @@ class _CMF:
                 self._n_orig,
                 self._k_pred, self.k_user, self.k_item, self._k_main_col,
                 lambda_, lambda_bias,
+                l1_lambda, l1_lambda_bias,
+                self.scale_lam, self.scale_lam_sideinfo,
                 self.w_user, self.w_main, self.w_implicit,
                 self.user_bias,
                 self.NA_as_zero_user, self.NA_as_zero,
@@ -1681,7 +1730,7 @@ class _CMF:
                 self._BeTBeChol,
                 n, m_u, m_x,
                 self.k, self.k_user, self.k_item, self.k_main,
-                lambda_, self.alpha,
+                lambda_, l1_lambda, self.alpha,
                 self._w_main_multiplier,
                 self.w_user, self.w_main,
                 self.apply_log_transf,
@@ -1705,6 +1754,13 @@ class _CMF:
         else:
             lambda_ = self.lambda_
             lambda_bias = self.lambda_
+
+        if isinstance(self.l1_lambda, np.ndarray):
+            l1_lambda = self.l1_lambda[3]
+            lambda_bias = self.l1_lambda[1]
+        else:
+            l1_lambda = self.l1_lambda
+            lambda_bias = self.l1_lambda
 
         I, I_col, I_val, I_bin = self._process_new_U(U=I, U_col=I_col, U_val=I_val, U_bin=I_bin, is_I=True)
 
@@ -1730,6 +1786,7 @@ class _CMF:
                 self.Ai_,
                 np.empty((0,0), dtype=self.dtype_),
                 np.empty((0,0), dtype=self.dtype_),
+                np.empty(0, dtype=self.dtype_),
                 np.empty((0,0), dtype=self.dtype_),
                 np.empty((0,0), dtype=self.dtype_),
                 np.empty((0,0), dtype=self.dtype_),
@@ -1738,6 +1795,8 @@ class _CMF:
                 self.A_.shape[0],
                 self.k, self.k_item, self.k_user, self.k_main,
                 lambda_, lambda_bias,
+                l1_lambda, l1_lambda_bias,
+                self.scale_lam, self.scale_lam_sideinfo,
                 self.w_item, self.w_main, self.w_implicit,
                 self.item_bias,
                 self.NA_as_zero_item, self.NA_as_zero,
@@ -1759,7 +1818,7 @@ class _CMF:
                 np.empty((0,0), dtype=self.dtype_),
                 np.empty((0,0), dtype=self.dtype_),
                 self.k, self.k_item, self.k_user, self.k_main,
-                lambda_, self.alpha,
+                lambda_, l1_lambda, self.alpha,
                 self._w_main_multiplier,
                 self.w_item, self.w_main,
                 self.apply_log_transf,
@@ -1805,6 +1864,17 @@ class _CMF:
             lambda_ = self.lambda_
             lambda_bias = self.lambda_
 
+        if isinstance(self.l1_lambda, np.ndarray):
+            if not is_I:
+                l1_lambda = self.l1_lambda[2]
+                l1_lambda_bias = self.l1_lambda[0]
+            else:
+                l1_lambda = self.l1_lambda[3]
+                l1_lambda_bias = self.l1_lambda[1]
+        else:
+            l1_lambda = self.l1_lambda
+            l1_lambda_bias = self.l1_lambda
+
         Uarr, Urow, Ucol, Uval, Ucsr_p, Ucsr_i, Ucsr, m_u, p = \
             self._process_new_U_2d(U=U, is_I=is_I, allow_csr=True)
         Ub_arr, m_ub, pbin = self._process_new_Ub_2d(U_bin=U_bin, is_I=is_I)
@@ -1837,8 +1907,9 @@ class _CMF:
                 self.Bi_ if not is_I else self.Ai_,
                 Mat,
                 MatBin,
-                self._TransBtBinvBt if not is_I else empty_arr,
                 self._BtB if not is_I else empty_arr,
+                self._TransBtBinvBt if not is_I else empty_arr,
+                self._BtXbias if not is_I else np.empty(0, dtype=self.dtype_),
                 self._BeTBeChol if not is_I else empty_arr,
                 self._BiTBi if not is_I else empty_arr,
                 self._TransCtCinvCt if not is_I else empty_arr,
@@ -1851,6 +1922,7 @@ class _CMF:
                 self.k_item if not is_I else self.k_user,
                 self.k_main,
                 lambda_, lambda_bias,
+                self.scale_lam, self.scale_lam_sideinfo,
                 self.w_user if not is_I else self.w_item,
                 self.w_main, self.w_implicit,
                 self.user_bias if not is_I else self.item_bias,
@@ -1885,7 +1957,7 @@ class _CMF:
                     self.k_user if not is_I else self.k_item,
                     self.k_item if not is_I else self.k_user,
                     self.k_main,
-                    lambda_, self.alpha,
+                    lambda_, l1_lambda, self.alpha,
                     self._w_main_multiplier,
                     self.w_user if not is_I else self.w_item, self.w_main,
                     self.apply_log_transf,
@@ -1930,12 +2002,21 @@ class _CMF:
             new_lambda[2], new_lambda[3] = new_lambda[3], new_lambda[2]
             new_lambda[4], new_lambda[5] = new_lambda[5], new_lambda[4]
 
+        new_l1_lambda = self.l1_lambda
+        if isinstance(new_l1_lambda, np.ndarray) and (new_l1_lambda.shape[0] == 6):
+            new_l1_lambda = self.l1_lambda.copy()
+            new_l1_lambda[0], new_l1_lambda[1] = new_l1_lambda[1], new_l1_lambda[0]
+            new_l1_lambda[2], new_l1_lambda[3] = new_l1_lambda[3], new_l1_lambda[2]
+            new_l1_lambda[4], new_l1_lambda[5] = new_l1_lambda[5], new_l1_lambda[4]
+
         if isinstance(self, CMF):
             new_model = CMF(
                 k=self.k, lambda_=new_lambda, method=self.method, use_cg=self.use_cg,
                 user_bias=self.item_bias, item_bias=self.user_bias, add_implicit_features=self.add_implicit_features,
                 k_user=self.k_item, k_item=self.k_user, k_main=self.k_main,
                 w_main=self.w_main, w_user=self.w_item, w_item=self.w_user, w_implicit=self.w_implicit,
+                l1_lambda=new_l1_lambda,
+                scale_lam=self.scale_lam, scale_lam_sideinfo=self.scale_lam_sideinfo,
                 maxiter=self.maxiter, niter=self.niter, parallelize=self.parallelize, corr_pairs=self.corr_pairs,
                 max_cg_steps=self.max_cg_steps, finalize_chol=self.finalize_chol,
                 NA_as_zero=self.NA_as_zero, NA_as_zero_user=self.NA_as_zero_item, NA_as_zero_item=self.NA_as_zero_user,
@@ -1950,6 +2031,8 @@ class _CMF:
                 k=self.k, lambda_=new_lambda, alpha=self.alpha, use_cg=self.use_cg,
                 k_user=self.k_item, k_item=self.k_user, k_main=self.k_main,
                 w_main=self.w_main, w_user=self.w_item, w_item=self.w_user,
+                l1_lambda=new_l1_lambda,
+                scale_lam=self.scale_lam, scale_lam_sideinfo=self.scale_lam_sideinfo,
                 niter=self.niter, NA_as_zero_user=self.NA_as_zero_item, NA_as_zero_item=self.NA_as_zero_user,
                 nonneg=self.nonneg,
                 apply_log_transf=self.apply_log_transf,
@@ -2048,17 +2131,18 @@ class _CMF:
                     lam_bias = new_lambda
                 c_funs = wrapper_float if self.use_float else wrapper_double
                 new_model._B_plus_bias, new_model._BtB, new_model._TransBtBinvBt, \
-                _1, _2, _3, _4 = \
+                _1, _2, _3, _4, _5 = \
                     c_funs.precompute_matrices_collective_explicit(
                         new_model.B_,
                         new_model.C_,
                         new_model.Bi_,
+                        new_model.item_bias_,
                         new_model.user_bias, False,
                         new_model.n_orig,
                         new_model.k_sec + new_model.k + new_model.k_main,
                         0, 0, 0,
                         lambda_, lam_bias,
-                        1., 1., 1.,
+                        1., 1., 1., 0., 0, 0, 0,
                         self.nonneg,
                         include_all_X = True
                     )
@@ -2149,10 +2233,11 @@ class CMF(_CMF):
         Even if passing "True" here, will use the Cholesky method in cases in which
         it is faster (e.g. dense matrices with no missing values),
         and will not use the conjugate gradient method on new data.
+        This option is not available when using L1 regularization and/or
+        non-negativity constraints.
         Ignored when passing ``method="lbfgs"``.
     user_bias : bool
         Whether to add user/row biases (intercepts) to the model.
-        Cannot be used together with ``NA_as_zero``.
         If using it for purposes other than recommender systems, this is is
         usually **not** suggested to include.
     item_bias : bool
@@ -2160,11 +2245,33 @@ class CMF(_CMF):
         item biases with low regularization for them will tend to favor items
         with high average ratings regardless of the number of ratings the item
         has received.
-        Cannot be used together with ``NA_as_zero``.
+    center : bool
+        Whether to center the "X" data by subtracting the mean value. For recommender
+        systems, it's highly recommended to pass "True" here, the more so if the
+        model has user and/or item biases.
     add_implicit_features : bool
         Whether to automatically add so-called implicit features from the data,
         as in reference [5] and similar. If using this for recommender systems
         with small amounts of data, it's recommended to pass 'True' here.
+    scale_lam : bool
+        Whether to scale (increase) the regularization parameter
+        for each row of the model matrices (A, B, C, D) according
+        to the number of non-missing entries in the data for that
+        particular row, as proposed in reference [7]. For the
+        A and B matrices, the regularization will only be scaled
+        according to the number of non-missing entries in "X"
+        (see also the ``scale_lam_sideinfo`` parameter). Note that,
+        when using the options ``NA_as_zero_*``, all entries are
+        considered to be non-missing. If passing "True" here, the
+        optimal value for ``lambda_`` will be much smaller.
+        Only supported for ``method="als"``.
+    scale_lam_sideinfo : bool
+        Whether to scale (increase) the regularization
+        parameter for each row of the "A" and "B"
+        matrices according to the number of non-missing
+        entries in both "X" and the side info matrices
+        "U" and "I". If passing "True" here, ``scale_lam``
+        will also be assumed to be "True".
     k_user : int
         Number of factors in the factorizing A and C matrices which will be used
         only for the 'U' and 'U_bin' matrices, while being ignored for the 'X' matrix.
@@ -2199,6 +2306,14 @@ class CMF(_CMF):
         for the original 'X' and a smaller value will perform better.
         It is recommended to tune this parameter carefully.
         Ignored when passing ``add_implicit_features=False``.
+    l1_lambda : float or array(6,)
+        Regularization parameter to apply to the L1 norm of the model matrices.
+        Can also pass different values for each matrix (see ``lambda_`` for
+        details). Note that, when adding L1 regularization, the model will be
+        fit through a coordinate descent procedure, which is significantly
+        slower than the Cholesky method with L2 regularization.
+        Only supported with ``method="als"``.
+        Not recommended.
     maxiter : int
         Maximum L-BFGS iterations to perform. The procedure will halt if it
         has not converged after this number of updates. Note that, compared to
@@ -2252,19 +2367,18 @@ class CMF(_CMF):
         all values set to one and weights corresponding to the actual values
         of "X" multiplied by alpha, plus 1 (W := 1 + alpha*X to imitate the
         implicit-feedback model).
-        Cannot be used together with ``user_bias`` or ``item_bias``.
-        Can be changed after the model has already been fit to data.
+        If passing this option, be aware that the defaults are also to
+        perform mean centering and add user/item biases, which might
+        be undesirable to have together with this option.
     NA_as_zero_user : bool
         Whether to take missing entries in the 'U' matrix as zeros (only
         when the 'U' matrix is passed as sparse COO matrix) instead of ignoring them.
         Note that passing "True" will affect the results of the functions named
         "warm" if no data is passed there (as it will assume zeros instead of
-        missing). Can be changed after the model has already been fit to data,
-        **as long as the model is not fit to binary user side info 'U_bin'**.
+        missing).
     NA_as_zero_item : bool
         Whether to take missing entries in the 'I' matrix as zeros (only
         when the 'I' matrix is passed as sparse COO matrix) instead of ignoring them.
-        Can be changed after the model has already been fit to data.
     nonneg : bool
         Whether to constrain the 'A' and 'B' matrices to be non-negative.
         In order for this to work correctly, the 'X' input data must also be
@@ -2286,10 +2400,10 @@ class CMF(_CMF):
         In order for this to work correctly, the 'I' input data must also be
         non-negative.
     max_cd_steps : int
-        Maximum number of coordinate descent updates to perform per iteration
-        when determining factors with non-negativity constraints.
+        Maximum number of coordinate descent updates to perform per iteration.
         Pass zero for no limit.
-        Ignored when not having non-negativity constraints.
+        The procedure will only use coordinate descent updates when having
+        L1 regularization and/or non-negativity constraints.
         This number should usually be larger than ``k``.
     precompute_for_predictions : bool
         Whether to precompute some of the matrices that are used when making
@@ -2419,11 +2533,18 @@ class CMF(_CMF):
            non-negative least squares problem."
            International Conference on Computer Analysis of Images and Patterns.
            Springer, Berlin, Heidelberg, 2005.
+    .. [7] Zhou, Yunhong, et al.
+           "Large-scale parallel collaborative filtering for the netflix prize."
+           International conference on algorithmic applications in management.
+           Springer, Berlin, Heidelberg, 2008.
     """
     def __init__(self, k=40, lambda_=1e+1, method="als", use_cg=True,
-                 user_bias=True, item_bias=True, add_implicit_features=False,
+                 user_bias=True, item_bias=True, center=True,
+                 add_implicit_features=False,
+                 scale_lam=False, scale_lam_sideinfo=False,
                  k_user=0, k_item=0, k_main=0,
                  w_main=1., w_user=1., w_item=1., w_implicit=0.5,
+                 l1_lambda=0.,
                  maxiter=800, niter=10, parallelize="separate", corr_pairs=4,
                  max_cg_steps=3, finalize_chol=True,
                  NA_as_zero=False, NA_as_zero_user=False, NA_as_zero_item=False,
@@ -2436,14 +2557,17 @@ class CMF(_CMF):
         self._take_params(implicit=False, alpha=0., downweight=False,
                           k=k, lambda_=lambda_, method=method,
                           add_implicit_features=add_implicit_features,
+                          scale_lam=scale_lam, scale_lam_sideinfo=scale_lam_sideinfo,
                           nonneg=nonneg, nonneg_C=nonneg_C, nonneg_D=nonneg_D,
                           use_cg=use_cg, max_cg_steps=max_cg_steps,
                           max_cd_steps=max_cd_steps,
                           finalize_chol=finalize_chol,
                           user_bias=user_bias, item_bias=item_bias,
+                          center=center,
                           k_user=k_user, k_item=k_item, k_main=k_main,
                           w_main=w_main, w_user=w_user, w_item=w_item,
                           w_implicit=w_implicit,
+                          l1_lambda=l1_lambda,
                           maxiter=maxiter, niter=niter, parallelize=parallelize,
                           corr_pairs=corr_pairs,
                           NA_as_zero=NA_as_zero, NA_as_zero_user=NA_as_zero_user,
@@ -2591,7 +2715,7 @@ class CMF(_CMF):
                     m, n, m_u, n_i, p, q,
                     self.k, self.k_user, self.k_item, self.k_main,
                     self.w_main, self.w_user, self.w_item,
-                    self.user_bias, self.item_bias,
+                    self.user_bias, self.item_bias, self.center,
                     self.lambda_ if isinstance(self.lambda_, float) else 0.,
                     self.lambda_ if isinstance(self.lambda_, np.ndarray) else np.empty(0, dtype=self.dtype_),
                     self.verbose, self.print_every,
@@ -2617,7 +2741,7 @@ class CMF(_CMF):
             self.user_bias_, self.item_bias_, \
             self.A_, self.B_, self.C_, self.D_, self.Ai_, self.Bi_, \
             self.glob_mean_,  self._U_colmeans, self._I_colmeans, \
-            self._B_plus_bias, self._BtB, self._TransBtBinvBt, \
+            self._B_plus_bias, self._BtB, self._TransBtBinvBt, self._BtXbias, \
             self._BeTBeChol, self._BiTBi, self._TransCtCinvCt, self._CtC = \
                 c_funs.call_fit_collective_explicit_als(
                     Xrow,
@@ -2638,9 +2762,12 @@ class CMF(_CMF):
                     m, n, m_u, n_i, p, q,
                     self.k, self.k_user, self.k_item, self.k_main,
                     self.w_main, self.w_user, self.w_item, self.w_implicit,
-                    self.user_bias, self.item_bias,
+                    self.user_bias, self.item_bias, self.center,
                     self.lambda_ if isinstance(self.lambda_, float) else 0.,
                     self.lambda_ if isinstance(self.lambda_, np.ndarray) else np.empty(0, dtype=self.dtype_),
+                    self.l1_lambda if isinstance(self.l1_lambda, float) else 0.,
+                    self.l1_lambda if isinstance(self.l1_lambda, np.ndarray) else np.empty(0, dtype=self.dtype_),
+                    self.scale_lam, self.scale_lam_sideinfo,
                     self.verbose, self.nthreads,
                     self.use_cg, self.max_cg_steps,
                     self.finalize_chol,
@@ -3039,6 +3166,13 @@ class CMF(_CMF):
             lambda_ = self.lambda_
             lambda_bias = self.lambda_
 
+        if isinstance(self.l1_lambda, np.ndarray):
+            l1_lambda = self.l1_lambda[2]
+            lambdabias = self.l1_lambda[0]
+        else:
+            l1_lambda = self.l1_lambda
+            lambda_bias = self.l1_lambda
+
         c_funs = wrapper_float if self.use_float else wrapper_double
         a_bias, a_vec = c_funs.call_factors_collective_explicit_single(
             X,
@@ -3057,8 +3191,9 @@ class CMF(_CMF):
             self.C_,
             self.Cbin_,
             self.Bi_,
-            self._TransBtBinvBt,
             self._BtB,
+            self._TransBtBinvBt,
+            self._BtXbias,
             self._BeTBeChol,
             self._BiTBi,
             self._CtC,
@@ -3067,6 +3202,8 @@ class CMF(_CMF):
             self._n_orig,
             self.k, self.k_user, self.k_item, self.k_main,
             lambda_, lambda_bias,
+            l1_lambda, l1_lambda_bias,
+            self.scale_lam, self.scale_lam_sideinfo,
             self.w_user, self.w_main, self.w_implicit,
             self.user_bias,
             self.NA_as_zero_user, self.NA_as_zero,
@@ -3252,7 +3389,8 @@ class CMF(_CMF):
         Uarr, Urow, Ucol, Uval, Ub_arr, \
         Ucsr_p, Ucsr_i, Ucsr, \
         n, m_u, m_x, p, pbin, \
-        lambda_, lambda_bias = \
+        lambda_, lambda_bias, \
+        l1_lambda, l1_lambda_bias = \
             self._process_transform_inputs(X=X, U=U, U_bin=U_bin, W=W,
                                            replace_existing=True)
         A, A_bias = c_funs.call_factors_collective_explicit_multiple(
@@ -3276,8 +3414,9 @@ class CMF(_CMF):
                 self.Bi_,
                 self.C_,
                 self.Cbin_,
-                self._TransBtBinvBt,
                 self._BtB,
+                self._TransBtBinvBt,
+                self._BtXbias,
                 self._BeTBeChol,
                 self._BiTBi,
                 self._TransCtCinvCt,
@@ -3287,6 +3426,7 @@ class CMF(_CMF):
                 self._n_orig,
                 self._k_pred, self.k_user, self.k_item, self._k_main_col,
                 lambda_, lambda_bias,
+                self.scale_lam, self.scale_lam_sideinfo,
                 self.w_user, self.w_main, self.w_implicit,
                 self.user_bias,
                 self.NA_as_zero_user, self.NA_as_zero,
@@ -3445,7 +3585,8 @@ class CMF(_CMF):
         Uarr, Urow, Ucol, Uval, Ub_arr, \
         Ucsr_p, Ucsr_i, Ucsr, \
         n, m_u, m_x, p, pbin, \
-        lambda_, lambda_bias = \
+        lambda_, lambda_bias, \
+        l1_lambda, l1_lambda_bias = \
             self._process_transform_inputs(X=X, U=U, U_bin=U_bin, W=W,
                                            replace_existing=replace_existing)
 
@@ -3469,8 +3610,8 @@ class CMF(_CMF):
             self.Bi_,
             self.C_,
             self.Cbin_,
-            self._TransBtBinvBt,
             self._BtB,
+            self._TransBtBinvBt,
             self._BeTBeChol,
             self._BiTBi,
             self._TransCtCinvCt,
@@ -3480,6 +3621,8 @@ class CMF(_CMF):
             self._n_orig,
             self.k, self.k_user, self.k_item, self.k_main,
             lambda_, lambda_bias,
+            l1_lambda, l1_lambda_bias,
+            self.scale_lam, self.scale_lam_sideinfo,
             self.w_user, self.w_main, self.w_implicit,
             self.user_bias,
             self.NA_as_zero_user,
@@ -3513,17 +3656,21 @@ class CMF(_CMF):
             lambda_bias = self.lambda_
         c_funs = wrapper_float if self.use_float else wrapper_double
         
-        self._B_plus_bias, self._BtB, self._TransBtBinvBt, self._BeTBeChol, \
-        self._BiTBi, self._TransCtCinvCt, self._CtC = \
+        self._B_plus_bias, self._BtB, self._TransBtBinvBt, self._BtXbias, \
+        self._BeTBeChol, self._BiTBi, self._TransCtCinvCt, self._CtC = \
             c_funs.precompute_matrices_collective_explicit(
                 self.B_,
                 self.C_,
                 self.Bi_,
+                self.item_bias_,
                 self.user_bias, self.add_implicit_features,
                 self._n_orig,
                 self.k, self.k_user, self.k_item, self.k_main,
                 lambda_, lambda_bias,
                 self.w_main, self.w_user, self.w_implicit,
+                self.glob_mean_,
+                self.scale_lam, self.scale_lam_sideinfo,
+                self.NA_as_zero,
                 self.nonneg,
                 self.include_all_X
             )
@@ -3569,6 +3716,12 @@ class CMF_implicit(_CMF):
     it does not offer a gradient-based approach like the explicit-feedback
     version.
 
+    Note
+    ----
+    This model will not perform mean centering and will not fit uer/item
+    biases. If desired, an equivalent problem formulation can be made through
+    ``CMF`` which can accommodate mean centering and biases.
+
     Parameters
     ----------
     k : int
@@ -3610,6 +3763,8 @@ class CMF_implicit(_CMF):
         Even if passing "True" here, will use the Cholesky method in cases in which
         it is faster (e.g. dense matrices with no missing values),
         and will not use the conjugate gradient method on new data.
+        This option is not available when using L1 regularization and/or
+        non-negativity constraints.
     k_user : int
         Number of factors in the factorizing A and C matrices which will be used
         only for the 'U' matrix, while being ignored for the 'X' matrix.
@@ -3649,6 +3804,13 @@ class CMF_implicit(_CMF):
         side info matrices (especially if using large ``alpha``), thus it's
         recommended to give higher weights to the side info matrices than to
         the main matrix.
+    l1_lambda : float or array(6,)
+        Regularization parameter to apply to the L1 norm of the model matrices.
+        Can also pass different values for each matrix (see ``lambda_`` for
+        details). Note that, when adding L1 regularization, the model will be
+        git through a coordinate descent procedure, which is significantly
+        slower than the Cholesky method with L2 regularization.
+        Not recommended.
     niter : int
         Number of alternating least-squares iterations to perform. Note that
         one iteration denotes an update round for all the matrices rather than
@@ -3660,7 +3822,7 @@ class CMF_implicit(_CMF):
         when the 'U' matrix is passed as sparse COO matrix) instead of ignoring them.
         Note that passing "True" will affect the results of the functions named
         "warm" if no data is passed there (as it will assume zeros instead of
-        missing). Can be changed after the model has already been fit to data.
+        missing).
     NA_as_zero_item : bool
         Whether to take missing entries in the 'I' matrix as zeros (only
         when the 'I' matrix is passed as sparse COO matrix) instead of ignoring them.
@@ -3684,10 +3846,10 @@ class CMF_implicit(_CMF):
         In order for this to work correctly, the 'I' input data must also be
         non-negative.
     max_cd_steps : int
-        Maximum number of coordinate descent updates to perform per iteration
-        when determining factors with non-negativity constraints.
+        Maximum number of coordinate descent updates to perform per iteration.
         Pass zero for no limit.
-        Ignored when not having non-negativity constraints.
+        The procedure will only use coordinate descent updates when having
+        L1 regularization and/or non-negativity constraints.
         This number should usually be larger than ``k``.
     apply_log_transf : bool
         Whether to apply a logarithm transformation on the values of 'X'
@@ -3801,6 +3963,7 @@ class CMF_implicit(_CMF):
     def __init__(self, k=50, lambda_=1e0, alpha=1., use_cg=True,
                  k_user=0, k_item=0, k_main=0,
                  w_main=1., w_user=10., w_item=10.,
+                 l1_lambda=0.,
                  niter=10, NA_as_zero_user=False, NA_as_zero_item=False,
                  nonneg=False, nonneg_C=False, nonneg_D=False, max_cd_steps=100,
                  apply_log_transf=False,
@@ -3819,6 +3982,7 @@ class CMF_implicit(_CMF):
                           user_bias=False, item_bias=False,
                           k_user=k_user, k_item=k_item, k_main=k_main,
                           w_main=w_main, w_user=w_user, w_item=w_item,
+                          l1_lambda=l1_lambda,
                           maxiter=0, niter=niter, parallelize="separate",
                           corr_pairs=0,
                           NA_as_zero=False, NA_as_zero_user=NA_as_zero_user,
@@ -3944,6 +4108,8 @@ class CMF_implicit(_CMF):
                 self.lambda_ if isinstance(self.lambda_, float) else 0.,
                 self.alpha, self.downweight, self.apply_log_transf,
                 self.lambda_ if isinstance(self.lambda_, np.ndarray) else np.empty(0, dtype=self.dtype_),
+                self.l1_lambda if isinstance(self.l1_lambda, float) else 0.,
+                self.l1_lambda if isinstance(self.l1_lambda, np.ndarray) else np.empty(0, dtype=self.dtype_),
                 self.verbose, self.niter,
                 self.nthreads, self.use_cg,
                 self.max_cg_steps, self.finalize_chol,
@@ -4299,7 +4465,7 @@ class CMF_implicit(_CMF):
             self._BtB,
             self._BeTBeChol,
             self.k, self.k_user, self.k_item, self.k_main,
-            lambda_, self.alpha,
+            lambda_, l1_lambda, self.alpha,
             self._w_main_multiplier,
             self.w_user, self.w_main,
             self.apply_log_transf,
@@ -4512,7 +4678,8 @@ class CMF_implicit(_CMF):
         Uarr, Urow, Ucol, Uval, Ub_arr, \
         Ucsr_p, Ucsr_i, Ucsr, \
         n, m_u, m_x, p, pbin, \
-        lambda_, lambda_bias = \
+        lambda_, lambda_bias, \
+        l1_lambda, l1_lambda_bias = \
             self._process_transform_inputs(X=X, U=U, U_bin=None, W=None,
                                            replace_existing=True)
 
@@ -4535,7 +4702,7 @@ class CMF_implicit(_CMF):
             self._BeTBeChol,
             n, m_u, m_x,
             self.k, self.k_user, self.k_item, self.k_main,
-            lambda_, self.alpha,
+            lambda_, l1_lambda, self.alpha,
             self._w_main_multiplier,
             self.w_user, self.w_main,
             self.apply_log_transf,
@@ -5011,13 +5178,15 @@ class OMF_explicit(_OMF):
         Ignored when passing ``method="lbfgs"``.
     user_bias : bool
         Whether to add user biases (intercepts) to the model.
-        Cannot be used together with ``NA_as_zero``.
     item_bias : bool
         Whether to add item biases (intercepts) to the model. Be aware that using
         item biases with low regularization for them will tend to favor items
         with high average ratings regardless of the number of ratings the item
         has received.
-        Cannot be used together with ``NA_as_zero``.
+    center : bool
+        Whether to center the "X" data by subtracting the mean value. For recommender
+        systems, it's highly recommended to pass "True" here, the more so if the
+        model has user and/or item biases.
     k_sec : int
         Number of factors in the factorizing matrices which are determined
         exclusively from user/item attributes. These will be at the beginning
@@ -5104,7 +5273,9 @@ class OMF_explicit(_OMF):
         model to fit. Be aware that this option will be ignored later when
         predicting on new data - that is, non-present values will be treated
         as missing.
-        Cannot be used together with ``user_bias`` or ``item_bias``.
+        If passing this option, be aware that the defaults are also to
+        perform mean centering and add user/item biases, which might
+        be undesirable to have together with this option.
     use_float : bool
         Whether to use C float type for the model parameters (typically this is
         ``np.float32``). If passing ``False``, will use C double (typically this
@@ -5210,7 +5381,7 @@ class OMF_explicit(_OMF):
            arXiv preprint arXiv:1809.00366 (2018).
     """
     def __init__(self, k=50, lambda_=1e1, method="lbfgs", use_cg=True,
-                 user_bias=True, item_bias=True, k_sec=0, k_main=0,
+                 user_bias=True, item_bias=True, center=True, k_sec=0, k_main=0,
                  add_intercepts=True, w_user=1., w_item=1.,
                  maxiter=10000, niter=10, parallelize="separate", corr_pairs=7,
                  max_cg_steps=3, finalize_chol=True,
@@ -5224,6 +5395,7 @@ class OMF_explicit(_OMF):
                           use_cg=use_cg, max_cg_steps=max_cg_steps,
                           finalize_chol=finalize_chol,
                           user_bias=user_bias, item_bias=item_bias,
+                          center=center,
                           k_user=0, k_item=0, k_main=0,
                           w_main=1., w_user=w_user, w_item=w_item,
                           maxiter=maxiter, niter=niter, parallelize=parallelize,
@@ -5355,7 +5527,7 @@ class OMF_explicit(_OMF):
                     m, n, p, q,
                     self.k, self.k_sec, self.k_main,
                     self.w_user, self.w_item,
-                    self.user_bias, self.item_bias,
+                    self.user_bias, self.item_bias, self.center,
                     self.add_intercepts,
                     self.lambda_ if isinstance(self.lambda_, float) else 0.,
                     self.lambda_ if isinstance(self.lambda_, np.ndarray) else np.empty(0, dtype=self.dtype_),
@@ -5388,16 +5560,17 @@ class OMF_explicit(_OMF):
                     lambda_bias = self.lambda_
 
                 self.is_fitted_ = True
-                _1, self._BtB, self._TransBtBinvBt, _2, _3, _4, _5 = \
+                _1, self._BtB, self._TransBtBinvBt, _2, _3, _4, _5, _6 = \
                     c_funs.precompute_matrices_collective_explicit(
                         self._B_pred,
                         np.empty((0,0), dtype=self.dtype_),
                         np.empty((0,0), dtype=self.dtype_),
+                        np.empty(0, dtype=self.dtype_),
                         self.user_bias, False,
                         self._B_pred.shape[0],
                         self.k_sec+self.k+self.k_main,
                         0, 0, 0,
-                        lambda_, lambda_bias, 1., 1., 1.,
+                        lambda_, lambda_bias, 1., 1., 1., 0., 0, 0, 0,
                         False,
                         True
                     )
@@ -5418,7 +5591,7 @@ class OMF_explicit(_OMF):
                     self.NA_as_zero,
                     m, n, p, q,
                     self.k,
-                    self.user_bias, self.item_bias,
+                    self.user_bias, self.item_bias, self.center,
                     self.add_intercepts,
                     self.lambda_,
                     self.verbose, self.nthreads,
@@ -5684,7 +5857,8 @@ class OMF_explicit(_OMF):
         W_dense, Xorig, mask_take, \
         Uarr, Urow, Ucol, Uval, _1, Ucsr_p, Ucsr_i, Ucsr, \
         n, m_u, m_x, p, _2, \
-        lambda_, lambda_bias = \
+        lambda_, lambda_bias, \
+        l1_lambda, l1_lambda_bias = \
             self._process_transform_inputs(X=X, U=U, U_bin=None, W=W,
                                            replace_existing=True)
 
@@ -5863,7 +6037,8 @@ class OMF_explicit(_OMF):
         W_dense, Xorig, mask_take, \
         Uarr, Urow, Ucol, Uval, _1, Ucsr_p, Ucsr_i, Ucsr, \
         n, m_u, m_x, p, _2, \
-        lambda_, lambda_bias = \
+        lambda_, lambda_bias, \
+        l1_lambda, l1_lambda_bias = \
             self._process_transform_inputs(X=X, U=U, U_bin=None, W=W,
                                            replace_existing=False)
 
@@ -6313,7 +6488,8 @@ class OMF_implicit(_OMF):
         W_dense, Xorig, mask_take, \
         Uarr, Urow, Ucol, Uval, _1, Ucsr_p, Ucsr_i, Ucsr, \
         n, m_u, m_x, p, _2, \
-        lambda_, lambda_bias = \
+        lambda_, lambda_bias, \
+        l1_lambda, l1_lambda_bias = \
             self._process_transform_inputs(X=X, U=U, U_bin=None, W=None,
                                            replace_existing=True)
 
@@ -6587,6 +6763,7 @@ class ContentBased(_OMF_Base):
         self._take_params(implicit=False, alpha=40., downweight=False,
                           k=1, lambda_=lambda_, method="lbfgs", use_cg=False,
                           user_bias=user_bias, item_bias=item_bias,
+                          center=True,
                           k_user=0, k_item=0, k_main=0,
                           w_main=1., w_user=1., w_item=1.,
                           maxiter=maxiter,
@@ -6989,6 +7166,10 @@ class MostPopular(_CMF):
         this value is 40, other software such as ``implicit`` use a value of 1,
         whereas Spark uses a value of 0.01 by default
         See the documentation of ``CMF_implicit`` for more details.
+    scale_lam : bool
+        Whether to scale (increase) the regularization parameter for each
+        estimated bias according to the number of non-missing entries in
+        the data. This is only available when passing ``implicit=False``.
     apply_log_transf : bool
         Whether to apply a logarithm transformation on the values of 'X'
         (i.e. 'X := log(X)'). This is only available with ``implicit=True``.
@@ -7056,12 +7237,15 @@ class MostPopular(_CMF):
            2008 Eighth IEEE International Conference on Data Mining. Ieee, 2008.
     """
     def __init__(self, implicit=False, user_bias=False, lambda_=1e1, alpha=1.,
-                 apply_log_transf=False, use_float=False, produce_dicts=False,
+                 scale_lam=False, apply_log_transf=False,
+                 use_float=False, produce_dicts=False,
                  copy_data=True, nthreads=-1):
         self._take_params(implicit=implicit, alpha=alpha, downweight=False,
                           k=1, lambda_=lambda_, method="als", use_cg=False,
                           apply_log_transf=apply_log_transf,
+                          scale_lam=scale_lam,
                           user_bias=user_bias, item_bias=True,
+                          center=not bool(implicit),
                           k_user=0, k_item=0, k_main=0,
                           w_main=1., w_user=1., w_item=1.,
                           maxiter=0, niter=0, parallelize="separate",
@@ -7078,8 +7262,11 @@ class MostPopular(_CMF):
         self.k = 0
         self.niter = 0
         self.implicit = bool(implicit)
-        if self.implicit and self.user_bias:
-            raise ValueError("'user_bias' not supported for implicit-feedback.")
+        if self.implicit:
+            if self.user_bias:
+                raise ValueError("'user_bias' not supported for implicit-feedback.")
+            if self.scale_lam:
+                raise ValueError("'scale_lam' not supported for implicit-feedback.")
         if (not self.implicit) and (self.apply_log_transf):
             warnings.warn("Option 'apply_log_transf' only available for 'implicit=True'.")
 
@@ -7160,6 +7347,7 @@ class MostPopular(_CMF):
                 self.user_bias,
                 self.implicit,
                 False,
+                self.scale_lam,
                 self.apply_log_transf,
                 self.nonneg,
                 self.nthreads

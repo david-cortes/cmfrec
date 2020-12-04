@@ -32,6 +32,10 @@
             non-negative least squares problem."
             International Conference on Computer Analysis of Images
             and Patterns. Springer, Berlin, Heidelberg, 2005.
+        (e) Zhou, Yunhong, et al.
+            "Large-scale parallel collaborative filtering for the netflix prize."
+            International conference on algorithmic applications in management.
+            Springer, Berlin, Heidelberg, 2008.
 
     For information about the models offered here and how they are fit to
     the data, see the files 'collective.c' and 'offsets.c'.

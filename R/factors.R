@@ -168,11 +168,13 @@ factors.CMF <- function(model, X=NULL, U=NULL, U_bin=NULL, weight=NULL,
                       model$matrices$B,
                       model$matrices$Bi, model$info$add_implicit_features,
                       model$info$k, model$info$k_user, model$info$k_item, model$info$k_main,
-                      model$info$lambda,
+                      model$info$lambda, model$info$l1_lambda,
+                      model$info$scale_lam, model$info$scale_lam_sideinfo,
                       model$info$w_main, model$info$w_user, model$info$w_implicit,
                       NCOL(model$matrices$B), model$info$include_all_X,
-                      model$precomputed$TransBtBinvBt,
                       model$precomputed$BtB,
+                      model$precomputed$TransBtBinvBt,
+                      model$precomputed$BtXbias,
                       model$precomputed$BeTBeChol,
                       model$precomputed$BiTBi,
                       model$precomputed$TransCtCinvCt,
@@ -198,6 +200,7 @@ factors.CMF_implicit <- function(model, X=NULL, U=NULL, ...) {
     A <- matrix(0., ncol = m_max, nrow = model$info$k_user + model$info$k + model$info$k_main)
     
     lambda <- ifelse(NROW(model$info$lambda) == 1L, model$info$lambda, model$info$lambda[3L])
+    l1_lambda <- ifelse(NROW(model$info$l1_lambda) == 1L, model$info$l1_lambda, model$info$l1_lambda[3L])
     
     ret_code <- .Call("call_factors_collective_implicit_multiple",
                       A, m_max,
@@ -212,7 +215,7 @@ factors.CMF_implicit <- function(model, X=NULL, U=NULL, ...) {
                       model$matrices$C,
                       model$matrices$U_colmeans,
                       model$info$k, model$info$k_user, model$info$k_item, model$info$k_main,
-                      lambda, model$info$alpha, model$info$w_main, model$info$w_user,
+                      lambda, l1_lambda, model$info$alpha, model$info$w_main, model$info$w_user,
                       model$info$w_main_multiplier,
                       model$info$apply_log_transf,
                       model$precomputed$BeTBe,

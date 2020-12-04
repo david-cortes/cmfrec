@@ -23,7 +23,10 @@ CMF(
   use_cg = TRUE,
   user_bias = TRUE,
   item_bias = TRUE,
+  center = TRUE,
   add_implicit_features = FALSE,
+  scale_lam = FALSE,
+  scale_lam_sideinfo = FALSE,
   k_user = 0L,
   k_item = 0L,
   k_main = 0L,
@@ -31,6 +34,7 @@ CMF(
   w_user = 1,
   w_item = 1,
   w_implicit = 0.5,
+  l1_lambda = 0,
   maxiter = 800L,
   niter = 10L,
   parallelize = "separate",
@@ -66,6 +70,7 @@ CMF_implicit(
   w_main = 1,
   w_user = 1,
   w_item = 1,
+  l1_lambda = 0,
   niter = 10L,
   max_cg_steps = 3L,
   finalize_chol = FALSE,
@@ -90,7 +95,8 @@ MostPopular(
   nonneg = FALSE,
   user_bias = ifelse(implicit, FALSE, TRUE),
   lambda = 10,
-  alpha = 1
+  alpha = 1,
+  scale_lam = FALSE
 )
 
 ContentBased(
@@ -124,6 +130,7 @@ OMF_explicit(
   use_cg = TRUE,
   user_bias = TRUE,
   item_bias = TRUE,
+  center = TRUE,
   k_sec = 0L,
   k_main = 0L,
   add_intercepts = TRUE,
@@ -324,6 +331,8 @@ parameters such as `niter`.
 and the matrices to which the constraints apply can only be determined through a
 coordinate descent procedure (which will ignore what is passed to
 `use_cg` and `finalize_chol`).
+\item Models with L1 regularization can only be fitted through the ALS method,
+and the sub-problems are solved through a coordinate-descent procedure.
 }}
 
 \item{use_cg}{In the ALS method, whether to use a conjugate gradient method to solve
@@ -342,22 +351,46 @@ due to differences in numerical precision. A workaround for this issue
 Even if passing `TRUE` here, will use the Cholesky method in cases in which
 it is faster (e.g. dense matrices with no missing values),
 and will not use the conjugate gradient method on new data.
+This option is not available when using L1 regularization and/or
+non-negativity constraints.
 Ignored when using the L-BFGS method.}
 
 \item{user_bias}{Whether to add user/row biases (intercepts) to the model.
-Cannot be used together with `NA_as_zero`.
 If using it for purposes other than recommender systems, this is is
 usually \bold{not} suggested to include.}
 
 \item{item_bias}{Whether to add item/column biases (intercepts) to the model. Be aware that using
 item biases with low regularization for them will tend to favor items
 with high average ratings regardless of the number of ratings the item
-has received.
-Cannot be used together with `NA_as_zero`.}
+has received.}
+
+\item{center}{Whether to center the "X" data by subtracting the mean value. For recommender
+systems, it's highly recommended to pass `TRUE` here, the more so if the
+model has user and/or item biases.}
 
 \item{add_implicit_features}{Whether to automatically add so-called implicit features from the data,
 as in reference [5] and similar. If using this for recommender systems
 with small amounts of data, it's recommended to pass `TRUE` here.}
+
+\item{scale_lam}{Whether to scale (increase) the regularization parameter
+for each row of the model matrices (A, B, C, D) according
+to the number of non-missing entries in the data for that
+particular row, as proposed in reference [7]. For the
+A and B matrices, the regularization will only be scaled
+according to the number of non-missing entries in `X`
+(see also the `scale_lam_sideinfo` parameter). Note that,
+when using the options `NA_as_zero_*`, all entries are
+considered to be non-missing. If passing `TRUE` here, the
+optimal value for `lambda` will be much smaller.
+Only supported for the ALS method. For the `MostPopular` model,
+this is not supported when passing `implicit=TRUE`.}
+
+\item{scale_lam_sideinfo}{Whether to scale (increase) the regularization
+parameter for each row of the "A" and "B"
+matrices according to the number of non-missing
+entries in both `X` and the side info matrices
+`U` and `I`. If passing `TRUE` here, `scale_lam`
+will also be assumed to be `TRUE`.}
 
 \item{k_user}{Number of factors in the factorizing `A` and `C` matrices which will be used
 only for the `U` and `U_bin` matrices, while being ignored for the `X` matrix.
@@ -398,6 +431,14 @@ data, the sum of errors from these factorizations might be much larger than
 for the original `X` and a smaller value will perform better.
 It is recommended to tune this parameter carefully.
 Ignored when passing `add_implicit_features=FALSE`.}
+
+\item{l1_lambda}{Regularization parameter to apply to the L1 norm of the model matrices.
+Can also pass different values for each matrix (see `lambda` for
+details). Note that, when adding L1 regularization, the model will be
+fit through a coordinate descent procedure, which is significantly
+slower than the Cholesky method with L2 regularization.
+Only supported with the ALS method.
+Not recommended.}
 
 \item{maxiter}{Maximum L-BFGS iterations to perform. The procedure will halt if it
 has not converged after this number of updates. Note that the `CMF` model is likely to
@@ -453,7 +494,12 @@ model if passing `TRUE` here, and then passing an `X` with
 all values set to one and weights corresponding to the actual values
 of `X` multiplied by `alpha`, plus 1 (`W := 1 + alpha*X` to imitate the
 implicit-feedback model).
-Cannot be used together with `user_bias` or `item_bias`.}
+If passing this option, be aware that the defaults are also to
+perform mean centering and add user/item biases, which might
+be undesirable to have together with this option.
+For the OMF_explicit model, this option will only affect the data
+to which the model is fit, while being always assumed `FALSE`
+for new data (e.g. when calling `factors`).}
 
 \item{NA_as_zero_user}{Whether to take missing entries in the `U` matrix as zeros (only
 when the `U` matrix is passed as a sparse matrix) instead of ignoring them.
@@ -487,10 +533,10 @@ non-negative.}
 In order for this to work correctly, the `I` input data must also be
 non-negative.}
 
-\item{max_cd_steps}{Maximum number of coordinate descent updates to perform per iteration
-when determining factors with non-negativity constraints.
+\item{max_cd_steps}{Maximum number of coordinate descent updates to perform per iteration.
 Pass zero for no limit.
-Ignored when not having non-negativity constraints.
+The procedure will only use coordinate descent updates when having
+L1 regularization and/or non-negativity constraints.
 This number should usually be larger than `k`.}
 
 \item{precompute_for_predictions}{Whether to precompute some of the matrices that are used when making
@@ -510,7 +556,7 @@ recommend such items, (b) the precomptued matrices will be less usable as
 they will include all such items, (c) it will be possible to pass `X` data
 to the new factors or topN functions that include such columns (rows of `I`).
 This option is ignored when using `NA_as_zero`, and is only relevant for the `CMF`
-model as all the other models will have the equivalent of `TRUE` here..}
+model as all the other models will have the equivalent of `TRUE` here.}
 
 \item{verbose}{Whether to print informational messages about the optimization
 routine used to fit the model.
@@ -710,8 +756,7 @@ U_bin ~ sigm(A*t(C_bin))} and \eqn{
 I_bin ~ sigm(B*t(D_bin))}, where \eqn{\sigma}{'sigm'} is a sigmoid function (\eqn{
 \sigma(x) = \frac{1}{1 + e^{-x}}}{
 sigm(x) = 1/(1+exp(-x))}). Under the options `NA_as_zero_*`,
-the mean(s) for that matrix are not added
-into the model, and the biases cannot be calculated when the `X` matrix has `NA_as_zero`.
+the mean(s) for that matrix are not added into the model for simplicity.
 For the implicit features option, the other matrices are predicted simply as
 \eqn{\mathbf{I}_x \approx \mathbf{A} \mathbf{B}_i , \:\:
 \mathbf{I}_x^T \approx \mathbf{B} \mathbf{A}_i}{Ix ~ A*t(Bi), t(Ix) ~ B*t(Ai)}.
@@ -726,7 +771,9 @@ Be aware that the functions for determining new factors will by default omit
 the bias term in the output.
 \item `CMF_implicit`: \eqn{\mathbf{X} \approx \mathbf{A} \mathbf{B}^T}{X ~ A * t(B)},
 while `U` and `I` remain the same as for `CMF`, and the ordering of the non-shared
-factors is the same.
+factors is the same. Note that there is no mean centering or user/item biases in the
+implicit-feedback model, but if desired, the `CMF` model can be made to mimic
+`CMF_implicit` while still accommodating for mean centering and biases.
 \item `MostPopular`: \eqn{\mathbf{X} \approx \mu + \mathbf{b}_u + \mathbf{b}_i}{
 X ~ \mu + bias_u + bias_i} (when using `implicit=FALSE`) or \eqn{
 \mathbf{X} \approx \mathbf{b}_i}{X ~ bias_i} (when using `implicit=TRUE`).
@@ -907,5 +954,6 @@ if (require("recommenderlab") && require("Matrix") && require("rsparse")) {
 \item Takacs, Gabor, Istvan Pilaszy, and Domonkos Tikk. "Applications of the conjugate gradient method for implicit feedback collaborative filtering." Proceedings of the fifth ACM conference on Recommender systems. 2011.
 \item Rendle, Steffen, Li Zhang, and Yehuda Koren. "On the difficulty of evaluating baselines: A study on recommender systems." arXiv preprint arXiv:1905.01395 (2019).
 \item Franc, Vojtech, Vaclav Hlavac, and Mirko Navara. "Sequential coordinate-wise algorithm for the non-negative least squares problem." International Conference on Computer Analysis of Images and Patterns. Springer, Berlin, Heidelberg, 2005.
+\item Zhou, Yunhong, et al. "Large-scale parallel collaborative filtering for the netflix prize." International conference on algorithmic applications in management. Springer, Berlin, Heidelberg, 2008.
 }
 }
