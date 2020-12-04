@@ -116,7 +116,7 @@ class _CMF:
                 raise ValueError("non-negativity constraints not supported with method='lbfgs'.")
             if (scale_lam) or (scale_lam_sideinfo):
                 raise ValueError("'scale_lam' not supported with method='lbfgs'.")
-            if max(l1_lambda) > 0.:
+            if l1_lambda != 0.:
                 raise ValueError("L1 regularization not supported with method='lbfgs'.")
 
         if method == "als":
@@ -1922,6 +1922,7 @@ class _CMF:
                 self.k_item if not is_I else self.k_user,
                 self.k_main,
                 lambda_, lambda_bias,
+                l1_lambda, l1_lambda_bias,
                 self.scale_lam, self.scale_lam_sideinfo,
                 self.w_user if not is_I else self.w_item,
                 self.w_main, self.w_implicit,
@@ -2208,7 +2209,8 @@ class CMF(_CMF):
         value for ``lambda_`` here is much higher than in other software, and that
         the loss/objective function is not divided by the number of entries anywhere,
         so this parameter needs good tuning.
-        For example, a good value for the MovieLens10M would be ``lambda_=35.``.
+        For example, a good value for the MovieLens10M would be ``lambda_=35.``
+        (or ``lambda=0.05`` with ``scale_lam=True``).
         Typical values are 10^-2 to 10^2.
     method : str, one of "lbfgs" or "als"
         Optimization method used to fit the model. If passing ``'lbfgs'``, will
@@ -3171,10 +3173,10 @@ class CMF(_CMF):
 
         if isinstance(self.l1_lambda, np.ndarray):
             l1_lambda = self.l1_lambda[2]
-            lambdabias = self.l1_lambda[0]
+            l1_lambda_bias = self.l1_lambda[0]
         else:
             l1_lambda = self.l1_lambda
-            lambda_bias = self.l1_lambda
+            l1_lambda_bias = self.l1_lambda
 
         c_funs = wrapper_float if self.use_float else wrapper_double
         a_bias, a_vec = c_funs.call_factors_collective_explicit_single(
@@ -3429,6 +3431,7 @@ class CMF(_CMF):
                 self._n_orig,
                 self._k_pred, self.k_user, self.k_item, self._k_main_col,
                 lambda_, lambda_bias,
+                l1_lambda, l1_lambda_bias,
                 self.scale_lam, self.scale_lam_sideinfo,
                 self.w_user, self.w_main, self.w_implicit,
                 self.user_bias,

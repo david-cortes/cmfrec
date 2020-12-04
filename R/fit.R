@@ -238,7 +238,8 @@ NULL
 #' value for `lambda` here is much higher than in other software, and that
 #' the loss/objective function is not divided by the number of entries anywhere,
 #' so this parameter needs good tuning.
-#' For example, a good value for the MovieLens10M would be `lambda=35`, whereas for the
+#' For example, a good value for the MovieLens10M would be `lambda=35`
+#' (or `lambda=0.05` with `scale_lam=TRUE`), whereas for the
 #' LastFM-360K, a good value would be `lambda=5`.
 #' Typical values are \eqn{10^{-2}}{0.01} to \eqn{10^2}{100}, with the
 #' implicit-feedback models requiring less regularization.
