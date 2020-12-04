@@ -633,6 +633,7 @@ void factors_closed_form
     real_t *restrict buffer_real_t,
     real_t lam, real_t lam_last,
     real_t l1_lam, real_t l1_lam_last,
+    bool scale_lam,
     real_t *restrict precomputedTransBtBinvBt,
     real_t *restrict precomputedBtB, int_t cnt_NA, int_t ld_BtB,
     bool BtB_has_diag, bool BtB_is_scaled, real_t scale_BtB, int_t n_BtB,
@@ -655,6 +656,21 @@ void factors_closed_form
                       (nnz > (size_t)(2*k));
     if (precomputedBtB == NULL)
         prefer_BtB = false;
+
+    if (scale_lam)
+    {
+        real_t multiplier_lam = 1.;
+        if (Xa_dense != NULL)
+            multiplier_lam = (real_t)(n - (full_dense? 0 : cnt_NA));
+        else if (NA_as_zero)
+            multiplier_lam = (real_t)n;
+        else
+            multiplier_lam = (real_t)nnz;
+        lam *= multiplier_lam;
+        lam_last *= multiplier_lam;
+        l1_lam *= multiplier_lam;
+        l1_lam_last *= multiplier_lam;
+    }
 
     /* Note: if passing 'NA_as_zero', 'n' and 'n_BtB' cannot be different */
 
@@ -2023,6 +2039,7 @@ void optimizeA
     int_t cnt_NA[], real_t *restrict weight, bool NA_as_zero,
     real_t lam, real_t lam_last,
     real_t l1_lam, real_t l1_lam_last,
+    bool scale_lam,
     bool do_B, bool is_first_iter,
     int_t nthreads,
     bool use_cg, int_t max_cg_steps,
@@ -2097,8 +2114,12 @@ void optimizeA
             copy_arr(bufferBtB, precomputedBtB, square(k));
             *filled_BtB = true;
         }
-        add_to_diag(bufferBtB, lam, k);
-        if (lam_last != lam) bufferBtB[square(k)-1] += (lam_last - lam);
+        add_to_diag(bufferBtB, scale_lam? (lam*(real_t)n) : (lam), k);
+        if (lam_last != lam)
+            if (!scale_lam)
+                bufferBtB[square(k)-1] += (lam_last - lam);
+            else
+                bufferBtB[square(k)-1] += (lam_last - lam) * (real_t)n;
         /* Here will also need t(B)*B + diag(lambda) alone (no Cholesky) */
         if (bufferBtBcopy != NULL)
             memcpy(bufferBtBcopy, bufferBtB, (size_t)square(k)*sizeof(real_t));
@@ -2146,7 +2167,8 @@ void optimizeA
                 A,
                 buffer_real_t,
                 m, k, lda,
-                l1_lam, l1_lam_last,
+                scale_lam? (l1_lam*n) : (l1_lam),
+                scale_lam? (l1_lam_last*n) : (l1_lam_last),
                 max_cd_steps,
                 nthreads
             );
@@ -2156,7 +2178,8 @@ void optimizeA
                 A,
                 buffer_real_t,
                 m, k, lda,
-                l1_lam, l1_lam_last,
+                scale_lam? (l1_lam*n) : (l1_lam),
+                scale_lam? (l1_lam_last*n) : (l1_lam_last),
                 max_cd_steps,
                 nthreads
             );
@@ -2173,7 +2196,7 @@ void optimizeA
                 size_buffer += (size_t)3*(size_t)k;
 
             #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
-                    shared(A, lda, B, ldb, ldX, m, n, k, \
+                    shared(A, lda, B, ldb, ldX, m, n, k, scale_lam, \
                            lam, lam_last, l1_lam, l1_lam_last, weight,\
                            cnt_NA, Xfull, buffer_real_t, bufferBtBcopy, \
                            nthreads, use_cg, nonneg, max_cd_steps) \
@@ -2209,6 +2232,7 @@ void optimizeA
                          + size_buffer * (size_t)omp_get_thread_num(),
                         lam, lam_last,
                         l1_lam, l1_lam_last,
+                        scale_lam,
                         (real_t*)NULL,
                         bufferBtBcopy, cnt_NA[ix], k,
                         true, false, 1., n,
@@ -2271,7 +2295,8 @@ void optimizeA
 
         #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
                 shared(Xfull, weight, do_B, m, n, k, A, lda, B, ldb, ldX, \
-                       lam, lam_last, bufferBtB, cnt_NA, buffer_remainder, \
+                       lam, lam_last, l1_lam, l1_lam_last, scale_lam, \
+                       bufferBtB, cnt_NA, buffer_remainder, \
                        use_cg, max_cg_steps, nonneg, max_cd_steps) \
                 firstprivate(bufferX, bufferW)
         for (size_t_for ix = 0; ix < (size_t)m; ix++)
@@ -2306,6 +2331,7 @@ void optimizeA
                 buffer_remainder + size_buffer*(size_t)omp_get_thread_num(),
                 lam, lam_last,
                 l1_lam, l1_lam_last,
+                scale_lam,
                 (real_t*)NULL,
                 bufferBtB, cnt_NA[ix], k,
                 true, false, 1., n,
@@ -2340,8 +2366,12 @@ void optimizeA
             copy_arr(bufferBtB, precomputedBtB, square(k));
             *filled_BtB = true;
         }
-        add_to_diag(bufferBtB, lam, k);
-        if (lam_last != lam) bufferBtB[square(k)-1] += (lam_last - lam);
+        add_to_diag(bufferBtB, scale_lam? (lam*(real_t)n) : (lam), k);
+        if (lam_last != lam)
+            if (!scale_lam)
+                bufferBtB[square(k)-1] += (lam_last - lam);
+            else
+                bufferBtB[square(k)-1] += (lam_last - lam) * (real_t)n;
         if (lda == k)
             set_to_zero_(A, (size_t)m*(size_t)k, nthreads);
         else
@@ -2369,7 +2399,8 @@ void optimizeA
                 A,
                 buffer_real_t,
                 m, k, lda,
-                l1_lam, l1_lam_last,
+                scale_lam? (l1_lam*(real_t)n) : (l1_lam),
+                scale_lam? (l1_lam_last*(real_t)n) : (l1_lam_last),
                 max_cd_steps,
                 nthreads
             );
@@ -2379,7 +2410,8 @@ void optimizeA
                 A,
                 buffer_real_t,
                 m, k, lda,
-                l1_lam, l1_lam_last,
+                scale_lam? (l1_lam*(real_t)n) : (l1_lam),
+                scale_lam? (l1_lam_last*(real_t)n) : (l1_lam_last),
                 max_cd_steps,
                 nthreads
             );
@@ -2392,7 +2424,8 @@ void optimizeA
         printf("optimizeA case4\n");
         /* When NAs are treated as zeros, can use a precomputed t(B)*B */
         real_t *restrict bufferBtB = NULL;
-        bool add_diag_to_BtB = !(use_cg && Xfull == NULL && NA_as_zero);
+        bool add_diag_to_BtB = !(use_cg && Xfull == NULL && NA_as_zero) &&
+                               !scale_lam;
         if (Xfull == NULL && NA_as_zero && (!use_cg || weight != NULL))
         {
             if (precomputedBtB != NULL &&
@@ -2434,7 +2467,7 @@ void optimizeA
             size_buffer += (size_t)3*(size_t)k;
 
         #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
-                shared(A, lda, B, ldb, m, n, k, \
+                shared(A, lda, B, ldb, m, n, k, scale_lam, \
                        lam, lam_last, l1_lam, l1_lam_last, weight, cnt_NA, \
                        Xcsr_p, Xcsr_i, Xcsr, buffer_real_t, NA_as_zero, \
                        bufferBtB, size_buffer, use_cg, \
@@ -2454,6 +2487,7 @@ void optimizeA
                     buffer_real_t + ((size_t)omp_get_thread_num()*size_buffer),
                     lam, lam_last,
                     l1_lam, l1_lam_last,
+                    scale_lam,
                     (real_t*)NULL,
                     bufferBtB, 0, k,
                     add_diag_to_BtB, false, 1., n,

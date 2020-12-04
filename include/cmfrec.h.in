@@ -372,7 +372,10 @@ extern "C" {
                       (see also the "scale_lam_sideinfo" parameter). Note that,
                       when using the option "NA_as_zero_*", all entries are
                       considered to be non-missing. If passing "true" here, the
-                      optimal value for "lam" will be much smaller.
+                      optimal value for "lam" will be much smaller
+                      (and likely below 0.1).
+                      This option tends to give better results, but
+                      requires more hyperparameter tuning.
                       Recommended value: false
     @param scale_lam_sideinfo  Whether to scale (increase) the regularization
                                parameter for each row of the "A" and "B"

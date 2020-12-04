@@ -2263,7 +2263,10 @@ class CMF(_CMF):
         (see also the ``scale_lam_sideinfo`` parameter). Note that,
         when using the options ``NA_as_zero_*``, all entries are
         considered to be non-missing. If passing "True" here, the
-        optimal value for ``lambda_`` will be much smaller.
+        optimal value for ``lambda_`` will be much smaller
+        (and likely below 0.1).
+        This option tends to give better results, but
+        requires more hyperparameter tuning.
         Only supported for ``method="als"``.
     scale_lam_sideinfo : bool
         Whether to scale (increase) the regularization

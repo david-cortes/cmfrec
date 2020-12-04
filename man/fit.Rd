@@ -381,7 +381,10 @@ according to the number of non-missing entries in `X`
 (see also the `scale_lam_sideinfo` parameter). Note that,
 when using the options `NA_as_zero_*`, all entries are
 considered to be non-missing. If passing `TRUE` here, the
-optimal value for `lambda` will be much smaller.
+optimal value for `lambda` will be much smaller
+(and likely below 0.1).
+This option tends to give better results, but
+requires more hyperparameter tuning.
 Only supported for the ALS method. For the `MostPopular` model,
 this is not supported when passing `implicit=TRUE`.}
 

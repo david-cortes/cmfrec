@@ -1229,6 +1229,7 @@ void collective_closed_form_block
     real_t *restrict weight,
     real_t lam, real_t w_user, real_t w_implicit, real_t lam_last,
     real_t l1_lam, real_t l1_lam_bias,
+    bool scale_lam, bool scale_lam_sideinfo,
     real_t *restrict precomputedBtB, int_t cnt_NA_x,
     real_t *restrict precomputedCtCw, int_t cnt_NA_u,
     real_t *restrict precomputedBeTBeChol, int_t n_BtB,
@@ -1269,6 +1270,32 @@ void collective_closed_form_block
     if (cnt_NA_x || cnt_NA_u) {
         add_X = true;
         add_U = true;
+    }
+
+    if (scale_lam || scale_lam_sideinfo)
+    {
+        real_t multiplier_lam = 0;
+        if (Xa_dense != NULL)
+            multiplier_lam = (real_t)(n - ((cnt_NA_x == 0)? 0 : cnt_NA_x));
+        else if (NA_as_zero_X)
+            multiplier_lam = (real_t)n;
+        else
+            multiplier_lam = (real_t)nnz;
+
+        if (scale_lam_sideinfo)
+        {
+            if (u_vec != NULL)
+                multiplier_lam += (real_t)(p - ((cnt_NA_u == 0)? 0 : cnt_NA_u));
+            else if (NA_as_zero_U)
+                multiplier_lam += (real_t)p;
+            else
+                multiplier_lam += (real_t)nnz_u_vec;
+        }
+        
+        lam *= multiplier_lam;
+        lam_last *= multiplier_lam;
+        l1_lam *= multiplier_lam;
+        l1_lam_bias *= multiplier_lam;
     }
 
     
@@ -3024,7 +3051,7 @@ int_t collective_factors_cold
                             u_vec_sp, u_vec_ixB, nnz_u_vec,
                             (real_t*)NULL,
                             buffer_real_t, lam/w_user, lam/w_user,
-                            l1_lam/w_user, l1_lam/w_user,
+                            l1_lam/w_user, l1_lam/w_user, scale_lam,
                             TransCtCinvCt, CtCw, cnt_NA_u_vec, k_user + k,
                             false, true, w_user, p,
                             (real_t*)NULL, NA_as_zero_U,
@@ -3397,7 +3424,7 @@ int_t collective_factors_warm
                                 Xa, ixB, nnz,
                                 weight,
                                 buffer_real_t,
-                                lam, lam, l1_lam, l1_lam,
+                                lam, lam, l1_lam, l1_lam, scale_lam,
                                 TransBtBinvBt, BtB,
                                 cnt_NA_x, k+k_main,
                                 false, false, 1., include_all_X? n_max : n,
@@ -3413,7 +3440,7 @@ int_t collective_factors_warm
                                 Xa, ixB, nnz,
                                 weight,
                                 buffer_real_t,
-                                lam, lam_bias, l1_lam, l1_lam_bias,
+                                lam, lam_bias, l1_lam, l1_lam_bias, scale_lam,
                                 TransBtBinvBt, BtB,
                                 cnt_NA_x, k+k_main+1,
                                 false, false, 1., include_all_X? n_max : n,
@@ -3498,6 +3525,7 @@ int_t collective_factors_warm
                 weight,
                 lam, w_user, w_implicit, lam,
                 l1_lam, l1_lam,
+                scale_lam, scale_lam_sideinfo,
                 BtB, cnt_NA_x,
                 CtCw, cnt_NA_u_vec,
                 BeTBeChol, include_all_X? n_max : n,
@@ -3523,6 +3551,7 @@ int_t collective_factors_warm
                 weight,
                 lam, w_user, w_implicit, lam_bias,
                 l1_lam, l1_lam_bias,
+                scale_lam, scale_lam_sideinfo,
                 BtB, cnt_NA_x,
                 CtCw, cnt_NA_u_vec,
                 BeTBeChol, include_all_X? n_max : n,
@@ -4275,6 +4304,7 @@ void optimizeA_collective
     bool full_dense_u, bool near_dense_u, bool NA_as_zero_U,
     real_t lam, real_t w_user, real_t w_implicit, real_t lam_last,
     real_t l1_lam, real_t l1_lam_bias,
+    bool scale_lam, bool scale_lam_sideinfo,
     bool do_B,
     int_t nthreads,
     bool use_cg, int_t max_cg_steps, bool is_first_iter,
@@ -4316,6 +4346,19 @@ void optimizeA_collective
     *filled_BeTBeChol = false;
     bool filled_BiTBi = false;
     *CtC_is_scaled = false;
+
+    real_t multiplier_lam = scale_lam_sideinfo? (n+p) : (scale_lam? n : 1);
+    real_t scaled_lam = lam;
+    real_t scaled_lam_last = lam_last;
+    real_t scaled_l1_lam = l1_lam;
+    real_t scaled_l1_lam_last = l1_lam_bias;
+    if (multiplier_lam != 1.)
+    {
+        scaled_lam *= multiplier_lam;
+        scaled_lam_last *= multiplier_lam;
+        scaled_l1_lam *= multiplier_lam;
+        scaled_l1_lam_last *= multiplier_lam;
+    }
 
     /* TODO: could reduce number of operations and save memory by determining
        when the BiTBi matrix could be added to BtB and when not. */
@@ -4402,6 +4445,7 @@ void optimizeA_collective
                 NA_as_zero_X,
                 lam, lam_last,
                 l1_lam, l1_lam_bias,
+                scale_lam,
                 false, false,
                 nthreads,
                 use_cg, max_cg_steps,
@@ -4448,6 +4492,7 @@ void optimizeA_collective
                 false, false, false,
                 lam, w_user, w_implicit, lam_last,
                 l1_lam, l1_lam_bias,
+                scale_lam, false,
                 do_B,
                 nthreads,
                 use_cg, max_cg_steps, is_first_iter,
@@ -4509,6 +4554,7 @@ void optimizeA_collective
                 NA_as_zero_U,
                 lam/w_user, lam/w_user,
                 l1_lam/w_user, l1_lam/w_user,
+                scale_lam,
                 false, false,
                 nthreads,
                 use_cg, max_cg_steps,
@@ -4554,7 +4600,9 @@ void optimizeA_collective
                 (U == NULL)? ((int_t*)NULL) : (cnt_NA_u + m),
                 full_dense_u, near_dense_u, NA_as_zero_U,
                 lam/w_implicit, w_user/w_implicit, 1., lam/w_implicit,
-                l1_lam/w_implicit, l1_lam/w_implicit,
+                (l1_lam/w_implicit) / (real_t)(scale_lam_sideinfo? n : 1),
+                (l1_lam/w_implicit) / (real_t)(scale_lam_sideinfo? n : 1),
+                false || scale_lam_sideinfo, scale_lam_sideinfo,
                 false,
                 nthreads,
                 use_cg, max_cg_steps, is_first_iter,
@@ -4645,7 +4693,8 @@ void optimizeA_collective
                 B, ldb, C,
                 k, k_user, k_main, k_item,
                 n, p,
-                lam, w_user
+                scaled_lam,
+                w_user
             );
             if (add_implicit_features)
                 cblas_tsyrk(CblasRowMajor, CblasUpper, CblasTrans,
@@ -4653,7 +4702,9 @@ void optimizeA_collective
                             w_implicit, Bi, k+k_main_i,
                             1., bufferBeTBeChol + offset_square, k_totA);
             if (lam_last != lam)
-                bufferBeTBeChol[square(k_totA)-1] += (lam_last - lam);
+                bufferBeTBeChol[square(k_totA)-1]
+                    +=
+                (scaled_lam_last-scaled_lam);
         }
 
         else
@@ -4718,9 +4769,11 @@ void optimizeA_collective
                         bufferBiTBi, k+k_main_i,
                         bufferBeTBeChol + offset_square, k_totA);
 
-            add_to_diag(bufferBeTBeChol, lam, k_totA);
+            add_to_diag(bufferBeTBeChol, scaled_lam, k_totA);
             if (lam_last != lam)
-                bufferBeTBeChol[square(k_totA)-1] += (lam_last - lam);
+                bufferBeTBeChol[square(k_totA)-1]
+                    +=
+                (scaled_lam_last - scaled_lam);
 
             if (w_user != 1. && !use_cg && p &&
                 bufferCtC != NULL && !(*CtC_is_scaled) &&
@@ -4833,7 +4886,8 @@ void optimizeA_collective
                 A,
                 buffer_real_t,
                 m, k_pred, lda,
-                l1_lam, l1_lam_bias,
+                scaled_l1_lam,
+                scaled_l1_lam_last,
                 max_cd_steps,
                 nthreads
             );
@@ -4845,7 +4899,8 @@ void optimizeA_collective
                 A,
                 buffer_real_t,
                 m, k_pred, lda,
-                l1_lam, l1_lam_bias,
+                scaled_l1_lam,
+                scaled_l1_lam_last,
                 max_cd_steps,
                 nthreads
             );
@@ -4888,6 +4943,7 @@ void optimizeA_collective
             #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
                     shared(A, k_totA, B, C, k, k_user, k_item, k_main, \
                            m, m_x, m_u, n, p, lda, ldb, \
+                           scale_lam, scale_lam_sideinfo, \
                            lam, lam_last, l1_lam, l1_lam_bias, w_user, \
                            Xfull, cnt_NA_x, ldX, full_dense, \
                            Xcsr, Xcsr_i, Xcsr_p, \
@@ -4950,6 +5006,7 @@ void optimizeA_collective
                         (real_t*)NULL,
                         lam, w_user, w_implicit, lam_last,
                         l1_lam, l1_lam_bias,
+                        scale_lam, scale_lam_sideinfo,
                         bufferBtB,
                         (Xfull == NULL)? (int_t)0 : cnt_NA_x[ix],
                         bufferCtC,
@@ -5107,9 +5164,11 @@ void optimizeA_collective
                 sum_mat(k+k_main_i, k+k_main_i,
                         bufferBiTBi, k+k_main_i,
                         bufferBeTBeChol + offset_square, k_totA);
-            add_to_diag(bufferBeTBeChol, lam, k_totA);
+            add_to_diag(bufferBeTBeChol, scaled_lam, k_totA);
             if (lam_last != lam)
-                bufferBeTBeChol[square(k_totA)-1] += (lam_last - lam);
+                bufferBeTBeChol[square(k_totA)-1]
+                    +=
+                (scaled_lam_last - scaled_lam);
             tpotrf_(&lo, &k_totA, bufferBeTBeChol, &k_totA, &ignore);
             if (bufferBeTBeChol == precomputedBeTBeChol)
                 *filled_BeTBeChol = true;
@@ -5293,6 +5352,7 @@ void optimizeA_collective
                                       : (weight + Xcsr_p[ix]) ),
                 lam, w_user, w_implicit, lam_last,
                 l1_lam, l1_lam_bias,
+                scale_lam, scale_lam_sideinfo,
                 bufferBtB, (Xfull != NULL)? cnt_NA_x[ix] : (int_t)0,
                 bufferCtC,
                 (U == NULL)? (int_t)0 : cnt_NA_u[ix],
@@ -7262,6 +7322,7 @@ int_t fit_collective_explicit_als
                     (l1_lam/w_user) : (l1_lam_unique[4]/w_user),
                 (l1_lam_unique == NULL)?
                     (l1_lam/w_user) : (l1_lam_unique[4]/w_user),
+                scale_lam,
                 Utrans == NULL,
                 iter == 0,
                 nthreads,
@@ -7319,6 +7380,7 @@ int_t fit_collective_explicit_als
                     (l1_lam/w_item) : (l1_lam_unique[5]/w_item),
                 (l1_lam_unique == NULL)?
                     (l1_lam/w_item) : (l1_lam_unique[5]/w_item),
+                scale_lam,
                 Itrans == NULL,
                 iter == 0,
                 nthreads,
@@ -7376,6 +7438,7 @@ int_t fit_collective_explicit_als
                     (l1_lam/w_implicit) : (l1_lam_unique[3]/w_implicit),
                 (l1_lam_unique == NULL)?
                     (l1_lam/w_implicit) : (l1_lam_unique[3]/w_implicit),
+                scale_lam,
                 Xfull != NULL, niter == 0,
                 nthreads,
                 false, 0,
@@ -7421,6 +7484,7 @@ int_t fit_collective_explicit_als
                     (l1_lam/w_implicit) : (l1_lam_unique[2]/w_implicit),
                 (l1_lam_unique == NULL)?
                     (l1_lam/w_implicit) : (l1_lam_unique[2]/w_implicit),
+                scale_lam,
                 false, niter == 0,
                 nthreads,
                 false, 0,
@@ -7562,6 +7626,7 @@ int_t fit_collective_explicit_als
                 (l1_lam_unique == NULL)? (l1_lam) : (l1_lam_unique[3]),
                 (l1_lam_unique == NULL)?
                     (l1_lam) : (l1_lam_unique[item_bias? 1 : 3]),
+                scale_lam, scale_lam_sideinfo,
                 Xfull != NULL && Xtrans == NULL,
                 nthreads,
                 use_cg_B && !nonneg, max_cg_steps, iter == 0,
@@ -7598,6 +7663,7 @@ int_t fit_collective_explicit_als
                 (l1_lam_unique == NULL)? (l1_lam) : (l1_lam_unique[3]),
                 (l1_lam_unique == NULL)?
                     (l1_lam) : (l1_lam_unique[item_bias? 1 : 3]),
+                scale_lam,
                 Xfull != NULL && Xtrans == NULL, iter == 0,
                 nthreads,
                 use_cg && !nonneg, max_cg_steps,
@@ -7727,6 +7793,7 @@ int_t fit_collective_explicit_als
                 (l1_lam_unique == NULL)? (l1_lam) : (l1_lam_unique[2]),
                 (l1_lam_unique == NULL)?
                     (l1_lam) : (l1_lam_unique[user_bias? 0 : 2]),
+                scale_lam, scale_lam_sideinfo,
                 false,
                 nthreads,
                 use_cg_B && !nonneg, max_cg_steps, iter == 0,
@@ -7758,6 +7825,7 @@ int_t fit_collective_explicit_als
                 (l1_lam_unique == NULL)? (l1_lam) : (l1_lam_unique[2]),
                 (l1_lam_unique == NULL)?
                     (l1_lam) : (l1_lam_unique[user_bias? 0 : 2]),
+                scale_lam,
                 false, iter == 0,
                 nthreads,
                 use_cg && !nonneg, max_cg_steps,
@@ -7958,10 +8026,14 @@ int_t fit_collective_explicit_als
                      precomputedTransBtBinvBt, k+k_main+user_bias);
             copy_arr(precomputedBtB, arr_use, square(k_pred));
             add_to_diag(arr_use,
-                        (lam_unique == NULL)? (lam) : (lam_unique[2]),
+                        ((lam_unique == NULL)? (lam) : (lam_unique[2]))
+                        * (real_t)(scale_lam? (include_all_X? n_max : n) : 1),
                         k_pred);
             if (lam_unique != NULL && user_bias && lam_unique[0]!=lam_unique[2])
-                arr_use[square(k_pred)-1] += (lam_unique[0]-lam_unique[2]);
+                arr_use[square(k_pred)-1]
+                    +=
+                (lam_unique[0]-lam_unique[2])
+                * (real_t)(scale_lam? (include_all_X? n_max : n) : 1);
             tposv_(&lo, &k_pred, include_all_X? &n_max : &n,
                    arr_use, &k_pred,
                    precomputedTransBtBinvBt, &k_pred, &ignore_int);
@@ -8011,6 +8083,7 @@ int_t fit_collective_explicit_als
                     copy_arr(precomputedCtCw, arr_use, square(k_pred));
                     add_to_diag(arr_use,
                                 ((lam_unique == NULL)? (lam) : (lam_unique[2]))
+                                    * (real_t)(scale_lam? p : 1)
                                     / w_user,
                                 k_pred);
                     if (w_user != 1.)
@@ -8032,6 +8105,7 @@ int_t fit_collective_explicit_als
                     }
                     add_to_diag(arr_use,
                                 ((lam_unique == NULL)? (lam) : (lam_unique[2]))
+                                    * (real_t)(scale_lam? p : 1)
                                     / w_user,
                                 k_pred);
                 }
@@ -8110,12 +8184,20 @@ int_t fit_collective_explicit_als
                         precomputedBeTBeChol + k_user + k_user*k_pred, k_pred);
 
             add_to_diag(precomputedBeTBeChol,
-                        (lam_unique == NULL)? (lam) : (lam_unique[2]),
+                        ((lam_unique == NULL)? (lam) : (lam_unique[2]))
+                                *
+                        (real_t)(scale_lam_sideinfo?
+                                (p+(include_all_X? n_max : n))
+                                : (scale_lam? (include_all_X? n_max : n) : 1)),
                         k_user+k+k_main+user_bias);
             if (lam_unique != NULL && user_bias && lam_unique[0]!=lam_unique[2])
                 precomputedBeTBeChol[square(k_pred)-1]
                     +=
-                (lam_unique[0]-lam_unique[2]);
+                (lam_unique[0]-lam_unique[2])
+                        *
+                (real_t)(scale_lam_sideinfo?
+                            (p+(include_all_X? n_max : n))
+                            : (scale_lam? (include_all_X? n_max : n) : 1));
 
             tpotrf_(&lo, &k_pred, precomputedBeTBeChol,&k_pred,&ignore_int);
             filled_BeTBeChol = true;
@@ -8591,6 +8673,7 @@ int_t fit_collective_implicit_als
                     (l1_lam/w_user) : (l1_lam_unique[4]/w_user),
                 (l1_lam_unique == NULL)?
                     (l1_lam/w_user) : (l1_lam_unique[4]/w_user),
+                false,
                 (Utrans != NULL)? (false) : (true),
                 iter == 0,
                 nthreads,
@@ -8639,6 +8722,7 @@ int_t fit_collective_implicit_als
                     (l1_lam/w_item) : (l1_lam_unique[5]/w_item),
                 (l1_lam_unique == NULL)?
                     (l1_lam/w_item) : (l1_lam_unique[5]/w_item),
+                false,
                 (Itrans != NULL)? (false) : (true),
                 iter == 0,
                 nthreads,
@@ -8959,6 +9043,26 @@ int_t precompute_collective_explicit
         w_implicit /= w_main;
     }
 
+    real_t lam_B = lam;
+    real_t lam_last_B = lam_last;
+    real_t lam_C = lam;
+
+    if (scale_lam || scale_lam_sideinfo)
+    {
+        lam *= (real_t)n;
+        lam_last *= (real_t)n;
+        lam_C *= (real_t)p;
+
+        lam_B = lam;
+        lam_last_B = lam_last;
+
+        if (scale_lam_sideinfo)
+        {
+            lam *= (real_t)p;
+            lam_last *= (real_t)p;
+        }
+    }
+
     real_t *arr_use = NULL;
     bool free_B_plus_bias = false;
     if (user_bias && B != NULL)
@@ -9056,9 +9160,9 @@ int_t precompute_collective_explicit
         }
 
         copy_arr(BtB, arr_use, square(k+k_main));
-        add_to_diag(arr_use, lam, k+k_main);
+        add_to_diag(arr_use, lam_B, k+k_main);
         if (lam != lam_last)
-            arr_use[square(k+k_main)-1] += (lam_last - lam);
+            arr_use[square(k+k_main)-1] += (lam_last_B - lam_B);
         copy_mat(n, k+k_main,
                  B + k_item, k_item+k+k_main,
                  TransBtBinvBt, k+k_main);
@@ -9094,7 +9198,7 @@ int_t precompute_collective_explicit
             }
 
             copy_arr(CtCw, arr_use, square(k_user+k));
-            add_to_diag(arr_use, lam/w_user, k_user+k);
+            add_to_diag(arr_use, lam_C/w_user, k_user+k);
             tposv_(&lo, &k_pred, &p,
                    arr_use, &k_pred,
                    TransCtCinvCt, &k_pred, &ignore);
