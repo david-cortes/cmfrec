@@ -1380,7 +1380,7 @@ void collective_closed_form_block
                     );
             }
 
-            if (bias_BtX != NULL && NA_as_zero_X)
+            if (bias_BtX != NULL && NA_as_zero_X && Xa_dense == NULL)
                 cblas_taxpy(k+k_main, 1., bias_BtX, 1, a_vec + k_user, 1);
         }
         
@@ -1682,9 +1682,9 @@ void collective_closed_form_block
             else {
                 for (size_t ix = 0; ix < nnz; ix++)
                     cblas_taxpy(k+k_main,
-                                weight[ix]*Xa[ix]
-                                    +
-                                (weight[ix]-1.)*bias_X[ixB[ix]],
+                                (weight[ix]*Xa[ix])
+                                    -
+                                ((weight[ix]-1.)*bias_X[ixB[ix]]),
                                 B+(size_t)k_item+(size_t)ixB[ix]*(size_t)ldb, 1,
                                 a_vec + k_user, 1);
             }
@@ -4952,7 +4952,7 @@ void optimizeA_collective
                            U_csr, U_csr_i, U_csr_p, \
                            buffer_real_t, size_buffer, do_B, \
                            bufferBtB, bufferCtC, nthreads, use_cg, \
-                           nonneg, max_cd_steps, bias_BtX, bias_X) \
+                           nonneg, max_cd_steps) \
                     firstprivate(bufferX)
             for (size_t_for ix = 0; ix < (size_t)m; ix++)
             {
@@ -5019,7 +5019,7 @@ void optimizeA_collective
                             max_cg_steps
                             : k_pred, /* <- more steps to reach optimum */
                         nonneg, max_cd_steps,
-                        bias_BtX,  bias_X,
+                        (real_t*)NULL,  (real_t*)NULL,
                         buffer_real_t
                           + (size_buffer*(size_t)omp_get_thread_num())
                     );
@@ -5124,8 +5124,9 @@ void optimizeA_collective
             C, p,
             k, k_user, k_main, k_item,
             use_cg? 1. : w_user,
-            (use_cg && NA_as_zero_X && Xfull == NULL && weight != NULL)?
-                ((real_t*)NULL) : (NA_as_zero_X? (real_t*)NULL : weight)
+            (NA_as_zero_X && Xfull == NULL)?
+                ((real_t*)NULL) : (weight)
+
         );
         if (!(*filled_CtCw))
         {
@@ -5137,6 +5138,15 @@ void optimizeA_collective
         if (bufferBtB == precomputedBtB) *filled_BtB = true;
         if (bufferCtC == precomputedCtCw) *filled_CtCw = true;
 
+        if (weight != NULL)
+        {
+            if (!(NA_as_zero_X && Xfull == NULL))
+            {
+                *filled_BtB = false;
+                bufferBtB = NULL;
+            }
+        }
+
 
         if (add_implicit_features && !filled_BiTBi)
         {
@@ -5146,7 +5156,7 @@ void optimizeA_collective
                         0., bufferBiTBi, k+k_main_i);
         }
 
-        if (bufferBeTBeChol != NULL)
+        if (bufferBeTBeChol != NULL && *filled_BtB)
         {
             if (k_user || k_main)
                 set_to_zero(bufferBeTBeChol, square(k_totA));
@@ -5172,6 +5182,10 @@ void optimizeA_collective
             tpotrf_(&lo, &k_totA, bufferBeTBeChol, &k_totA, &ignore);
             if (bufferBeTBeChol == precomputedBeTBeChol)
                 *filled_BeTBeChol = true;
+        }
+
+        else {
+            bufferBeTBeChol = NULL;
         }
 
         if (add_implicit_features && use_cg && w_implicit != 1.)
@@ -5247,7 +5261,7 @@ void optimizeA_collective
                 );
         }
 
-        if (bias_BtX != NULL && NA_as_zero_X && !add_X)
+        if (bias_BtX != NULL && NA_as_zero_X && Xfull == NULL && !add_X)
         {
             for (size_t row = 0; row < (size_t)m_x; row++)
                 cblas_taxpy(k+k_main, 1., bias_BtX, 1,
@@ -7002,12 +7016,12 @@ int_t fit_collective_explicit_als
             (user_bias && !item_bias))
         {
             free_BtX = true;
-            buffer_BtX = (real_t*)malloc((size_t)(k+k_main+1)
-                                         *sizeof(real_t));
+            buffer_BtX = (real_t*)calloc((size_t)(k+k_main+1), sizeof(real_t));
             if (buffer_BtX == NULL) goto throw_oom;
         }
         else {
             buffer_BtX = precomputedBtXbias;
+            set_to_zero(buffer_BtX, k+k_main+user_bias);
         }
     }
 
@@ -7179,7 +7193,7 @@ int_t fit_collective_explicit_als
     size_buffer = max2(max2(size_bufferA, size_bufferB),
                        max2(size_bufferC, size_bufferD));
     size_buffer = max2(size_buffer, max2(size_bufferAi, size_bufferBi));
-    buffer_real_t = (real_t*)malloc(size_buffer * sizeof(real_t));
+    buffer_real_t = (real_t*)malloc(500*size_buffer * sizeof(real_t));
     if (buffer_real_t == NULL) goto throw_oom;
 
 

@@ -622,7 +622,6 @@ real_t fun_grad_cannonical_form
 
 
 *******************************************************************************/
-#define printf 
 void factors_closed_form
 (
     real_t *restrict a_vec, int_t k,
@@ -699,7 +698,6 @@ void factors_closed_form
          (Xa_dense == NULL && NA_as_zero && bias_BtX == NULL)) &&
         (l1_lam == 0. && l1_lam_last == 0.))
     {
-        printf("case1\n");
         if (Xa_dense != NULL)
             cblas_tgemv(CblasRowMajor, CblasTrans,
                         n, k,
@@ -724,7 +722,6 @@ void factors_closed_form
     else if (Xa_dense != NULL && precomputedBtB != NULL && weight == NULL &&
              prefer_BtB)
     {
-        printf("case2\n");
         add_diag = false;
         copy_mat(k, k,
                  precomputedBtB, ld_BtB,
@@ -756,7 +753,6 @@ void factors_closed_form
              Xa_dense == NULL && precomputedBtBchol != NULL &&
              l1_lam == 0. && l1_lam_last == 0.)
     {
-        printf("case3\n");
         set_to_zero(a_vec, k);
         tgemv_dense_sp(n, k,
                        1., B, (size_t)ldb,
@@ -779,7 +775,6 @@ void factors_closed_form
        then adjust by substracting from it again. */
     else if (Xa_dense == NULL && NA_as_zero && !use_cg)
     {
-        printf("case4 - [weight:%p]\n", weight);
         set_to_zero(a_vec, k);
         set_to_zero(bufferBtB, square(k));
 
@@ -787,8 +782,6 @@ void factors_closed_form
         {
             for (size_t ix = 0; ix < nnz; ix++)
             {
-                // printf("[ix:%d] [ixB[ix]:%d] [weight:%.2f] [Xa:%.2f] [nnz:%d] [bias_X:%p]\n",
-                    // (int)ix, (int)ixB[ix], weight[ix], Xa[ix], (int)nnz, bias_X);
                 cblas_tsyr(CblasRowMajor, CblasUpper,
                            k, (weight[ix] - 1.),
                            B + (size_t)ixB[ix]*(size_t)ldb, 1,
@@ -825,7 +818,6 @@ void factors_closed_form
                         precomputedBtB, ld_BtB,
                         bufferBtB, k);
             add_diag = !BtB_has_diag;
-            printf("copied BtB [k:%d] [add_diag:%d]\n", k, (int)add_diag);
         }
 
     }
@@ -836,7 +828,6 @@ void factors_closed_form
        not need to calculate the Cholesky. */
     else if (use_cg)
     {
-        printf("case5\n");
         if (Xa_dense != NULL)
             factors_explicit_cg_dense(
                 a_vec, k,
@@ -885,7 +876,6 @@ void factors_closed_form
 
     else if (Xa_dense == NULL)
     {
-        printf("case6\n");
         /* Sparse X - obtain t(B)*B through SR1 updates, avoiding a full
            matrix-matrix multiplication. This is the expected scenario for
            most use-cases. */
@@ -919,7 +909,6 @@ void factors_closed_form
 
     else
     {
-        printf("case7\n");
         /* Dense X - in this case, re-construct t(B)*B without the missing
            entries - at once if possible, or one-by-one if not.
            Note that, if B0 is the B matrix with the rows set to zero
@@ -2028,7 +2017,6 @@ size_t buffer_size_optimizeA_implicit
             + nthreads * size_thread_buffer;
 }
 
-#undef printf 
 void optimizeA
 (
     real_t *restrict A, int_t lda,
@@ -2078,7 +2066,6 @@ void optimizeA
        solutions individually. */
     if (Xfull != NULL && (full_dense || near_dense) && weight == NULL)
     {
-        printf("optimizeA case1\n");
         real_t *restrict bufferBtBcopy = NULL;
         if (near_dense)
         {
@@ -2239,7 +2226,7 @@ void optimizeA
                         (real_t*)NULL, false,
                         use_cg, k, /* <- A was reset to zero, need more steps */
                         nonneg, max_cd_steps,
-                        bias_BtX, bias_X,
+                        (real_t*)NULL, (real_t*)NULL,
                         false
                     );
                 }
@@ -2253,7 +2240,6 @@ void optimizeA
        in case some rows have few missing values. */
     else if (Xfull != NULL)
     {
-        printf("optimizeA case2\n");
         real_t *restrict bufferBtB = NULL;
         if (weight == NULL) {
             if (precomputedBtB != NULL && !keep_precomputedBtB)
@@ -2338,7 +2324,7 @@ void optimizeA
                 (real_t*)NULL, false,
                 use_cg, max_cg_steps,
                 nonneg, max_cd_steps,
-                bias_BtX, bias_X,
+                (real_t*)NULL, (real_t*)NULL,
                 false
             );
         }
@@ -2348,7 +2334,6 @@ void optimizeA
        Here can also use one Cholesky for all rows at once. */
     else if (Xfull == NULL && NA_as_zero && weight == NULL)
     {
-        printf("optimizeA case3\n");
         real_t *restrict bufferBtB = NULL;
         if (precomputedBtB != NULL && !keep_precomputedBtB)
             bufferBtB = precomputedBtB;
@@ -2421,7 +2406,6 @@ void optimizeA
        This is the expected case for most situations. */
     else
     {
-        printf("optimizeA case4\n");
         /* When NAs are treated as zeros, can use a precomputed t(B)*B */
         real_t *restrict bufferBtB = NULL;
         bool add_diag_to_BtB = !(use_cg && Xfull == NULL && NA_as_zero) &&
@@ -2471,11 +2455,17 @@ void optimizeA
                        lam, lam_last, l1_lam, l1_lam_last, weight, cnt_NA, \
                        Xcsr_p, Xcsr_i, Xcsr, buffer_real_t, NA_as_zero, \
                        bufferBtB, size_buffer, use_cg, \
-                       nonneg, max_cd_steps, bias_BtX)
+                       nonneg, max_cd_steps, bias_BtX, bias_X)
         for (size_t_for ix = 0; ix < (size_t)m; ix++)
         {
+            /* FIXME: this should work with only the first and the second line
+               (which is commented out), but it produces incorrect results
+               unless adding the third condition. This is a quick fix which
+               covers as many cases as I could test, but in reality it could be
+               a major bug underneath that affects more cases. */
             if ((Xcsr_p[ix+(size_t)1] > Xcsr_p[ix]) ||
-                (NA_as_zero && bias_BtX != NULL))
+                // (NA_as_zero && bias_BtX != NULL))
+                (NA_as_zero))
             {
                 factors_closed_form(
                     A + ix*(size_t)lda, k,
