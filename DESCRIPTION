@@ -23,7 +23,8 @@ Description: Collective matrix factorization (a.k.a. multi-view or multi-way fac
 	(Takacs, Pilaszy, Tikk, (2011) <doi:10.1145/2043932.2043987>), or a non-negative
 	coordinate descent solver (Franc, Hlavac, Navara, (2005) <doi:10.1007/11556121_50>),
 	providing efficient methods for sparse and dense data, and mixtures thereof.
-	Offers alternative most-popular and content-based models, and implements functionality
+	Supports L1 and L2 regularization in the main models,
+	offers alternative most-popular and content-based models, and implements functionality
 	for cold-start recommendations and imputation of 2D data.
 License: MIT + file LICENSE
 Suggests: Matrix, rsparse, recommenderlab, MASS

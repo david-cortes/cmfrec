@@ -458,12 +458,13 @@ void factors_closed_form
     real_t *restrict weight,
     real_t *restrict buffer_real_t,
     real_t lam, real_t lam_last,
+    real_t l1_lam, real_t l1_lam_last,
     real_t *restrict precomputedTransBtBinvBt,
     real_t *restrict precomputedBtB, int_t cnt_NA, int_t ld_BtB,
     bool BtB_has_diag, bool BtB_is_scaled, real_t scale_BtB, int_t n_BtB,
     real_t *restrict precomputedBtBchol, bool NA_as_zero,
     bool use_cg, int_t max_cg_steps,/* <- 'cg' should not be used for new data*/
-    bool nonneg, int_t max_cd_steps, real_t *restrict a_prev,
+    bool nonneg, int_t max_cd_steps,
     real_t *restrict bias_BtX, real_t *restrict bias_X,
     bool force_add_diag
 );
@@ -515,17 +516,18 @@ void factors_implicit_chol
     real_t *restrict a_vec, int_t k,
     real_t *restrict B, size_t ldb,
     real_t *restrict Xa, int_t ixB[], size_t nnz,
-    real_t lam,
+    real_t lam, real_t l1_lam,
     real_t *restrict precomputedBtB, int_t ld_BtB,
-    bool nonneg, int_t max_cd_steps, real_t *restrict a_prev,
+    bool nonneg, int_t max_cd_steps,
     real_t *restrict buffer_real_t
 );
 void solve_nonneg
 (
     real_t *restrict BtB,
     real_t *restrict BtX, /* <- solution will be here */
-    real_t *restrict a_prev,
+    real_t *restrict buffer_real_t,
     int_t k,
+    real_t l1_lam, real_t l1_lam_last,
     size_t max_cd_steps,
     bool fill_lower
 );
@@ -533,8 +535,29 @@ void solve_nonneg_batch
 (
     real_t *restrict BtB,
     real_t *restrict BtX, /* <- solution will be here */
-    real_t *restrict A_prev,
+    real_t *restrict buffer_real_t,
     int_t m, int_t k, size_t lda,
+    real_t l1_lam, real_t l1_lam_last,
+    size_t max_cd_steps,
+    int nthreads
+);
+void solve_elasticnet
+(
+    real_t *restrict BtB,
+    real_t *restrict BtX, /* <- solution will be here */
+    real_t *restrict buffer_real_t,
+    int_t k,
+    real_t l1_lam, real_t l1_lam_last,
+    size_t max_cd_steps,
+    bool fill_lower
+);
+void solve_elasticnet_batch
+(
+    real_t *restrict BtB,
+    real_t *restrict BtX, /* <- solution will be here */
+    real_t *restrict buffer_real_t,
+    int_t m, int_t k, size_t lda,
+    real_t l1_lam, real_t l1_lam_last,
     size_t max_cd_steps,
     int nthreads
 );
@@ -596,6 +619,7 @@ size_t buffer_size_optimizeA
 (
     size_t n, bool full_dense, bool near_dense, bool do_B,
     bool has_dense, bool has_weights, bool NA_as_zero,
+    bool nonneg, bool has_l1,
     size_t k, size_t nthreads,
     bool pass_allocated_BtB, bool keep_precomputedBtB,
     bool use_cg, bool finalize_chol
@@ -604,6 +628,7 @@ size_t buffer_size_optimizeA_implicit
 (
     size_t k, size_t nthreads,
     bool pass_allocated_BtB,
+    bool nonneg, bool has_l1,
     bool use_cg, bool finalize_chol
 );
 void optimizeA
@@ -615,10 +640,11 @@ void optimizeA
     real_t *restrict Xfull, int_t ldX, bool full_dense, bool near_dense,
     int_t cnt_NA[], real_t *restrict weight, bool NA_as_zero,
     real_t lam, real_t lam_last,
+    real_t l1_lam, real_t l1_lam_last,
     bool do_B, bool is_first_iter,
     int_t nthreads,
     bool use_cg, int_t max_cg_steps,
-    bool nonneg, int_t max_cd_steps, real_t *restrict A_prev,
+    bool nonneg, int_t max_cd_steps,
     real_t *restrict bias_BtX, real_t *restrict bias_X,
     bool keep_precomputedBtB,
     real_t *restrict precomputedBtB, bool *filled_BtB,
@@ -630,10 +656,10 @@ void optimizeA_implicit
     real_t *restrict B, size_t ldb,
     int_t m, int_t n, int_t k,
     size_t Xcsr_p[], int_t Xcsr_i[], real_t *restrict Xcsr,
-    real_t lam,
+    real_t lam, real_t l1_lam,
     int_t nthreads,
     bool use_cg, int_t max_cg_steps, bool force_set_to_zero,
-    bool nonneg, int_t max_cd_steps, real_t *restrict A_prev,
+    bool nonneg, int_t max_cd_steps,
     real_t *restrict precomputedBtB, /* <- will be calculated if not passed */
     real_t *restrict buffer_real_t
 );
@@ -850,13 +876,14 @@ void collective_closed_form_block
     real_t *restrict Xones, int_t incXones,
     real_t *restrict weight,
     real_t lam, real_t w_user, real_t w_implicit, real_t lam_last,
+    real_t l1_lam, real_t l1_lam_bias,
     real_t *restrict precomputedBtB, int_t cnt_NA_x,
     real_t *restrict precomputedCtCw, int_t cnt_NA_u,
     real_t *restrict precomputedBeTBeChol, int_t n_BtB,
     real_t *restrict precomputedBiTBi,
     bool add_X, bool add_U,
     bool use_cg, int_t max_cg_steps,/* <- 'cg' should not be used for new data*/
-    bool nonneg, int_t max_cd_steps, real_t *restrict a_prev,
+    bool nonneg, int_t max_cd_steps,
     real_t *restrict bias_BtX, real_t *restrict bias_X,
     real_t *restrict buffer_real_t
 );
@@ -869,14 +896,14 @@ void collective_closed_form_block_implicit
     real_t *restrict u_vec, int_t cnt_NA_u,
     real_t *restrict u_vec_sp, int_t u_vec_ixB[], size_t nnz_u_vec,
     bool NA_as_zero_U,
-    real_t lam, real_t w_user,
+    real_t lam, real_t l1_lam, real_t w_user,
     real_t *restrict precomputedBeTBe,
     real_t *restrict precomputedBtB, /* for cg, should NOT have lambda added */
     real_t *restrict precomputedBeTBeChol,
     real_t *restrict precomputedCtCw,
     bool add_U, bool shapes_match,
     bool use_cg, int_t max_cg_steps,/* <- 'cg' should not be used for new data*/
-    bool nonneg, int_t max_cd_steps, real_t *restrict a_prev,
+    bool nonneg, int_t max_cd_steps,
     real_t *restrict buffer_real_t
 );
 void collective_block_cg
@@ -928,10 +955,10 @@ void optimizeA_collective_implicit
     size_t U_csr_p[], int_t U_csr_i[], real_t *restrict U_csr,
     real_t *restrict U, int_t cnt_NA_u[],
     bool full_dense_u, bool near_dense_u, bool NA_as_zero_U,
-    real_t lam, real_t w_user,
+    real_t lam, real_t l1_lam, real_t w_user,
     int_t nthreads,
     bool use_cg, int_t max_cg_steps, bool is_first_iter,
-    bool nonneg, int_t max_cd_steps, real_t *restrict A_prev,
+    bool nonneg, int_t max_cd_steps,
     real_t *restrict precomputedBtB, /* will not have lambda with CG */
     real_t *restrict precomputedBeTBe,
     real_t *restrict precomputedBeTBeChol,
@@ -1069,7 +1096,7 @@ size_t buffer_size_optimizeA_collective
     bool add_implicit_features, size_t k_main_i,
     size_t nthreads,
     bool use_cg, bool finalize_chol,
-    bool nonneg,
+    bool nonneg, bool has_l1,
     bool keep_precomputed,
     bool pass_allocated_BtB,
     bool pass_allocated_CtCw,
@@ -1084,6 +1111,7 @@ size_t buffer_size_optimizeA_collective_implicit
     bool NA_as_zero_U,
     size_t nthreads,
     bool use_cg,
+    bool nonneg, bool has_l1,
     bool pass_allocated_BtB,
     bool pass_allocated_BeTBe,
     bool pass_allocated_BeTBeChol,
@@ -1106,10 +1134,11 @@ void optimizeA_collective
     real_t *restrict U, int_t cnt_NA_u[],
     bool full_dense_u, bool near_dense_u, bool NA_as_zero_U,
     real_t lam, real_t w_user, real_t w_implicit, real_t lam_last,
+    real_t l1_lam, real_t l1_lam_bias,
     bool do_B,
     int_t nthreads,
     bool use_cg, int_t max_cg_steps, bool is_first_iter,
-    bool nonneg, int_t max_cd_steps, real_t *restrict A_prev,
+    bool nonneg, int_t max_cd_steps,
     real_t *restrict bias_BtX, real_t *restrict bias_X,
     bool keep_precomputed,
     real_t *restrict precomputedBtB,

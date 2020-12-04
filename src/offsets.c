@@ -652,12 +652,12 @@ int_t offsets_factors_warm
                                     Xa, ixB, nnz,
                                     weight,
                                     buffer_real_t,
-                                    lam, lam,
+                                    lam, lam, 0., 0.,
                                     precomputedTransBtBinvBt,
                                     precomputedBtB, cnt_NA, k_sec+k+k_main,
                                     false, false, 1., n,
                                     (real_t*)NULL, false,
-                                    false, 0, false, 0, (real_t*)NULL,
+                                    false, 0, false, 0,
                                     (real_t*)NULL, (real_t*)NULL, false);
             else {
                 factors_closed_form(a_plus_bias, k_sec+k+k_main+1,
@@ -666,12 +666,12 @@ int_t offsets_factors_warm
                                     Xa, ixB, nnz,
                                     weight,
                                     buffer_real_t,
-                                    lam, lam_bias,
+                                    lam, lam_bias, 0., 0.,
                                     precomputedTransBtBinvBt,
                                     precomputedBtB, cnt_NA, k_sec+k+k_main+1,
                                     false, false, 1., n,
                                     (real_t*)NULL, false,
-                                    false, 0, false, 0, (real_t*)NULL,
+                                    false, 0, false, 0,
                                     (real_t*)NULL, (real_t*)NULL, false);
                 memcpy(a_vec, a_plus_bias,
                        (size_t)(k_sec+k+k_main)*sizeof(real_t));
@@ -696,9 +696,9 @@ int_t offsets_factors_warm
                 a_vec, k_sec+k+k_main,
                 Bm, k_sec+k+k_main,
                 Xa, ixB, nnz,
-                lam,
+                lam, 0.,
                 precomputedBtB, k_sec+k+k_main,
-                false, 0, (real_t*)NULL,
+                false, 0,
                 buffer_real_t
             );
         }
@@ -792,12 +792,12 @@ int_t offsets_factors_warm
                                     (real_t*)NULL, (int_t*)NULL, (size_t)0,
                                     weight,
                                     buffer_remainder,
-                                    lam, lam,
+                                    lam, lam, 0., 0.,
                                     (real_t*)NULL,
                                     (real_t*)NULL, 0, 0,
                                     false, false, 1., n,
                                     (real_t*)NULL, false,
-                                    false, 0, false, 0, (real_t*)NULL,
+                                    false, 0, false, 0,
                                     (real_t*)NULL, (real_t*)NULL, false);
             else {
                 factors_closed_form(a_plus_bias + k_sec, k+k_main+1,
@@ -806,12 +806,12 @@ int_t offsets_factors_warm
                                     (real_t*)NULL, (int_t*)NULL, (size_t)0,
                                     weight,
                                     buffer_remainder,
-                                    lam, lam_bias,
+                                    lam, lam_bias, 0., 0.,
                                     (real_t*)NULL,
                                     (real_t*)NULL, 0, 0,
                                     false, false, 1., n,
                                     (real_t*)NULL, false,
-                                    false, 0, false, 0, (real_t*)NULL,
+                                    false, 0, false, 0,
                                     (real_t*)NULL, (real_t*)NULL, false);
                 memcpy(a_vec + k_sec, a_plus_bias + k_sec,
                        (size_t)(k+k_main)*sizeof(real_t));
