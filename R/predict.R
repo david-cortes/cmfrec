@@ -9,7 +9,8 @@
 #' predictions for all of its non-missing entries.
 #' 
 #' Invalid combinations (e.g. rows and columns outside of the range of `X` to
-#' which the model was fit) will be filled with NAs.
+#' which the model was fit) will be filled with global mean plus biases if applicable
+#' for `CMF_explicit`, and with NAs for the other models.
 #' 
 #' For example usage, see the main section \link{fit_models}.
 #' @param object A collective matrix factorization model from this package - see

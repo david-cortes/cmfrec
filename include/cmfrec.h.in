@@ -1130,7 +1130,8 @@ int_t factors_collective_implicit_multiple
     the original A matrix and a row index to select from it.
 
     If any of the row/column combinations passed to 'predict_X' is invalid, will
-    set the predicted value to NAN.
+    set the predicted value to NAN for the implicit model, and to global mean
+    plus biases if applicable for the explicit model.
 
     -- Parameters for impute_X ---
     @param Xfull  (input, output) New 'X' data with missing values. The missing

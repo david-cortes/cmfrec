@@ -1025,6 +1025,12 @@ class _CMF:
         """
         Predict ratings/values given by existing users to existing items
 
+        Note
+        ----
+        For CMF explicit, invalid combinations of users and items will be
+        set to the global mean plus biases if applicable. For other models,
+        invalid combinations will be set as NaN.
+
         Parameters
         ----------
         user : array-like(n,)
@@ -1070,41 +1076,21 @@ class _CMF:
                     if isinstance(out, np.ndarray):
                         out = out[0]
                     return out
-            ### TODO: This function no longer needs to know which which entries
-            #### will be nan, as it's now implemented in the C function
             else:
                 n_users = max(self._A_pred.shape[0], self.user_bias_.shape[0])
                 n_items = max(self._B_pred.shape[0], self.item_bias_.shape[0])
-                nan_entries = (user < 0) | (item < 0) | \
-                              (user >= n_users) | (item >= n_items)
-                if ~np.any(nan_entries):
-                    return c_funs.call_predict_multiple(
-                        self._A_pred,
-                        self._B_pred,
-                        self.user_bias_,
-                        self.item_bias_,
-                        self.glob_mean_,
-                        np.array(user).astype(ctypes.c_int),
-                        np.array(item).astype(ctypes.c_int),
-                        self._k_pred, self.k_user, self.k_item, self._k_main_col,
-                        self.nthreads
-                    )
-                else:
-                    non_na_user = (user >= 0) & (user < n_users)
-                    non_na_item = (item >= 0) & (item < n_items)
-                    outp = c_funs.call_predict_multiple(
-                        self._A_pred,
-                        self._B_pred,
-                        self.user_bias_,
-                        self.item_bias_,
-                        self.glob_mean_,
-                        np.where(non_na_user, np.array(user).astype(ctypes.c_int), np.zeros(user.shape[0], dtype=ctypes.c_int)),
-                        np.where(non_na_item, np.array(item).astype(ctypes.c_int), np.zeros(item.shape[0], dtype=ctypes.c_int)),
-                        self._k_pred, self.k_user, self.k_item, self._k_main_col,
-                        self.nthreads
-                    )
-                    outp[nan_entries] = np.nan
-                    return outp
+                return c_funs.call_predict_multiple(
+                    self._A_pred,
+                    self._B_pred,
+                    self.user_bias_,
+                    self.item_bias_,
+                    self.glob_mean_,
+                    np.array(user).astype(ctypes.c_int),
+                    np.array(item).astype(ctypes.c_int),
+                    self._k_pred, self.k_user, self.k_item, self._k_main_col,
+                    self.nthreads
+                )
+
         #### When passing the factors directly
         else:
             item = np.array([item]).reshape(-1)

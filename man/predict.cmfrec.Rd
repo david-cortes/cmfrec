@@ -54,7 +54,8 @@ Alternatively, might pass a sparse matrix, in which case it will make
 predictions for all of its non-missing entries.
 
 Invalid combinations (e.g. rows and columns outside of the range of `X` to
-which the model was fit) will be filled with NAs.
+which the model was fit) will be filled with global mean plus biases if applicable
+for `CMF_explicit`, and with NAs for the other models.
 
 For example usage, see the main section \link{fit_models}.
 }

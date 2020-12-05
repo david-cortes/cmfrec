@@ -7278,7 +7278,8 @@ int_t fit_collective_explicit_als
                  = 1.;
     }
 
-    #if !defined(_WIN32) && !defined(_WIN64) && !defined(_MSC_VER)
+    // #if !defined(_WIN32) && !defined(_WIN64) && !defined(_MSC_VER)
+    #if defined USE_SIGACTION
     struct sigaction sig_handle;
     memset(&sig_handle, 0, sizeof(sig_handle));
     if (handle_interrupt)
@@ -7306,7 +7307,8 @@ int_t fit_collective_explicit_als
 
         /* Optimize C and D (they are independent of each other) */
         if (handle_interrupt)
-            #if !defined(_WIN32) && !defined(_WIN64) && !defined(_MSC_VER)
+            // #if !defined(_WIN32) && !defined(_WIN64) && !defined(_MSC_VER)
+            #if defined USE_SIGACTION
             sigaction(SIGINT, &sig_handle, NULL);
             #else
             signal(SIGINT, set_interrup_global_variable);
@@ -7367,7 +7369,8 @@ int_t fit_collective_explicit_als
         }
 
         if (handle_interrupt)
-            #if !defined(_WIN32) && !defined(_WIN64) && !defined(_MSC_VER)
+            // #if !defined(_WIN32) && !defined(_WIN64) && !defined(_MSC_VER)
+            #if defined USE_SIGACTION
             sigaction(SIGINT, &sig_handle, NULL);
             #else
             signal(SIGINT, set_interrup_global_variable);
@@ -7435,7 +7438,8 @@ int_t fit_collective_explicit_als
         if (add_implicit_features)
         {
             if (handle_interrupt)
-                #if !defined(_WIN32) && !defined(_WIN64) && !defined(_MSC_VER)
+                //#if !defined(_WIN32) && !defined(_WIN64) && !defined(_MSC_VER)
+                #if defined USE_SIGACTION
                 sigaction(SIGINT, &sig_handle, NULL);
                 #else
                 signal(SIGINT, set_interrup_global_variable);
@@ -7486,7 +7490,8 @@ int_t fit_collective_explicit_als
 
 
             if (handle_interrupt)
-                #if !defined(_WIN32) && !defined(_WIN64) && !defined(_MSC_VER)
+                //#if !defined(_WIN32) && !defined(_WIN64) && !defined(_MSC_VER)
+                #if defined USE_SIGACTION
                 sigaction(SIGINT, &sig_handle, NULL);
                 #else
                 signal(SIGINT, set_interrup_global_variable);
@@ -7613,7 +7618,8 @@ int_t fit_collective_explicit_als
 
         /* Optimize B */
         if (handle_interrupt)
-            #if !defined(_WIN32) && !defined(_WIN64) && !defined(_MSC_VER)
+            // #if !defined(_WIN32) && !defined(_WIN64) && !defined(_MSC_VER)
+            #if defined USE_SIGACTION
             sigaction(SIGINT, &sig_handle, NULL);
             #else
             signal(SIGINT, set_interrup_global_variable);
@@ -7803,7 +7809,8 @@ int_t fit_collective_explicit_als
         filled_CtCw = false;
         filled_BeTBeChol = false;
         if (handle_interrupt)
-            #if !defined(_WIN32) && !defined(_WIN64) && !defined(_MSC_VER)
+            // #if !defined(_WIN32) && !defined(_WIN64) && !defined(_MSC_VER)
+            #if defined USE_SIGACTION
             sigaction(SIGINT, &sig_handle, NULL);
             #else
             signal(SIGINT, set_interrup_global_variable);
@@ -8685,7 +8692,8 @@ int_t fit_collective_implicit_als
         #endif
     }
 
-    #if !defined(_WIN32) && !defined(_WIN64) && !defined(_MSC_VER)
+    // #if !defined(_WIN32) && !defined(_WIN64) && !defined(_MSC_VER)
+    #if defined USE_SIGACTION
     struct sigaction sig_handle;
     memset(&sig_handle, 0, sizeof(sig_handle));
     if (handle_interrupt)
@@ -8703,7 +8711,8 @@ int_t fit_collective_implicit_als
 
         /* Optimize C and D (they are independent of each other) */
         if (handle_interrupt)
-            #if !defined(_WIN32) && !defined(_WIN64) && !defined(_MSC_VER)
+            // #if !defined(_WIN32) && !defined(_WIN64) && !defined(_MSC_VER)
+            #if defined USE_SIGACTION
             sigaction(SIGINT, &sig_handle, NULL);
             #else
             signal(SIGINT, set_interrup_global_variable);
@@ -8757,7 +8766,8 @@ int_t fit_collective_implicit_als
         }
 
         if (handle_interrupt)
-            #if !defined(_WIN32) && !defined(_WIN64) && !defined(_MSC_VER)
+            // #if !defined(_WIN32) && !defined(_WIN64) && !defined(_MSC_VER)
+            #if defined USE_SIGACTION
             sigaction(SIGINT, &sig_handle, NULL);
             #else
             signal(SIGINT, set_interrup_global_variable);
@@ -8812,7 +8822,8 @@ int_t fit_collective_implicit_als
 
         /* Optimize B */
         if (handle_interrupt)
-            #if !defined(_WIN32) && !defined(_WIN64) && !defined(_MSC_VER)
+            // #if !defined(_WIN32) && !defined(_WIN64) && !defined(_MSC_VER)
+            #if defined USE_SIGACTION
             sigaction(SIGINT, &sig_handle, NULL);
             #else
             signal(SIGINT, set_interrup_global_variable);
@@ -8873,7 +8884,8 @@ int_t fit_collective_implicit_als
 
         /* Optimize A */
         if (handle_interrupt)
-            #if !defined(_WIN32) && !defined(_WIN64) && !defined(_MSC_VER)
+            // #if !defined(_WIN32) && !defined(_WIN64) && !defined(_MSC_VER)
+            #if defined USE_SIGACTION
             sigaction(SIGINT, &sig_handle, NULL);
             #else
             signal(SIGINT, set_interrup_global_variable);
@@ -10553,6 +10565,21 @@ int_t predict_X_old_collective_explicit
         predicted,
         nthreads
     );
+    for (size_t ix = 0; ix < n_predict; ix++)
+    {
+        predicted[ix]
+            =
+        #ifdef _FOR_R
+        (!ISNAN(predicted[ix]))?
+        #else
+        (!isnan(predicted[ix]))?
+        #endif
+            predicted[ix]
+                :
+            (glob_mean
+                + ((biasA != NULL && row[ix] < m)? biasA[row[ix]] : 0.)
+                + ((biasB != NULL && col[ix] < n_max)? biasB[col[ix]] : 0.));
+    }
     return 0;
 }
 
@@ -10676,6 +10703,24 @@ int_t predict_X_new_collective_explicit
         m_max, n_max,
         nthreads
     );
+    if (retval != 0)
+        goto cleanup;
+
+    for (size_t ix = 0; ix < n_predict; ix++)
+    {
+        predicted[ix]
+            =
+        #ifdef _FOR_R
+        (!ISNAN(predicted[ix]))?
+        #else
+        (!isnan(predicted[ix]))?
+        #endif
+            predicted[ix]
+                :
+            (glob_mean
+                + ((biasA != NULL && row[ix] < m_new)? biasA[row[ix]] : 0.)
+                + ((biasB != NULL && col[ix] < n_max)? biasB[col[ix]] : 0.));
+    }
 
     cleanup:
         free(A);
