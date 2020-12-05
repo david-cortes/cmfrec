@@ -1674,12 +1674,7 @@ void collective_closed_form_block
                                1., B + k_item, (size_t)ldb,
                                ixB, Xa, nnz,
                                a_vec + k_user);
-            else if (!(NA_as_zero_X && bias_X != NULL && bias_X_glob == 0.))
-                tgemv_dense_sp_weighted(n, k+k_main, weight,
-                                        B + k_item, (size_t)ldb,
-                                        ixB, Xa, nnz,
-                                        a_vec + k_user);
-            else {
+            else
                 for (size_t ix = 0; ix < nnz; ix++)
                     cblas_taxpy(k+k_main,
                                 (weight[ix]*Xa[ix])
@@ -1687,10 +1682,9 @@ void collective_closed_form_block
                                 (weight[ix]-1.)
                                     *
                                 (bias_X_glob + ((bias_X == NULL)?
-                                                    0 : bias_X[ixB[ix]])),
+                                                    0. : bias_X[ixB[ix]])),
                                 B+(size_t)k_item+(size_t)ixB[ix]*(size_t)ldb, 1,
                                 a_vec + k_user, 1);
-            }
         }
 
 

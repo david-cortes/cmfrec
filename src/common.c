@@ -2725,7 +2725,12 @@ int_t initialize_biases
                 for (size_t ix = Xcsc_p[col]; ix < Xcsc_p[col+(size_t)1]; ix++)
                     biasB[col] += (Xcsc[ix] - biasB[col])
                                    / ((double)(ix - Xcsc_p[col] +(size_t)1)
-                                      + lam_item);
+                                      + (lam_item
+                                            *
+                                        (scale_lam?
+                                            (real_t)(Xcsc_p[col+(size_t)1]
+                                                        -
+                                                     Xcsc_p[col]) : 1.)));
         }
 
         else
@@ -2738,7 +2743,10 @@ int_t initialize_biases
 
         if (Xfull != NULL || Xcsc == NULL)
             for (int_t ix = 0; ix < n; ix++)
-                biasB[ix] /= ((double)buffer_cnt[ix] + lam_item);
+                biasB[ix] /= ((double)buffer_cnt[ix]
+                                + (lam_item
+                                    *
+                                   (scale_lam? (double)buffer_cnt[ix] : 1.)));
 
         for (int_t ix = 0; ix < n; ix++)
             biasB[ix] = (!isnan(biasB[ix]))? biasB[ix] : 0.;
@@ -2780,7 +2788,12 @@ int_t initialize_biases
                                     - (item_bias? (biasB[Xcsr_i[ix]]) : (0.))
                                     - biasA[row])
                                    / ((double)(ix - Xcsr_p[row] +(size_t)1)
-                                      + lam_user);
+                                      + (lam_user
+                                            *
+                                         (scale_lam?
+                                            (real_t)(Xcsr_p[row+(size_t)1]
+                                                        -
+                                                     Xcsr_p[row]) : 1.)));
         }
 
         else
@@ -2793,7 +2806,10 @@ int_t initialize_biases
 
         if (Xfull != NULL || Xcsr == NULL)
             for (int_t ix = 0; ix < m; ix++)
-                biasA[ix] /= ((double)buffer_cnt[ix] + lam_user);
+                biasA[ix] /= ((double)buffer_cnt[ix]
+                                + (lam_user
+                                    *
+                                   (scale_lam? (double)buffer_cnt[ix] : 1.)));
 
         for (int_t ix = 0; ix < m; ix++)
             biasA[ix] = (!isnan(biasA[ix]))? biasA[ix] : 0.;
@@ -3317,19 +3333,17 @@ int_t fit_most_popular
 
     if (biasA != NULL) {
 
-        if (weight == NULL) {
+        if (weight == NULL || scale_lam) {
             cnt_by_col = (int_t*)calloc((size_t)n, sizeof(int_t));
             cnt_by_row = (int_t*)calloc((size_t)m, sizeof(int_t));
+            if (cnt_by_col == NULL || cnt_by_row == NULL)
+                goto throw_oom;
         }
-        else {
+        if (weight != NULL) {
             sum_by_col = (real_t*)calloc((size_t)n, sizeof(real_t));
             sum_by_row = (real_t*)calloc((size_t)m, sizeof(real_t));
-        }
-
-        if ((cnt_by_col == NULL && sum_by_col == NULL) ||
-            (cnt_by_row == NULL && sum_by_row == NULL))
-        {
-            goto throw_oom;
+            if (sum_by_col == NULL || sum_by_row == NULL)
+                goto throw_oom;
         }
     }
 
@@ -3357,14 +3371,14 @@ int_t fit_most_popular
 
     if (Xfull != NULL)
     {
-        if (weight == NULL)
+        if (weight == NULL || scale_lam)
             for (size_t row = 0; row < (size_t)m; row++) {
                 for (size_t col = 0; col < (size_t)n; col++) {
                     cnt_by_row[row] += !isnan(Xfull[col + row*(size_t)n]);
                     cnt_by_col[col] += !isnan(Xfull[col + row*(size_t)n]);
                 }
             }
-        else
+        if (weight != NULL)
             for (size_t row = 0; row < (size_t)m; row++) {
                 for (size_t col = 0; col < (size_t)n; col++) {
                     sum_by_row[row] += (!isnan(Xfull[col + row*(size_t)n]))?
@@ -3377,12 +3391,12 @@ int_t fit_most_popular
 
     else
     {
-        if (weight == NULL)
+        if (weight == NULL || scale_lam)
             for (size_t ix = 0; ix < nnz; ix++) {
                 cnt_by_row[ixA[ix]]++;
                 cnt_by_col[ixB[ix]]++;
             }
-        else
+        if (weight != NULL)
             for (size_t ix = 0; ix < nnz; ix++) {
                 sum_by_row[ixA[ix]] += weight[ix];
                 sum_by_col[ixB[ix]] += weight[ix];
@@ -3408,7 +3422,11 @@ int_t fit_most_popular
                                        (Xfull[col + row*(size_t)n] - biasA[row])
                                        : (0.);
                 for (int_t ix = 0; ix < n; ix++)
-                    biasB[ix] /= ((double)cnt_by_col[ix] + lam_item);
+                    biasB[ix] /= ((double)cnt_by_col[ix]
+                                    + (lam_item
+                                        *
+                                       (scale_lam?
+                                            (double)cnt_by_col[ix] : 1.)));
             }
 
             else
@@ -3419,7 +3437,11 @@ int_t fit_most_popular
          weight[col + row*(size_t)n] * (Xfull[col + row*(size_t)n] - biasA[row])
                                        : (0.);
                 for (int_t ix = 0; ix < n; ix++)
-                    biasB[ix] /= (sum_by_col[ix] + lam_item);
+                    biasB[ix] /= (sum_by_col[ix]
+                                    + (lam_item
+                                        *
+                                       (scale_lam?
+                                            (double)cnt_by_col[ix] : 1.)));
             }
 
             for (int_t ix = 0; ix < n; ix++)
@@ -3439,7 +3461,11 @@ int_t fit_most_popular
                                        (Xfull[col + row*(size_t)n] - biasB[col])
                                        : (0.);
                 for (int_t ix = 0; ix < m; ix++)
-                    biasA[ix] /= ((double)cnt_by_row[ix] + lam_user);
+                    biasA[ix] /= ((double)cnt_by_row[ix]
+                                    + (lam_user
+                                        *
+                                       (scale_lam?
+                                            (double)cnt_by_row[ix] : 1.)));
             }
 
             else
@@ -3450,7 +3476,11 @@ int_t fit_most_popular
          weight[col + row*(size_t)n] * (Xfull[col + row*(size_t)n] - biasB[col])
                                        : (0.);
                 for (int_t ix = 0; ix < m; ix++)
-                    biasA[ix] /= (sum_by_row[ix] + lam_user);
+                    biasA[ix] /= (sum_by_row[ix]
+                                    + (lam_user
+                                        *
+                                       (scale_lam?
+                                            (double)cnt_by_row[ix] : 1.)));
             }
 
             for (int_t ix = 0; ix < m; ix++)
@@ -3471,7 +3501,11 @@ int_t fit_most_popular
                 for (size_t ix = 0; ix < nnz; ix++)
                     biasB[ixB[ix]] += (X[ix] - biasA[ixA[ix]]);
                 for (int_t ix = 0; ix < n; ix++)
-                    biasB[ix] /= ((double)cnt_by_col[ix] + lam_item);
+                    biasB[ix] /= ((double)cnt_by_col[ix]
+                                    + (lam_item
+                                        *
+                                       (scale_lam?
+                                            (double)cnt_by_col[ix] : 1.)));
             }
 
             else
@@ -3479,7 +3513,11 @@ int_t fit_most_popular
                 for (size_t ix = 0; ix < nnz; ix++)
                     biasB[ixB[ix]] += weight[ix] * (X[ix] - biasA[ixA[ix]]);
                 for (int_t ix = 0; ix < n; ix++)
-                    biasB[ix] /= (sum_by_col[ix] + lam_item);
+                    biasB[ix] /= (sum_by_col[ix]
+                                    + (lam_item
+                                        *
+                                       (scale_lam?
+                                            (double)cnt_by_col[ix] : 1.)));
             }
 
             for (int_t ix = 0; ix < n; ix++)
@@ -3496,7 +3534,11 @@ int_t fit_most_popular
                 for (size_t ix = 0; ix < nnz; ix++)
                     biasA[ixA[ix]] += (X[ix] - biasB[ixB[ix]]);
                 for (int_t ix = 0; ix < m; ix++)
-                    biasA[ix] /= ((double)cnt_by_row[ix] + lam_user);
+                    biasA[ix] /= ((double)cnt_by_row[ix]
+                                    + (lam_user
+                                        *
+                                       (scale_lam?
+                                            (double)cnt_by_row[ix] : 1.)));
             }
 
             else
@@ -3504,7 +3546,11 @@ int_t fit_most_popular
                 for (size_t ix = 0; ix < nnz; ix++)
                     biasA[ixA[ix]] += weight[ix] * (X[ix] - biasB[ixB[ix]]);
                 for (int_t ix = 0; ix < m; ix++)
-                    biasA[ix] /= (sum_by_row[ix] + lam_user);
+                    biasA[ix] /= (sum_by_row[ix]
+                                    + (lam_user
+                                        *
+                                       (scale_lam?
+                                            (double)cnt_by_row[ix] : 1.)));
             }
 
             for (int_t ix = 0; ix < m; ix++)
