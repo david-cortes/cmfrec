@@ -466,7 +466,7 @@ void factors_closed_form
     real_t *restrict precomputedBtBchol, bool NA_as_zero,
     bool use_cg, int_t max_cg_steps,/* <- 'cg' should not be used for new data*/
     bool nonneg, int_t max_cd_steps,
-    real_t *restrict bias_BtX, real_t *restrict bias_X,
+    real_t *restrict bias_BtX, real_t *restrict bias_X, real_t bias_X_glob,
     bool force_add_diag
 );
 void factors_explicit_cg
@@ -486,7 +486,7 @@ void factors_explicit_cg_NA_as_zero_weighted
     real_t *restrict Xa, int_t ixB[], size_t nnz,
     real_t *restrict weight,
     real_t *restrict precomputedBtB, int_t ld_BtB,
-    real_t *restrict bias_BtX, real_t *restrict bias_X,
+    real_t *restrict bias_BtX, real_t *restrict bias_X, real_t bias_X_glob,
     real_t *restrict buffer_real_t,
     real_t lam, real_t lam_last,
     int_t max_cg_steps
@@ -647,7 +647,7 @@ void optimizeA
     int_t nthreads,
     bool use_cg, int_t max_cg_steps,
     bool nonneg, int_t max_cd_steps,
-    real_t *restrict bias_BtX, real_t *restrict bias_X,
+    real_t *restrict bias_BtX, real_t *restrict bias_X, real_t bias_X_glob,
     bool keep_precomputedBtB,
     real_t *restrict precomputedBtB, bool *filled_BtB,
     real_t *restrict buffer_real_t
@@ -887,7 +887,7 @@ void collective_closed_form_block
     bool add_X, bool add_U,
     bool use_cg, int_t max_cg_steps,/* <- 'cg' should not be used for new data*/
     bool nonneg, int_t max_cd_steps,
-    real_t *restrict bias_BtX, real_t *restrict bias_X,
+    real_t *restrict bias_BtX, real_t *restrict bias_X, real_t bias_X_glob,
     real_t *restrict buffer_real_t
 );
 void collective_closed_form_block_implicit
@@ -929,7 +929,7 @@ void collective_block_cg
     real_t *restrict precomputedBtB,
     real_t *restrict precomputedCtC, /* should NOT be multiplied by 'w_user' */
     int_t max_cg_steps,
-    real_t *restrict bias_BtX, real_t *restrict bias_X,
+    real_t *restrict bias_BtX, real_t *restrict bias_X, real_t bias_X_glob,
     real_t *restrict buffer_real_t
 );
 void collective_block_cg_implicit
@@ -1143,7 +1143,7 @@ void optimizeA_collective
     int_t nthreads,
     bool use_cg, int_t max_cg_steps, bool is_first_iter,
     bool nonneg, int_t max_cd_steps,
-    real_t *restrict bias_BtX, real_t *restrict bias_X,
+    real_t *restrict bias_BtX, real_t *restrict bias_X, real_t bias_X_glob,
     bool keep_precomputed,
     real_t *restrict precomputedBtB,
     real_t *restrict precomputedCtCw,

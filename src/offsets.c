@@ -658,7 +658,7 @@ int_t offsets_factors_warm
                                     false, false, 1., n,
                                     (real_t*)NULL, false,
                                     false, 0, false, 0,
-                                    (real_t*)NULL, (real_t*)NULL, false);
+                                    (real_t*)NULL, (real_t*)NULL, 0., false);
             else {
                 factors_closed_form(a_plus_bias, k_sec+k+k_main+1,
                                     Bm_plus_bias, n, k_sec+k+k_main+1,
@@ -672,7 +672,7 @@ int_t offsets_factors_warm
                                     false, false, 1., n,
                                     (real_t*)NULL, false,
                                     false, 0, false, 0,
-                                    (real_t*)NULL, (real_t*)NULL, false);
+                                    (real_t*)NULL, (real_t*)NULL, 0., false);
                 memcpy(a_vec, a_plus_bias,
                        (size_t)(k_sec+k+k_main)*sizeof(real_t));
                 *a_bias = a_plus_bias[k_sec+k+k_main];
@@ -798,7 +798,7 @@ int_t offsets_factors_warm
                                     false, false, 1., n,
                                     (real_t*)NULL, false,
                                     false, 0, false, 0,
-                                    (real_t*)NULL, (real_t*)NULL, false);
+                                    (real_t*)NULL, (real_t*)NULL, 0., false);
             else {
                 factors_closed_form(a_plus_bias + k_sec, k+k_main+1,
                                     Bm_plus_bias + k_sec, n, k_sec+k+k_main+1,
@@ -812,7 +812,7 @@ int_t offsets_factors_warm
                                     false, false, 1., n,
                                     (real_t*)NULL, false,
                                     false, 0, false, 0,
-                                    (real_t*)NULL, (real_t*)NULL, false);
+                                    (real_t*)NULL, (real_t*)NULL, 0., false);
                 memcpy(a_vec + k_sec, a_plus_bias + k_sec,
                        (size_t)(k+k_main)*sizeof(real_t));
                 *a_bias = a_plus_bias[k_sec+k+k_main];

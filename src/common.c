@@ -639,7 +639,7 @@ void factors_closed_form
     real_t *restrict precomputedBtBchol, bool NA_as_zero,
     bool use_cg, int_t max_cg_steps,/* <- 'cg' should not be used for new data*/
     bool nonneg, int_t max_cd_steps,
-    real_t *restrict bias_BtX, real_t *restrict bias_X,
+    real_t *restrict bias_BtX, real_t *restrict bias_X, real_t bias_X_glob,
     bool force_add_diag
 )
 {
@@ -789,8 +789,10 @@ void factors_closed_form
                 cblas_taxpy(k,
                             (weight[ix] * Xa[ix])
                                 -
-                            ((bias_X == NULL)?
-                                (0.) : ((weight[ix]-1.) * bias_X[ixB[ix]])),
+                            (weight[ix]-1.)
+                                *
+                            (bias_X_glob + ((bias_X == NULL)?
+                                                0 : bias_X[ixB[ix]])),
                             B + (size_t)ixB[ix]*(size_t)ldb, 1,
                             a_vec, 1);
             }
@@ -846,7 +848,7 @@ void factors_closed_form
                 Xa, ixB, nnz,
                 weight,
                 precomputedBtB, ld_BtB,
-                bias_BtX, bias_X,
+                bias_BtX, bias_X, bias_X_glob,
                 buffer_real_t,
                 lam, lam_last,
                 max_cg_steps
@@ -1069,7 +1071,7 @@ void factors_explicit_cg_NA_as_zero_weighted
     real_t *restrict Xa, int_t ixB[], size_t nnz,
     real_t *restrict weight,
     real_t *restrict precomputedBtB, int_t ld_BtB,
-    real_t *restrict bias_BtX, real_t *restrict bias_X,
+    real_t *restrict bias_BtX, real_t *restrict bias_X, real_t bias_X_glob,
     real_t *restrict buffer_real_t,
     real_t lam, real_t lam_last,
     int_t max_cg_steps
@@ -1099,7 +1101,8 @@ void factors_explicit_cg_NA_as_zero_weighted
             cblas_taxpy(k,
                         -(weight[ix]-1.)
                             *
-                        (coef + ((bias_X == NULL)? (0.) : (bias_X[ixB[ix]])))
+                        (coef + bias_X_glob + ((bias_X == NULL)?
+                                                0: bias_X[ixB[ix]]))
                             +
                         (weight[ix] * Xa[ix]),
                         B + (size_t)ixB[ix]*(size_t)ldb, 1,
@@ -1118,7 +1121,13 @@ void factors_explicit_cg_NA_as_zero_weighted
             wr[ixB[ix]] = weight[ix] * (wr[ixB[ix]] + Xa[ix]);
         if (bias_X != NULL) {
             for (size_t ix = 0; ix < nnz; ix++)
-                wr[ixB[ix]] -= (weight[ix] - 1.) * bias_X[ixB[ix]];
+                wr[ixB[ix]] -= (weight[ix] - 1.)
+                                    *
+                               (bias_X[ixB[ix]] + bias_X_glob);
+        }
+        else if (bias_X_glob) {
+            for (size_t ix = 0; ix < nnz; ix++)
+                wr[ixB[ix]] -= (weight[ix] - 1.) * bias_X_glob;
         }
         cblas_tgemv(CblasRowMajor, CblasTrans,
                     n, k,
@@ -1909,7 +1918,7 @@ size_t buffer_size_optimizeA
             if (nonneg)
                 buffer_size += k*nthreads;
             else if (has_l1)
-                buffer_size == (size_t)3*k*nthreads;
+                buffer_size += (size_t)3*k*nthreads;
         }
         return buffer_size;
     }
@@ -2032,7 +2041,7 @@ void optimizeA
     int_t nthreads,
     bool use_cg, int_t max_cg_steps,
     bool nonneg, int_t max_cd_steps,
-    real_t *restrict bias_BtX, real_t *restrict bias_X,
+    real_t *restrict bias_BtX, real_t *restrict bias_X, real_t bias_X_glob,
     bool keep_precomputedBtB,
     real_t *restrict precomputedBtB, bool *filled_BtB,
     real_t *restrict buffer_real_t
@@ -2103,10 +2112,12 @@ void optimizeA
         }
         add_to_diag(bufferBtB, scale_lam? (lam*(real_t)n) : (lam), k);
         if (lam_last != lam)
+        {
             if (!scale_lam)
                 bufferBtB[square(k)-1] += (lam_last - lam);
             else
                 bufferBtB[square(k)-1] += (lam_last - lam) * (real_t)n;
+        }
         /* Here will also need t(B)*B + diag(lambda) alone (no Cholesky) */
         if (bufferBtBcopy != NULL)
             memcpy(bufferBtBcopy, bufferBtB, (size_t)square(k)*sizeof(real_t));
@@ -2226,7 +2237,7 @@ void optimizeA
                         (real_t*)NULL, false,
                         use_cg, k, /* <- A was reset to zero, need more steps */
                         nonneg, max_cd_steps,
-                        (real_t*)NULL, (real_t*)NULL,
+                        (real_t*)NULL, (real_t*)NULL, 0.,
                         false
                     );
                 }
@@ -2324,7 +2335,7 @@ void optimizeA
                 (real_t*)NULL, false,
                 use_cg, max_cg_steps,
                 nonneg, max_cd_steps,
-                (real_t*)NULL, (real_t*)NULL,
+                (real_t*)NULL, (real_t*)NULL, 0.,
                 false
             );
         }
@@ -2353,10 +2364,12 @@ void optimizeA
         }
         add_to_diag(bufferBtB, scale_lam? (lam*(real_t)n) : (lam), k);
         if (lam_last != lam)
+        {
             if (!scale_lam)
                 bufferBtB[square(k)-1] += (lam_last - lam);
             else
                 bufferBtB[square(k)-1] += (lam_last - lam) * (real_t)n;
+        }
         if (lda == k)
             set_to_zero_(A, (size_t)m*(size_t)k, nthreads);
         else
@@ -2455,14 +2468,14 @@ void optimizeA
                        lam, lam_last, l1_lam, l1_lam_last, weight, cnt_NA, \
                        Xcsr_p, Xcsr_i, Xcsr, buffer_real_t, NA_as_zero, \
                        bufferBtB, size_buffer, use_cg, \
-                       nonneg, max_cd_steps, bias_BtX, bias_X)
+                       nonneg, max_cd_steps, bias_BtX, bias_X, bias_X_glob)
         for (size_t_for ix = 0; ix < (size_t)m; ix++)
         {
             /* FIXME: this should work with only the first and the second line
                (which is commented out), but it produces incorrect results
                unless adding the third condition. This is a quick fix which
                covers as many cases as I could test, but in reality it could be
-               a major bug underneath that affects more cases. */
+               a major bug underneath that corrupts some buffer. */
             if ((Xcsr_p[ix+(size_t)1] > Xcsr_p[ix]) ||
                 // (NA_as_zero && bias_BtX != NULL))
                 (NA_as_zero))
@@ -2484,7 +2497,7 @@ void optimizeA
                     (real_t*)NULL, NA_as_zero,
                     use_cg, max_cg_steps,
                     nonneg, max_cd_steps,
-                    bias_BtX, bias_X,
+                    bias_BtX, bias_X, bias_X_glob,
                     false
                 );
             }
