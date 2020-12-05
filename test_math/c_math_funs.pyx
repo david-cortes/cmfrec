@@ -16,12 +16,15 @@ cdef extern from "cmfrec.h":
         double *weight,
         double *buffer_double,
         double lam, double lam_last,
+        double l1_lam, double l1_lam_last,
+        bint scale_lam,
         double *precomputedTransBtBinvBt,
         double *precomputedBtBw, int cnt_NA, int ld_BtB,
         bint BtB_has_diag, bint BtB_is_scaled, double scale_BtB, int n_BtB,
         double *precomputedBtBchol, bint NA_as_zero,
         bint use_cg, int max_cg_steps,
-        bint nonneg, int max_cd_steps, double *a_prev,
+        bint nonneg, int max_cd_steps,
+        double *bias_BtX, double *bias_X, double bias_X_glob,
         bint force_add_diag
     )
 
@@ -92,7 +95,8 @@ cdef extern from "cmfrec.h":
         double *CtCw,
         double *col_means,
         int k, int k_user, int k_main,
-        double lam, double w_main, double w_user,
+        double lam, double l1_lam, double w_main, double w_user,
+        bint scale_lam,
         bint NA_as_zero_U,
         bint nonneg
     )
@@ -112,8 +116,11 @@ cdef extern from "cmfrec.h":
         double *Bi, bint add_implicit_features,
         int k, int k_user, int k_item, int k_main,
         double lam, double w_main, double w_user, double w_implicit, double lam_bias,
+        double l1_lam, double l1_lam_bias,
+        bint scale_lam, bint scale_lam_sideinfo,
         int n_max, bint include_all_X,
         double *TransBtBinvBt,
+        double *BtXbias,
         double *BtB,
         double *BeTBeChol,
         double *BiTBi,
@@ -149,10 +156,13 @@ cdef extern from "cmfrec.h":
         double *Xfull, int ldX, bint full_dense, bint near_dense,
         int cnt_NA[], double *weight, bint NA_as_zero,
         double lam, double lam_last,
+        double l1_lam, double l1_lam_last,
+        bint scale_lam,
         bint do_B, bint is_first_iter,
         int nthreads,
         bint use_cg, int max_cg_steps,
-        bint nonneg, int max_cd_steps, double *A_prev,
+        bint nonneg, int max_cd_steps,
+        double *bias_BtX, double *bias_X, double bias_X_glob,
         bint keep_precomputedBtB,
         double *precomputedBtB, c_bool *filled_BtB,
         double *buffer_double
@@ -163,10 +173,10 @@ cdef extern from "cmfrec.h":
         double *B, size_t ldb,
         int m, int n, int k,
         size_t Xcsr_p[], int Xcsr_i[], double *Xcsr,
-        double lam,
+        double lam, double l1_lam,
         int nthreads,
         bint use_cg, int max_cg_steps, bint force_set_to_zero,
-        bint nonneg, int max_cd_steps, double *A_prev,
+        bint nonneg, int max_cd_steps,
         double *precomputedBtB,
         double *buffer_double
     )
@@ -184,16 +194,20 @@ cdef extern from "cmfrec.h":
         double* U, int cnt_NA_u[],
         bint full_dense_u, bint near_dense_u, bint NA_as_zero_U,
         double lam, double w_user, double w_implicit, double lam_last,
+        double l1_lam, double l1_lam_bias,
+        bint scale_lam, bint scale_lam_sideinfo,
         bint do_B,
         int nthreads,
         bint use_cg, int max_cg_steps, bint is_first_iter,
-        bint nonneg, int max_cd_steps, double *A_prev,
+        bint nonneg, int max_cd_steps,
+        double *bias_BtX, double *bias_X, double bias_X_glob,
         bint keep_precomputed,
         double *precomputedBtB,
         double *precomputedCtCw,
         double *precomputedBeTBeChol,
         double *precomputedBiTBi,
         c_bool *filled_BtB, c_bool *filled_CtCw, c_bool *filled_BeTBeChol,
+        c_bool *CtC_is_scaled,
         double* buffer_double
     )
 
@@ -205,10 +219,10 @@ cdef extern from "cmfrec.h":
         size_t U_csr_p[], int U_csr_i[], double *U_csr,
         double *U, int cnt_NA_u[],
         bint full_dense_u, bint near_dense_u, bint NA_as_zero_U,
-        double lam, double w_user,
+        double lam, double l1_lam, double w_user,
         int nthreads,
         bint use_cg, int max_cg_steps, bint is_first_iter,
-        bint nonneg, int max_cd_steps, double *A_prev,
+        bint nonneg, int max_cd_steps,
         double *precomputedBtB,
         double *precomputedBeTBe,
         double *precomputedBeTBeChol,
@@ -267,14 +281,17 @@ cdef extern from "cmfrec.h":
         double *B, int n, int n_max, bint include_all_X,
         double *C, int p,
         double *Bi, bint add_implicit_features,
+        double *biasB, double glob_mean, bint NA_as_zero_X,
         int k, int k_user, int k_item, int k_main,
         bint user_bias,
         bint nonneg,
         double lam, double *lam_unique,
+        bint scale_lam, bint scale_lam_sideinfo,
         double w_main, double w_user, double w_implicit,
         double *B_plus_bias,
         double *BtB,
         double *TransBtBinvBt,
+        double *BtXbias,
         double *BeTBeChol,
         double *BiTBi,
         double *TransCtCinvCt,
@@ -285,6 +302,7 @@ cdef extern from "cmfrec.h":
         double *glob_mean, double *biasA, double *biasB,
         bint user_bias, bint item_bias,
         double lam_user, double lam_item,
+        bint scale_lam,
         int m, int n,
         int m_bias, int n_bias,
         int ixA[], int ixB[], double *X, size_t nnz,
@@ -319,6 +337,7 @@ cdef extern from "cmfrec.h":
     void fill_lower_triangle(double A[], size_t n, size_t lda)
 
 ### TODO: add tests for the precomputed matrices too
+### TODO: add tests for mean centering with NA_as_zero_X
 import ctypes
 
 def py_factors_closed_form(
@@ -366,9 +385,11 @@ def py_factors_closed_form(
             &B[0,0], n, n, 0,
             <double*>NULL, 0,
             <double*>NULL, 0,
+            <double*>NULL, 0., 0,
             k, 0, 0, 0,
             0, nonneg,
             lam, <double*>NULL,
+            0, 0,
             1., 1., 1.,
             <double*>NULL,
             &BtBw[0,0],
@@ -376,11 +397,11 @@ def py_factors_closed_form(
             <double*>NULL,
             <double*>NULL,
             <double*>NULL,
+            <double*>NULL,
             <double*>NULL
         )
         dpotrf(&lo, &k, &BtBchol[0,0], &k, &ignore)
 
-    cdef np.ndarray[double, ndim=1] a_prev = np.zeros(k, dtype=np.float64)
 
     factors_closed_form(
         &outp[0], k,
@@ -390,12 +411,14 @@ def py_factors_closed_form(
         ptr_weight,
         &buffer_double[0],
         lam, lam,
+        0., 0., 0,
         ptr_TransBtBinvBt,
         ptr_BtBw, np.sum(np.isnan(Xa_dense)), k,
         1, 0, 1., 0,
         ptr_BtBchol, 0,
         0, 0,
-        nonneg, 10000, &a_prev[0],
+        nonneg, 10000,
+        <double*>NULL, <double*>NULL, 0.,
         0
     )
     return outp
@@ -547,13 +570,16 @@ def py_collective_factors(
             &B[0,0], B.shape[0], B.shape[0], 0,
             ptr_C, p,
             ptr_Bi, add_implicit_features,
+            <double*>NULL, 0., NA_as_zero_X,
             k, k_user, k_item, k_main,
             0, 0,
             lam, <double*>NULL,
-            w_main, w_user, w_implicit,
+            0, 0,
+            1., w_user, w_implicit,
             <double*>NULL,
             ptr_BtB,
             ptr_TransBtBinvBt,
+            <double*>NULL,
             ptr_BeTBeChol,
             ptr_BiTBi,
             <double*>NULL,
@@ -597,8 +623,10 @@ def py_collective_factors(
         ptr_Bi, add_implicit_features,
         k, k_user, k_item, k_main,
         lam, w_main, w_user, w_implicit, lam,
+        0., 0.,
+        0, 0,
         B.shape[0], 0,
-        ptr_TransBtBinvBt, ptr_BtB, ptr_BeTBeChol,
+        ptr_TransBtBinvBt, <double*>NULL, ptr_BtB, ptr_BeTBeChol,
         ptr_BiTBi, ptr_CtCw,
         NA_as_zero_U, NA_as_zero_X,
         0,
@@ -930,10 +958,13 @@ def py_collective_cold_start(
             <double*>NULL, 0, 0, 0,
             &C[0,0], p,
             <double*>NULL, 0,
+            <double*>NULL, 0., 0,
             k, k_user, 0, k_main,
             0, 0,
             lam, <double*>NULL,
+            0, 0,
             1., w_user, 1.,
+            <double*>NULL,
             <double*>NULL,
             <double*>NULL,
             <double*>NULL,
@@ -980,7 +1011,8 @@ def py_collective_cold_start(
         ptr_TransCtCinvCt, ptr_CtCw,
         <double*>NULL,
         k, k_user, k_main,
-        lam, 1., w_user,
+        lam, 0., 1., w_user,
+        0,
         NA_as_zero_U,
         0
     )
@@ -1042,9 +1074,11 @@ def py_optimizeA(
         ptr_Xfull, Xfull.shape[1], full_dense, as_near_dense,
         ptr_cnt_NA, ptr_weight, NA_as_zero,
         lam, lam,
+        0., 0., 0,
         is_B, 1,
         nthreads,
-        0, 0, 0, 0, <double*>NULL,
+        0, 0, 0, 0,
+        <double*>NULL, <double*>NULL, 0.,
         0,
         <double*>NULL, &ignore,
         &buffer_double[0]
@@ -1123,11 +1157,13 @@ def py_optimizeA_collective(
 
     if w_main != 1.:
         w_user /= w_main
+        w_implicit /= w_main
         lam /= w_main
 
     cdef c_bool ignore1 = 0
     cdef c_bool ignore2 = 0
     cdef c_bool ignore3 = 0
+    cdef c_bool ignore4 = 0
 
     cdef c_bool add_implicit_features = 0
     cdef double *ptr_Bi = NULL
@@ -1139,10 +1175,11 @@ def py_optimizeA_collective(
         ptr_Bi = &Bi[0,0]
         if Xfull.shape[0]:
             Xones2 = (~np.isnan(Xfull)).astype("float64")
-            if is_B:
-                Xones2 = np.asfortranarray(Xones2)
-            else:
-                Xones2 = np.ascontiguousarray(Xones2)
+            if np.isfortran(Xfull) != np.isfortran(Xones2):
+                if np.isfortran(Xfull):
+                    Xones2 = np.asfortranarray(Xones2)
+                else:
+                    Xones2 = np.ascontiguousarray(Xones2)
             ptr_X_ones = &Xones2[0,0]
         else:
             Xones1 = np.ones(Xcsr.shape[0], dtype="float64")
@@ -1161,12 +1198,14 @@ def py_optimizeA_collective(
         ptr_U, ptr_cnt_NA_u,
         full_dense_u, as_near_dense_u, NA_as_zero_U,
         lam, w_user, w_implicit, lam,
+        0., 0., 0, 0,
         is_B,
         nthreads,
         0, 0, 1,
-        0, 0, <double*>NULL,
+        0, 0,
+        <double*>NULL, <double*>NULL, 0.,
         0, <double*>NULL, <double*>NULL, <double*>NULL, <double*>NULL,
-        &ignore1, &ignore2, &ignore3,
+        &ignore1, &ignore2, &ignore3, &ignore4,
         &buffer_double[0]
     )
     return A
@@ -1193,10 +1232,10 @@ def py_optimizeA_implicit(
         &B[0,0], ldb,
         m, n, k,
         &Xcsr_p[0], &Xcsr_i[0], &Xcsr_pass[0],
-        lam,
+        lam, 0.,
         nthreads,
         0, 0, 1,
-        0, 0, <double*>NULL,
+        0, 0,
         <double*>NULL,
         &buffer_double[0]
     )
@@ -1263,10 +1302,10 @@ def py_optimizeA_collective_implicit(
         ptr_Ucsr_p, ptr_Ucsr_i, ptr_Ucsr,
         ptr_U, ptr_cnt_NA_u,
         full_dense_u, as_near_dense_u, NA_as_zero_U,
-        lam/w_main, w_user/w_main,
+        lam/w_main, 0., w_user/w_main,
         nthreads,
         0, 0, 1,
-        0, 0, <double*>NULL,
+        0, 0,
         <double*>NULL,
         <double*>NULL,
         <double*>NULL,
@@ -1537,7 +1576,7 @@ def py_initialize_biases(
     initialize_biases(
         &glob_mean, ptr_biasA, ptr_biasB,
         user_bias, item_bias,
-        0., 0.,
+        0., 0., 0,
         m, n,
         m, n,
         ptr_ixA, ptr_ixB, ptr_X, nnz,

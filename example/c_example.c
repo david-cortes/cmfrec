@@ -92,6 +92,7 @@ int main()
     double regularization = 1e-1;
     bool user_bias = false;
     bool item_bias = false;
+    bool center = true;
     bool use_cg = true;
     int max_cg_steps = 3;
     int niter = 10;
@@ -113,8 +114,10 @@ int main()
         Xrow, Xcol, X, nnz,
         NULL,
         NULL,
-        user_bias, item_bias,
+        user_bias, item_bias, center,
         regularization, NULL,
+        0., NULL,
+        false, false,
         NULL, 0, 0,
         NULL, 0, 0,
         NULL, NULL, NULL, 0,
@@ -127,6 +130,7 @@ int main()
         false, 0, false, false,
         false,
         false,
+        NULL,
         NULL,
         NULL,
         NULL,

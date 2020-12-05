@@ -32,6 +32,10 @@
             non-negative least squares problem."
             International Conference on Computer Analysis of Images
             and Patterns. Springer, Berlin, Heidelberg, 2005.
+        (e) Zhou, Yunhong, et al.
+            "Large-scale parallel collaborative filtering for the netflix prize."
+            International conference on algorithmic applications in management.
+            Springer, Berlin, Heidelberg, 2008.
 
     For information about the models offered here and how they are fit to
     the data, see the files 'collective.c' and 'offsets.c'.
@@ -648,13 +652,13 @@ int_t offsets_factors_warm
                                     Xa, ixB, nnz,
                                     weight,
                                     buffer_real_t,
-                                    lam, lam,
+                                    lam, lam, 0., 0., false,
                                     precomputedTransBtBinvBt,
                                     precomputedBtB, cnt_NA, k_sec+k+k_main,
                                     false, false, 1., n,
                                     (real_t*)NULL, false,
-                                    false, 0, false, 0, (real_t*)NULL,
-                                    false);
+                                    false, 0, false, 0,
+                                    (real_t*)NULL, (real_t*)NULL, 0., false);
             else {
                 factors_closed_form(a_plus_bias, k_sec+k+k_main+1,
                                     Bm_plus_bias, n, k_sec+k+k_main+1,
@@ -662,13 +666,13 @@ int_t offsets_factors_warm
                                     Xa, ixB, nnz,
                                     weight,
                                     buffer_real_t,
-                                    lam, lam_bias,
+                                    lam, lam_bias, 0., 0., false,
                                     precomputedTransBtBinvBt,
                                     precomputedBtB, cnt_NA, k_sec+k+k_main+1,
                                     false, false, 1., n,
                                     (real_t*)NULL, false,
-                                    false, 0, false, 0, (real_t*)NULL,
-                                    false);
+                                    false, 0, false, 0,
+                                    (real_t*)NULL, (real_t*)NULL, 0., false);
                 memcpy(a_vec, a_plus_bias,
                        (size_t)(k_sec+k+k_main)*sizeof(real_t));
                 *a_bias = a_plus_bias[k_sec+k+k_main];
@@ -692,9 +696,9 @@ int_t offsets_factors_warm
                 a_vec, k_sec+k+k_main,
                 Bm, k_sec+k+k_main,
                 Xa, ixB, nnz,
-                lam,
+                lam, 0.,
                 precomputedBtB, k_sec+k+k_main,
-                false, 0, (real_t*)NULL,
+                false, 0,
                 buffer_real_t
             );
         }
@@ -788,13 +792,13 @@ int_t offsets_factors_warm
                                     (real_t*)NULL, (int_t*)NULL, (size_t)0,
                                     weight,
                                     buffer_remainder,
-                                    lam, lam,
+                                    lam, lam, 0., 0., false,
                                     (real_t*)NULL,
                                     (real_t*)NULL, 0, 0,
                                     false, false, 1., n,
                                     (real_t*)NULL, false,
-                                    false, 0, false, 0, (real_t*)NULL,
-                                    false);
+                                    false, 0, false, 0,
+                                    (real_t*)NULL, (real_t*)NULL, 0., false);
             else {
                 factors_closed_form(a_plus_bias + k_sec, k+k_main+1,
                                     Bm_plus_bias + k_sec, n, k_sec+k+k_main+1,
@@ -802,13 +806,13 @@ int_t offsets_factors_warm
                                     (real_t*)NULL, (int_t*)NULL, (size_t)0,
                                     weight,
                                     buffer_remainder,
-                                    lam, lam_bias,
+                                    lam, lam_bias, 0., 0., false,
                                     (real_t*)NULL,
                                     (real_t*)NULL, 0, 0,
                                     false, false, 1., n,
                                     (real_t*)NULL, false,
-                                    false, 0, false, 0, (real_t*)NULL,
-                                    false);
+                                    false, 0, false, 0,
+                                    (real_t*)NULL, (real_t*)NULL, 0., false);
                 memcpy(a_vec + k_sec, a_plus_bias + k_sec,
                        (size_t)(k+k_main)*sizeof(real_t));
                 *a_bias = a_plus_bias[k_sec+k+k_main];
@@ -842,6 +846,7 @@ int_t precompute_offsets_both
     real_t *restrict C, int_t p,
     real_t *restrict D, int_t q,
     real_t *restrict C_bias, real_t *restrict D_bias,
+    real_t *restrict biasB, real_t glob_mean, bool NA_as_zero_X,
     bool user_bias, bool add_intercepts, bool implicit,
     int_t k, int_t k_main, int_t k_sec,
     real_t lam, real_t *restrict lam_unique,
@@ -927,14 +932,17 @@ int_t precompute_offsets_both
             Bm, n, 0, 0,
             (real_t*)NULL, 0,
             (real_t*)NULL, false,
+            biasB, glob_mean, NA_as_zero_X,
             k_sec+k+k_main, 0, 0, 0,
             user_bias,
             false,
             lam, lam_unique,
+            false, false,
             1., 1., 1.,
             Bm_plus_bias,
             BtB,
             TransBtBinvBt,
+            (real_t*)NULL,
             (real_t*)NULL,
             (real_t*)NULL,
             (real_t*)NULL,
@@ -1005,6 +1013,7 @@ int_t precompute_offsets_explicit
         C, p,
         D, q,
         C_bias, D_bias,
+        (real_t*)NULL, 0., false,
         user_bias, add_intercepts, false,
         k, k_main, k_sec,
         lam, lam_unique,
@@ -1050,6 +1059,7 @@ int_t precompute_offsets_implicit
         C, p,
         D, q,
         C_bias, D_bias,
+        (real_t*)NULL, 0., false,
         false, add_intercepts, true,
         k, 0, 0,
         lam, (real_t*)NULL,
@@ -1112,7 +1122,7 @@ int_t fit_offsets_explicit_lbfgs_internal
     int_t ixA[], int_t ixB[], real_t *restrict X, size_t nnz,
     real_t *restrict Xfull,
     real_t *restrict weight,
-    bool user_bias, bool item_bias,
+    bool user_bias, bool item_bias, bool center,
     bool add_intercepts,
     real_t lam, real_t *restrict lam_unique,
     real_t *restrict U, int_t p,
@@ -1290,6 +1300,7 @@ int_t fit_offsets_explicit_lbfgs_internal
         user_bias, item_bias,
         (lam_unique == NULL)? (lam) : (lam_unique[0]),
         (lam_unique == NULL)? (lam) : (lam_unique[1]),
+        false,
         m, n,
         m, n,
         ixA, ixB, X, nnz,
@@ -1300,6 +1311,24 @@ int_t fit_offsets_explicit_lbfgs_internal
         nthreads
     );
     if (retval != 0) goto cleanup;
+
+    if (!center)
+    {
+        if (Xfull != NULL)
+        {
+            for (size_t row = 0; row < (size_t)m; row++)
+                for (size_t col = 0; col < (size_t)n; col++)
+                    Xfull[col + row*(size_t)n] += *glob_mean;
+        }
+
+        else if (nnz)
+        {
+            for (size_t ix = 0; ix < nnz; ix++)
+                X[ix] += *glob_mean;
+        }
+        
+        *glob_mean = 0.;
+    }
 
     if (reset_values)
         retval = rnorm(values + (user_bias? m : 0) + (item_bias? n : 0),
@@ -1466,7 +1495,7 @@ int_t fit_offsets_explicit_lbfgs
     int_t ixA[], int_t ixB[], real_t *restrict X, size_t nnz,
     real_t *restrict Xfull,
     real_t *restrict weight,
-    bool user_bias, bool item_bias,
+    bool user_bias, bool item_bias, bool center,
     bool add_intercepts,
     real_t lam, real_t *restrict lam_unique,
     real_t *restrict U, int_t p,
@@ -1556,7 +1585,7 @@ int_t fit_offsets_explicit_lbfgs
         ixA, ixB, X, nnz,
         Xfull,
         weight,
-        user_bias, item_bias,
+        user_bias, item_bias, center,
         add_intercepts,
         lam, lam_unique,
         U, p,
@@ -1614,14 +1643,17 @@ int_t fit_offsets_explicit_lbfgs
             Bm, n, n, true,
             (real_t*)NULL, 0,
             (real_t*)NULL, false,
+            biasB, *glob_mean, false,
             k_sec+k+k_main, 0, 0, 0,
             user_bias,
             false,
             lam, lam_unique,
+            false, false,
             1., 1., 1.,
             Bm_plus_bias,
             precomputedBtB,
             precomputedTransBtBinvBt,
+            (real_t*)NULL,
             (real_t*)NULL,
             (real_t*)NULL,
             (real_t*)NULL,
@@ -1654,7 +1686,7 @@ int_t fit_offsets_als
     int_t ixA[], int_t ixB[], real_t *restrict X, size_t nnz,
     real_t *restrict Xfull,
     real_t *restrict weight,
-    bool user_bias, bool item_bias, bool add_intercepts,
+    bool user_bias, bool item_bias, bool center, bool add_intercepts,
     real_t lam,
     real_t *restrict U, int_t p,
     real_t *restrict II, int_t q,
@@ -1735,8 +1767,10 @@ int_t fit_offsets_als
                     ixA, ixB, X, nnz,
                     Xfull,
                     weight,
-                    user_bias, item_bias,
+                    user_bias, item_bias, center,
                     lam, (real_t*)NULL,
+                    0., (real_t*)NULL,
+                    false, false,
                     (real_t*)NULL, 0, 0,
                     (real_t*)NULL, 0, 0,
                     (int_t*)NULL, (int_t*)NULL, (real_t*)NULL, 0,
@@ -1755,6 +1789,7 @@ int_t fit_offsets_als
                     (real_t*)NULL,
                     (real_t*)NULL,
                     (real_t*)NULL,
+                    (real_t*)NULL,
                     (real_t*)NULL
                 );
     else
@@ -1765,6 +1800,7 @@ int_t fit_offsets_als
                     m, n, k,
                     ixA, ixB, X, nnz,
                     lam, (real_t*)NULL,
+                    0., (real_t*)NULL,
                     (real_t*)NULL, 0, 0,
                     (real_t*)NULL, 0, 0,
                     (int_t*)NULL, (int_t*)NULL, (real_t*)NULL, 0,
@@ -1973,7 +2009,7 @@ int_t fit_offsets_explicit_als
     int_t ixA[], int_t ixB[], real_t *restrict X, size_t nnz,
     real_t *restrict Xfull,
     real_t *restrict weight,
-    bool user_bias, bool item_bias, bool add_intercepts,
+    bool user_bias, bool item_bias, bool center, bool add_intercepts,
     real_t lam,
     real_t *restrict U, int_t p,
     real_t *restrict II, int_t q,
@@ -2000,7 +2036,7 @@ int_t fit_offsets_explicit_als
         ixA, ixB, X, nnz,
         Xfull,
         weight,
-        user_bias, item_bias, add_intercepts,
+        user_bias, item_bias, center, add_intercepts,
         lam,
         U, p,
         II, q,
@@ -2050,7 +2086,7 @@ int_t fit_offsets_implicit_als
         ixA, ixB, X, nnz,
         (real_t*)NULL,
         (real_t*)NULL,
-        false, false, add_intercepts,
+        false, false, false, add_intercepts,
         lam,
         U, p,
         II, q,
@@ -3160,12 +3196,12 @@ int_t fit_content_based_lbfgs
             ixA, ixB, (X == NULL)? ((real_t*)NULL) : Xorig, nnz,
             (Xfull == NULL)? ((real_t*)NULL) : Xorig,
             weight,
-            user_bias, item_bias, add_intercepts,
+            user_bias, item_bias, true, add_intercepts,
             lam,
             U, p,
             II, q,
             false,
-            6,
+            10,
             nthreads, true,
             3, false,
             verbose, handle_interrupt,
@@ -3227,7 +3263,7 @@ int_t fit_content_based_lbfgs
         ixA, ixB, X, nnz,
         Xfull,
         weight,
-        user_bias, item_bias,
+        user_bias, item_bias, true,
         add_intercepts,
         lam, lam_unique,
         U, p,

@@ -33,16 +33,21 @@ def vector_dense_to_sp(X):
     return X_ix, X_sp
 
 def py_eval(values):
-    errX = X_full - B[:,k_item:].dot(values[k_user:])
+    if (xtype != "full") and (na_as_zero_x):
+        X_use = X_sp.copy()
+        X_use[np.isnan(X_sp)] = 0.
+    else:
+        X_use = X_sp
+    errX = X_use - B[:,k_item:].dot(values[k_user:])
     errU = U_full - C.dot(values[:k_user+k])
     errUb = Ub_full - 1/(1+np.exp(-Cb.dot(values[:k_user+k])))
     res = lam*values.dot(values)
-    if xtype != "full" and not na_as_zero_x:
-        errX[np.isnan(X_sp)] = 0
-    if utype != "full" and not na_as_zero_u:
-        errU[np.isnan(U_sp)] = 0
+    if (xtype != "full") or (not na_as_zero_x):
+        errX[np.isnan(X_sp)] = 0.
+    if (utype != "full") or (not na_as_zero_u):
+        errU[np.isnan(U_sp)] = 0.
     if ubin_type != "full":
-        errUb[np.isnan(Ub_sp)] = 0
+        errUb[np.isnan(Ub_sp)] = 0.
     if weighted:
         res += w_main * ((errX**2)*W_full).sum()
     else:
@@ -52,7 +57,7 @@ def py_eval(values):
     if ubin_type != "missing":
         res += w_user * (errUb**2).sum()
     if i_f:
-        res += w_main * (((~np.isnan(X_full)).astype("float64") - Bi.dot(values[k_user:]))**2).sum()
+        res += w_main * (((~np.isnan(X_sp)).astype("float64") - Bi.dot(values[k_user:]))**2).sum()
     return res / 2
 
 empty_1d = np.empty(0, dtype=ctypes.c_double)

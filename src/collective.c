@@ -32,6 +32,10 @@
             non-negative least squares problem."
             International Conference on Computer Analysis of Images
             and Patterns. Springer, Berlin, Heidelberg, 2005.
+        (e) Zhou, Yunhong, et al.
+            "Large-scale parallel collaborative filtering for the netflix prize."
+            International conference on algorithmic applications in management.
+            Springer, Berlin, Heidelberg, 2008.
 
     For information about the models offered here and how they are fit to
     the data, see the files 'collective.c' and 'offsets.c'.
@@ -294,6 +298,18 @@
     biases by simply changing the last element of diag(lambda) that is added
     to the matrices (or the last element of ap/pp for the CG method)
     accordingly.
+
+    When using 'NA_as_zero', adding the biases is a bit more tricky, as then
+    subtracting them from 'X' would result in a dense matrix. However, since
+    the solution to the problem is also the solution to:
+        min t(B)*B - t(B)*t(X)
+    and it is this second form that's used to find the factors, the biases can
+    instead be subtracted from t(B)*t(X):
+        t(B)*t(X-b) = t(B)*t(X) + t(B)*t(-b)
+    Hence, it's only necessary to calculate -t(B)*t(b), and then subtract it
+    when necessary (first step in the conjugate gradient method, right hand side
+    in the Cholesky method). The same trick can be used for mean-centering too.
+
 
 
     Both the gradient-based approach and the closed-form solution with these
@@ -1212,13 +1228,16 @@ void collective_closed_form_block
     real_t *restrict Xones, int_t incXones,
     real_t *restrict weight,
     real_t lam, real_t w_user, real_t w_implicit, real_t lam_last,
+    real_t l1_lam, real_t l1_lam_bias,
+    bool scale_lam, bool scale_lam_sideinfo,
     real_t *restrict precomputedBtB, int_t cnt_NA_x,
     real_t *restrict precomputedCtCw, int_t cnt_NA_u,
     real_t *restrict precomputedBeTBeChol, int_t n_BtB,
     real_t *restrict precomputedBiTBi,
     bool add_X, bool add_U,
     bool use_cg, int_t max_cg_steps,/* <- 'cg' should not be used for new data*/
-    bool nonneg, int_t max_cd_steps, real_t *restrict a_prev,
+    bool nonneg, int_t max_cd_steps,
+    real_t *restrict bias_BtX, real_t *restrict bias_X, real_t bias_X_glob,
     real_t *restrict buffer_real_t
 )
 {
@@ -1228,7 +1247,8 @@ void collective_closed_form_block
     
     /* Potential bad inputs - should not reach this point_t */
     if (  (  (Xa_dense != NULL && cnt_NA_x == n) ||
-             (Xa_dense == NULL && nnz == 0)  )
+             (  Xa_dense == NULL && nnz == 0
+                && !(NA_as_zero_X && bias_BtX != NULL))  )
                 &&
           (  (u_vec != NULL && cnt_NA_u == p) ||
              (u_vec == NULL && nnz_u_vec == 0)  ) )
@@ -1252,6 +1272,32 @@ void collective_closed_form_block
         add_U = true;
     }
 
+    if (scale_lam || scale_lam_sideinfo)
+    {
+        real_t multiplier_lam = 0;
+        if (Xa_dense != NULL)
+            multiplier_lam = (real_t)(n - ((cnt_NA_x == 0)? 0 : cnt_NA_x));
+        else if (NA_as_zero_X)
+            multiplier_lam = (real_t)n;
+        else
+            multiplier_lam = (real_t)nnz;
+
+        if (scale_lam_sideinfo)
+        {
+            if (u_vec != NULL)
+                multiplier_lam += (real_t)(p - ((cnt_NA_u == 0)? 0 : cnt_NA_u));
+            else if (NA_as_zero_U)
+                multiplier_lam += (real_t)p;
+            else
+                multiplier_lam += (real_t)nnz_u_vec;
+        }
+        
+        lam *= multiplier_lam;
+        lam_last *= multiplier_lam;
+        l1_lam *= multiplier_lam;
+        l1_lam_bias *= multiplier_lam;
+    }
+
     
     int_t k_totA = k_user + k + k_main;
     size_t k_totC = k_user + k;
@@ -1264,7 +1310,7 @@ void collective_closed_form_block
 
     if (n_BtB == 0) n_BtB = n;
 
-    if (precomputedBeTBeChol != NULL && !nonneg &&
+    if (precomputedBeTBeChol != NULL && !nonneg && !l1_lam & !l1_lam_bias &&
         (   (Xa_dense != NULL && cnt_NA_x == 0 &&
              weight == NULL && n_BtB == n) ||
             (Xa_dense == NULL && NA_as_zero_X &&
@@ -1333,6 +1379,9 @@ void collective_closed_form_block
                         a_vec + k_user
                     );
             }
+
+            if (bias_BtX != NULL && NA_as_zero_X && Xa_dense == NULL)
+                cblas_taxpy(k+k_main, 1., bias_BtX, 1, a_vec + k_user, 1);
         }
         
         tpotrs_(&lo, &k_totA, &one,
@@ -1347,14 +1396,30 @@ void collective_closed_form_block
         precomputedCtCw = NULL;
 
     #ifdef TEST_CG
-    use_cg = true;
-    max_cg_steps = 10000;
-    if (precomputedBiTBi != NULL && add_implicit_features)
-        cblas_tsyrk(CblasRowMajor, CblasUpper, CblasTrans,
-                    k+k_main_i, n,
-                    1.,
-                    Bi, k+k_main_i,
-                    0., precomputedBiTBi, k+k_main_i);
+    if (!nonneg && !l1_lam && !l1_lam_bias)
+    {
+        use_cg = true;
+        max_cg_steps = 10000;
+        if (add_implicit_features)
+        {
+            precomputedBiTBi = (real_t*)malloc((size_t)square(k+k_main_i)
+                                               *sizeof(real_t));
+            cblas_tsyrk(CblasRowMajor, CblasUpper, CblasTrans,
+                        k+k_main_i, n,
+                        1.,
+                        Bi, k+k_main_i,
+                        0., precomputedBiTBi, k+k_main_i);
+        }
+        if (precomputedCtCw != NULL)
+        {
+            precomputedCtCw = (real_t*)malloc((size_t)square(k_user+k)
+                                              *sizeof(real_t));
+            cblas_tsyrk(CblasRowMajor, CblasUpper, CblasTrans,
+                        k_user+k, p,
+                        1., C, k_user+k,
+                        0., precomputedCtCw, k_user+k);
+        }
+    }
     #endif
 
     if (add_implicit_features && precomputedBiTBi == NULL)
@@ -1388,12 +1453,22 @@ void collective_closed_form_block
             cnt_NA_x, cnt_NA_u,
             precomputedBtB, precomputedCtCw,
             max_cg_steps,
+            bias_BtX, bias_X, bias_X_glob,
             buffer_real_t
         );
+        #ifdef TEST_CG
+        if (!nonneg && !l1_lam && !l1_lam_bias)
+        {
+            free(precomputedCtCw);
+            if (precomputedBiTBi != NULL && add_implicit_features)
+                free(precomputedBiTBi);
+        }
+        #endif
         return;
     }
 
     real_t *restrict bufferBeTBe = buffer_real_t;
+    buffer_real_t += square(k_totA);
     set_to_zero(bufferBeTBe, square(k_totA));
     
     if (add_X && add_U)
@@ -1414,9 +1489,6 @@ void collective_closed_form_block
     if (precomputedCtCw == NULL)
         prefer_CtC = false;
 
-    /* TODO: for better precision, here could do the parts from matrix B
-       before the parts from matrix C, then rescale according to 'w_main',
-       instead of multiplying each row by 'w_main'. */
 
     /* =================== Part 1 =====================
        Constructing t(Be)*Be, upper-left square (from C) */
@@ -1522,7 +1594,7 @@ void collective_closed_form_block
             for (size_t ix = 0; ix < nnz; ix++)
                 cblas_tsyr(CblasRowMajor, CblasUpper,
                            k+k_main, weight[ix]-1.,
-                           B + (size_t)k_item +(size_t)ixB[ix]*(size_t)ldb, 1,
+                           B + (size_t)k_item + (size_t)ixB[ix]*(size_t)ldb, 1,
                            bufferBeTBe + offset_square, k_totA);
         }
 
@@ -1603,10 +1675,16 @@ void collective_closed_form_block
                                ixB, Xa, nnz,
                                a_vec + k_user);
             else
-                tgemv_dense_sp_weighted(n, k+k_main, weight,
-                                        B + k_item, (size_t)ldb,
-                                        ixB, Xa, nnz,
-                                        a_vec + k_user);
+                for (size_t ix = 0; ix < nnz; ix++)
+                    cblas_taxpy(k+k_main,
+                                (weight[ix]*Xa[ix])
+                                    -
+                                (weight[ix]-1.)
+                                    *
+                                (bias_X_glob + ((bias_X == NULL)?
+                                                    0. : bias_X[ixB[ix]])),
+                                B+(size_t)k_item+(size_t)ixB[ix]*(size_t)ldb, 1,
+                                a_vec + k_user, 1);
         }
 
 
@@ -1625,6 +1703,11 @@ void collective_closed_form_block
                     ixB, Xones, nnz,
                     a_vec + k_user
                 );
+        }
+
+        if (bias_BtX != NULL && NA_as_zero_X)
+        {
+            cblas_taxpy(k+k_main, 1., bias_BtX, 1, a_vec + k_user, 1);
         }
     }
 
@@ -1668,17 +1751,28 @@ void collective_closed_form_block
     add_to_diag(bufferBeTBe, lam, k_totA);
     if (lam_last != lam) bufferBeTBe[square(k_totA)-1] += (lam_last - lam);
 
-    if (!nonneg)
+    if (!nonneg && !l1_lam && !l1_lam_bias)
         tposv_(&lo, &k_totA, &one,
                bufferBeTBe, &k_totA,
                a_vec, &k_totA,
                &ignore);
+    else if (!nonneg)
+        solve_elasticnet(
+            bufferBeTBe,
+            a_vec,
+            buffer_real_t,
+            k_totA,
+            l1_lam, l1_lam_bias,
+            max_cd_steps,
+            true
+        );
     else
         solve_nonneg(
             bufferBeTBe,
             a_vec,
-            a_prev,
+            buffer_real_t,
             k_totA,
+            l1_lam, l1_lam_bias,
             max_cd_steps,
             true
         );
@@ -1693,14 +1787,14 @@ void collective_closed_form_block_implicit
     real_t *restrict u_vec, int_t cnt_NA_u,
     real_t *restrict u_vec_sp, int_t u_vec_ixB[], size_t nnz_u_vec,
     bool NA_as_zero_U,
-    real_t lam, real_t w_user,
+    real_t lam, real_t l1_lam, real_t w_user,
     real_t *restrict precomputedBeTBe,
     real_t *restrict precomputedBtB, /* for cg, should NOT have lambda added */
     real_t *restrict precomputedBeTBeChol,
     real_t *restrict precomputedCtCw,
     bool add_U, bool shapes_match,
     bool use_cg, int_t max_cg_steps,/* <- 'cg' should not be used for new data*/
-    bool nonneg, int_t max_cd_steps, real_t *restrict a_prev,
+    bool nonneg, int_t max_cd_steps,
     real_t *restrict buffer_real_t
 )
 {
@@ -1737,7 +1831,8 @@ void collective_closed_form_block_implicit
     bool add_C = false;
 
     if (nnz == 0 && ((u_vec != NULL && cnt_NA_u == 0) || NA_as_zero_U) &&
-        precomputedBeTBeChol != NULL && (!use_cg || p < k_totA) && !nonneg)
+        precomputedBeTBeChol != NULL && (!use_cg || p < k_totA) &&
+        !nonneg && !l1_lam)
     {
         if (use_cg || add_U)
         {
@@ -1789,6 +1884,8 @@ void collective_closed_form_block_implicit
             );
         return;
     }
+
+    buffer_real_t += square(k);
     
 
     if ((u_vec != NULL && few_NAs) || (u_vec == NULL && NA_as_zero_U))
@@ -1923,17 +2020,28 @@ void collective_closed_form_block_implicit
                     a_vec + k_user, 1);
     }
 
-    if (!nonneg)
+    if (!nonneg && !l1_lam)
         tposv_(&lo, &k_totA, &one,
                BtB, &k_totA,
                a_vec, &k_totA,
                &ignore);
+    else if (!nonneg)
+        solve_elasticnet(
+            BtB,
+            a_vec,
+            buffer_real_t,
+            k_totA,
+            l1_lam, l1_lam,
+            max_cd_steps,
+            true
+        );
     else
         solve_nonneg(
             BtB,
             a_vec,
-            a_prev,
+            buffer_real_t,
             k_totA,
+            l1_lam, l1_lam,
             max_cd_steps,
             true
         );
@@ -1959,6 +2067,7 @@ void collective_block_cg
     real_t *restrict precomputedBtB,
     real_t *restrict precomputedCtC, /* should NOT be multiplied by 'w_user' */
     int_t max_cg_steps,
+    real_t *restrict bias_BtX, real_t *restrict bias_X, real_t bias_X_glob,
     real_t *restrict buffer_real_t
 )
 {
@@ -1975,7 +2084,7 @@ void collective_block_cg
         wr = r + k_totA;  /* has length 'n' */
     set_to_zero(r, k_totA);
     real_t r_new, r_old;
-    real_t a, coef, w_this;
+    real_t a, coef;
 
     if (u_vec != NULL && cnt_NA_u == p) {
         u_vec = NULL;
@@ -1991,10 +2100,10 @@ void collective_block_cg
 
     bool prefer_BtB = (cnt_NA_x < 2*(k+k_main)) ||
                       (nnz > (size_t)(2*(k+k_main))) ||
-                      (NA_as_zero_X);
+                      (NA_as_zero_X && (k+k_main) < n);
     bool prefer_CtC = (cnt_NA_u < 2*(k+k_user)) ||
                       (nnz_u_vec > (size_t)(2*(k+k_user))) ||
-                      (NA_as_zero_U);
+                      (NA_as_zero_U && (k_user+k) < p);
     if (precomputedBtB == NULL)
         prefer_BtB = false;
     if (precomputedCtC == NULL || (!p && !nnz_u_vec))
@@ -2063,15 +2172,13 @@ void collective_block_cg
         else
             for (size_t ix = 0; ix < (size_t)n; ix++)
                 if (!isnan(Xa_dense[ix])) {
-                    w_this = (weight == NULL)? 1. : weight[ix];
-                    cblas_taxpy(k + k_main,
-                                w_this * Xa_dense[ix],
-                                B + (size_t)k_item + ix*(size_t)ldb, 1,
-                                r + k_user, 1);
                     coef = cblas_tdot(k + k_main,
                                       B + (size_t)k_item + ix*(size_t)ldb, 1,
                                       a_vec + k_user, 1);
-                    cblas_taxpy(k + k_main, -w_this * coef,
+                    cblas_taxpy(k + k_main,
+                                (-coef + Xa_dense[ix])
+                                    *
+                                ((weight == NULL)? 1. : weight[ix]),
                                 B + (size_t)k_item + ix*(size_t)ldb, 1,
                                 r + k_user, 1);
                 }
@@ -2080,23 +2187,13 @@ void collective_block_cg
     else if (NA_as_zero_X)
     {
         if (weight == NULL)
+        {
             tgemv_dense_sp(
                 n, k+k_main,
                 1., B + k_item, (size_t)ldb,
                 ixB, Xa, nnz,
                 r + k_user
             );
-        else {
-            tgemv_dense_sp_weighted(
-                n, k+k_main,
-                weight, B + k_item, (size_t)ldb,
-                ixB, Xa, nnz,
-                r + k_user
-            );
-        }
-        
-        if (weight == NULL)
-        {
             if (prefer_BtB)
                 cblas_tsymv(CblasRowMajor, CblasUpper, k+k_main,
                             -1., precomputedBtB, ld_BtB,
@@ -2120,7 +2217,7 @@ void collective_block_cg
                 cblas_tsymv(CblasRowMajor, CblasUpper, k+k_main,
                             -1., precomputedBtB, ld_BtB,
                             a_vec + k_user, 1,
-                            1., r + k_user, 1);
+                            0., r + k_user, 1);
                 for (size_t ix = 0; ix < nnz; ix++)
                 {
                     coef = cblas_tdot(k + k_main,
@@ -2128,8 +2225,16 @@ void collective_block_cg
                                         + (size_t)k_item
                                         + (size_t)ixB[ix]*(size_t)ldb, 1,
                                       a_vec + k_user, 1);
-                    cblas_taxpy(k + k_main, -((weight[ix]-1.) * coef),
-                                B + (size_t)k_item + ix*(size_t)ldb, 1,
+                    cblas_taxpy(k + k_main,
+                                -(weight[ix]-1.)
+                                    *
+                                (coef + bias_X_glob + ((bias_X == NULL)?
+                                                        0 : bias_X[ixB[ix]]))
+                                    +
+                                (weight[ix] * Xa[ix]),
+                                B
+                                    + (size_t)k_item
+                                    + (size_t)ixB[ix]*(size_t)ldb, 1,
                                 r + k_user, 1);
                 }
             }
@@ -2142,7 +2247,17 @@ void collective_block_cg
                             a_vec + k_user, 1,
                             0., wr, 1);
                 for (size_t ix = 0; ix < nnz; ix++)
-                    wr[ixB[ix]] *= weight[ix];
+                    wr[ixB[ix]] = weight[ix] * (wr[ixB[ix]] + Xa[ix]);
+                if (bias_X != NULL) {
+                    for (size_t ix = 0; ix < nnz; ix++)
+                        wr[ixB[ix]] -= (weight[ix] - 1.)
+                                            *
+                                       (bias_X[ixB[ix]] + bias_X_glob);
+                }
+                else if (bias_X_glob != 0.) {
+                    for (size_t ix = 0; ix < nnz; ix++)
+                        wr[ixB[ix]] -= (weight[ix] - 1.) * bias_X_glob;
+                }
                 cblas_tgemv(CblasRowMajor, CblasTrans,
                             n, k+k_main,
                             1., B + k_item, ldb,
@@ -2150,24 +2265,24 @@ void collective_block_cg
                             1., r + k_user, 1);
             }
         }
+
+        if (bias_BtX != NULL)
+        {
+            cblas_taxpy(k+k_main, 1., bias_BtX, 1, r + k_user, 1);
+        }
     }
 
     else
     {
         for (size_t ix = 0; ix < nnz; ix++)
         {
-            w_this = (weight == NULL)? 1. : weight[ix];
-            cblas_taxpy(k + k_main,
-                        w_this * Xa[ix],
-                        B + (size_t)k_item + (size_t)ixB[ix]*(size_t)ldb, 1,
-                        r + k_user, 1);
             coef = cblas_tdot(k + k_main,
                               B
                                 + (size_t)k_item
-                                + (size_t)ixB[ix]*(size_t)ldb,
-                              1,
+                                + (size_t)ixB[ix]*(size_t)ldb, 1,
                               a_vec + k_user, 1);
-            cblas_taxpy(k + k_main, -w_this * coef,
+            cblas_taxpy(k + k_main,
+                        (-coef + Xa[ix]) * ((weight == NULL)? 1. : weight[ix]),
                         B + (size_t)k_item + (size_t)ixB[ix]*(size_t)ldb, 1,
                         r + k_user, 1);
         }
@@ -2191,7 +2306,7 @@ void collective_block_cg
                 coef = cblas_tdot(k_user+k,
                                   C + ix*(size_t)k_totC, 1,
                                   a_vec, 1);
-                cblas_taxpy(k, -w_user * coef,
+                cblas_taxpy(k_user+k, -w_user * coef,
                             C + ix*(size_t)k_totC, 1,
                             r, 1);
             }
@@ -2211,7 +2326,7 @@ void collective_block_cg
                     coef = cblas_tdot(k_user+k,
                                       C + ix*(size_t)k_totC, 1,
                                       a_vec, 1);
-                    cblas_taxpy(k, w_user * coef,
+                    cblas_taxpy(k_user+k, w_user * coef,
                                 C + ix*(size_t)k_totC, 1,
                                 r, 1);
                 }
@@ -2228,20 +2343,16 @@ void collective_block_cg
         else
             for (size_t ix = 0; ix < (size_t)p; ix++)
                 if (!isnan(u_vec[ix])) {
-                    cblas_taxpy(k_user+k,
-                                w_user * u_vec[ix],
-                                C + ix*(size_t)k_totC, 1,
-                                r, 1);
                     coef = cblas_tdot(k_user+k,
                                       C + ix*(size_t)k_totC, 1,
                                       a_vec, 1);
-                    cblas_taxpy(k, -w_user * coef,
+                    cblas_taxpy(k_user+k, w_user * (-coef + u_vec[ix]),
                                 C + ix*(size_t)k_totC, 1,
                                 r, 1);
                 }
     }
 
-    else if (NA_as_zero_U)
+    else if (u_vec == NULL && NA_as_zero_U)
     {
         tgemv_dense_sp(
                 p, k_user+k,
@@ -2260,7 +2371,7 @@ void collective_block_cg
                 coef = cblas_tdot(k_user+k,
                                   C + ix*(size_t)k_totC, 1,
                                   a_vec, 1);
-                cblas_taxpy(k, -w_user * coef,
+                cblas_taxpy(k_user+k, -w_user * coef,
                             C + ix*(size_t)k_totC, 1,
                             r, 1);
             }
@@ -2270,14 +2381,10 @@ void collective_block_cg
     {
         for (size_t ix = 0; ix < nnz_u_vec; ix++)
         {
-            cblas_taxpy(k_user+k,
-                        w_user * u_vec_sp[ix],
-                        C + (size_t)u_vec_ixB[ix]*(size_t)k_totC, 1,
-                        r, 1);
             coef = cblas_tdot(k_user+k,
                               C + (size_t)u_vec_ixB[ix]*(size_t)k_totC, 1,
                               a_vec, 1);
-            cblas_taxpy(k, -w_user * coef,
+            cblas_taxpy(k_user+k, w_user * (-coef + u_vec_sp[ix]),
                         C + (size_t)u_vec_ixB[ix]*(size_t)k_totC, 1,
                         r, 1);
         }
@@ -2340,11 +2447,11 @@ void collective_block_cg
             else
                 for (size_t ix = 0; ix < (size_t)n; ix++)
                 {
-                    w_this = (weight == NULL)? 1. : weight[ix];
                     coef = cblas_tdot(k+k_main,
                                       B + (size_t)k_item + ix*(size_t)ldb, 1,
                                       pp + k_user, 1);
-                    cblas_taxpy(k+k_main, w_this * coef,
+                    cblas_taxpy(k+k_main,
+                                coef * ((weight == NULL)? 1. : weight[ix]),
                                 B + (size_t)k_item + ix*(size_t)ldb, 1,
                                 Ap + k_user, 1);
                 }
@@ -2368,8 +2475,7 @@ void collective_block_cg
                     cblas_taxpy(k+k_main, (weight[ix] - 1.) * coef,
                                 B
                                   + (size_t)k_item
-                                  + (size_t)ixB[ix]*(size_t)ldb,
-                                1,
+                                  + (size_t)ixB[ix]*(size_t)ldb, 1,
                                 Ap + k_user, 1);
                 }
             }
@@ -2416,13 +2522,13 @@ void collective_block_cg
                 for (size_t ix = 0; ix < (size_t)n; ix++)
                 {
                     if (!isnan(Xa_dense[ix])) {
-                        w_this = (weight == NULL)? 1. : weight[ix];
                         coef = cblas_tdot(k+k_main,
                                           B
                                             + (size_t)k_item
                                             + ix*(size_t)ldb, 1,
                                           pp + k_user, 1);
-                        cblas_taxpy(k+k_main, w_this * coef,
+                        cblas_taxpy(k+k_main,
+                                    coef * ((weight == NULL)? 1. : weight[ix]),
                                     B + (size_t)k_item + ix*(size_t)ldb, 1,
                                     Ap + k_user, 1);
                     }
@@ -2433,18 +2539,15 @@ void collective_block_cg
         {
             for (size_t ix = 0; ix < nnz; ix++)
             {
-                w_this = (weight == NULL)? 1. : weight[ix];
                 coef = cblas_tdot(k+k_main,
                                   B
                                     + (size_t)k_item
-                                    + (size_t)ixB[ix]*(size_t)ldb,
-                                  1,
+                                    + (size_t)ixB[ix]*(size_t)ldb, 1,
                                   pp + k_user, 1);
-                cblas_taxpy(k+k_main, w_this * coef,
+                cblas_taxpy(k+k_main, coef * ((weight == NULL)? 1. : weight[ix]),
                             B
                               + (size_t)k_item
-                              + (size_t)ixB[ix]*(size_t)ldb,
-                            1,
+                              + (size_t)ixB[ix]*(size_t)ldb, 1,
                             Ap + k_user, 1);
             }
         }
@@ -2625,7 +2728,7 @@ void collective_block_cg_implicit
                 coef = cblas_tdot(k_user+k,
                                   C + ix*(size_t)k_totC, 1,
                                   a_vec, 1);
-                cblas_taxpy(k, -w_user * coef,
+                cblas_taxpy(k_user+k, -w_user * coef,
                             C + ix*(size_t)k_totC, 1,
                             r, 1);
             }
@@ -2645,7 +2748,7 @@ void collective_block_cg_implicit
                     coef = cblas_tdot(k_user+k,
                                       C + ix*(size_t)k_totC, 1,
                                       a_vec, 1);
-                    cblas_taxpy(k, w_user * coef,
+                    cblas_taxpy(k_user+k, w_user * coef,
                                 C + ix*(size_t)k_totC, 1,
                                 r, 1);
                 }
@@ -2662,14 +2765,10 @@ void collective_block_cg_implicit
         else
             for (size_t ix = 0; ix < (size_t)p; ix++)
                 if (!isnan(u_vec[ix])) {
-                    cblas_taxpy(k_user+k,
-                                w_user * u_vec[ix],
-                                C + ix*(size_t)k_totC, 1,
-                                r, 1);
                     coef = cblas_tdot(k_user+k,
                                       C + ix*(size_t)k_totC, 1,
                                       a_vec, 1);
-                    cblas_taxpy(k, -w_user * coef,
+                    cblas_taxpy(k_user+k, w_user * (-coef + u_vec[ix]),
                                 C + ix*(size_t)k_totC, 1,
                                 r, 1);
                 }
@@ -2694,7 +2793,7 @@ void collective_block_cg_implicit
                 coef = cblas_tdot(k_user+k,
                                   C + ix*(size_t)k_totC, 1,
                                   a_vec, 1);
-                cblas_taxpy(k, -w_user * coef,
+                cblas_taxpy(k_user+k, -w_user * coef,
                             C + ix*(size_t)k_totC, 1,
                             r, 1);
             }
@@ -2704,14 +2803,10 @@ void collective_block_cg_implicit
     {
         for (size_t ix = 0; ix < nnz_u_vec; ix++)
         {
-            cblas_taxpy(k_user+k,
-                        w_user * u_vec_sp[ix],
-                        C + (size_t)u_vec_ixB[ix]*(size_t)k_totC, 1,
-                        r, 1);
             coef = cblas_tdot(k_user+k,
                               C + (size_t)u_vec_ixB[ix]*(size_t)k_totC, 1,
                               a_vec, 1);
-            cblas_taxpy(k, -w_user * coef,
+            cblas_taxpy(k_user+k, w_user * (-coef + u_vec_sp[ix]),
                         C + (size_t)u_vec_ixB[ix]*(size_t)k_totC, 1,
                         r, 1);
         }
@@ -2775,8 +2870,8 @@ void collective_block_cg_implicit
         {
             if (prefer_CtC)
             {
-                cblas_tsymv(CblasRowMajor, CblasUpper, k_totC,
-                            w_user, precomputedCtC, k_totC,
+                cblas_tsymv(CblasRowMajor, CblasUpper, k_user+k,
+                            w_user, precomputedCtC, k_user+k,
                             pp, 1,
                             1., Ap, 1);
                 for (size_t ix = 0; ix < (size_t)p; ix++)
@@ -2888,7 +2983,8 @@ int_t collective_factors_cold
     real_t *restrict CtCw,
     real_t *restrict col_means,
     int_t k, int_t k_user, int_t k_main,
-    real_t lam, real_t w_main, real_t w_user,
+    real_t lam, real_t l1_lam, real_t w_main, real_t w_user,
+    bool scale_lam,
     bool NA_as_zero_U,
     bool nonneg
 )
@@ -2912,13 +3008,12 @@ int_t collective_factors_cold
     if (k_main > 0)
         set_to_zero(a_vec + k_user+k, k_main);
 
-    real_t *restrict a_prev = NULL;
-
     real_t *restrict buffer_real_t = NULL;
     size_t size_buffer = 0;
 
     if (w_main != 1.) {
         lam /= w_main;
+        l1_lam /= w_main;
         w_user /= w_main;
     }
 
@@ -2928,21 +3023,21 @@ int_t collective_factors_cold
                     &&
             (u_bin_vec == NULL || cnt_NA_u_bin_vec == pbin)  )
     {
-        set_to_zero(a_vec, k_user+k+k_main);
+        set_to_zero(a_vec, k_user+k);
         goto cleanup;
     }
 
-    if (nonneg) {
-        a_prev = (real_t*)calloc(k_user+k+k_main, sizeof(real_t));
-        if (a_prev == NULL) goto throw_oom;
-    }
 
     /* If there are no binary variables, solution can be obtained through
        closed form */
     if (u_bin_vec == NULL)
     {
         size_buffer = square(k_user + k);
-        if (TransCtCinvCt != NULL && !nonneg &&
+        if (nonneg)
+            size_buffer += k_user + k;
+        else if (l1_lam)
+            size_buffer += 3*(k_user+k);
+        if (TransCtCinvCt != NULL && !nonneg && !l1_lam &&
             ((cnt_NA_u_vec == 0 && u_vec != NULL) ||
              (u_vec == NULL && NA_as_zero_U)))
         {
@@ -2959,12 +3054,13 @@ int_t collective_factors_cold
                             u_vec_sp, u_vec_ixB, nnz_u_vec,
                             (real_t*)NULL,
                             buffer_real_t, lam/w_user, lam/w_user,
+                            l1_lam/w_user, l1_lam/w_user, scale_lam,
                             TransCtCinvCt, CtCw, cnt_NA_u_vec, k_user + k,
                             false, true, w_user, p,
                             (real_t*)NULL, NA_as_zero_U,
                             false, 0,
-                            nonneg, max2(k_user+k, (int_t)10*(k_user+k)),a_prev,
-                            true);
+                            nonneg, max2(k_user+k, (int_t)10*(k_user+k)),
+                            (real_t*)NULL, (real_t*)NULL, 0., true);
     }
 
     else
@@ -2991,7 +3087,6 @@ int_t collective_factors_cold
 
     cleanup:
         free(buffer_real_t);
-        free(a_prev);
         return retval;
     throw_oom:
     {
@@ -3012,7 +3107,8 @@ int_t collective_factors_cold_implicit
     real_t *restrict BeTBeChol,
     real_t *restrict col_means,
     int_t k, int_t k_user, int_t k_item, int_t k_main,
-    real_t lam, real_t w_main, real_t w_user, real_t w_main_multiplier,
+    real_t lam, real_t l1_lam,
+    real_t w_main, real_t w_user, real_t w_main_multiplier,
     bool NA_as_zero_U,
     bool nonneg
 )
@@ -3020,11 +3116,8 @@ int_t collective_factors_cold_implicit
     int_t retval = 0;
     int_t k_totA = k_user + k + k_main;
     int_t cnt_NA_u_vec = 0;
-    real_t *restrict a_prev = NULL;
-    real_t *restrict buffer_real_t = (real_t*)malloc((size_t)square(k_totA)
-                                                      *
-                                                     sizeof(real_t));
-    if (buffer_real_t == NULL) goto throw_oom;
+    real_t *restrict buffer_real_t = NULL;
+    size_t size_buffer = square(k_totA);
 
     if (u_vec != NULL || (u_vec_sp != NULL && !NA_as_zero_U))
         preprocess_vec(u_vec, p, u_vec_ixB, u_vec_sp, nnz_u_vec,
@@ -3038,10 +3131,12 @@ int_t collective_factors_cold_implicit
         goto cleanup;
     }
 
-    if (nonneg) {
-        a_prev = (real_t*)calloc(k_totA, sizeof(real_t));
-        if (a_prev == NULL) goto throw_oom;
-    }
+    if (nonneg)
+        size_buffer += k_totA;
+    else if (l1_lam)
+        size_buffer += 3*k_totA;
+    buffer_real_t = (real_t*)malloc(size_buffer*sizeof(real_t));
+    if (buffer_real_t == NULL) goto throw_oom;
 
     if (w_main_multiplier != 1.)
         w_main *= w_main_multiplier;
@@ -3049,6 +3144,7 @@ int_t collective_factors_cold_implicit
     if (w_main != 1.) {
         w_user /= w_main;
         lam /= w_main;
+        l1_lam /= w_main;
     }
 
     collective_closed_form_block_implicit(
@@ -3059,19 +3155,18 @@ int_t collective_factors_cold_implicit
         u_vec, cnt_NA_u_vec,
         u_vec_sp, u_vec_ixB, nnz_u_vec,
         NA_as_zero_U,
-        lam, w_user,
+        lam, l1_lam, w_user,
         BeTBe,
         BtB,
         BeTBeChol,
         (real_t*)NULL,
         true, true, false, 0,
-        nonneg, max2(k_totA, (int_t)10*k_totA), a_prev,
+        nonneg, max2(k_totA, (int_t)10*k_totA),
         buffer_real_t
     );
 
     cleanup:
         free(buffer_real_t);
-        free(a_prev);
         return retval;
     throw_oom:
     {
@@ -3119,8 +3214,11 @@ int_t collective_factors_warm
     real_t *restrict Bi, bool add_implicit_features,
     int_t k, int_t k_user, int_t k_item, int_t k_main,
     real_t lam, real_t w_main, real_t w_user, real_t w_implicit,real_t lam_bias,
+    real_t l1_lam, real_t l1_lam_bias,
+    bool scale_lam, bool scale_lam_sideinfo,
     int_t n_max, bool include_all_X,
     real_t *restrict TransBtBinvBt,
+    real_t *restrict BtXbias,
     real_t *restrict BtB,
     real_t *restrict BeTBeChol,
     real_t *restrict BiTBi,
@@ -3146,6 +3244,7 @@ int_t collective_factors_warm
     }
 
     int_t retval = 0;
+    bool free_BtX = false;
 
     int_t cnt_NA_u_vec = 0;
     int_t cnt_NA_u_bin_vec = 0;
@@ -3162,9 +3261,16 @@ int_t collective_factors_warm
                        (B_plus_bias == NULL)? a_bias : (real_t*)NULL,
                        &cnt_NA_x);
 
+    scale_lam = scale_lam || scale_lam_sideinfo;
+
+    if (Xa_dense != NULL || !NA_as_zero_X)
+        BtXbias = NULL;
+
     /* If there is no data, can just set it to zero */
     if (
-        ((Xa_dense != NULL && cnt_NA_x == n) || (Xa_dense == NULL && nnz == 0))
+        ((Xa_dense != NULL && cnt_NA_x == n) ||
+         (Xa_dense == NULL && nnz == 0 &&
+          !(NA_as_zero_X && (BtXbias!= NULL|| glob_mean!= 0.|| biasB != NULL))))
             &&
         (   (u_vec != NULL && cnt_NA_u_vec == p)
                 ||
@@ -3197,7 +3303,8 @@ int_t collective_factors_warm
             CtCw,
             col_means,
             k, k_user, k_main,
-            lam, w_main, w_user,
+            lam, l1_lam, w_main, w_user,
+            scale_lam,
             NA_as_zero_U,
             nonneg
         );
@@ -3224,7 +3331,6 @@ int_t collective_factors_warm
     real_t *restrict buffer_real_t = NULL;
     size_t size_buffer;
 
-    real_t *restrict a_prev = NULL;
     
     real_t *restrict a_plus_bias = NULL;
     if (append_bias) {
@@ -3233,17 +3339,56 @@ int_t collective_factors_warm
         if (a_plus_bias == NULL) goto throw_oom;
     }
 
-    if (nonneg) {
-        a_prev = (real_t*)calloc(k_user+k+k_main+append_bias, sizeof(real_t));
-        if (a_prev == NULL) goto throw_oom;
-    }
 
     if (w_main != 1.) {
         w_user /= w_main;
         w_implicit /= w_main;
         lam /= w_main;
         lam_bias /= w_main;
+        l1_lam /= w_main;
+        l1_lam_bias /= w_main;
         w_main = 1.;
+    }
+
+    if (NA_as_zero_X && BtXbias == NULL && (glob_mean != 0. || biasB != NULL))
+    {
+        BtXbias = (real_t*)calloc(k+k_main+append_bias, sizeof(real_t));
+        if (BtXbias == NULL) goto throw_oom;
+        free_BtX = true;
+
+        if (biasB != NULL)
+        {
+            if (glob_mean != 0. && n_max > n)
+            {
+                sum_by_cols((append_bias? B_plus_bias : B)
+                                + k_item
+                                + (size_t)n*(size_t)
+                                            (k_item+k+k_main+append_bias),
+                            BtXbias,
+                            n_max - n, k+k_main,
+                            k_item+k+k_main+append_bias, 1);
+                if (append_bias)
+                    BtXbias[k+k_main] = (real_t)(n_max - n);
+                cblas_tscal(k+k_main+append_bias, -glob_mean, BtXbias, 1);
+            }
+            for (size_t col = 0; col < (size_t)n; col++)
+                cblas_taxpy(k+k_main+append_bias,
+                            -(biasB[col] + glob_mean),
+                            (append_bias? B_plus_bias : B)
+                                + (size_t)k_item
+                                + col*(size_t)(k_item+k+k_main+append_bias), 1,
+                            BtXbias, 1);
+        }
+
+        else if (glob_mean != 0.)
+        {
+            sum_by_cols((append_bias? B_plus_bias : B) + k_item, BtXbias,
+                        n_max, k+k_main,
+                        k_item+k+k_main+append_bias, 1);
+            if (append_bias)
+                BtXbias[k+k_main] = (real_t)n_max;
+            cblas_tscal(k+k_main+append_bias, -glob_mean, BtXbias, 1);
+        }
     }
 
     /* If there's no side info, just need to apply the closed-form
@@ -3252,9 +3397,14 @@ int_t collective_factors_warm
         u_bin_vec == NULL && !add_implicit_features)
     {
         size_buffer = square(k + k_main + (int)append_bias);
-        if (TransBtBinvBt != NULL && weight == NULL && !nonneg &&
+        if (nonneg)
+            size_buffer += k+k_main+append_bias;
+        else if (l1_lam || l1_lam_bias)
+            size_buffer += 3*(k+k_main+append_bias);
+        if (TransBtBinvBt != NULL && weight == NULL &&
+            !nonneg && !l1_lam && !l1_lam_bias &&
             ((cnt_NA_x == 0 && Xa_dense != NULL) ||
-             (Xa_dense == NULL && NA_as_zero_X)) )
+             (Xa_dense == NULL && NA_as_zero_X && BtXbias == NULL)) )
         {
             size_buffer = 0;
         }
@@ -3277,14 +3427,14 @@ int_t collective_factors_warm
                                 Xa, ixB, nnz,
                                 weight,
                                 buffer_real_t,
-                                lam, lam,
+                                lam, lam, l1_lam, l1_lam, scale_lam,
                                 TransBtBinvBt, BtB,
                                 cnt_NA_x, k+k_main,
                                 false, false, 1., include_all_X? n_max : n,
                                 (real_t*)NULL, NA_as_zero_X,
                                 false, 0,
                                 nonneg, max2(k+k_main, (int_t)10*(k+k_main)),
-                                a_prev,
+                                BtXbias, biasB, glob_mean,
                                 true);
         else
             factors_closed_form(a_plus_bias + k_user, k+k_main+1,
@@ -3293,14 +3443,14 @@ int_t collective_factors_warm
                                 Xa, ixB, nnz,
                                 weight,
                                 buffer_real_t,
-                                lam, lam_bias,
+                                lam, lam_bias, l1_lam, l1_lam_bias, scale_lam,
                                 TransBtBinvBt, BtB,
                                 cnt_NA_x, k+k_main+1,
                                 false, false, 1., include_all_X? n_max : n,
                                 (real_t*)NULL, NA_as_zero_X,
                                 false, 0,
                                 nonneg, max2(k+k_main+1,(int_t)10*(k+k_main+1)),
-                                a_prev,
+                                BtXbias, biasB, glob_mean,
                                 true);
     }
 
@@ -3355,6 +3505,10 @@ int_t collective_factors_warm
         size_buffer = square(k_user+k+k_main+(int)append_bias);
         if (add_implicit_features && BiTBi == NULL)
             size_buffer += square(k+k_main);
+        if (nonneg)
+            size_buffer += k_user+k+k_main+append_bias;
+        else if (l1_lam || l1_lam_bias)
+            size_buffer += 3*(k_user+k+k_main+append_bias);
         buffer_real_t = (real_t*)malloc(size_buffer*sizeof(real_t));
         if (buffer_real_t == NULL) goto throw_oom;
 
@@ -3373,13 +3527,15 @@ int_t collective_factors_warm
                 Xones, 1,
                 weight,
                 lam, w_user, w_implicit, lam,
+                l1_lam, l1_lam,
+                scale_lam, scale_lam_sideinfo,
                 BtB, cnt_NA_x,
                 CtCw, cnt_NA_u_vec,
                 BeTBeChol, include_all_X? n_max : n,
                 BiTBi,
                 true, true, false, 0,
                 nonneg, max2(k_user+k+k_main, (int_t)10*(k_user+k+k_main)),
-                a_prev,
+                BtXbias, biasB, glob_mean,
                 buffer_real_t
             );
         else
@@ -3397,13 +3553,15 @@ int_t collective_factors_warm
                 Xones, 1,
                 weight,
                 lam, w_user, w_implicit, lam_bias,
+                l1_lam, l1_lam_bias,
+                scale_lam, scale_lam_sideinfo,
                 BtB, cnt_NA_x,
                 CtCw, cnt_NA_u_vec,
                 BeTBeChol, include_all_X? n_max : n,
                 BiTBi,
                 true, true, false, 0,
                 nonneg, max2(k_user+k+k_main+1, (int_t)10*(k_user+k+k_main+1)),
-                a_prev,
+                BtXbias, biasB, glob_mean,
                 buffer_real_t
             );
         retval = 0;
@@ -3417,8 +3575,9 @@ int_t collective_factors_warm
     cleanup:
         free(buffer_real_t);
         free(a_plus_bias);
-        free(a_prev);
         free(Xones);
+        if (free_BtX)
+            free(BtXbias);
         return retval;
     throw_oom:
     {
@@ -3438,7 +3597,7 @@ int_t collective_factors_warm_implicit
     real_t *restrict B, int_t n, real_t *restrict C,
     real_t *restrict Xa, int_t ixB[], size_t nnz,
     int_t k, int_t k_user, int_t k_item, int_t k_main,
-    real_t lam, real_t alpha, real_t w_main, real_t w_user,
+    real_t lam, real_t l1_lam, real_t alpha, real_t w_main, real_t w_user,
     real_t w_main_multiplier,
     real_t *restrict BeTBe,
     real_t *restrict BtB,
@@ -3448,16 +3607,15 @@ int_t collective_factors_warm_implicit
     int_t retval = 0;
     int_t cnt_NA_u_vec = 0;
     int_t k_totA = k_user + k + k_main;
-    real_t *restrict buffer_real_t = (real_t*)malloc((size_t)square(k_totA)
-                                                      *
-                                                     sizeof(real_t));
-    if (buffer_real_t == NULL) return 1;
+    real_t *restrict buffer_real_t = NULL;
+    size_t size_buffer = square(k_totA);
 
-    real_t *restrict a_prev = NULL;
-    if (nonneg) {
-        a_prev = (real_t*)calloc(k_totA, sizeof(real_t));
-        if (a_prev == NULL) goto throw_oom;
-    }
+    if (nonneg)
+        size_buffer += k_totA;
+    else if (l1_lam)
+        size_buffer += 3*k_totA;
+    buffer_real_t = (real_t*)malloc(size_buffer*sizeof(real_t));
+    if (buffer_real_t == NULL) goto throw_oom;
 
     w_main *= w_main_multiplier;
     if (w_main != 1.) {
@@ -3481,13 +3639,13 @@ int_t collective_factors_warm_implicit
             u_vec, cnt_NA_u_vec,
             u_vec_sp, u_vec_ixB, nnz_u_vec,
             NA_as_zero_U,
-            lam, w_user,
+            lam, l1_lam, w_user,
             BeTBe,
             BtB,
             BeTBeChol,
             (real_t*)NULL,
             true, true, false, 0,
-            nonneg, max2(k_totA, (int_t)10*k_totA), a_prev,
+            nonneg, max2(k_totA, (int_t)10*k_totA),
             buffer_real_t
         );
     }
@@ -3498,16 +3656,15 @@ int_t collective_factors_warm_implicit
             a_vec + k_user, k+k_main,
             B + k_item, (size_t)(k_item+k+k_main),
             Xa, ixB, nnz,
-            lam,
+            lam, l1_lam,
             BtB, k+k_main,
-            nonneg, max2(k_totA, (int_t)10*k_totA), a_prev,
+            nonneg, max2(k_totA, (int_t)10*k_totA),
             buffer_real_t
         );
     }
 
     cleanup:
         free(buffer_real_t);
-        free(a_prev);
         return retval;
     throw_oom:
     {
@@ -3700,7 +3857,7 @@ size_t buffer_size_optimizeA_collective
     bool add_implicit_features, size_t k_main_i,
     size_t nthreads,
     bool use_cg, bool finalize_chol,
-    bool nonneg,
+    bool nonneg, bool has_l1,
     bool keep_precomputed,
     bool pass_allocated_BtB,
     bool pass_allocated_CtCw,
@@ -3721,7 +3878,7 @@ size_t buffer_size_optimizeA_collective
                 add_implicit_features, k_main_i,
                 nthreads,
                 true, false,
-                nonneg,
+                nonneg, has_l1,
                 keep_precomputed,
                 pass_allocated_BtB,
                 pass_allocated_CtCw,
@@ -3738,7 +3895,7 @@ size_t buffer_size_optimizeA_collective
                 add_implicit_features, k_main_i,
                 nthreads,
                 false, false,
-                nonneg,
+                nonneg, has_l1,
                 keep_precomputed,
                 pass_allocated_BtB,
                 pass_allocated_CtCw,
@@ -3759,6 +3916,9 @@ size_t buffer_size_optimizeA_collective
 
     bool will_use_BtB_here = false;
     bool will_use_CtC_here = false;
+
+    if (nonneg || has_l1)
+        use_cg = false;
 
     if (!has_dense) do_B = false;
 
@@ -3797,6 +3957,7 @@ size_t buffer_size_optimizeA_collective
             size_optimizeA = buffer_size_optimizeA(
                 n, full_dense, near_dense, do_B,
                 has_dense, has_weights, NA_as_zero_X,
+                nonneg, has_l1,
                 k+k_main, nthreads,
                 pass_allocated_BtB, keep_precomputed || will_use_BtB_here,
                 use_cg, finalize_chol
@@ -3812,7 +3973,7 @@ size_t buffer_size_optimizeA_collective
                 add_implicit_features, k_main_i,
                 nthreads,
                 use_cg, finalize_chol,
-                nonneg,
+                nonneg, has_l1,
                 keep_precomputed,
                 pass_allocated_BtB,
                 false,
@@ -3844,13 +4005,44 @@ size_t buffer_size_optimizeA_collective
             pass_allocated_CtCw = true;
         }
 
-        size_optimizeA = buffer_size_optimizeA(
-            p, full_dense_u, near_dense_u, false,
-            has_dense_U, false, NA_as_zero_U,
-            k_user+k, nthreads,
-            pass_allocated_CtCw, keep_precomputed || will_use_CtC_here,
-            use_cg, finalize_chol
-        );
+        if (!add_implicit_features)
+            size_optimizeA = buffer_size_optimizeA(
+                p, full_dense_u, near_dense_u, false,
+                has_dense_U, false, NA_as_zero_U,
+                nonneg, has_l1,
+                k_user+k, nthreads,
+                pass_allocated_CtCw, keep_precomputed || will_use_CtC_here,
+                use_cg, finalize_chol
+            );
+        else {
+            if (!pass_allocated_BiTBi) {
+                min_size += square(k+k_main_i);
+                pass_allocated_BiTBi = true;
+            }
+            size_t m_diff = m_u - m + 2; /* <- extra padding just in case */
+            if (sizeof(size_t) > sizeof(real_t))
+                m_diff *= (size_t)ceill((long double)(sizeof(size_t))
+                                            /
+                                        (long double)(sizeof(real_t)));
+            size_optimizeA = m_diff;
+            size_optimizeA += buffer_size_optimizeA_collective(
+                m_diff, m_diff, n, p,
+                k, k_main_i, k_user,
+                false, false, false,
+                false, true, false, true,
+                has_dense_U, has_sparse_U,
+                full_dense_u, near_dense_u, NA_as_zero_U,
+                false, 0,
+                nthreads,
+                use_cg, finalize_chol,
+                nonneg, has_l1,
+                keep_precomputed,
+                true,
+                pass_allocated_CtCw,
+                pass_allocated_BeTBeChol,
+                false
+            );
+        }
     }
 
 
@@ -3907,10 +4099,22 @@ size_t buffer_size_optimizeA_collective
                 size_alt += square(k_user+k+k_main);
         }
 
-        if (do_B)
-            buffer_thread += n;
-        buffer_thread += use_cg? (3*k_totA) : (square(k_totA));
-        buffer_thread *= nthreads;
+        if (nonneg)
+            size_alt += k_totA;
+        else if (has_l1)
+            size_alt += (size_t)3*k_totA*nthreads;
+
+        if ((has_dense && !full_dense) || (has_dense_U && !full_dense_u))
+        {
+            if (do_B)
+                buffer_thread += n;
+            buffer_thread += use_cg? (3*k_totA) : (square(k_totA));
+            if (nonneg)
+                buffer_thread += k_totA;
+            else if (has_l1)
+                buffer_thread += 3*k_totA;
+            buffer_thread *= nthreads;
+        }
         buffer_thread = max2(buffer_thread, size_alt);
 
         buffer_size += buffer_thread;
@@ -3973,6 +4177,10 @@ size_t buffer_size_optimizeA_collective
             buffer_size += n * (nthreads+1);
 
         buffer_thread += use_cg? (3*k_totA) : (square(k_totA));
+        if (nonneg)
+            buffer_thread += k_totA;
+        else if (has_l1)
+            buffer_thread += (size_t)3*k_totA;
         if (use_cg && !has_dense && NA_as_zero_X && has_weights)
             buffer_thread += n;
 
@@ -3991,6 +4199,7 @@ size_t buffer_size_optimizeA_collective_implicit
     bool NA_as_zero_U,
     size_t nthreads,
     bool use_cg,
+    bool nonneg, bool has_l1,
     bool pass_allocated_BtB,
     bool pass_allocated_BeTBe,
     bool pass_allocated_BeTBeChol,
@@ -4008,6 +4217,7 @@ size_t buffer_size_optimizeA_collective_implicit
                     NA_as_zero_U,
                     nthreads,
                     true,
+                    nonneg, has_l1,
                     pass_allocated_BtB,
                     pass_allocated_BeTBe,
                     pass_allocated_BeTBeChol,
@@ -4021,6 +4231,7 @@ size_t buffer_size_optimizeA_collective_implicit
                     NA_as_zero_U,
                     nthreads,
                     false,
+                    nonneg, has_l1,
                     pass_allocated_BtB,
                     pass_allocated_BeTBe,
                     pass_allocated_BeTBeChol,
@@ -4041,6 +4252,7 @@ size_t buffer_size_optimizeA_collective_implicit
         size_from_single = buffer_size_optimizeA_implicit(
                                 k + k_main, nthreads,
                                 true,
+                                nonneg, has_l1,
                                 use_cg, finalize_chol
                             );
 
@@ -4068,6 +4280,10 @@ size_t buffer_size_optimizeA_collective_implicit
     }
 
     size_t size_buffer_thread = use_cg? ((size_t)3 * k_totA) : (square(k_totA));
+    if (nonneg)
+        size_buffer_thread += k_totA;
+    else if (has_l1)
+        size_buffer_thread += (size_t)3*k_totA;
     size_buffer += nthreads * size_buffer_thread;
 
     size_buffer = max2(size_buffer, size_from_single);
@@ -4090,16 +4306,20 @@ void optimizeA_collective
     real_t *restrict U, int_t cnt_NA_u[],
     bool full_dense_u, bool near_dense_u, bool NA_as_zero_U,
     real_t lam, real_t w_user, real_t w_implicit, real_t lam_last,
+    real_t l1_lam, real_t l1_lam_bias,
+    bool scale_lam, bool scale_lam_sideinfo,
     bool do_B,
     int_t nthreads,
     bool use_cg, int_t max_cg_steps, bool is_first_iter,
-    bool nonneg, int_t max_cd_steps, real_t *restrict A_prev,
+    bool nonneg, int_t max_cd_steps,
+    real_t *restrict bias_BtX, real_t *restrict bias_X, real_t bias_X_glob,
     bool keep_precomputed,
     real_t *restrict precomputedBtB,
     real_t *restrict precomputedCtCw,
     real_t *restrict precomputedBeTBeChol,
     real_t *restrict precomputedBiTBi,
     bool *filled_BtB, bool *filled_CtCw, bool *filled_BeTBeChol,
+    bool *CtC_is_scaled,
     real_t *restrict buffer_real_t
 )
 {
@@ -4113,6 +4333,7 @@ void optimizeA_collective
     int_t ignore = 0;
     bool ignore_bool = false;
     bool ignore_bool2 = false;
+    bool ignore_bool3 = false;
 
     #ifdef TEST_CG
     use_cg = true;
@@ -4120,10 +4341,27 @@ void optimizeA_collective
     is_first_iter = true;
     #endif
 
+    if (nonneg || l1_lam || l1_lam_bias)
+        use_cg = false;
+
     *filled_BtB = false;
     *filled_CtCw = false;
     *filled_BeTBeChol = false;
     bool filled_BiTBi = false;
+    *CtC_is_scaled = false;
+
+    real_t multiplier_lam = scale_lam_sideinfo? (n+p) : (scale_lam? n : 1);
+    real_t scaled_lam = lam;
+    real_t scaled_lam_last = lam_last;
+    real_t scaled_l1_lam = l1_lam;
+    real_t scaled_l1_lam_last = l1_lam_bias;
+    if (multiplier_lam != 1.)
+    {
+        scaled_lam *= multiplier_lam;
+        scaled_lam_last *= multiplier_lam;
+        scaled_l1_lam *= multiplier_lam;
+        scaled_l1_lam_last *= multiplier_lam;
+    }
 
     /* TODO: could reduce number of operations and save memory by determining
        when the BiTBi matrix could be added to BtB and when not. */
@@ -4137,12 +4375,8 @@ void optimizeA_collective
     if (Xfull == NULL) do_B = false;
     /* TODO: here should only need to set straight away the lower half,
        and only when there are un-even entries in each matrix */
-    if (!use_cg || is_first_iter)
+    if (!use_cg || is_first_iter || nonneg || l1_lam || l1_lam_bias)
         set_to_zero_(A, (size_t)max2(m, m_u)*(size_t)lda - (size_t)(lda-k_totA),
-                     nthreads);
-    if (nonneg)
-        set_to_zero_(A_prev,
-                     (size_t)max2(m, m_u)*(size_t)lda - (size_t)(lda-k_totA),
                      nthreads);
 
     /* If one of the matrices has more rows than the other, the rows
@@ -4213,14 +4447,13 @@ void optimizeA_collective
                                         (weight + (size_t)m_u*(size_t)n)) ),
                 NA_as_zero_X,
                 lam, lam_last,
+                l1_lam, l1_lam_bias,
+                scale_lam,
                 false, false,
                 nthreads,
                 use_cg, max_cg_steps,
                 nonneg, max_cd_steps,
-                (A_prev == NULL)?
-                    ((real_t*)NULL)
-                        :
-                    (A_prev + (size_t)k_user + (size_t)m_u*(size_t)lda),
+                bias_BtX, bias_X, bias_X_glob,
                 keep_precomputed || will_use_BtB_here,
                 precomputedBtB,
                 (keep_precomputed || will_use_BtB_here)?
@@ -4250,38 +4483,33 @@ void optimizeA_collective
                                     (do_B?
                                         (weight + m_u)
                                             :
-                                        (weight + (size_t)m_u*(size_t)n)) ),
+                                        (weight+(size_t)m_u*(size_t)ldXones)) ),
                 NA_as_zero_X,
                 (Xfull == NULL)?
                     (Xones)
                         :
-                    (do_B? (Xones + m_u) : (Xones + (size_t)m_u*(size_t)n)),
+                    (do_B? (Xones + m_u) : (Xones+(size_t)m_u*(size_t)ldXones)),
                 k_main_i, ldXones, add_implicit_features,
                 (size_t*)NULL, (int_t*)NULL, (real_t*)NULL,
                 (real_t*)NULL, (int_t*)NULL,
                 false, false, false,
                 lam, w_user, w_implicit, lam_last,
+                l1_lam, l1_lam_bias,
+                scale_lam, false,
                 do_B,
                 nthreads,
                 use_cg, max_cg_steps, is_first_iter,
                 nonneg, max_cd_steps,
-                (A_prev == NULL)?
-                    ((real_t*)NULL) : (A_prev + (size_t)m_u*(size_t)lda),
+                bias_BtX, bias_X, bias_X_glob,
                 keep_precomputed,
                 precomputedBtB,
                 (real_t*)NULL,
                 precomputedBeTBeChol,
                 precomputedBiTBi,
                 filled_BtB, &ignore_bool, &ignore_bool2,
+                &ignore_bool3,
                 buffer_real_t
             );
-
-        if (add_implicit_features)
-        {
-            filled_BiTBi = true;
-            if (use_cg && w_implicit != 1.)
-                filled_BiTBi = false;
-        }
 
         m_x = m_u;
     }
@@ -4312,36 +4540,107 @@ void optimizeA_collective
         }
 
         int_t m_diff = m_u - m;
-        optimizeA(
-            A + (size_t)m*(size_t)lda, lda,
-            C, k_totC,
-            m_diff, p, k_user + k,
-            (U != NULL)? ((size_t*)NULL) : (U_csr_p + m),
-            (U != NULL)? ((int_t*)NULL) : U_csr_i,
-            (U != NULL)? ((real_t*)NULL) : U_csr,
-            (U == NULL)? ((real_t*)NULL) : (U + (size_t)m*(size_t)p),
-            p,
-            full_dense_u, near_dense_u,
-            (U == NULL)? ((int_t*)NULL) : (cnt_NA_u + m),
-            (real_t*)NULL,
-            NA_as_zero_U,
-            lam/w_user, lam/w_user,
-            false, false,
-            nthreads,
-            use_cg, max_cg_steps,
-            nonneg, max_cd_steps,
-            (A_prev == NULL)?
-                ((real_t*)NULL) : (A_prev + (size_t)m*(size_t)lda),
-            keep_precomputed || will_use_CtC_here,
-            precomputedCtCw,
-            (keep_precomputed || will_use_CtC_here)? filled_CtCw : &ignore_bool,
-            buffer_real_t
-        );
+        if (!add_implicit_features)
+        {
+            optimizeA(
+                A + (size_t)m*(size_t)lda, lda,
+                C, k_totC,
+                m_diff, p, k_user + k,
+                (U != NULL)? ((size_t*)NULL) : (U_csr_p + m),
+                (U != NULL)? ((int_t*)NULL) : U_csr_i,
+                (U != NULL)? ((real_t*)NULL) : U_csr,
+                (U == NULL)? ((real_t*)NULL) : (U + (size_t)m*(size_t)p),
+                p,
+                full_dense_u, near_dense_u,
+                (U == NULL)? ((int_t*)NULL) : (cnt_NA_u + m),
+                (real_t*)NULL,
+                NA_as_zero_U,
+                lam/w_user, lam/w_user,
+                l1_lam/w_user, l1_lam/w_user,
+                scale_lam,
+                false, false,
+                nthreads,
+                use_cg, max_cg_steps,
+                nonneg, max_cd_steps,
+                (real_t*)NULL, (real_t*)NULL, 0.,
+                keep_precomputed || will_use_CtC_here,
+                precomputedCtCw,
+                (keep_precomputed || will_use_CtC_here)?
+                    filled_CtCw : &ignore_bool,
+                buffer_real_t
+            );
+        }
+        
+        else
+        {
+            if (precomputedBiTBi == NULL)
+            {
+                precomputedBiTBi = buffer_real_t;
+                buffer_real_t += square(k+k_main_i);
+            }
 
+            /* TODO: find a faster way of doing this that wouldn't involve
+               iterating over 'n' if not required. */
+            size_t *buffer_empty_csr_p = (size_t*)buffer_real_t;
+            memset(buffer_empty_csr_p, 0, (size_t)(m_diff+1)*sizeof(size_t));
+            
+            optimizeA_collective(
+                A + (size_t)m*(size_t)lda, lda,
+                Bi, k+k_main_i,
+                C,
+                (real_t*)NULL,
+                m_diff, m_diff, n, p,
+                k, k_main_i, k_user, 0,
+                buffer_empty_csr_p, (int_t*)NULL, (real_t*)NULL,
+                (real_t*)NULL, false, false, 0,
+                (int_t*)NULL, (real_t*)NULL, true,
+                (real_t*)NULL, 0, 0,
+                false,
+                (U != NULL)? ((size_t*)NULL) : (U_csr_p + m),
+                (U != NULL)? ((int_t*)NULL) : U_csr_i,
+                (U != NULL)? ((real_t*)NULL) : U_csr,
+                (U == NULL)? ((real_t*)NULL) : (U + (size_t)m*(size_t)p),
+                (U == NULL)? ((int_t*)NULL) : (cnt_NA_u + m),
+                full_dense_u, near_dense_u, NA_as_zero_U,
+                lam/w_implicit, w_user/w_implicit, 1., lam/w_implicit,
+                (l1_lam/w_implicit) / (real_t)(scale_lam_sideinfo? n : 1),
+                (l1_lam/w_implicit) / (real_t)(scale_lam_sideinfo? n : 1),
+                false || scale_lam_sideinfo, scale_lam_sideinfo,
+                false,
+                nthreads,
+                use_cg, max_cg_steps, is_first_iter,
+                nonneg, max_cd_steps,
+                (real_t*)NULL, (real_t*)NULL, 0.,
+                true,
+                precomputedBiTBi,
+                precomputedCtCw,
+                precomputedBeTBeChol,
+                (real_t*)NULL,
+                &filled_BiTBi, filled_CtCw, &ignore_bool,
+                CtC_is_scaled,
+                (real_t*)(((size_t*)buffer_real_t) + (m_diff + 1))
+            );
+        }
+
+        if (add_implicit_features && w_implicit != 1.)
+        {
+            if (filled_BiTBi)
+                cblas_tscal(square(k+k_main_i), w_implicit, precomputedBiTBi,1);
+            if (*filled_CtCw && precomputedCtCw != NULL && *CtC_is_scaled)
+                cblas_tscal(square(k_user+k), w_implicit, precomputedCtCw, 1);
+        }
+
+        if (precomputedCtCw == NULL)
+        {
+            *filled_CtCw = false;
+            *CtC_is_scaled = false;
+        }
+        if (!(*filled_CtCw))
+            *CtC_is_scaled = false;
         m_u = m_x;
     }
 
-    m = max2(m_x, m_u);
+    m = max2(m_x, m_u); /* <- should be equal by this point */
 
 
     /* Case 1: both matrices are either (a) dense with few missing values and
@@ -4397,7 +4696,8 @@ void optimizeA_collective
                 B, ldb, C,
                 k, k_user, k_main, k_item,
                 n, p,
-                lam, w_user
+                scaled_lam,
+                w_user
             );
             if (add_implicit_features)
                 cblas_tsyrk(CblasRowMajor, CblasUpper, CblasTrans,
@@ -4405,7 +4705,9 @@ void optimizeA_collective
                             w_implicit, Bi, k+k_main_i,
                             1., bufferBeTBeChol + offset_square, k_totA);
             if (lam_last != lam)
-                bufferBeTBeChol[square(k_totA)-1] += (lam_last - lam);
+                bufferBeTBeChol[square(k_totA)-1]
+                    +=
+                (scaled_lam_last-scaled_lam);
         }
 
         else
@@ -4445,6 +4747,13 @@ void optimizeA_collective
                 1.,
                 (real_t*)NULL
             );
+            if (*filled_CtCw && *CtC_is_scaled) {
+                cblas_tscal(square(k_user+k), 1./w_user, bufferCtC, 1);
+                *CtC_is_scaled = false;
+            }
+            else if (!(*filled_CtCw)) {
+                *CtC_is_scaled = false;
+            }
 
             if (k_user || k_main || (!p && U_csr_p == NULL))
                 set_to_zero(bufferBeTBeChol, square(k_totA));
@@ -4452,7 +4761,7 @@ void optimizeA_collective
                 copy_mat(k_totC, k_totC,
                          bufferCtC, k_totC,
                          bufferBeTBeChol, k_totA);
-            if (w_user != 1. && p)
+            if (w_user != 1. && p && !(*CtC_is_scaled))
                 cblas_tscal(square(k_totA) - k_main - k_main*k_totA, w_user,
                             bufferBeTBeChol, 1);
             sum_mat(k+k_main, k+k_main,
@@ -4463,15 +4772,19 @@ void optimizeA_collective
                         bufferBiTBi, k+k_main_i,
                         bufferBeTBeChol + offset_square, k_totA);
 
-            add_to_diag(bufferBeTBeChol, lam, k_totA);
+            add_to_diag(bufferBeTBeChol, scaled_lam, k_totA);
             if (lam_last != lam)
-                bufferBeTBeChol[square(k_totA)-1] += (lam_last - lam);
+                bufferBeTBeChol[square(k_totA)-1]
+                    +=
+                (scaled_lam_last - scaled_lam);
 
             if (w_user != 1. && !use_cg && p &&
+                bufferCtC != NULL && !(*CtC_is_scaled) &&
                 (keep_precomputed || ((Xfull != NULL && !full_dense) ||
                                       (U != NULL && !full_dense_u))))
             {
                 cblas_tscal(square(k_totC), w_user, bufferCtC, 1);
+                *CtC_is_scaled = true;
             }
 
             *filled_BtB = true;
@@ -4487,7 +4800,8 @@ void optimizeA_collective
         if (use_cg && !is_first_iter && (k_user || Xfull == NULL))
         {
             set_to_zero_(A,
-                         (size_t)max2(m, m_u)*(size_t)lda -(size_t)(lda-k_totA),
+                         (size_t)max2(m_x, m_u)*(size_t)lda
+                            - (size_t)(lda-k_totA),
                          nthreads);
         }
 
@@ -4544,8 +4858,16 @@ void optimizeA_collective
                 );
         }
 
+        if (bias_BtX != NULL && Xfull == NULL && NA_as_zero_X)
+        {
+            for (size_t row = 0; row < (size_t)m_x; row++)
+                for (size_t ix = 0; ix < (size_t)(k+k_main); ix++)
+                    A[(size_t)k_user + row*(size_t)lda + ix] += bias_BtX[ix];
+        }
+
         #ifdef FORCE_NO_NAN_PROPAGATION
-        if (!nonneg) {
+        if (!nonneg && !l1_lam && !l1_lam_bias)
+        {
             if ((Xfull != NULL && !full_dense) || (U != NULL && !full_dense_u))
                 #pragma omp parallel for schedule(static) \
                         num_threads(min2(4, nthreads)) \
@@ -4557,25 +4879,54 @@ void optimizeA_collective
         }
         #endif
 
-        if (!nonneg)
+        if (!nonneg && !l1_lam && !l1_lam_bias)
             tposv_(&lo, &k_pred, &m,
                    bufferBeTBeChol, &k_pred,
                    A, &lda,
                    &ignore);
-        else
-            solve_nonneg_batch(
+        else if (!nonneg) {
+            solve_elasticnet_batch(
                 bufferBeTBeChol,
                 A,
-                A_prev,
+                buffer_real_t,
                 m, k_pred, lda,
+                scaled_l1_lam,
+                scaled_l1_lam_last,
                 max_cd_steps,
                 nthreads
             );
+            *filled_BeTBeChol = false;
+        }
+        else {
+            solve_nonneg_batch(
+                bufferBeTBeChol,
+                A,
+                buffer_real_t,
+                m, k_pred, lda,
+                scaled_l1_lam,
+                scaled_l1_lam_last,
+                max_cd_steps,
+                nthreads
+            );
+            *filled_BeTBeChol = false;
+        }
+
+
+        if (add_implicit_features && use_cg && w_implicit != 1. &&
+            (keep_precomputed || (Xfull != NULL && !full_dense) ||
+                                 (U != NULL && !full_dense_u)))
+        {
+            cblas_tscal(square(k+k_main_i), 1./w_implicit, bufferBiTBi, 1);
+        }
 
         if ((Xfull != NULL && !full_dense) || (U != NULL && !full_dense_u))
         {
-            if (add_implicit_features && use_cg && w_implicit != 1.)
-                cblas_tscal(square(k+k_main_i), 1./w_implicit, bufferBiTBi, 1);
+            if (w_user != 1. && p && use_cg &&
+                *CtC_is_scaled && bufferCtC != NULL)
+            {
+                cblas_tscal(square(k_user+k), 1./w_user, bufferCtC, 1);
+                *CtC_is_scaled = false;
+            }
 
             /* When doing the B matrix, the X matrix will be transposed
                and need to make a copy of the column for each observation,
@@ -4585,23 +4936,27 @@ void optimizeA_collective
             /* TODO: do away with the 'bufferX', replace it instead with an
                'incX' parameter */
             real_t *restrict bufferX = buffer_real_t;
-            real_t *restrict buffer_remainder = bufferX
-                                                + (do_B?
-                                                    ((size_t)n*(size_t)nthreads)
-                                                    : (0));
+            if (do_B)
+                buffer_real_t += (size_t)n*(size_t)nthreads;
             size_t size_buffer = use_cg? (3*k_totA) : (square(k_totA));
+            if (nonneg)
+                size_buffer += k_totA;
+            else if (l1_lam || l1_lam_bias)
+                size_buffer += (size_t)3*(size_t)k_totA;
 
             #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
                     shared(A, k_totA, B, C, k, k_user, k_item, k_main, \
-                           m, m_x, m_u, n, p, lda, ldb, lam, lam_last, w_user, \
+                           m, m_x, m_u, n, p, lda, ldb, \
+                           scale_lam, scale_lam_sideinfo, \
+                           lam, lam_last, l1_lam, l1_lam_bias, w_user, \
                            Xfull, cnt_NA_x, ldX, full_dense, \
                            Xcsr, Xcsr_i, Xcsr_p, \
                            add_implicit_features, Xones, w_implicit, k_main_i, \
                            U, cnt_NA_u, full_dense_u, \
                            U_csr, U_csr_i, U_csr_p, \
-                           buffer_remainder, size_buffer, do_B, \
+                           buffer_real_t, size_buffer, do_B, \
                            bufferBtB, bufferCtC, nthreads, use_cg, \
-                           nonneg, max_cd_steps, A_prev) \
+                           nonneg, max_cd_steps) \
                     firstprivate(bufferX)
             for (size_t_for ix = 0; ix < (size_t)m; ix++)
             {
@@ -4654,6 +5009,8 @@ void optimizeA_collective
                         (Xfull == NULL)? ((int_t)1) : (do_B? ldXones : (int_t)1),
                         (real_t*)NULL,
                         lam, w_user, w_implicit, lam_last,
+                        l1_lam, l1_lam_bias,
+                        scale_lam, scale_lam_sideinfo,
                         bufferBtB,
                         (Xfull == NULL)? (int_t)0 : cnt_NA_x[ix],
                         bufferCtC,
@@ -4666,9 +5023,8 @@ void optimizeA_collective
                             max_cg_steps
                             : k_pred, /* <- more steps to reach optimum */
                         nonneg, max_cd_steps,
-                        (A_prev == NULL)?
-                            ((real_t*)NULL) : (A_prev + ix*(size_t)lda),
-                        buffer_remainder
+                        (real_t*)NULL,  (real_t*)NULL, 0.,
+                        buffer_real_t
                           + (size_buffer*(size_t)omp_get_thread_num())
                     );
                 }
@@ -4733,6 +5089,7 @@ void optimizeA_collective
                 }
             }
         }
+        
         if (prefer_CtC && p)
         {
             if (precomputedCtCw != NULL)
@@ -4758,8 +5115,11 @@ void optimizeA_collective
         bool add_X = true;
         bool add_U = true;
 
-        if (*filled_CtCw && w_user != 1. && !use_cg && p)
+        if (*filled_CtCw && !(*CtC_is_scaled) && w_user != 1. && !use_cg && p)
+        {
             cblas_tscal(square(k_totC), w_user, bufferCtC, 1);
+            *CtC_is_scaled = true;
+        }
 
         build_BtB_CtC(
             *filled_BtB? ((real_t*)NULL) : bufferBtB,
@@ -4768,11 +5128,29 @@ void optimizeA_collective
             C, p,
             k, k_user, k_main, k_item,
             use_cg? 1. : w_user,
-            (use_cg && NA_as_zero_X && Xfull == NULL && weight != NULL)?
-                ((real_t*)NULL) : (NA_as_zero_X? (real_t*)NULL : weight)
+            (NA_as_zero_X && Xfull == NULL)?
+                ((real_t*)NULL) : (weight)
+
         );
+        if (!(*filled_CtCw))
+        {
+            if (use_cg)
+                *CtC_is_scaled = false;
+            else
+                *CtC_is_scaled = true;
+        }
         if (bufferBtB == precomputedBtB) *filled_BtB = true;
         if (bufferCtC == precomputedCtCw) *filled_CtCw = true;
+
+        if (weight != NULL)
+        {
+            if (!(NA_as_zero_X && Xfull == NULL))
+            {
+                *filled_BtB = false;
+                bufferBtB = NULL;
+            }
+        }
+
 
         if (add_implicit_features && !filled_BiTBi)
         {
@@ -4782,7 +5160,7 @@ void optimizeA_collective
                         0., bufferBiTBi, k+k_main_i);
         }
 
-        if (bufferBeTBeChol != NULL)
+        if (bufferBeTBeChol != NULL && *filled_BtB)
         {
             if (k_user || k_main)
                 set_to_zero(bufferBeTBeChol, square(k_totA));
@@ -4790,7 +5168,7 @@ void optimizeA_collective
                 copy_mat(k_user+k, k_user+k,
                          bufferCtC, k_user+k,
                          bufferBeTBeChol, k_totA);
-            if (use_cg && w_user != 1. && p)
+            if (w_user != 1. && p && !(*CtC_is_scaled))
                 cblas_tscal(square(k_totA) - k_main - k_main*k_totA, w_user,
                             bufferBeTBeChol, 1);
             sum_mat(k+k_main, k+k_main,
@@ -4800,12 +5178,18 @@ void optimizeA_collective
                 sum_mat(k+k_main_i, k+k_main_i,
                         bufferBiTBi, k+k_main_i,
                         bufferBeTBeChol + offset_square, k_totA);
-            add_to_diag(bufferBeTBeChol, lam, k_totA);
+            add_to_diag(bufferBeTBeChol, scaled_lam, k_totA);
             if (lam_last != lam)
-                bufferBeTBeChol[square(k_totA)-1] += (lam_last - lam);
+                bufferBeTBeChol[square(k_totA)-1]
+                    +=
+                (scaled_lam_last - scaled_lam);
             tpotrf_(&lo, &k_totA, bufferBeTBeChol, &k_totA, &ignore);
             if (bufferBeTBeChol == precomputedBeTBeChol)
                 *filled_BeTBeChol = true;
+        }
+
+        else {
+            bufferBeTBeChol = NULL;
         }
 
         if (add_implicit_features && use_cg && w_implicit != 1.)
@@ -4864,7 +5248,7 @@ void optimizeA_collective
         {
             if (Xfull != NULL)
                 build_XBw(
-                    A + k_user, k_totA,
+                    A + k_user, lda,
                     Bi, k+k_main_i,
                     Xones, ldXones,
                     m_x, n, k+k_main_i,
@@ -4881,9 +5265,20 @@ void optimizeA_collective
                 );
         }
 
+        if (bias_BtX != NULL && NA_as_zero_X && Xfull == NULL && !add_X)
+        {
+            for (size_t row = 0; row < (size_t)m_x; row++)
+                for (size_t ix = 0; ix < (size_t)(k+k_main); ix++)
+                    A[(size_t)k_user + row*(size_t)lda + ix] += bias_BtX[ix];
+        }
+
         skip_chol_simplifications:
             {};
         size_t size_buffer = use_cg? (3*k_totA) : (square(k_totA));
+        if (nonneg)
+            size_buffer += k_totA;
+        else if (l1_lam || l1_lam_bias)
+            size_buffer += (size_t)3*(size_t)k_totA;
         if (use_cg && Xfull == NULL && NA_as_zero_X && weight != NULL)
             size_buffer += n;
 
@@ -4891,16 +5286,25 @@ void optimizeA_collective
            if (!use_cg) add_U = false;
         }
 
+        if (w_user != 1. && p && use_cg &&
+            *CtC_is_scaled && bufferCtC != NULL)
+        {
+            cblas_tscal(square(k_user+k), 1./w_user, bufferCtC, 1);
+            *CtC_is_scaled = false;
+        }
+
         #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
                 shared(A, k_totA, B, C, Bi, k, k_user, k_item, k_main,k_main_i,\
-                       m, m_x, m_u, n, p, lam, lam_last, w_user, w_implicit, \
+                       m, m_x, m_u, n, p, \
+                       lam, lam_last, l1_lam, l1_lam_bias, w_user, w_implicit, \
                        NA_as_zero_X, NA_as_zero_U, add_implicit_features, \
                        add_X, add_U, weight, \
                        Xfull, Xcsr_p, Xcsr_i, Xcsr, cnt_NA_x, ldX, \
                        U, U_csr_p, U_csr_i, U_csr, cnt_NA_u, \
                        bufferBtB, bufferCtC, bufferBiTBi, bufferBeTBeChol, \
                        buffer_remainder, size_buffer, \
-                       do_B, nthreads, use_cg, nonneg, max_cd_steps, A_prev) \
+                       do_B, nthreads, use_cg, nonneg, max_cd_steps, \
+                       bias_BtX, bias_X, bias_X_glob) \
                 firstprivate(bufferX, bufferW)
         for (size_t_for ix = 0; ix < (size_t)m; ix++)
         {
@@ -4965,6 +5369,8 @@ void optimizeA_collective
                                         : ((size_t)0)))
                                       : (weight + Xcsr_p[ix]) ),
                 lam, w_user, w_implicit, lam_last,
+                l1_lam, l1_lam_bias,
+                scale_lam, scale_lam_sideinfo,
                 bufferBtB, (Xfull != NULL)? cnt_NA_x[ix] : (int_t)0,
                 bufferCtC,
                 (U == NULL)? (int_t)0 : cnt_NA_u[ix],
@@ -4974,8 +5380,7 @@ void optimizeA_collective
                 (U == NULL)? (add_U) : (add_U || cnt_NA_u[ix] > 0),
                 use_cg, max_cg_steps,
                 nonneg, max_cd_steps,
-                (A_prev == NULL)?
-                    ((real_t*)NULL) : (A_prev + ix*(size_t)lda),
+                bias_BtX,  bias_X, bias_X_glob,
                 buffer_remainder + (size_buffer*(size_t)omp_get_thread_num())
             );
         }
@@ -4992,10 +5397,10 @@ void optimizeA_collective_implicit
     size_t U_csr_p[], int_t U_csr_i[], real_t *restrict U_csr,
     real_t *restrict U, int_t cnt_NA_u[],
     bool full_dense_u, bool near_dense_u, bool NA_as_zero_U,
-    real_t lam, real_t w_user,
+    real_t lam, real_t l1_lam, real_t w_user,
     int_t nthreads,
     bool use_cg, int_t max_cg_steps, bool is_first_iter,
-    bool nonneg, int_t max_cd_steps, real_t *restrict A_prev,
+    bool nonneg, int_t max_cd_steps,
     real_t *restrict precomputedBtB, /* will not have lambda with CG */
     real_t *restrict precomputedBeTBe,
     real_t *restrict precomputedBeTBeChol,
@@ -5023,12 +5428,12 @@ void optimizeA_collective_implicit
     use_cg = true;
     max_cg_steps = 10000;
     is_first_iter = true;
+    if (nonneg || l1_lam)
+        use_cg = false;
     #endif
 
     if (!use_cg || is_first_iter)
         set_to_zero_(A, (size_t)max2(m, m_u)*(size_t)k_totA, nthreads);
-    if (nonneg)
-        set_to_zero_(A_prev, (size_t)max2(m, m_u)*(size_t)k_totA, nthreads);
 
     /* TODO: BtB can be skipped when using NA_as_zero_U */
     if (precomputedBtB == NULL)
@@ -5054,13 +5459,9 @@ void optimizeA_collective_implicit
                 B + k_item, (size_t)k_totB,
                 m_diff, n, k + k_main,
                 Xcsr_p + m_u, Xcsr_i, Xcsr,
-                lam,
+                lam, l1_lam,
                 nthreads, use_cg, max_cg_steps, false,
                 nonneg, max_cd_steps,
-                (A_prev == NULL)?
-                    ((real_t*)NULL)
-                        :
-                    (A_prev + (size_t)k_user + (size_t)m_u*(size_t)k_totA),
                 precomputedBtB,
                 buffer_real_t
             );
@@ -5125,7 +5526,6 @@ void optimizeA_collective_implicit
     else {
         precomputedBeTBe = NULL;
     }
-    real_t *restrict buffer_remainder = buffer_real_t;
 
     if (precomputedBeTBe != NULL)
     {
@@ -5201,14 +5601,18 @@ void optimizeA_collective_implicit
     m = max2(m, m_u);
 
     size_t size_buffer = use_cg? (3 * k_totA) : (square(k_totA));
+    if (nonneg)
+        size_buffer += k_totA;
+    else if (l1_lam != 0.)
+        size_buffer += (size_t)3*(size_t)k_totA;
 
     #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
-            shared(A, B, C, m, n, p, k, k_user, k_item, k_main, lam, \
+            shared(A, B, C, m, n, p, k, k_user, k_item, k_main, lam, l1_lam, \
                    Xcsr, Xcsr_p, Xcsr_i, U, U_csr, U_csr_i, U_csr_p, \
                    NA_as_zero_U, cnt_NA_u, \
                    precomputedBeTBe, precomputedBtB, precomputedBeTBeChol, \
-                   k_totA, buffer_remainder, use_cg, m_x, \
-                   nonneg, max_cd_steps, A_prev)
+                   k_totA, buffer_real_t, use_cg, m_x, \
+                   nonneg, max_cd_steps)
     for (ix = 0; ix < m; ix++)
         collective_closed_form_block_implicit(
             A + (size_t)ix*(size_t)k_totA,
@@ -5223,16 +5627,14 @@ void optimizeA_collective_implicit
             (U == NULL)? (U_csr_i + U_csr_p[ix]) : ((int_t*)NULL),
             (U == NULL)? (U_csr_p[ix+(size_t)1] - U_csr_p[ix]) : ((size_t)0),
             NA_as_zero_U,
-            lam, w_user,
+            lam, l1_lam, w_user,
             precomputedBeTBe,
             precomputedBtB,
             precomputedBeTBeChol,
             precomputedCtC,
             false, true, use_cg, max_cg_steps,
             nonneg, max_cd_steps,
-            (A_prev == NULL)?
-                ((real_t*)NULL) : (A_prev + (size_t)ix*(size_t)k_totA),
-            buffer_remainder + ((size_t)omp_get_thread_num() * size_buffer)
+            buffer_real_t + ((size_t)omp_get_thread_num() * size_buffer)
         );
 
 }
@@ -5541,7 +5943,7 @@ int_t fit_collective_explicit_lbfgs_internal
     int_t ixA[], int_t ixB[], real_t *restrict X, size_t nnz,
     real_t *restrict Xfull,
     real_t *restrict weight,
-    bool user_bias, bool item_bias,
+    bool user_bias, bool item_bias, bool center,
     real_t lam, real_t *restrict lam_unique,
     real_t *restrict U, int_t m_u, int_t p,
     real_t *restrict II, int_t n_i, int_t q,
@@ -5558,6 +5960,7 @@ int_t fit_collective_explicit_lbfgs_internal
     real_t *restrict B_plus_bias
 )
 {
+    should_stop_procedure = false;
     real_t *restrict buffer_real_t = NULL;
     real_t *restrict buffer_mt = NULL;
     int_t retval = 0;
@@ -5686,6 +6089,7 @@ int_t fit_collective_explicit_lbfgs_internal
         user_bias, item_bias,
         (lam_unique == NULL)? (lam) : (lam_unique[0]),
         (lam_unique == NULL)? (lam) : (lam_unique[1]),
+        false,
         m, n,
         m_max, n_max,
         ixA, ixB, X, nnz,
@@ -5696,6 +6100,24 @@ int_t fit_collective_explicit_lbfgs_internal
         nthreads
     );
     if (retval != 0) goto cleanup;
+
+    if (!center)
+    {
+        if (Xfull != NULL)
+        {
+            for (size_t row = 0; row < (size_t)m; row++)
+                for (size_t col = 0; col < (size_t)n; col++)
+                    Xfull[col + row*(size_t)n] += *glob_mean;
+        }
+
+        else if (nnz)
+        {
+            for (size_t ix = 0; ix < nnz; ix++)
+                X[ix] += *glob_mean;
+        }
+        
+        *glob_mean = 0.;
+    }
 
     if (U != NULL || U_sp != NULL) {
         retval = center_by_cols(
@@ -5873,7 +6295,7 @@ int_t fit_collective_explicit_lbfgs
     int_t ixA[], int_t ixB[], real_t *restrict X, size_t nnz,
     real_t *restrict Xfull,
     real_t *restrict weight,
-    bool user_bias, bool item_bias,
+    bool user_bias, bool item_bias, bool center,
     real_t lam, real_t *restrict lam_unique,
     real_t *restrict U, int_t m_u, int_t p,
     real_t *restrict II, int_t n_i, int_t q,
@@ -5960,7 +6382,7 @@ int_t fit_collective_explicit_lbfgs
         ixA, ixB, X, nnz,
         Xfull,
         weight,
-        user_bias, item_bias,
+        user_bias, item_bias, center,
         lam, lam_unique,
         U, m_u, p,
         II, n_i, q,
@@ -6019,14 +6441,17 @@ int_t fit_collective_explicit_lbfgs
             B, n, n_max, include_all_X,
             C, p,
             (real_t*)NULL, false,
+            (real_t*)NULL, *glob_mean, false,
             k, k_user, k_item, k_main,
             user_bias,
             false,
             lam, lam_unique,
+            false, false,
             w_main, w_user, 1.,
             B_plus_bias,
             precomputedBtB,
             precomputedTransBtBinvBt,
+            (real_t*)NULL,
             precomputedBeTBeChol,
             (real_t*)NULL,
             precomputedTransCtCinvCt,
@@ -6066,8 +6491,10 @@ int_t fit_collective_explicit_als
     int_t ixA[], int_t ixB[], real_t *restrict X, size_t nnz,
     real_t *restrict Xfull,
     real_t *restrict weight,
-    bool user_bias, bool item_bias,
+    bool user_bias, bool item_bias, bool center,
     real_t lam, real_t *restrict lam_unique,
+    real_t l1_lam, real_t *restrict l1_lam_unique,
+    bool scale_lam, bool scale_lam_sideinfo,
     real_t *restrict U, int_t m_u, int_t p,
     real_t *restrict II, int_t n_i, int_t q,
     int_t U_row[], int_t U_col[], real_t *restrict U_sp, size_t nnz_U,
@@ -6083,18 +6510,15 @@ int_t fit_collective_explicit_als
     real_t *restrict B_plus_bias,
     real_t *restrict precomputedBtB,
     real_t *restrict precomputedTransBtBinvBt,
+    real_t *restrict precomputedBtXbias,
     real_t *restrict precomputedBeTBeChol,
     real_t *restrict precomputedBiTBi,
     real_t *restrict precomputedTransCtCinvCt,
     real_t *restrict precomputedCtCw
 )
 {
+    should_stop_procedure = false;
     int_t retval = 0;
-    if ((NA_as_zero_X && Xfull == NULL) && (user_bias || item_bias)) {
-        if (verbose)
-            fprintf(stderr, "Cannot calculate biases with 'NA_as_zero_X'.\n");
-        retval = 2;
-    }
 
     if (k_user && U == NULL && nnz_U == 0) {
         if (verbose)
@@ -6114,8 +6538,7 @@ int_t fit_collective_explicit_als
         retval = 2;
     }
 
-    if ((Xfull != NULL && NA_as_zero_X) ||
-        (U != NULL && NA_as_zero_U) ||
+    if ((U != NULL && NA_as_zero_U) ||
         (II != NULL && NA_as_zero_I))
     {
         if (verbose)
@@ -6140,6 +6563,10 @@ int_t fit_collective_explicit_als
     long long row, col, ix;
     #endif
 
+    #ifndef _OPENMP
+    nthreads = 1;
+    #endif
+
     int_t k_totA = k_user + k + k_main;
     int_t k_totB = k_item + k + k_main;
     int_t has_bias = user_bias || item_bias;
@@ -6153,8 +6580,8 @@ int_t fit_collective_explicit_als
     real_t *restrict Xfull_orig = NULL;
     real_t *restrict Xtrans_orig = NULL;
 
-    real_t *restrict buffer_nonneg = NULL;
-    size_t size_largest_mat = 0;
+    real_t *restrict buffer_BtX = NULL;
+    bool free_BtX = false;
 
     real_t *restrict buffer_real_t = NULL;
     size_t size_bufferA = 0;
@@ -6212,7 +6639,11 @@ int_t fit_collective_explicit_als
     bool filled_CtCw = false;
     bool filled_BeTBeChol = false;
     bool filled_BiTBi = false;
+    bool CtC_is_scaled = false;
     bool ignore = false;
+    bool ignore2 = false;
+    bool ignore3 = false;
+    bool ignore4 = false;
     bool back_to_precompute = false;
 
     bool finished_TransBtBinvBt = false;
@@ -6226,6 +6657,9 @@ int_t fit_collective_explicit_als
 
     int_t *restrict seed_arr = NULL;
     real_t *restrict lam_unique_copy = NULL;
+    real_t *restrict l1_lam_unique_copy = NULL;
+
+    scale_lam = scale_lam || scale_lam_sideinfo;
 
     bool use_cg_A = use_cg;
     bool use_cg_B = use_cg;
@@ -6234,12 +6668,20 @@ int_t fit_collective_explicit_als
     if (NA_as_zero_X && weight == NULL && NA_as_zero_I && II == NULL)
         use_cg_B = false;
 
+    if (nonneg || nonneg_C || nonneg_D || l1_lam || l1_lam_unique != NULL)
+    {
+        use_cg = false;
+        use_cg_A = false;
+        use_cg_B = false;
+    }
+
     if (!use_cg) finalize_chol = false;
 
     /* This avoids differences in the scaling of the precomputed matrices */
     if (w_main != 1.)
     {
         lam /= w_main;
+        l1_lam /= w_main;
         w_user /= w_main;
         w_item /= w_main;
         w_implicit /= w_main;
@@ -6250,6 +6692,14 @@ int_t fit_collective_explicit_als
             for (int_t ix = 0; ix < 6; ix++)
                 lam_unique_copy[ix] = lam_unique[ix] / w_main;
             lam_unique = lam_unique_copy;
+        }
+        if (l1_lam_unique != NULL)
+        {
+            l1_lam_unique_copy = (real_t*)malloc(6*sizeof(real_t));
+            if (l1_lam_unique_copy == NULL) goto throw_oom;
+            for (int_t ix = 0; ix < 6; ix++)
+                l1_lam_unique_copy[ix] = l1_lam_unique[ix] / w_main;
+            l1_lam_unique = l1_lam_unique_copy;
         }
         w_main = 1.;
     }
@@ -6262,37 +6712,15 @@ int_t fit_collective_explicit_als
         if (precomputedBiTBi == NULL) goto throw_oom;
     }
 
-    if (nonneg || nonneg_C || nonneg_D)
-    {
-        if (nonneg)
-        {
-            size_largest_mat = max2(size_largest_mat,
-                                    (size_t)m_max
-                                    *(size_t)(k_user+k+k_main+has_bias));
-            size_largest_mat = max2(size_largest_mat,
-                                    (size_t)n_max
-                                    *(size_t)(k_item+k+k_main+has_bias));
-        }
-        if (nonneg_C)
-        {
-            size_largest_mat = max2(size_largest_mat,
-                                    (size_t)m_u*(size_t)(k_user+k));
-        }
-
-        if (nonneg_D)
-        {
-            size_largest_mat = max2(size_largest_mat,
-                                    (size_t)n_i*(size_t)(k_item+k));
-        }
-
-        buffer_nonneg = (real_t*)malloc(size_largest_mat*sizeof(real_t));
-    }
 
     #ifdef _FOR_R
     if (Xfull != NULL) R_nan_to_C_nan(Xfull, (size_t)m*(size_t)n);
     if (U != NULL) R_nan_to_C_nan(U, (size_t)m_u*(size_t)p);
     if (II != NULL) R_nan_to_C_nan(II, (size_t)n_i*(size_t)q);
     #endif
+
+    if (!center)
+        *glob_mean = 0.;
 
     if (Xfull != NULL || !NA_as_zero_X)
     {
@@ -6303,6 +6731,7 @@ int_t fit_collective_explicit_als
                 glob_mean,
                 (lam_unique == NULL)? (lam) : (lam_unique[0]),
                 (lam_unique == NULL)? (lam) : (lam_unique[1]),
+                scale_lam,
                 1.,
                 m, n,
                 ixA, ixB, X, nnz,
@@ -6323,6 +6752,7 @@ int_t fit_collective_explicit_als
                 user_bias, item_bias,
                 (lam_unique == NULL)? (lam) : (lam_unique[0]),
                 (lam_unique == NULL)? (lam) : (lam_unique[1]),
+                scale_lam,
                 m, n,
                 m_max, n_max,
                 ixA, ixB, X, nnz,
@@ -6334,6 +6764,133 @@ int_t fit_collective_explicit_als
             );
             if (retval != 0) goto throw_oom;
         }
+
+        if (!center)
+        {
+            if (Xfull != NULL)
+            {
+                for (size_t row = 0; row < (size_t)m; row++)
+                    for (size_t col = 0; col < (size_t)n; col++)
+                        Xfull[col + row*(size_t)n] += *glob_mean;
+            }
+
+            else if (nnz)
+            {
+                for (size_t ix = 0; ix < nnz; ix++)
+                    X[ix] += *glob_mean;
+            }
+
+            if (user_bias && item_bias)
+            {
+                for (size_t row = 0; row < (size_t)m; row++)
+                    biasA[row] += *glob_mean / 2.;
+                for (size_t col = 0; col < (size_t)n; col++)
+                    biasB[col] += *glob_mean / 2.;
+            }
+
+            else if (user_bias)
+            {
+                for (size_t row = 0; row < (size_t)m; row++)
+                    biasA[row] += *glob_mean;
+            }
+
+            else if (item_bias)
+            {
+                for (size_t col = 0; col < (size_t)n; col++)
+                    biasB[col] += *glob_mean;
+            }
+
+            *glob_mean = 0.;
+        }
+    }
+
+    else if (Xfull == NULL && NA_as_zero_X)
+    {
+        if (center)
+        {
+            if (weight == NULL)
+            {
+                *glob_mean = compensated_sum(X, nnz)
+                                /
+                             (long double)((size_t)m*(size_t)n);
+            }
+
+            else
+            {
+                *glob_mean
+                    =
+                compensated_sum_product(X, weight, nnz)
+                    /
+                (compensated_sum(weight, nnz)
+                    + (long double)((size_t)m*(size_t)n - nnz));
+            }
+
+            // if (fabs_t(*glob_mean) < 1e-8)
+            // {
+            //     *glob_mean = 0.;
+            //     center = false;
+            // }
+        }
+
+        else {
+            *glob_mean = 0.;
+        }
+
+        if (user_bias)
+        {
+            set_to_zero(biasA, m_max);
+            if (weight == NULL)
+            {
+                for (size_t ix = 0; ix < nnz; ix++)
+                    biasA[ixA[ix]] += X[ix];
+                if (center) {
+                    for (size_t row = 0; row < (size_t)m; row++)
+                        biasA[row] -= *glob_mean * (real_t)n;
+                }
+                for (size_t row = 0; row < (size_t)m; row++)
+                    biasA[row] /= ((real_t)n
+                                        +
+                                    ((lam_unique == NULL)?
+                                        (lam):(lam_unique[0])));
+            }
+
+            else
+            {
+                buffer_real_t = (real_t*)calloc(m, sizeof(real_t));
+                if (buffer_real_t == NULL) goto throw_oom;
+                for (size_t ix = 0; ix < nnz; ix++) {
+                    biasA[ixA[ix]] += (X[ix] - *glob_mean) * weight[ix]
+                                        + *glob_mean;
+                    buffer_real_t[ixA[ix]] += weight[ix] - 1.;
+                }
+                if (*glob_mean != 0.) {
+                    for (size_t row = 0; row < (size_t)m; row++)
+                        biasA[row] -= *glob_mean * (real_t)n;
+                }
+                for (size_t row = 0; row < (size_t)m; row++) {
+                    biasA[row] /= (
+                        buffer_real_t[row] + (real_t)n
+                        + ((lam_unique == NULL)? (lam):(lam_unique[0]))
+                    );
+                }
+                free(buffer_real_t); buffer_real_t = NULL;
+            }
+
+            if (nonneg)
+            {
+                for (size_t row = 0; row < (size_t)m; row++)
+                    biasA[row] = max2(0., biasA[row]);
+            }
+
+            if (item_bias)
+            {
+                for (size_t row = 0; row < (size_t)m; row++)
+                    biasA[row] /= 3.;
+            }
+        }
+
+        if (item_bias)
+            set_to_zero(biasB, n_max);
     }
 
 
@@ -6358,7 +6915,6 @@ int_t fit_collective_explicit_als
                 m = max2(m, m_u);
             if (II != NULL || nnz_I)
                 n = max2(n, n_i);
-            *glob_mean = 0.;
         }
         retval = convert_sparse_X(
                     ixA, ixB, X, nnz,
@@ -6411,8 +6967,8 @@ int_t fit_collective_explicit_als
        all entries before optimizing a given matrix. */
     if (user_bias || item_bias)
     {
-        A_bias = (real_t*)malloc((size_t)m_max*(size_t)(k_totA+1)
-                                  * sizeof(real_t));
+        A_bias = (real_t*)malloc((size_t)m_max * (size_t)(k_totA+1)
+                                               * sizeof(real_t));
         /* Note: 'B_plus_bias' might be part of the desired outputs, in which
            case it is to be passed already allocated. If not, will allocate it
            here instead */
@@ -6425,12 +6981,12 @@ int_t fit_collective_explicit_als
         
         if (Xcsr != NULL)
         {
-            if (item_bias) {
+            if (item_bias && !NA_as_zero_X) {
                 Xcsr_orig = (real_t*)malloc(nnz*sizeof(real_t));
                 if (Xcsr_orig == NULL) goto throw_oom;
                 copy_arr_(Xcsr, Xcsr_orig, nnz, nthreads);
             }
-            if (user_bias) {
+            if (user_bias && !NA_as_zero_X) {
                 Xcsc_orig = (real_t*)malloc(nnz*sizeof(real_t));
                 if (Xcsc_orig == NULL) goto throw_oom;
                 copy_arr_(Xcsc, Xcsc_orig, nnz, nthreads);
@@ -6456,6 +7012,20 @@ int_t fit_collective_explicit_als
         /* these are only used as place-holders, do not get overwritten */
         A_bias = A;
         B_bias = B;
+    }
+
+    if (NA_as_zero_X && (center || user_bias || item_bias))
+    {
+        if (precomputedBtXbias == NULL || (user_bias && !item_bias))
+        {
+            free_BtX = true;
+            buffer_BtX = (real_t*)calloc((size_t)(k+k_main+1), sizeof(real_t));
+            if (buffer_BtX == NULL) goto throw_oom;
+        }
+        else {
+            buffer_BtX = precomputedBtXbias;
+            set_to_zero(buffer_BtX, k+k_main+user_bias);
+        }
     }
 
     if (U != NULL || nnz_U)
@@ -6505,6 +7075,7 @@ int_t fit_collective_explicit_als
             near_dense_u_col,
             Utrans == NULL,
             U != NULL, false, NA_as_zero_U,
+            nonneg_C, l1_lam != 0. || l1_lam_unique != NULL,
             k_user+k, nthreads,
             ((size_t)n*(size_t)(k_user+k+k_main+user_bias)
                 >=
@@ -6521,6 +7092,7 @@ int_t fit_collective_explicit_als
             near_dense_i_col,
             Itrans == NULL,
             II != NULL, false, NA_as_zero_I,
+            nonneg_D, l1_lam != 0. || l1_lam_unique != NULL,
             k_item+k, nthreads,
             ((size_t)n*(size_t)(k_user+k+k_main+user_bias)
                 >=
@@ -6537,6 +7109,7 @@ int_t fit_collective_explicit_als
         size_bufferAi = buffer_size_optimizeA(
             n, true, false, false,
             Xfull != NULL, false, Xfull == NULL,
+            nonneg, l1_lam != 0. || l1_lam_unique != NULL,
             k+k_main, nthreads,
             precomputedBtB != NULL, false,
             false, false
@@ -6545,6 +7118,7 @@ int_t fit_collective_explicit_als
         size_bufferBi = buffer_size_optimizeA(
             m, true, false, Xfull != NULL,
             Xfull != NULL, false, Xfull == NULL,
+            nonneg, l1_lam != 0. || l1_lam_unique != NULL,
             k+k_main, nthreads,
             precomputedBtB != NULL, false,
             false, false
@@ -6562,7 +7136,7 @@ int_t fit_collective_explicit_als
             add_implicit_features, k_main,
             nthreads,
             use_cg_A && !nonneg, finalize_chol,
-            nonneg,
+            nonneg, l1_lam != 0. || l1_lam_unique != NULL,
             true,
             precomputedBtB != NULL,
             precomputedCtCw != NULL,
@@ -6573,6 +7147,7 @@ int_t fit_collective_explicit_als
         size_bufferA = buffer_size_optimizeA(
             n, full_dense, near_dense_row, false,
             Xfull != NULL, weight != NULL, NA_as_zero_X,
+            nonneg, l1_lam != 0. || l1_lam_unique != NULL,
             k+k_main+(int)user_bias, nthreads,
             precomputedBtB != NULL, precompute_for_predictions,
             use_cg && !nonneg, finalize_chol
@@ -6591,7 +7166,7 @@ int_t fit_collective_explicit_als
             add_implicit_features, k_main,
             nthreads,
             use_cg_B && !nonneg, finalize_chol,
-            nonneg,
+            nonneg, l1_lam != 0. || l1_lam_unique != NULL,
             false,
             (item_bias <= user_bias)?
                 (precomputedBtB != NULL) : (false),
@@ -6605,6 +7180,7 @@ int_t fit_collective_explicit_als
         size_bufferB = buffer_size_optimizeA(
             m, full_dense, near_dense_col, Xtrans != NULL,
             Xfull != NULL, weight != NULL, NA_as_zero_X,
+            nonneg, l1_lam != 0. || l1_lam_unique != NULL,
             k+k_main+(int)item_bias, nthreads,
             ((size_t)n*(size_t)(k_user+k+k_main+user_bias)
                     >=
@@ -6759,11 +7335,17 @@ int_t fit_collective_explicit_als
                 cnt_NA_u_bycol, (real_t*)NULL, NA_as_zero_U,
                 (lam_unique == NULL)? (lam/w_user) : (lam_unique[4]/w_user),
                 (lam_unique == NULL)? (lam/w_user) : (lam_unique[4]/w_user),
+                (l1_lam_unique == NULL)?
+                    (l1_lam/w_user) : (l1_lam_unique[4]/w_user),
+                (l1_lam_unique == NULL)?
+                    (l1_lam/w_user) : (l1_lam_unique[4]/w_user),
+                scale_lam,
                 Utrans == NULL,
                 iter == 0,
                 nthreads,
                 use_cg && !nonneg_C, max_cg_steps,
-                nonneg_C, max_cd_steps, buffer_nonneg,
+                nonneg_C, max_cd_steps,
+                (real_t*)NULL, (real_t*)NULL, 0.,
                 false,
                 ((size_t)n*(size_t)(k_user+k+k_main+user_bias)
                     >=
@@ -6811,11 +7393,17 @@ int_t fit_collective_explicit_als
                 cnt_NA_i_bycol, (real_t*)NULL, NA_as_zero_I,
                 (lam_unique == NULL)? (lam/w_item) : (lam_unique[5]/w_item),
                 (lam_unique == NULL)? (lam/w_item) : (lam_unique[5]/w_item),
+                (l1_lam_unique == NULL)?
+                    (l1_lam/w_item) : (l1_lam_unique[5]/w_item),
+                (l1_lam_unique == NULL)?
+                    (l1_lam/w_item) : (l1_lam_unique[5]/w_item),
+                scale_lam,
                 Itrans == NULL,
                 iter == 0,
                 nthreads,
                 use_cg && !nonneg_D, max_cg_steps,
-                nonneg_D, max_cd_steps, buffer_nonneg,
+                nonneg_D, max_cd_steps,
+                (real_t*)NULL, (real_t*)NULL, 0.,
                 false,
                 ((size_t)n*(size_t)(k_user+k+k_main+user_bias)
                     >=
@@ -6863,10 +7451,16 @@ int_t fit_collective_explicit_als
                     (lam/w_implicit) : (lam_unique[3]/w_implicit),
                 (lam_unique == NULL)?
                     (lam/w_implicit) : (lam_unique[3]/w_implicit),
+                (l1_lam_unique == NULL)?
+                    (l1_lam/w_implicit) : (l1_lam_unique[3]/w_implicit),
+                (l1_lam_unique == NULL)?
+                    (l1_lam/w_implicit) : (l1_lam_unique[3]/w_implicit),
+                scale_lam,
                 Xfull != NULL, niter == 0,
                 nthreads,
                 false, 0,
-                nonneg, max_cd_steps, buffer_nonneg,
+                nonneg, max_cd_steps,
+                (real_t*)NULL, (real_t*)NULL, 0.,
                 false,
                 precomputedBtB, &ignore,
                 buffer_real_t
@@ -6903,10 +7497,16 @@ int_t fit_collective_explicit_als
                     (lam/w_implicit) : (lam_unique[2]/w_implicit),
                 (lam_unique == NULL)?
                     (lam/w_implicit) : (lam_unique[2]/w_implicit),
+                (l1_lam_unique == NULL)?
+                    (l1_lam/w_implicit) : (l1_lam_unique[2]/w_implicit),
+                (l1_lam_unique == NULL)?
+                    (l1_lam/w_implicit) : (l1_lam_unique[2]/w_implicit),
+                scale_lam,
                 false, niter == 0,
                 nthreads,
                 false, 0,
-                nonneg, max_cd_steps, buffer_nonneg,
+                nonneg, max_cd_steps,
+                (real_t*)NULL, (real_t*)NULL, 0.,
                 false,
                 precomputedBtB, &ignore,
                 buffer_real_t
@@ -6923,7 +7523,14 @@ int_t fit_collective_explicit_als
         }
 
         /* Apply bias beforehand, as its column will be fixed */
-        if (user_bias)
+        if (item_bias)
+        {
+            for (int_t ix = 0; ix < m; ix++)
+                A_bias[(size_t)(k_user+k+k_main)
+                        + ix*(size_t)(k_user+k+k_main + 1)] = 1.;
+        }
+
+        if (user_bias && (!NA_as_zero_X || Xfull != NULL))
         {
             if (Xtrans != NULL) {
                 #pragma omp parallel for schedule(static) \
@@ -6938,7 +7545,7 @@ int_t fit_collective_explicit_als
                 for (size_t row = 0; row < (size_t)m; row++)
                     for (size_t col = 0; col < (size_t)n; col++)
                         Xfull[col + row*n] = Xfull_orig[col + row*n]
-                                              -  biasA[row];
+                                               - biasA[row];
             }
             else {
                 #pragma omp parallel for schedule(static) \
@@ -6947,11 +7554,37 @@ int_t fit_collective_explicit_als
                 for (size_t_for ix = 0; ix < nnz; ix++)
                     Xcsc[ix] = Xcsc_orig[ix] - biasA[Xcsc_i[ix]];
             }
+        }
 
+        else if (user_bias && NA_as_zero_X && Xfull == NULL)
+        {
+            if (!center)
+                cblas_tgemv(CblasRowMajor, CblasTrans,
+                            m, k+k_main+item_bias,
+                            -1., A_bias + k_user, k_totA+has_bias,
+                            biasA, 1,
+                            0., buffer_BtX, 1);
+            else {
+                set_to_zero(buffer_BtX, k+k_main+item_bias);
+                for (size_t row = 0; row < (size_t)m; row++)
+                    cblas_taxpy(k+k_main+item_bias,
+                                -(biasA[row] + *glob_mean),
+                                A_bias
+                                    + (size_t)k_user
+                                    + row*(size_t)(k_totA+has_bias), 1,
+                                buffer_BtX, 1);
+            }
+        }
+
+        else if (NA_as_zero_X && center && Xfull == NULL)
+        {
+            set_to_zero(buffer_BtX, k+k_main+item_bias);
+            sum_by_cols(A_bias + k_user, buffer_BtX,
+                        m, k+k_main,
+                        k_totA+has_bias, nthreads);
             if (item_bias)
-                for (int_t ix = 0; ix < m_max; ix++)
-                    A_bias[(size_t)(k_user+k+k_main)
-                            + ix*(size_t)(k_user+k+k_main + 1)] = 1.;
+                buffer_BtX[k+k_main] = (real_t)m;
+            cblas_tscal(k+k_main+item_bias, -(*glob_mean), buffer_BtX, 1);
         }
 
         else if (Xfull_orig != NULL || Xtrans_orig != NULL)
@@ -7007,10 +7640,19 @@ int_t fit_collective_explicit_als
                 (lam_unique == NULL)? (lam) : (lam_unique[3]),
                 w_item, w_implicit,
                 (lam_unique == NULL)? (lam) : (lam_unique[item_bias? 1 : 3]),
+                (l1_lam_unique == NULL)? (l1_lam) : (l1_lam_unique[3]),
+                (l1_lam_unique == NULL)?
+                    (l1_lam) : (l1_lam_unique[item_bias? 1 : 3]),
+                scale_lam, scale_lam_sideinfo,
                 Xfull != NULL && Xtrans == NULL,
                 nthreads,
                 use_cg_B && !nonneg, max_cg_steps, iter == 0,
-                nonneg, max_cd_steps, buffer_nonneg,
+                nonneg, max_cd_steps,
+                (buffer_BtX != NULL && (center || user_bias))?
+                    (buffer_BtX) : ((real_t*)NULL),
+                (buffer_BtX != NULL && (center || user_bias))?
+                    (biasA) : ((real_t*)NULL),
+                *glob_mean,
                 false,
                 (item_bias <= user_bias)?
                     (precomputedBtB) : ((real_t*)NULL),
@@ -7019,7 +7661,7 @@ int_t fit_collective_explicit_als
                 (k_item + item_bias <= k_user + user_bias)?
                     (precomputedBeTBeChol) : ((real_t*)NULL),
                 precomputedBiTBi,
-                &ignore, &ignore, &ignore,
+                &ignore, &ignore2, &ignore3, &ignore4,
                 buffer_real_t
             );
         else
@@ -7036,10 +7678,19 @@ int_t fit_collective_explicit_als
                 NA_as_zero_X,
                 (lam_unique == NULL)? (lam) : (lam_unique[3]),
                 (lam_unique == NULL)? (lam) : (lam_unique[item_bias? 1 : 3]),
+                (l1_lam_unique == NULL)? (l1_lam) : (l1_lam_unique[3]),
+                (l1_lam_unique == NULL)?
+                    (l1_lam) : (l1_lam_unique[item_bias? 1 : 3]),
+                scale_lam,
                 Xfull != NULL && Xtrans == NULL, iter == 0,
                 nthreads,
                 use_cg && !nonneg, max_cg_steps,
-                nonneg, max_cd_steps, buffer_nonneg,
+                nonneg, max_cd_steps,
+                (buffer_BtX != NULL && (center || user_bias))?
+                    (buffer_BtX) : ((real_t*)NULL),
+                (buffer_BtX != NULL && (center || user_bias))?
+                    (biasA) : ((real_t*)NULL),
+                *glob_mean,
                 false,
                 ((size_t)n*(size_t)(k_user+k+k_main+user_bias)
                     >=
@@ -7063,7 +7714,14 @@ int_t fit_collective_explicit_als
                         biasB, 1);
 
         /* Apply bias beforehand, as its column will be fixed */
-        if (item_bias)
+        if (user_bias)
+        {
+            for (int_t ix = 0; ix < n; ix++)
+                B_bias[(size_t)(k_item+k+k_main)
+                        + ix*(size_t)(k_item+k+k_main + 1)] = 1.;
+        }
+
+        if (item_bias && (!NA_as_zero_X || Xfull != NULL))
         {
             if (Xfull != NULL) {
                 #pragma omp parallel for schedule(static) \
@@ -7082,10 +7740,37 @@ int_t fit_collective_explicit_als
                     Xcsr[ix] = Xcsr_orig[ix] - biasB[Xcsr_i[ix]];
             }
 
+        }
+
+        else if (item_bias && NA_as_zero_X && Xfull == NULL)
+        {
+            if (!center)
+                cblas_tgemv(CblasRowMajor, CblasTrans,
+                            n, k+k_main+user_bias,
+                            -1., B_bias + k_item, k_totB+has_bias,
+                            biasB, 1,
+                            0., buffer_BtX, 1);
+            else {
+                set_to_zero(buffer_BtX, k+k_main+user_bias);
+                for (size_t col = 0; col < (size_t)n; col++)
+                    cblas_taxpy(k+k_main+user_bias,
+                                -(biasB[col] + *glob_mean),
+                                B_bias
+                                    + (size_t)k_item
+                                    + col*(size_t)(k_totB+has_bias), 1,
+                                buffer_BtX, 1);
+            }
+        }
+
+        else if (NA_as_zero_X && center && Xfull == NULL)
+        {
+            set_to_zero(buffer_BtX, k+k_main+user_bias);
+            sum_by_cols(B_bias + k_item, buffer_BtX,
+                        n, k+k_main,
+                        k_totB+has_bias, nthreads);
             if (user_bias)
-                for (int_t ix = 0; ix < n_max; ix++)
-                    B_bias[(size_t)(k_item+k+k_main)
-                            + ix*(size_t)(k_item+k+k_main + 1)] = 1.;
+                buffer_BtX[k+k_main] = (real_t)n;
+            cblas_tscal(k+k_main+user_bias, -(*glob_mean), buffer_BtX, 1);
         }
 
         else if (Xfull_orig != NULL)
@@ -7124,14 +7809,24 @@ int_t fit_collective_explicit_als
                 (lam_unique == NULL)? (lam) : (lam_unique[2]),
                 w_user, w_implicit,
                 (lam_unique == NULL)? (lam) : (lam_unique[user_bias? 0 : 2]),
+                (l1_lam_unique == NULL)? (l1_lam) : (l1_lam_unique[2]),
+                (l1_lam_unique == NULL)?
+                    (l1_lam) : (l1_lam_unique[user_bias? 0 : 2]),
+                scale_lam, scale_lam_sideinfo,
                 false,
                 nthreads,
                 use_cg_B && !nonneg, max_cg_steps, iter == 0,
-                nonneg, max_cd_steps, buffer_nonneg,
+                nonneg, max_cd_steps,
+                (buffer_BtX != NULL && (center || item_bias))?
+                    (buffer_BtX) : ((real_t*)NULL),
+                (buffer_BtX != NULL && (center || item_bias))?
+                    (biasB) : ((real_t*)NULL),
+                *glob_mean,
                 precompute_for_predictions,
                 precomputedBtB, precomputedCtCw, precomputedBeTBeChol,
                 precomputedBiTBi,
                 &filled_BtB, &filled_CtCw, &filled_BeTBeChol,
+                &CtC_is_scaled,
                 buffer_real_t
             );
         else
@@ -7147,10 +7842,19 @@ int_t fit_collective_explicit_als
                 NA_as_zero_X,
                 (lam_unique == NULL)? (lam) : (lam_unique[2]),
                 (lam_unique == NULL)? (lam) : (lam_unique[user_bias? 0 : 2]),
+                (l1_lam_unique == NULL)? (l1_lam) : (l1_lam_unique[2]),
+                (l1_lam_unique == NULL)?
+                    (l1_lam) : (l1_lam_unique[user_bias? 0 : 2]),
+                scale_lam,
                 false, iter == 0,
                 nthreads,
                 use_cg && !nonneg, max_cg_steps,
-                nonneg, max_cd_steps, buffer_nonneg,
+                nonneg, max_cd_steps,
+                (buffer_BtX != NULL && (center || item_bias))?
+                    (buffer_BtX) : ((real_t*)NULL),
+                (buffer_BtX != NULL && (center || item_bias))?
+                    (biasB) : ((real_t*)NULL),
+                *glob_mean,
                 iter == niter - 1,
                 precomputedBtB, &filled_BtB,
                 buffer_real_t
@@ -7206,11 +7910,74 @@ int_t fit_collective_explicit_als
             set_to_zero(biasA + m, m_max-m);
         if (n_max > n && item_bias)
             set_to_zero(biasB + n, n_max-n);
+
+        if (free_BtX && precomputedBtXbias != NULL &&
+            (item_bias||center) && NA_as_zero_X)
+        {
+            copy_arr(buffer_BtX, precomputedBtXbias, k+k_main+user_bias);
+            precomputedBtXbias = NULL;
+        }
     }
 
     precompute:
     if (precompute_for_predictions)
     {
+        if ((NA_as_zero_X && (center||item_bias) && precomputedBtXbias != NULL)
+                &&
+            (!filled_BtB || Xfull != NULL)
+                &&
+            !back_to_precompute)
+        {
+            set_to_zero(precomputedBtXbias, k+k_main+user_bias);
+            if (item_bias)
+            {
+                if (n_max > n && center)
+                {
+                    sum_by_cols(B_bias
+                                    + k_item
+                                    + (size_t)n*
+                                      (size_t)(k_item+k+k_main+has_bias),
+                                precomputedBtXbias,
+                                n_max - n, k+k_main,
+                                k_item+k+k_main+has_bias, nthreads);
+                    if (user_bias)
+                        precomputedBtXbias[k+k_main] = (real_t)(n_max - n);
+                    cblas_tscal(k+k_main+user_bias, -(*glob_mean),
+                                precomputedBtXbias, 1);
+                }
+                if (!center)
+                    cblas_tgemv(CblasRowMajor, CblasTrans,
+                                n, k+k_main+user_bias,
+                                -1., B_bias + k_item, k_item+k+k_main+has_bias,
+                                biasB, 1,
+                                0., precomputedBtXbias, 1);
+                else {
+                    for (size_t col = 0; col < (size_t)n; col++)
+                        cblas_taxpy(k+k_main+user_bias,
+                                    -(biasB[col] + *glob_mean),
+                                    B_bias
+                                        + (size_t)k_item
+                                        +col*(size_t)(k_item+k+k_main+has_bias),
+                                    1,
+                                    precomputedBtXbias, 1);
+                }
+            }
+
+            else if (center)
+            {
+                set_to_zero(precomputedBtXbias, k+k_main+user_bias);
+                sum_by_cols(B_bias + k_item, precomputedBtXbias,
+                            n_max, k+k_main,
+                            k_item+k+k_main+has_bias, nthreads);
+                if (user_bias)
+                    precomputedBtXbias[k+k_main] = (real_t)n_max;
+                cblas_tscal(k+k_main+user_bias, -(*glob_mean),
+                            precomputedBtXbias, 1);
+            }
+
+            precomputedBtXbias = NULL;
+        }
+
         if (add_implicit_features && !filled_BiTBi)
         {
             cblas_tsyrk(CblasRowMajor, CblasUpper, CblasTrans,
@@ -7222,7 +7989,8 @@ int_t fit_collective_explicit_als
         else if (add_implicit_features && use_cg && w_implicit != 1. &&
                  !back_to_precompute && !free_BiTBi)
         {
-            cblas_tscal(square(k+k_main), 1./w_implicit, precomputedBiTBi, 1);
+            /* TODO: revisit this */
+            cblas_tscal(square(k+k_main), w_implicit, precomputedBiTBi, 1);
         }
         if (!filled_BtB)
         {
@@ -7283,10 +8051,14 @@ int_t fit_collective_explicit_als
                      precomputedTransBtBinvBt, k+k_main+user_bias);
             copy_arr(precomputedBtB, arr_use, square(k_pred));
             add_to_diag(arr_use,
-                        (lam_unique == NULL)? (lam) : (lam_unique[2]),
+                        ((lam_unique == NULL)? (lam) : (lam_unique[2]))
+                        * (real_t)(scale_lam? (include_all_X? n_max : n) : 1),
                         k_pred);
             if (lam_unique != NULL && user_bias && lam_unique[0]!=lam_unique[2])
-                arr_use[square(k_pred)-1] += (lam_unique[0]-lam_unique[2]);
+                arr_use[square(k_pred)-1]
+                    +=
+                (lam_unique[0]-lam_unique[2])
+                * (real_t)(scale_lam? (include_all_X? n_max : n) : 1);
             tposv_(&lo, &k_pred, include_all_X? &n_max : &n,
                    arr_use, &k_pred,
                    precomputedTransBtBinvBt, &k_pred, &ignore_int);
@@ -7336,18 +8108,29 @@ int_t fit_collective_explicit_als
                     copy_arr(precomputedCtCw, arr_use, square(k_pred));
                     add_to_diag(arr_use,
                                 ((lam_unique == NULL)? (lam) : (lam_unique[2]))
+                                    * (real_t)(scale_lam? p : 1)
                                     / w_user,
                                 k_pred);
                     if (w_user != 1.)
                         cblas_tscal(square(k_pred), w_user, precomputedCtCw, 1);
                     filled_CtCw = true;
+                    CtC_is_scaled = true;
                 }
                 else {
                     copy_arr(precomputedCtCw, arr_use, square(k_pred));
-                    if (w_user != 1. && !use_cg)
-                        cblas_tscal(square(k_pred), 1./w_user, arr_use, 1);
+                    if (w_user != 1.)
+                    {
+                        if (CtC_is_scaled)
+                            cblas_tscal(square(k_pred), 1./w_user, arr_use, 1);
+                        else {
+                            cblas_tscal(square(k_user+k), w_user,
+                                        precomputedCtCw, 1);
+                            CtC_is_scaled = true;
+                        }
+                    }
                     add_to_diag(arr_use,
                                 ((lam_unique == NULL)? (lam) : (lam_unique[2]))
+                                    * (real_t)(scale_lam? p : 1)
                                     / w_user,
                                 k_pred);
                 }
@@ -7361,14 +8144,20 @@ int_t fit_collective_explicit_als
             }
 
 
-            if (precomputedCtCw != NULL && filled_CtCw && use_cg && w_user !=1.)
+            if (precomputedCtCw != NULL && filled_CtCw &&
+                w_user != 1. && !CtC_is_scaled)
+            {
                 cblas_tscal(square(k_user+k), w_user, precomputedCtCw, 1);
-            else if (!filled_CtCw && precomputedCtCw != NULL) {
+                CtC_is_scaled = true;
+            }
+            else if (!filled_CtCw && precomputedCtCw != NULL)
+            {
                 cblas_tsyrk(CblasRowMajor, CblasUpper, CblasTrans,
                             k_user+k, p,
                             w_user, C, k_user+k,
                             0., precomputedCtCw, k_user+k);
                 filled_CtCw = true;
+                CtC_is_scaled = true;
             }
         }
 
@@ -7383,6 +8172,11 @@ int_t fit_collective_explicit_als
                      precomputedBeTBeChol + k_user + k_user*k_pred, k_pred);
             if (p) {
                 if (filled_CtCw) {
+                    if (!CtC_is_scaled && w_user != 1.) {
+                        cblas_tscal(square(k_user+k), w_user,
+                                    precomputedCtCw, 1);
+                        CtC_is_scaled = true;
+                    }
                     sum_mat(k_user+k, k_user+k,
                             precomputedCtCw, k_user+k,
                             precomputedBeTBeChol, k_pred);
@@ -7400,6 +8194,7 @@ int_t fit_collective_explicit_als
                             cblas_tscal(square(k_user+k), w_user,
                                         precomputedCtCw, 1);
                         filled_CtCw = true;
+                        CtC_is_scaled = true;
                     } else {
                         cblas_tsyrk(CblasRowMajor, CblasUpper, CblasTrans,
                                     k_user+k, p,
@@ -7414,12 +8209,20 @@ int_t fit_collective_explicit_als
                         precomputedBeTBeChol + k_user + k_user*k_pred, k_pred);
 
             add_to_diag(precomputedBeTBeChol,
-                        (lam_unique == NULL)? (lam) : (lam_unique[2]),
+                        ((lam_unique == NULL)? (lam) : (lam_unique[2]))
+                                *
+                        (real_t)(scale_lam_sideinfo?
+                                (p+(include_all_X? n_max : n))
+                                : (scale_lam? (include_all_X? n_max : n) : 1)),
                         k_user+k+k_main+user_bias);
             if (lam_unique != NULL && user_bias && lam_unique[0]!=lam_unique[2])
                 precomputedBeTBeChol[square(k_pred)-1]
                     +=
-                (lam_unique[0]-lam_unique[2]);
+                (lam_unique[0]-lam_unique[2])
+                        *
+                (real_t)(scale_lam_sideinfo?
+                            (p+(include_all_X? n_max : n))
+                            : (scale_lam? (include_all_X? n_max : n) : 1));
 
             tpotrf_(&lo, &k_pred, precomputedBeTBeChol,&k_pred,&ignore_int);
             filled_BeTBeChol = true;
@@ -7430,7 +8233,6 @@ int_t fit_collective_explicit_als
 
     cleanup:
         free(buffer_real_t); buffer_real_t = NULL;
-        free(buffer_nonneg); buffer_nonneg = NULL;
         free(Xtrans); Xtrans = NULL;
         free(Wtrans); Wtrans = NULL;
         free(Xcsr_p); Xcsr_p = NULL;
@@ -7478,9 +8280,13 @@ int_t fit_collective_explicit_als
         if (Xtrans_orig != NULL) {
             free(Xtrans_orig); Xtrans_orig = NULL;
         }
+        if (free_BtX) {
+            free(buffer_BtX); buffer_BtX = NULL;
+        }
         free(seed_arr); seed_arr = NULL;
         if (back_to_precompute) goto precompute;
         free(lam_unique_copy); lam_unique_copy = NULL;
+        free(l1_lam_unique_copy); l1_lam_unique_copy = NULL;
         if (free_BiTBi) {
             free(precomputedBiTBi); precomputedBiTBi = NULL;
         }
@@ -7508,6 +8314,7 @@ int_t fit_collective_implicit_als
     int_t m, int_t n, int_t k,
     int_t ixA[], int_t ixB[], real_t *restrict X, size_t nnz,
     real_t lam, real_t *restrict lam_unique,
+    real_t l1_lam, real_t *restrict l1_lam_unique,
     real_t *restrict U, int_t m_u, int_t p,
     real_t *restrict II, int_t n_i, int_t q,
     int_t U_row[], int_t U_col[], real_t *restrict U_sp, size_t nnz_U,
@@ -7526,6 +8333,7 @@ int_t fit_collective_implicit_als
     real_t *restrict precomputedBeTBeChol
 )
 {
+    should_stop_procedure = false;
     int_t retval = 0;
     if (k_user && U == NULL && nnz_U == 0) {
         if (verbose)
@@ -7562,6 +8370,10 @@ int_t fit_collective_implicit_als
         }
         return retval;
     }
+
+    #ifndef _OPENMP
+    nthreads = 1;
+    #endif
     
     int_t k_totA = k_user + k + k_main;
     int_t k_totB = k_item + k + k_main;
@@ -7574,9 +8386,6 @@ int_t fit_collective_implicit_als
     size_t size_bufferC = 0;
     size_t size_bufferD = 0;
     size_t size_buffer = 0;
-
-    real_t *restrict buffer_nonneg = NULL;
-    size_t size_largest_mat = 0;
 
     size_t *Xcsr_p = (size_t*)malloc(((size_t)m+(size_t)1)*sizeof(size_t));
     int_t *Xcsr_i = (int_t*)malloc(nnz*sizeof(int_t));
@@ -7619,6 +8428,7 @@ int_t fit_collective_implicit_als
 
     int_t *restrict seed_arr = NULL;
     real_t *restrict lam_unique_copy = NULL;
+    real_t *restrict l1_lam_unique_copy = NULL;
 
     if (!use_cg) finalize_chol = false;
 
@@ -7644,29 +8454,9 @@ int_t fit_collective_implicit_als
         allocated_CtC = true;
     }
 
-    if (nonneg || nonneg_C || nonneg_D)
+    if (nonneg || nonneg_C || nonneg_D || l1_lam || l1_lam_unique != NULL)
     {
-        if (nonneg)
-        {
-            size_largest_mat = max2(size_largest_mat,
-                                    (size_t)m_max*(size_t)(k_user+k+k_main));
-            size_largest_mat = max2(size_largest_mat,
-                                    (size_t)n_max*(size_t)(k_item+k+k_main));
-        }
-
-        if (nonneg_C)
-        {
-            size_largest_mat = max2(size_largest_mat,
-                                    (size_t)m_u*(size_t)(k_user+k));
-        }
-
-        if (nonneg_D)
-        {
-            size_largest_mat = max2(size_largest_mat,
-                                    (size_t)n_i*(size_t)(k_item+k));
-        }
-
-        buffer_nonneg = (real_t*)malloc(size_largest_mat*sizeof(real_t));
+        use_cg = false;
     }
 
     #ifdef _FOR_R
@@ -7707,6 +8497,7 @@ int_t fit_collective_implicit_als
             near_dense_u_col,
             Utrans == NULL,
             U != NULL, false, NA_as_zero_U,
+            nonneg_C, l1_lam != 0. || l1_lam_unique != NULL,
             k_user+k, nthreads,
             precomputedBeTBeChol != NULL,
             false,
@@ -7732,6 +8523,7 @@ int_t fit_collective_implicit_als
             near_dense_i_col,
             Itrans == NULL,
             II != NULL, false, NA_as_zero_I,
+            nonneg_D, l1_lam != 0. || l1_lam_unique != NULL,
             k_item+k, nthreads,
             precomputedBeTBeChol != NULL && k_item+k <= k_user+k+k_main,
             false,
@@ -7746,6 +8538,7 @@ int_t fit_collective_implicit_als
                             NA_as_zero_U,
                             nthreads,
                             use_cg && !nonneg,
+                            nonneg, l1_lam != 0. || l1_lam_unique != NULL,
                             true,
                             precompute_for_predictions,
                             precompute_for_predictions,
@@ -7756,6 +8549,7 @@ int_t fit_collective_implicit_als
         size_bufferA = buffer_size_optimizeA_implicit(
                             k+k_main, nthreads,
                             true,
+                            nonneg, l1_lam != 0. || l1_lam_unique != NULL,
                             use_cg && !nonneg, finalize_chol
                         );
 
@@ -7767,6 +8561,7 @@ int_t fit_collective_implicit_als
                             NA_as_zero_I,
                             nthreads,
                             use_cg && !nonneg,
+                            nonneg, l1_lam != 0. || l1_lam_unique != NULL,
                             true,
                             precompute_for_predictions && k_item <= k_user,
                             precompute_for_predictions && k_item <= k_user,
@@ -7777,6 +8572,7 @@ int_t fit_collective_implicit_als
         size_bufferB = buffer_size_optimizeA_implicit(
                             k+k_main, nthreads,
                             true,
+                            nonneg, l1_lam != 0. || l1_lam_unique != NULL,
                             use_cg && !nonneg, finalize_chol
                         );
 
@@ -7833,6 +8629,7 @@ int_t fit_collective_implicit_als
     if (w_main != 1.)
     {
         lam /= w_main;
+        l1_lam /= w_main;
         w_user /= w_main;
         w_item /= w_main;
         if (lam_unique != NULL)
@@ -7843,6 +8640,15 @@ int_t fit_collective_implicit_als
                 lam_unique_copy[ix] = lam_unique[ix] / w_main;
             }
             lam_unique = lam_unique_copy;
+        }
+        if (l1_lam_unique != NULL)
+        {
+            l1_lam_unique_copy = (real_t*)malloc(6*sizeof(real_t));
+            if (l1_lam_unique_copy == NULL) goto throw_oom;
+            for (int_t ix = 2; ix < 6; ix++) {
+                l1_lam_unique_copy[ix] = l1_lam_unique[ix] / w_main;
+            }
+            l1_lam_unique = l1_lam_unique_copy;
         }
         w_main = 1.;
     }
@@ -7887,11 +8693,17 @@ int_t fit_collective_implicit_als
                 cnt_NA_u_bycol, (real_t*)NULL, NA_as_zero_U,
                 (lam_unique == NULL)? (lam/w_user) : (lam_unique[4]/w_user),
                 (lam_unique == NULL)? (lam/w_user) : (lam_unique[4]/w_user),
+                (l1_lam_unique == NULL)?
+                    (l1_lam/w_user) : (l1_lam_unique[4]/w_user),
+                (l1_lam_unique == NULL)?
+                    (l1_lam/w_user) : (l1_lam_unique[4]/w_user),
+                false,
                 (Utrans != NULL)? (false) : (true),
                 iter == 0,
                 nthreads,
                 use_cg && !nonneg_C, max_cg_steps,
-                nonneg_C, max_cd_steps, buffer_nonneg,
+                nonneg_C, max_cd_steps,
+                (real_t*)NULL, (real_t*)NULL, 0.,
                 false,
                 precomputedBeTBeChol,
                 &ignore,
@@ -7930,11 +8742,17 @@ int_t fit_collective_implicit_als
                 cnt_NA_i_bycol, (real_t*)NULL, NA_as_zero_I,
                 (lam_unique == NULL)? (lam/w_item) : (lam_unique[5]/w_item),
                 (lam_unique == NULL)? (lam/w_item) : (lam_unique[5]/w_item),
+                (l1_lam_unique == NULL)?
+                    (l1_lam/w_item) : (l1_lam_unique[5]/w_item),
+                (l1_lam_unique == NULL)?
+                    (l1_lam/w_item) : (l1_lam_unique[5]/w_item),
+                false,
                 (Itrans != NULL)? (false) : (true),
                 iter == 0,
                 nthreads,
                 use_cg && !nonneg_D, max_cg_steps,
-                nonneg_D, max_cd_steps, buffer_nonneg,
+                nonneg_D, max_cd_steps,
+                (real_t*)NULL, (real_t*)NULL, 0.,
                 false,
                 (k_item+k <= k_user+k+k_main)?
                     (precomputedBeTBeChol) : ((real_t*)NULL),
@@ -7975,9 +8793,10 @@ int_t fit_collective_implicit_als
                 II, cnt_NA_i_byrow,
                 full_dense_i, near_dense_i_row, NA_as_zero_I,
                 (lam_unique == NULL)? (lam) : (lam_unique[3]),
+                (l1_lam_unique == NULL)? (l1_lam) : (l1_lam_unique[3]),
                 w_item,
                 nthreads, use_cg && !nonneg, max_cg_steps, iter == 0,
-                nonneg, max_cd_steps, buffer_nonneg,
+                nonneg, max_cd_steps,
                 precomputedBtB,
                 (k_item <= k_user)? (precomputedBeTBe) : ((real_t*)NULL),
                 (k_item <= k_user)? (precomputedBeTBeChol) : ((real_t*)NULL),
@@ -7992,8 +8811,9 @@ int_t fit_collective_implicit_als
                 n, m, k+k_main,
                 Xcsc_p, Xcsc_i, Xcsc,
                 (lam_unique == NULL)? (lam) : (lam_unique[3]),
+                (l1_lam_unique == NULL)? (l1_lam) : (l1_lam_unique[3]),
                 nthreads, use_cg && !nonneg, max_cg_steps, iter == 0,
-                nonneg, max_cd_steps, buffer_nonneg,
+                nonneg, max_cd_steps,
                 precomputedBtB,
                 buffer_real_t
             );
@@ -8024,9 +8844,10 @@ int_t fit_collective_implicit_als
                 U, cnt_NA_u_byrow,
                 full_dense_u, near_dense_u_row, NA_as_zero_U,
                 (lam_unique == NULL)? (lam) : (lam_unique[2]),
+                (l1_lam_unique == NULL)? (l1_lam) : (l1_lam_unique[2]),
                 w_user,
                 nthreads, use_cg && !nonneg, max_cg_steps, iter == 0,
-                nonneg, max_cd_steps, buffer_nonneg,
+                nonneg, max_cd_steps,
                 precomputedBtB,
                 precomputedBeTBe,
                 precomputedBeTBeChol,
@@ -8042,9 +8863,10 @@ int_t fit_collective_implicit_als
                 m, n, k+k_main,
                 Xcsr_p, Xcsr_i, Xcsr,
                 (lam_unique == NULL)? (lam) : (lam_unique[2]),
+                (l1_lam_unique == NULL)? (l1_lam) : (l1_lam_unique[2]),
                 nthreads,
                 use_cg && !nonneg, max_cg_steps, iter == 0,
-                nonneg, max_cd_steps, buffer_nonneg,
+                nonneg, max_cd_steps,
                 precomputedBtB,
                 buffer_real_t
             );
@@ -8107,7 +8929,7 @@ int_t fit_collective_implicit_als
         }
 
         else if (use_cg) {
-            add_to_diag(precomputedBtB, lam, k_totA);
+            add_to_diag(precomputedBtB, lam, k+k_main);
         }
 
         if (!filled_BeTBe && (U != NULL || nnz_U))
@@ -8160,7 +8982,6 @@ int_t fit_collective_implicit_als
 
     cleanup:
         free(buffer_real_t);
-        free(buffer_nonneg);
         free(Xcsr_p);
         free(Xcsr_i);
         free(Xcsr);
@@ -8190,6 +9011,7 @@ int_t fit_collective_implicit_als
         free(precomputedCtC);
         free(seed_arr);
         free(lam_unique_copy);
+        free(l1_lam_unique_copy);
     return retval;
 
     throw_oom:
@@ -8206,14 +9028,17 @@ int_t precompute_collective_explicit
     real_t *restrict B, int_t n, int_t n_max, bool include_all_X,
     real_t *restrict C, int_t p,
     real_t *restrict Bi, bool add_implicit_features,
+    real_t *restrict biasB, real_t glob_mean, bool NA_as_zero_X,
     int_t k, int_t k_user, int_t k_item, int_t k_main,
     bool user_bias,
     bool nonneg,
     real_t lam, real_t *restrict lam_unique,
+    bool scale_lam, bool scale_lam_sideinfo,
     real_t w_main, real_t w_user, real_t w_implicit,
     real_t *restrict B_plus_bias,
     real_t *restrict BtB,
     real_t *restrict TransBtBinvBt,
+    real_t *restrict BtXbias,
     real_t *restrict BeTBeChol,
     real_t *restrict BiTBi,
     real_t *restrict TransCtCinvCt,
@@ -8242,6 +9067,26 @@ int_t precompute_collective_explicit
         w_implicit /= w_main;
     }
 
+    real_t lam_B = lam;
+    real_t lam_last_B = lam_last;
+    real_t lam_C = lam;
+
+    if (scale_lam || scale_lam_sideinfo)
+    {
+        lam *= (real_t)n;
+        lam_last *= (real_t)n;
+        lam_C *= (real_t)p;
+
+        lam_B = lam;
+        lam_last_B = lam_last;
+
+        if (scale_lam_sideinfo)
+        {
+            lam *= (real_t)p;
+            lam_last *= (real_t)p;
+        }
+    }
+
     real_t *arr_use = NULL;
     bool free_B_plus_bias = false;
     if (user_bias && B != NULL)
@@ -8250,8 +9095,8 @@ int_t precompute_collective_explicit
         {
             free_B_plus_bias = true;
             B_plus_bias = (real_t*)malloc(  (size_t)n_max
-                                         * (size_t)(k_item+k+k_main+1)
-                                         * sizeof(real_t));
+                                          * (size_t)(k_item+k+k_main+1)
+                                          * sizeof(real_t));
             if (B_plus_bias == NULL) goto throw_oom;
         }
 
@@ -8267,7 +9112,50 @@ int_t precompute_collective_explicit
         B = B_plus_bias;
     }
 
-    if (B != NULL)
+    if (NA_as_zero_X && BtXbias != NULL)
+    {
+        set_to_zero(BtXbias, k+k_main);
+        if (n_max > n && glob_mean != 0.)
+        {
+            sum_by_cols(B
+                            + (size_t)k_item
+                            + (size_t)n*(size_t)(k_item+k+k_main),
+                        BtXbias,
+                        n_max - n, k+k_main,
+                        k_item+k+k_main, 1);
+            cblas_tscal(k+k_main, -glob_mean, BtXbias, 1);
+        }
+        if (biasB != NULL)
+        {
+            if (glob_mean == 0.)
+                cblas_tgemv(CblasRowMajor, CblasTrans,
+                            n, k+k_main,
+                            -1., B + k_item, k_item+k+k_main,
+                            biasB, 1,
+                            0., BtXbias, 1);
+            else {
+                for (size_t col = 0; col < (size_t)n; col++)
+                    cblas_taxpy(k+k_main,
+                                -(biasB[col] + glob_mean),
+                                B
+                                    + (size_t)k_item
+                                    + col*(size_t)(k_item+k+k_main), 1,
+                                BtXbias, 1);
+            }
+        }
+
+        else if (glob_mean != 0.)
+        {
+            for (size_t col = 0; col < (size_t)n; col++)
+                cblas_taxpy(k+k_main, -glob_mean,
+                            B
+                                + (size_t)k_item
+                                + col*(size_t)(k_item+k+k_main), 1,
+                            BtXbias, 1);
+        }
+    }
+
+    if (BtB != NULL)
     {
         set_to_zero(BtB, square(k+k_main));
         cblas_tsyrk(CblasRowMajor, CblasUpper, CblasTrans,
@@ -8296,9 +9184,9 @@ int_t precompute_collective_explicit
         }
 
         copy_arr(BtB, arr_use, square(k+k_main));
-        add_to_diag(arr_use, lam, k+k_main);
+        add_to_diag(arr_use, lam_B, k+k_main);
         if (lam != lam_last)
-            arr_use[square(k+k_main)-1] += (lam_last - lam);
+            arr_use[square(k+k_main)-1] += (lam_last_B - lam_B);
         copy_mat(n, k+k_main,
                  B + k_item, k_item+k+k_main,
                  TransBtBinvBt, k+k_main);
@@ -8334,7 +9222,7 @@ int_t precompute_collective_explicit
             }
 
             copy_arr(CtCw, arr_use, square(k_user+k));
-            add_to_diag(arr_use, lam/w_user, k_user+k);
+            add_to_diag(arr_use, lam_C/w_user, k_user+k);
             tposv_(&lo, &k_pred, &p,
                    arr_use, &k_pred,
                    TransCtCinvCt, &k_pred, &ignore);
@@ -8501,10 +9389,13 @@ int_t factors_collective_explicit_single
     real_t *restrict Bi, bool add_implicit_features,
     int_t k, int_t k_user, int_t k_item, int_t k_main,
     real_t lam, real_t *restrict lam_unique,
+    real_t l1_lam, real_t *restrict l1_lam_unique,
+    bool scale_lam, bool scale_lam_sideinfo,
     real_t w_main, real_t w_user, real_t w_implicit,
     int_t n_max, bool include_all_X,
-    real_t *restrict TransBtBinvBt,
     real_t *restrict BtB,
+    real_t *restrict TransBtBinvBt,
+    real_t *restrict BtXbias,
     real_t *restrict BeTBeChol,
     real_t *restrict BiTBi,
     real_t *restrict CtCw,
@@ -8514,10 +9405,16 @@ int_t factors_collective_explicit_single
 {
     int_t retval = 0;
     real_t lam_bias = lam;
+    real_t l1_lam_bias = l1_lam;
     if (lam_unique != NULL)
     {
         lam_bias = lam_unique[(a_bias != NULL)? 0 : 2];
         lam = lam_unique[2];
+    }
+    if (l1_lam_unique != NULL)
+    {
+        l1_lam_bias = l1_lam_unique[(a_bias != NULL)? 0 : 2];
+        l1_lam = l1_lam_unique[2];
     }
 
     bool set_to_nan = check_sparse_indices(
@@ -8569,7 +9466,8 @@ int_t factors_collective_explicit_single
             CtCw,
             U_colmeans,
             k, k_user, k_main,
-            lam, w_main, w_user,
+            lam, l1_lam, w_main, w_user,
+            scale_lam || scale_lam_sideinfo,
             NA_as_zero_U,
             nonneg
         );
@@ -8590,8 +9488,11 @@ int_t factors_collective_explicit_single
             Bi, add_implicit_features,
             k, k_user, k_item, k_main,
             lam, w_main, w_user, w_implicit, lam_bias,
+            l1_lam, l1_lam_bias,
+            scale_lam, scale_lam_sideinfo,
             n_max, include_all_X,
             TransBtBinvBt,
+            BtXbias,
             BtB,
             BeTBeChol,
             BiTBi,
@@ -8623,7 +9524,7 @@ int_t factors_collective_implicit_single
     real_t *restrict B, int_t n, real_t *restrict C,
     real_t *restrict Xa, int_t ixB[], size_t nnz,
     int_t k, int_t k_user, int_t k_item, int_t k_main,
-    real_t lam, real_t alpha, real_t w_main, real_t w_user,
+    real_t lam, real_t l1_lam, real_t alpha, real_t w_main, real_t w_user,
     real_t w_main_multiplier,
     bool apply_log_transf,
     real_t *restrict BeTBe,
@@ -8674,7 +9575,7 @@ int_t factors_collective_implicit_single
             B, n, C,
             Xa, ixB, nnz,
             k, k_user, k_item, k_main,
-            lam, alpha, w_main, w_user,
+            lam, l1_lam, alpha, w_main, w_user,
             w_main_multiplier,
             BeTBe,
             BtB,
@@ -8692,7 +9593,8 @@ int_t factors_collective_implicit_single
             BeTBeChol,
             U_colmeans,
             k, k_user, k_item, k_main,
-            lam, w_main, w_user, w_main_multiplier,
+            lam, l1_lam,
+            w_main, w_user, w_main_multiplier,
             NA_as_zero_U,
             nonneg
         );
@@ -8723,10 +9625,13 @@ int_t factors_collective_explicit_multiple
     real_t *restrict Bi, bool add_implicit_features,
     int_t k, int_t k_user, int_t k_item, int_t k_main,
     real_t lam, real_t *restrict lam_unique,
+    real_t l1_lam, real_t *restrict l1_lam_unique,
+    bool scale_lam, bool scale_lam_sideinfo,
     real_t w_main, real_t w_user, real_t w_implicit,
     int_t n_max, bool include_all_X,
-    real_t *restrict TransBtBinvBt,
     real_t *restrict BtB,
+    real_t *restrict TransBtBinvBt,
+    real_t *restrict BtXbias,
     real_t *restrict BeTBeChol,
     real_t *restrict BiTBi,
     real_t *restrict TransCtCinvCt,
@@ -8755,7 +9660,9 @@ int_t factors_collective_explicit_multiple
     real_t *restrict weightR = NULL;
     bool free_U_csr = false;
     bool free_X_csr = false;
+    bool free_BtB   = false;
     bool free_BiTBi = false;
+    bool free_BtX   = false;
     int_t *restrict ret = (int_t*)malloc(m_max*sizeof(int_t));
     if (ret == NULL) goto throw_oom;
 
@@ -8813,11 +9720,26 @@ int_t factors_collective_explicit_multiple
         );
     }
 
+    if (BtB == NULL && NA_as_zero_X)
+    {
+        free_BtB = true;
+        BtB =(real_t*)malloc((size_t)square(k+k_main+user_bias)*sizeof(real_t));
+        if (BtB == NULL) goto throw_oom;
+
+        cblas_tsyrk(CblasRowMajor, CblasUpper, CblasTrans,
+                    k+k_main+user_bias, max2(n, n_max),
+                    1.,
+                    (user_bias? B_plus_bias : B) + k_item,
+                    k_item+k+k_main+user_bias,
+                    0., BtB, k+k_main+user_bias);
+    }
+
     if (add_implicit_features && BiTBi == NULL)
     {
         free_BiTBi = true;
         BiTBi = (real_t*)malloc((size_t)square(k+k_main)*sizeof(real_t));
         if (BiTBi == NULL) goto throw_oom;
+        
         cblas_tsyrk(CblasRowMajor, CblasUpper, CblasTrans,
                     k+k_main, n,
                     w_implicit,
@@ -8825,16 +9747,61 @@ int_t factors_collective_explicit_multiple
                     0., BiTBi, k+k_main);
     }
 
+    if (Xfull == NULL && NA_as_zero_X && BtXbias == NULL &&
+        (biasB != NULL || glob_mean != 0.))
+    {
+        BtXbias = (real_t*)calloc(k+k_main+user_bias, sizeof(real_t));
+        if (BtXbias == NULL) goto throw_oom;
+        free_BtX = true;
+
+        if (biasB != NULL)
+        {
+            if (glob_mean != 0. && n_max > n)
+            {
+                sum_by_cols((user_bias? B_plus_bias : B)
+                                + k_item
+                                + (size_t)n*(size_t)(k_item+k+k_main+user_bias),
+                            BtXbias,
+                            n_max - n, k+k_main+user_bias,
+                            k_item+k+k_main+user_bias, nthreads);
+                if (user_bias)
+                    BtXbias[k+k_main] = (real_t)(n_max-n);
+                cblas_tscal(k+k_main+user_bias, -glob_mean, BtXbias, 1);
+            }
+            for (size_t col = 0; col < (size_t)n; col++)
+                cblas_taxpy(k+k_main+user_bias,
+                            -(biasB[col] + glob_mean),
+                            (user_bias? B_plus_bias : B)
+                                + (size_t)k_item
+                                + col*(size_t)(k_item+k+k_main+user_bias), 1,
+                            BtXbias, 1);
+        }
+
+        else if (glob_mean != 0.)
+        {
+            sum_by_cols((user_bias? B_plus_bias : B)
+                            + k_item
+                            + (size_t)n*(size_t)(k_item+k+k_main+user_bias),
+                        BtXbias,
+                        n_max, k+k_main+user_bias,
+                        k_item+k+k_main+user_bias, nthreads);
+            if (user_bias)
+                BtXbias[k+k_main] = (real_t)n_max;
+            cblas_tscal(k+k_main+user_bias, -glob_mean, BtXbias, 1);
+        }
+    }
+
     #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
-            shared(A, B, C, Cb, biasA, glob_mean, U_colmeans, \
+            shared(A, B, C, Cb, biasA, biasB, glob_mean, U_colmeans, \
                    Bi, add_implicit_features, \
                    Xfull, weight, Xcsr, Xcsr_p, Xcsr_i, weightR, m, n, \
                    U, U_csr, U_csr_p, U_csr_i, p, Ub, pbin, m_u, m_ubin, \
                    NA_as_zero_X, NA_as_zero_U, nonneg, m_max, \
-                   lam, lam_unique, w_main, w_user, w_implicit, \
+                   lam, lam_unique, l1_lam, l1_lam_unique, \
+                   w_main, w_user, w_implicit, \
                    k, k_user, k_item, k_main, \
                    TransBtBinvBt, BtB, BeTBeChol, CtCw, TransCtCinvCt, \
-                   B_plus_bias, BiTBi)
+                   B_plus_bias, BiTBi, BtXbias, scale_lam, scale_lam_sideinfo)
     for (size_t_for ix = 0; ix < m_max; ix++)
         ret[ix] = factors_collective_explicit_single(
             A + ix*lda,
@@ -8874,10 +9841,13 @@ int_t factors_collective_explicit_multiple
             Bi, add_implicit_features,
             k, k_user, k_item, k_main,
             lam, lam_unique,
+            l1_lam, l1_lam_unique,
+            scale_lam, scale_lam_sideinfo,
             w_main, w_user, w_implicit,
             n_max, include_all_X,
-            TransBtBinvBt,
             BtB,
+            TransBtBinvBt,
+            BtXbias,
             BeTBeChol,
             BiTBi,
             CtCw,
@@ -8906,8 +9876,12 @@ int_t factors_collective_explicit_multiple
         }
         if (free_B_plus_bias)
             free(B_plus_bias);
+        if (free_BtB)
+            free(BtB);
         if (free_BiTBi)
             free(BiTBi);
+        if (free_BtX)
+            free(BtXbias);
         free(ret);
         return retval;
 
@@ -8932,7 +9906,7 @@ int_t factors_collective_implicit_multiple
     real_t *restrict C,
     real_t *restrict U_colmeans,
     int_t k, int_t k_user, int_t k_item, int_t k_main,
-    real_t lam, real_t alpha, real_t w_main, real_t w_user,
+    real_t lam, real_t l1_lam, real_t alpha, real_t w_main, real_t w_user,
     real_t w_main_multiplier,
     bool apply_log_transf,
     real_t *restrict BeTBe,
@@ -9012,7 +9986,7 @@ int_t factors_collective_implicit_multiple
             shared(A, B, C, m, m_u, U_colmeans, n, \
                    U, U_csr, U_csr_i, U_csr_p, NA_as_zero_U, nonneg, \
                    Xcsr, Xcsr_i, Xcsr_p, \
-                   lam, alpha, w_main, w_user, w_main_multiplier, \
+                   lam, l1_lam, alpha, w_main, w_user, w_main_multiplier, \
                    k, k_user, k_item, k_main, \
                    BtB, BeTBe, BeTBeChol)
     for (size_t_for ix = 0; ix < (size_t)m; ix++)
@@ -9035,7 +10009,7 @@ int_t factors_collective_implicit_multiple
             Xcsr_i + Xcsr_p[ix],
             Xcsr_p[ix+1] - Xcsr_p[ix],
             k, k_user, k_item, k_main,
-            lam, alpha, w_main, w_user,
+            lam, l1_lam, alpha, w_main, w_user,
             w_main_multiplier,
             apply_log_transf,
             BeTBe,
@@ -9090,10 +10064,12 @@ int_t impute_X_collective_explicit
     real_t *restrict Bi, bool add_implicit_features,
     int_t k, int_t k_user, int_t k_item, int_t k_main,
     real_t lam, real_t *restrict lam_unique,
+    real_t l1_lam, real_t *restrict l1_lam_unique,
+    bool scale_lam, bool scale_lam_sideinfo,
     real_t w_main, real_t w_user, real_t w_implicit,
     int_t n_max, bool include_all_X,
-    real_t *restrict TransBtBinvBt,
     real_t *restrict BtB,
+    real_t *restrict TransBtBinvBt,
     real_t *restrict BeTBeChol,
     real_t *restrict BiTBi,
     real_t *restrict TransCtCinvCt,
@@ -9170,10 +10146,13 @@ int_t impute_X_collective_explicit
         Bi, add_implicit_features,
         k, k_user, k_item, k_main,
         lam, lam_unique,
+        l1_lam, l1_lam_unique,
+        scale_lam, scale_lam_sideinfo,
         w_main, w_user, w_implicit,
         n_max, include_all_X,
-        TransBtBinvBt,
         BtB,
+        TransBtBinvBt,
+        (real_t*)NULL,
         BeTBeChol,
         BiTBi,
         TransCtCinvCt,
@@ -9344,10 +10323,13 @@ int_t topN_new_collective_explicit
     real_t *restrict Bi, bool add_implicit_features,
     int_t k, int_t k_user, int_t k_item, int_t k_main,
     real_t lam, real_t *restrict lam_unique,
+    real_t l1_lam, real_t *restrict l1_lam_unique,
+    bool scale_lam, bool scale_lam_sideinfo,
     real_t w_main, real_t w_user, real_t w_implicit,
     int_t n_max, bool include_all_X,
-    real_t *restrict TransBtBinvBt,
     real_t *restrict BtB,
+    real_t *restrict TransBtBinvBt,
+    real_t *restrict BtXbias,
     real_t *restrict BeTBeChol,
     real_t *restrict BiTBi,
     real_t *restrict CtCw,
@@ -9383,10 +10365,13 @@ int_t topN_new_collective_explicit
         Bi, add_implicit_features,
         k, k_user, k_item, k_main,
         lam, lam_unique,
+        l1_lam, l1_lam_unique,
+        scale_lam, scale_lam_sideinfo,
         w_main, w_user, w_implicit,
         n_max, include_all_X,
-        TransBtBinvBt,
         BtB,
+        TransBtBinvBt,
+        BtXbias,
         BeTBeChol,
         BiTBi,
         CtCw,
@@ -9433,7 +10418,7 @@ int_t topN_new_collective_implicit
     real_t *restrict B, real_t *restrict C,
     real_t *restrict Xa, int_t ixB[], size_t nnz,
     int_t k, int_t k_user, int_t k_item, int_t k_main,
-    real_t lam, real_t alpha, real_t w_main, real_t w_user,
+    real_t lam, real_t l1_lam, real_t alpha, real_t w_main, real_t w_user,
     real_t w_main_multiplier,
     bool apply_log_transf,
     real_t *restrict BeTBe,
@@ -9461,7 +10446,7 @@ int_t topN_new_collective_implicit
         B, n, C,
         Xa, ixB, nnz,
         k, k_user, k_item, k_main,
-        lam, alpha, w_main, w_user,
+        lam, l1_lam, alpha, w_main, w_user,
         w_main_multiplier,
         apply_log_transf,
         BeTBe,
@@ -9569,10 +10554,13 @@ int_t predict_X_new_collective_explicit
     real_t *restrict Bi, bool add_implicit_features,
     int_t k, int_t k_user, int_t k_item, int_t k_main,
     real_t lam, real_t *restrict lam_unique,
+    real_t l1_lam, real_t *restrict l1_lam_unique,
+    bool scale_lam, bool scale_lam_sideinfo,
     real_t w_main, real_t w_user, real_t w_implicit,
     int_t n_max, bool include_all_X,
-    real_t *restrict TransBtBinvBt,
     real_t *restrict BtB,
+    real_t *restrict TransBtBinvBt,
+    real_t *restrict BtXbias,
     real_t *restrict BeTBeChol,
     real_t *restrict BiTBi,
     real_t *restrict TransCtCinvCt,
@@ -9610,10 +10598,13 @@ int_t predict_X_new_collective_explicit
         Bi, add_implicit_features,
         k, k_user, k_item, k_main,
         lam, lam_unique,
+        l1_lam, l1_lam_unique,
+        scale_lam, scale_lam_sideinfo,
         w_main, w_user, w_implicit,
         n_max, include_all_X,
-        TransBtBinvBt,
         BtB,
+        TransBtBinvBt,
+        BtXbias,
         BeTBeChol,
         BiTBi,
         TransCtCinvCt,
@@ -9664,7 +10655,7 @@ int_t predict_X_new_collective_implicit
     real_t *restrict C,
     real_t *restrict U_colmeans,
     int_t k, int_t k_user, int_t k_item, int_t k_main,
-    real_t lam, real_t alpha, real_t w_main, real_t w_user,
+    real_t lam, real_t l1_lam, real_t alpha, real_t w_main, real_t w_user,
     real_t w_main_multiplier,
     bool apply_log_transf,
     real_t *restrict BeTBe,
@@ -9691,7 +10682,7 @@ int_t predict_X_new_collective_implicit
         C,
         U_colmeans,
         k, k_user, k_item, k_main,
-        lam, alpha, w_main, w_user,
+        lam, l1_lam, alpha, w_main, w_user,
         w_main_multiplier,
         apply_log_transf,
         BeTBe,

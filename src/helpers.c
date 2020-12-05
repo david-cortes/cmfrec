@@ -624,6 +624,8 @@ void tgemm_sp_dense
     int_t nthreads
 )
 {
+    if (m <= 0 || indptr[0] == indptr[m])
+        return;
     real_t *ptr_col;
     #if defined(_OPENMP) && \
                 ( (_OPENMP < 200801)  /* OpenMP < 3.0 */ \
@@ -914,9 +916,9 @@ void coo_to_csr_and_csc
                     }
                 else
                     for (size_t ix = 0; ix < nnz; ix++) {
-                        csr_w[csr_p[Xcol[ix]] + cnt_byrow[Xcol[ix]]] = W[ix];
-                        csr_v[csr_p[Xcol[ix]] + cnt_byrow[Xcol[ix]]] = Xval[ix];
-                        csr_i[csr_p[Xcol[ix]] + cnt_byrow[Xcol[ix]]++] = Xrow[ix];
+                        csr_w[csr_p[Xrow[ix]] + cnt_byrow[Xrow[ix]]] = W[ix];
+                        csr_v[csr_p[Xrow[ix]] + cnt_byrow[Xrow[ix]]] = Xval[ix];
+                        csr_i[csr_p[Xrow[ix]] + cnt_byrow[Xrow[ix]]++] = Xcol[ix];
                     }
 
             }
@@ -1163,3 +1165,39 @@ void R_nan_to_C_nan(real_t arr[], size_t n)
         arr[ix] = ISNAN(arr[ix])? NAN : arr[ix];
 }
 #endif
+
+long double compensated_sum(real_t *arr, size_t n)
+{
+    long double err = 0.;
+    long double diff = 0.;
+    long double temp;
+    long double res = 0;
+
+    for (size_t ix = 0; ix < n; ix++)
+    {
+        diff = arr[ix] - err;
+        temp = res + diff;
+        err = (temp - res) - diff;
+        res = temp;
+    }
+
+    return res;
+}
+
+long double compensated_sum_product(real_t *restrict arr1, real_t *restrict arr2, size_t n)
+{
+    long double err = 0.;
+    long double diff = 0.;
+    long double temp;
+    long double res = 0;
+
+    for (size_t ix = 0; ix < n; ix++)
+    {
+        diff = arr1[ix]*arr2[ix] - err;
+        temp = res + diff;
+        err = (temp - res) - diff;
+        res = temp;
+    }
+
+    return res;
+}
