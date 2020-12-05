@@ -6200,17 +6200,6 @@ int_t fit_collective_explicit_lbfgs_internal
         handle_interrupt
     };
 
-    if (handle_interrupt)
-        signal(SIGINT, set_interrup_global_variable);
-    if (should_stop_procedure)
-    {
-        should_stop_procedure = false;
-        fprintf(stderr, "Procedure terminated before starting optimization\n");
-        #if !defined(_FOR_R)
-        fflush(stderr);
-        #endif
-        goto cleanup;
-    }
 
     retval = lbfgs(
         nvars,
@@ -7289,6 +7278,17 @@ int_t fit_collective_explicit_als
                  = 1.;
     }
 
+    #if !defined(_WIN32) && !defined(_WIN64) && !defined(_MSC_VER)
+    struct sigaction sig_handle;
+    memset(&sig_handle, 0, sizeof(sig_handle));
+    if (handle_interrupt)
+    {
+        sig_handle.sa_flags = SA_RESETHAND;
+        sig_handle.sa_handler = set_interrup_global_variable;
+        sigemptyset(&sig_handle.sa_mask);
+    }
+    #endif
+
     if (verbose) {
         printf("Starting ALS optimization routine\n\n");
         #if !defined(_FOR_R)
@@ -7306,7 +7306,11 @@ int_t fit_collective_explicit_als
 
         /* Optimize C and D (they are independent of each other) */
         if (handle_interrupt)
+            #if !defined(_WIN32) && !defined(_WIN64) && !defined(_MSC_VER)
+            sigaction(SIGINT, &sig_handle, NULL);
+            #else
             signal(SIGINT, set_interrup_global_variable);
+            #endif
         if (should_stop_procedure) goto check_interrupt;
         if (U != NULL || nnz_U) {
             if (verbose) {
@@ -7363,7 +7367,11 @@ int_t fit_collective_explicit_als
         }
 
         if (handle_interrupt)
+            #if !defined(_WIN32) && !defined(_WIN64) && !defined(_MSC_VER)
+            sigaction(SIGINT, &sig_handle, NULL);
+            #else
             signal(SIGINT, set_interrup_global_variable);
+            #endif
         if (should_stop_procedure) goto check_interrupt;
         if (II != NULL || nnz_I) {
             if (verbose) {
@@ -7427,7 +7435,11 @@ int_t fit_collective_explicit_als
         if (add_implicit_features)
         {
             if (handle_interrupt)
+                #if !defined(_WIN32) && !defined(_WIN64) && !defined(_MSC_VER)
+                sigaction(SIGINT, &sig_handle, NULL);
+                #else
                 signal(SIGINT, set_interrup_global_variable);
+                #endif
             if (should_stop_procedure) goto check_interrupt;
             if (verbose) {
                 printf("Updating Bi...");
@@ -7474,7 +7486,11 @@ int_t fit_collective_explicit_als
 
 
             if (handle_interrupt)
+                #if !defined(_WIN32) && !defined(_WIN64) && !defined(_MSC_VER)
+                sigaction(SIGINT, &sig_handle, NULL);
+                #else
                 signal(SIGINT, set_interrup_global_variable);
+                #endif
             if (should_stop_procedure) goto check_interrupt;
             if (verbose) {
                 printf("Updating Ai...");
@@ -7597,7 +7613,11 @@ int_t fit_collective_explicit_als
 
         /* Optimize B */
         if (handle_interrupt)
+            #if !defined(_WIN32) && !defined(_WIN64) && !defined(_MSC_VER)
+            sigaction(SIGINT, &sig_handle, NULL);
+            #else
             signal(SIGINT, set_interrup_global_variable);
+            #endif
         if (should_stop_procedure) goto check_interrupt;
         if (verbose) {
             printf("Updating B ...");
@@ -7783,7 +7803,11 @@ int_t fit_collective_explicit_als
         filled_CtCw = false;
         filled_BeTBeChol = false;
         if (handle_interrupt)
+            #if !defined(_WIN32) && !defined(_WIN64) && !defined(_MSC_VER)
+            sigaction(SIGINT, &sig_handle, NULL);
+            #else
             signal(SIGINT, set_interrup_global_variable);
+            #endif
         if (should_stop_procedure) goto check_interrupt;
         if (verbose) {
             printf("Updating A ...");
@@ -8661,6 +8685,17 @@ int_t fit_collective_implicit_als
         #endif
     }
 
+    #if !defined(_WIN32) && !defined(_WIN64) && !defined(_MSC_VER)
+    struct sigaction sig_handle;
+    memset(&sig_handle, 0, sizeof(sig_handle));
+    if (handle_interrupt)
+    {
+        sig_handle.sa_flags = SA_RESETHAND;
+        sig_handle.sa_handler = set_interrup_global_variable;
+        sigemptyset(&sig_handle.sa_mask);
+    }
+    #endif
+
     for (int_t iter = 0; iter < niter; iter++)
     {
         if (iter == niter - 1 && use_cg && finalize_chol)
@@ -8668,7 +8703,11 @@ int_t fit_collective_implicit_als
 
         /* Optimize C and D (they are independent of each other) */
         if (handle_interrupt)
+            #if !defined(_WIN32) && !defined(_WIN64) && !defined(_MSC_VER)
+            sigaction(SIGINT, &sig_handle, NULL);
+            #else
             signal(SIGINT, set_interrup_global_variable);
+            #endif
         if (should_stop_procedure) goto check_interrupt;
         if (U != NULL || nnz_U) {
             if (verbose) {
@@ -8718,7 +8757,11 @@ int_t fit_collective_implicit_als
         }
 
         if (handle_interrupt)
+            #if !defined(_WIN32) && !defined(_WIN64) && !defined(_MSC_VER)
+            sigaction(SIGINT, &sig_handle, NULL);
+            #else
             signal(SIGINT, set_interrup_global_variable);
+            #endif
         if (should_stop_procedure) goto check_interrupt;
         if (II != NULL || nnz_I) {
             if (verbose) {
@@ -8769,7 +8812,11 @@ int_t fit_collective_implicit_als
 
         /* Optimize B */
         if (handle_interrupt)
+            #if !defined(_WIN32) && !defined(_WIN64) && !defined(_MSC_VER)
+            sigaction(SIGINT, &sig_handle, NULL);
+            #else
             signal(SIGINT, set_interrup_global_variable);
+            #endif
         if (should_stop_procedure) goto check_interrupt;
         if (verbose) {
             printf("Updating B...");
@@ -8826,7 +8873,11 @@ int_t fit_collective_implicit_als
 
         /* Optimize A */
         if (handle_interrupt)
+            #if !defined(_WIN32) && !defined(_WIN64) && !defined(_MSC_VER)
+            sigaction(SIGINT, &sig_handle, NULL);
+            #else
             signal(SIGINT, set_interrup_global_variable);
+            #endif
         if (should_stop_procedure) goto check_interrupt;
         if (verbose) {
             printf("Updating A...");
