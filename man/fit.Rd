@@ -728,9 +728,9 @@ cold-start recommendations in cases in which there is side info about users but 
 items or vice-versa - it is not recommended to rely on them.)
 
 Some extra considerations about the parameters here: \itemize{
-\item None of the terms in the optimization objective is scaled by the number of entries,
-thus hyperparameters such as `lambda` will require more tuning than in other software and
-will require trying a wider range of values.
+\item By default, the terms in the optimization objective are not scaled by the
+number of entries (see parameter `scale_lam`), thus hyperparameters such as `lambda`
+will require more tuning than in other software and will require trying a wider range of values.
 \item The regularization applied to the matrices is the same for all users and for all items.
 \item The default hyperparameters are not geared towards speed - for faster fitting times,
 use `method='als'`, `use_cg=TRUE`, `finalize_chol=FALSE`, `precompute_for_predictions=FALSE`,

@@ -2190,9 +2190,10 @@ class CMF(_CMF):
 
     Note
     ----
-    The model optimization objective will not scale any of its terms according
-    to number of entries, so hyperparameters such as ``lambda_`` will require
-    more tuning than in other software and trying out values over a wider range.
+    By default, the model optimization objective will not scale any of its
+    terms according to number of entries (see parameter ``scale_lam``),
+    so hyperparameters such as ``lambda_`` will require more tuning than
+    in other software and trying out values over a wider range.
 
     Parameters
     ----------

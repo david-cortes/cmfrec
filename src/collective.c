@@ -1247,7 +1247,7 @@ void collective_closed_form_block
     
     /* Potential bad inputs - should not reach this point_t */
     if (  (  (Xa_dense != NULL && cnt_NA_x == n) ||
-             (  (Xa_dense == NULL && nnz == 0)
+             (  Xa_dense == NULL && nnz == 0
                 && !(NA_as_zero_X && bias_BtX != NULL))  )
                 &&
           (  (u_vec != NULL && cnt_NA_u == p) ||
@@ -4375,7 +4375,7 @@ void optimizeA_collective
     if (Xfull == NULL) do_B = false;
     /* TODO: here should only need to set straight away the lower half,
        and only when there are un-even entries in each matrix */
-    if (!use_cg || is_first_iter)
+    if (!use_cg || is_first_iter || nonneg || l1_lam || l1_lam_bias)
         set_to_zero_(A, (size_t)max2(m, m_u)*(size_t)lda - (size_t)(lda-k_totA),
                      nthreads);
 
@@ -4858,15 +4858,16 @@ void optimizeA_collective
                 );
         }
 
-        if (bias_BtX != NULL)
+        if (bias_BtX != NULL && Xfull == NULL && NA_as_zero_X)
         {
             for (size_t row = 0; row < (size_t)m_x; row++)
-                cblas_taxpy(k+k_main, 1., bias_BtX, 1,
-                            A + (size_t)k_user + row*(size_t)lda, 1);
+                for (size_t ix = 0; ix < (size_t)(k+k_main); ix++)
+                    A[(size_t)k_user + row*(size_t)lda + ix] += bias_BtX[ix];
         }
 
         #ifdef FORCE_NO_NAN_PROPAGATION
-        if (!nonneg) {
+        if (!nonneg && !l1_lam && !l1_lam_bias)
+        {
             if ((Xfull != NULL && !full_dense) || (U != NULL && !full_dense_u))
                 #pragma omp parallel for schedule(static) \
                         num_threads(min2(4, nthreads)) \
@@ -4910,6 +4911,7 @@ void optimizeA_collective
             *filled_BeTBeChol = false;
         }
 
+
         if (add_implicit_features && use_cg && w_implicit != 1. &&
             (keep_precomputed || (Xfull != NULL && !full_dense) ||
                                  (U != NULL && !full_dense_u)))
@@ -4919,7 +4921,6 @@ void optimizeA_collective
 
         if ((Xfull != NULL && !full_dense) || (U != NULL && !full_dense_u))
         {
-
             if (w_user != 1. && p && use_cg &&
                 *CtC_is_scaled && bufferCtC != NULL)
             {
@@ -5267,8 +5268,8 @@ void optimizeA_collective
         if (bias_BtX != NULL && NA_as_zero_X && Xfull == NULL && !add_X)
         {
             for (size_t row = 0; row < (size_t)m_x; row++)
-                cblas_taxpy(k+k_main, 1., bias_BtX, 1,
-                            A + (size_t)k_user + row*(size_t)lda, 1);
+                for (size_t ix = 0; ix < (size_t)(k+k_main); ix++)
+                    A[(size_t)k_user + row*(size_t)lda + ix] += bias_BtX[ix];
         }
 
         skip_chol_simplifications:
@@ -5959,6 +5960,7 @@ int_t fit_collective_explicit_lbfgs_internal
     real_t *restrict B_plus_bias
 )
 {
+    should_stop_procedure = false;
     real_t *restrict buffer_real_t = NULL;
     real_t *restrict buffer_mt = NULL;
     int_t retval = 0;
@@ -6515,6 +6517,7 @@ int_t fit_collective_explicit_als
     real_t *restrict precomputedCtCw
 )
 {
+    should_stop_procedure = false;
     int_t retval = 0;
 
     if (k_user && U == NULL && nnz_U == 0) {
@@ -6912,12 +6915,6 @@ int_t fit_collective_explicit_als
                 m = max2(m, m_u);
             if (II != NULL || nnz_I)
                 n = max2(n, n_i);
-            /* TODO: delete */
-            // if (!center) {
-            //     center = true;
-            //     *glob_mean = 0.;
-            // }
-            /* end of delete */
         }
         retval = convert_sparse_X(
                     ixA, ixB, X, nnz,
@@ -7019,10 +7016,7 @@ int_t fit_collective_explicit_als
 
     if (NA_as_zero_X && (center || user_bias || item_bias))
     {
-        /* TODO: restore */
-        // if (precomputedBtXbias == NULL || (!item_bias && !center) ||
-        //     (user_bias && !item_bias))
-        if (true)
+        if (precomputedBtXbias == NULL || (user_bias && !item_bias))
         {
             free_BtX = true;
             buffer_BtX = (real_t*)calloc((size_t)(k+k_main+1), sizeof(real_t));
@@ -7202,8 +7196,7 @@ int_t fit_collective_explicit_als
     size_buffer = max2(max2(size_bufferA, size_bufferB),
                        max2(size_bufferC, size_bufferD));
     size_buffer = max2(size_buffer, max2(size_bufferAi, size_bufferBi));
-    /* TODO: restore */
-    buffer_real_t = (real_t*)malloc(500*size_buffer * sizeof(real_t));
+    buffer_real_t = (real_t*)malloc(size_buffer * sizeof(real_t));
     if (buffer_real_t == NULL) goto throw_oom;
 
 
@@ -7530,9 +7523,9 @@ int_t fit_collective_explicit_als
         }
 
         /* Apply bias beforehand, as its column will be fixed */
-        if (user_bias && item_bias)
+        if (item_bias)
         {
-            for (int_t ix = 0; ix < m_max; ix++)
+            for (int_t ix = 0; ix < m; ix++)
                 A_bias[(size_t)(k_user+k+k_main)
                         + ix*(size_t)(k_user+k+k_main + 1)] = 1.;
         }
@@ -7568,7 +7561,7 @@ int_t fit_collective_explicit_als
             if (!center)
                 cblas_tgemv(CblasRowMajor, CblasTrans,
                             m, k+k_main+item_bias,
-                            -1., A_bias + k_user, k_user+k+k_main+has_bias,
+                            -1., A_bias + k_user, k_totA+has_bias,
                             biasA, 1,
                             0., buffer_BtX, 1);
             else {
@@ -7578,7 +7571,7 @@ int_t fit_collective_explicit_als
                                 -(biasA[row] + *glob_mean),
                                 A_bias
                                     + (size_t)k_user
-                                    + row*(size_t)(k_user+k+k_main+has_bias), 1,
+                                    + row*(size_t)(k_totA+has_bias), 1,
                                 buffer_BtX, 1);
             }
         }
@@ -7588,7 +7581,7 @@ int_t fit_collective_explicit_als
             set_to_zero(buffer_BtX, k+k_main+item_bias);
             sum_by_cols(A_bias + k_user, buffer_BtX,
                         m, k+k_main,
-                        k_user+k+k_main+has_bias, nthreads);
+                        k_totA+has_bias, nthreads);
             if (item_bias)
                 buffer_BtX[k+k_main] = (real_t)m;
             cblas_tscal(k+k_main+item_bias, -(*glob_mean), buffer_BtX, 1);
@@ -7721,9 +7714,9 @@ int_t fit_collective_explicit_als
                         biasB, 1);
 
         /* Apply bias beforehand, as its column will be fixed */
-        if (item_bias && user_bias)
+        if (user_bias)
         {
-            for (int_t ix = 0; ix < n_max; ix++)
+            for (int_t ix = 0; ix < n; ix++)
                 B_bias[(size_t)(k_item+k+k_main)
                         + ix*(size_t)(k_item+k+k_main + 1)] = 1.;
         }
@@ -7754,7 +7747,7 @@ int_t fit_collective_explicit_als
             if (!center)
                 cblas_tgemv(CblasRowMajor, CblasTrans,
                             n, k+k_main+user_bias,
-                            -1., B_bias + k_item, k_item+k+k_main+has_bias,
+                            -1., B_bias + k_item, k_totB+has_bias,
                             biasB, 1,
                             0., buffer_BtX, 1);
             else {
@@ -7764,7 +7757,7 @@ int_t fit_collective_explicit_als
                                 -(biasB[col] + *glob_mean),
                                 B_bias
                                     + (size_t)k_item
-                                    + col*(size_t)(k_item+k+k_main+has_bias), 1,
+                                    + col*(size_t)(k_totB+has_bias), 1,
                                 buffer_BtX, 1);
             }
         }
@@ -7774,7 +7767,7 @@ int_t fit_collective_explicit_als
             set_to_zero(buffer_BtX, k+k_main+user_bias);
             sum_by_cols(B_bias + k_item, buffer_BtX,
                         n, k+k_main,
-                        k_item+k+k_main+has_bias, nthreads);
+                        k_totB+has_bias, nthreads);
             if (user_bias)
                 buffer_BtX[k+k_main] = (real_t)n;
             cblas_tscal(k+k_main+user_bias, -(*glob_mean), buffer_BtX, 1);
@@ -7938,16 +7931,20 @@ int_t fit_collective_explicit_als
             set_to_zero(precomputedBtXbias, k+k_main+user_bias);
             if (item_bias)
             {
-                sum_by_cols(B_bias
-                                + k_item
-                                + (size_t)n*(size_t)(k_item+k+k_main+has_bias),
-                            precomputedBtXbias,
-                            n_max - n, k+k_main,
-                            k_item+k+k_main+has_bias, nthreads);
-                if (user_bias)
-                    precomputedBtXbias[k+k_main] = (real_t)(n_max - n);
-                cblas_tscal(k+k_main+user_bias, -(*glob_mean),
-                            precomputedBtXbias, 1);
+                if (n_max > n && center)
+                {
+                    sum_by_cols(B_bias
+                                    + k_item
+                                    + (size_t)n*
+                                      (size_t)(k_item+k+k_main+has_bias),
+                                precomputedBtXbias,
+                                n_max - n, k+k_main,
+                                k_item+k+k_main+has_bias, nthreads);
+                    if (user_bias)
+                        precomputedBtXbias[k+k_main] = (real_t)(n_max - n);
+                    cblas_tscal(k+k_main+user_bias, -(*glob_mean),
+                                precomputedBtXbias, 1);
+                }
                 if (!center)
                     cblas_tgemv(CblasRowMajor, CblasTrans,
                                 n, k+k_main+user_bias,
@@ -8336,6 +8333,7 @@ int_t fit_collective_implicit_als
     real_t *restrict precomputedBeTBeChol
 )
 {
+    should_stop_procedure = false;
     int_t retval = 0;
     if (k_user && U == NULL && nnz_U == 0) {
         if (verbose)
@@ -9117,6 +9115,16 @@ int_t precompute_collective_explicit
     if (NA_as_zero_X && BtXbias != NULL)
     {
         set_to_zero(BtXbias, k+k_main);
+        if (n_max > n && glob_mean != 0.)
+        {
+            sum_by_cols(B
+                            + (size_t)k_item
+                            + (size_t)n*(size_t)(k_item+k+k_main),
+                        BtXbias,
+                        n_max - n, k+k_main,
+                        k_item+k+k_main, 1);
+            cblas_tscal(k+k_main, -glob_mean, BtXbias, 1);
+        }
         if (biasB != NULL)
         {
             if (glob_mean == 0.)
@@ -9139,16 +9147,6 @@ int_t precompute_collective_explicit
         else if (glob_mean != 0.)
         {
             for (size_t col = 0; col < (size_t)n; col++)
-                cblas_taxpy(k+k_main, -glob_mean,
-                            B
-                                + (size_t)k_item
-                                + col*(size_t)(k_item+k+k_main), 1,
-                            BtXbias, 1);
-        }
-
-        if (glob_mean != 0. && n_max > n)
-        {
-            for (size_t col = n; col < (size_t)n_max; col++)
                 cblas_taxpy(k+k_main, -glob_mean,
                             B
                                 + (size_t)k_item

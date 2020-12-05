@@ -2064,6 +2064,7 @@ void optimizeA
     if (Xfull == NULL) do_B = false;
     if (l1_lam || l1_lam_last || nonneg) use_cg = false;
 
+
     /* TODO: in many cases here, it's possible to shrink the buffer
        size for the threads when using 'use_cg'. */
 
@@ -2142,7 +2143,7 @@ void optimizeA
 
         
         #ifdef FORCE_NO_NAN_PROPAGATION
-        if (!full_dense && !nonneg)
+        if (!full_dense && !nonneg && !l1_lam && !l1_lam_last)
             #pragma omp parallel for schedule(static) \
                     num_threads(min2(4, nthreads)) \
                     shared(A, m, lda)
@@ -2419,6 +2420,9 @@ void optimizeA
        This is the expected case for most situations. */
     else
     {
+        if (is_first_iter)
+            set_to_zero_(A, (size_t)m*(size_t)lda - (size_t)(lda-k), nthreads);
+
         /* When NAs are treated as zeros, can use a precomputed t(B)*B */
         real_t *restrict bufferBtB = NULL;
         bool add_diag_to_BtB = !(use_cg && Xfull == NULL && NA_as_zero) &&
@@ -2471,14 +2475,8 @@ void optimizeA
                        nonneg, max_cd_steps, bias_BtX, bias_X, bias_X_glob)
         for (size_t_for ix = 0; ix < (size_t)m; ix++)
         {
-            /* FIXME: this should work with only the first and the second line
-               (which is commented out), but it produces incorrect results
-               unless adding the third condition. This is a quick fix which
-               covers as many cases as I could test, but in reality it could be
-               a major bug underneath that corrupts some buffer. */
             if ((Xcsr_p[ix+(size_t)1] > Xcsr_p[ix]) ||
-                // (NA_as_zero && bias_BtX != NULL))
-                (NA_as_zero))
+                (NA_as_zero && bias_BtX != NULL))
             {
                 factors_closed_form(
                     A + ix*(size_t)lda, k,
