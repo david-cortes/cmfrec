@@ -668,7 +668,7 @@ void optimizeA_implicit
 int_t initialize_biases
 (
     real_t *restrict glob_mean, real_t *restrict biasA, real_t *restrict biasB,
-    bool user_bias, bool item_bias,
+    bool user_bias, bool item_bias, bool center,
     real_t lam_user, real_t lam_item,
     bool scale_lam,
     int_t m, int_t n,
@@ -730,6 +730,22 @@ int_t fit_most_popular
 (
     real_t *restrict biasA, real_t *restrict biasB,
     real_t *restrict glob_mean,
+    real_t lam_user, real_t lam_item,
+    bool scale_lam,
+    real_t alpha,
+    int_t m, int_t n,
+    int_t ixA[], int_t ixB[], real_t *restrict X, size_t nnz,
+    real_t *restrict Xfull,
+    real_t *restrict weight,
+    bool implicit, bool adjust_weight, bool apply_log_transf,
+    bool nonneg,
+    real_t *restrict w_main_multiplier,
+    int_t nthreads
+);
+int_t fit_most_popular_internal
+(
+    real_t *restrict biasA, real_t *restrict biasB,
+    real_t *restrict glob_mean, bool center,
     real_t lam_user, real_t lam_item,
     bool scale_lam,
     real_t alpha,

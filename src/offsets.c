@@ -1297,7 +1297,7 @@ int_t fit_offsets_explicit_lbfgs_internal
 
     retval = initialize_biases(
         glob_mean, values, values + (user_bias? m : 0),
-        user_bias, item_bias,
+        user_bias, item_bias, center,
         (lam_unique == NULL)? (lam) : (lam_unique[0]),
         (lam_unique == NULL)? (lam) : (lam_unique[1]),
         false,
@@ -1311,24 +1311,6 @@ int_t fit_offsets_explicit_lbfgs_internal
         nthreads
     );
     if (retval != 0) goto cleanup;
-
-    if (!center)
-    {
-        if (Xfull != NULL)
-        {
-            for (size_t row = 0; row < (size_t)m; row++)
-                for (size_t col = 0; col < (size_t)n; col++)
-                    Xfull[col + row*(size_t)n] += *glob_mean;
-        }
-
-        else if (nnz)
-        {
-            for (size_t ix = 0; ix < nnz; ix++)
-                X[ix] += *glob_mean;
-        }
-        
-        *glob_mean = 0.;
-    }
 
     if (reset_values)
         retval = rnorm(values + (user_bias? m : 0) + (item_bias? n : 0),

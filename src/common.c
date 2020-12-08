@@ -2543,43 +2543,50 @@ void optimizeA_implicit
     int_t ix = 0;
 
     if (use_cg)
+    {
         #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
                 shared(A, B, lda, ldb, m, n, k, lam, \
                        Xcsr, Xcsr_i, Xcsr_p, precomputedBtB, buffer_real_t, \
                        max_cg_steps, size_buffer)
         for (ix = 0; ix < m; ix++)
-            factors_implicit_cg(
-                A + (size_t)ix*lda, k,
-                B, ldb,
-                Xcsr + Xcsr_p[ix], Xcsr_i + Xcsr_p[ix],
-                Xcsr_p[ix+(size_t)1] - Xcsr_p[ix],
-                lam,
-                precomputedBtB, k,
-                max_cg_steps,
-                buffer_real_t + ((size_t)omp_get_thread_num() * size_buffer)
-            );
+            if (Xcsr_p[ix+(size_t)1] > Xcsr_p[ix])
+                factors_implicit_cg(
+                    A + (size_t)ix*lda, k,
+                    B, ldb,
+                    Xcsr + Xcsr_p[ix], Xcsr_i + Xcsr_p[ix],
+                    Xcsr_p[ix+(size_t)1] - Xcsr_p[ix],
+                    lam,
+                    precomputedBtB, k,
+                    max_cg_steps,
+                    buffer_real_t + ((size_t)omp_get_thread_num() * size_buffer)
+                );
+    }
+    
     else
+    {
         #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
                 shared(A, B, lda, ldb, m, n, k, lam, l1_lam, \
                        Xcsr, Xcsr_i, Xcsr_p, precomputedBtB, buffer_real_t, \
                        size_buffer, nonneg, max_cd_steps)
         for (ix = 0; ix < m; ix++)
-            factors_implicit_chol(
-                A + (size_t)ix*lda, k,
-                B, ldb,
-                Xcsr + Xcsr_p[ix], Xcsr_i + Xcsr_p[ix],
-                Xcsr_p[ix+(size_t)1] - Xcsr_p[ix],
-                lam, l1_lam,
-                precomputedBtB, k,
-                nonneg, max_cd_steps,
-                buffer_real_t + ((size_t)omp_get_thread_num() * size_buffer)
-            );
+            if (Xcsr_p[ix+(size_t)1] > Xcsr_p[ix])
+                factors_implicit_chol(
+                    A + (size_t)ix*lda, k,
+                    B, ldb,
+                    Xcsr + Xcsr_p[ix], Xcsr_i + Xcsr_p[ix],
+                    Xcsr_p[ix+(size_t)1] - Xcsr_p[ix],
+                    lam, l1_lam,
+                    precomputedBtB, k,
+                    nonneg, max_cd_steps,
+                    buffer_real_t + ((size_t)omp_get_thread_num() * size_buffer)
+                );
+    }
 }
 
 int_t initialize_biases
 (
     real_t *restrict glob_mean, real_t *restrict biasA, real_t *restrict biasB,
-    bool user_bias, bool item_bias,
+    bool user_bias, bool item_bias, bool center,
     real_t lam_user, real_t lam_item,
     bool scale_lam,
     int_t m, int_t n,
@@ -2609,7 +2616,7 @@ int_t initialize_biases
     /* First calculate the global mean */
     double xsum = 0.;
     size_t cnt = 0;
-    if (!nonneg)
+    if (center)
     {
         if (Xfull != NULL)
         {
@@ -3263,12 +3270,50 @@ int_t fit_most_popular
     int_t nthreads
 )
 {
+    return fit_most_popular_internal(
+        biasA, biasB,
+        glob_mean, true,
+        lam_user, lam_item,
+        scale_lam,
+        alpha,
+        m, n,
+        ixA, ixB, X, nnz,
+        Xfull,
+        weight,
+        implicit, adjust_weight, apply_log_transf,
+        nonneg,
+        w_main_multiplier,
+        nthreads
+    );
+}
+
+
+int_t fit_most_popular_internal
+(
+    real_t *restrict biasA, real_t *restrict biasB,
+    real_t *restrict glob_mean, bool center,
+    real_t lam_user, real_t lam_item,
+    bool scale_lam,
+    real_t alpha,
+    int_t m, int_t n,
+    int_t ixA[], int_t ixB[], real_t *restrict X, size_t nnz,
+    real_t *restrict Xfull,
+    real_t *restrict weight,
+    bool implicit, bool adjust_weight, bool apply_log_transf,
+    bool nonneg,
+    real_t *restrict w_main_multiplier,
+    int_t nthreads
+)
+{
     int_t retval = 0;
     int_t *restrict cnt_by_col = NULL;
     int_t *restrict cnt_by_row = NULL;
     real_t *restrict sum_by_col = NULL;
     real_t *restrict sum_by_row = NULL;
     int_t maxiter = 5;
+
+    if (glob_mean != NULL)
+        *glob_mean = 0;
 
     if (implicit)
     {
@@ -3347,7 +3392,7 @@ int_t fit_most_popular
 
     retval = initialize_biases(
         glob_mean, biasA, biasB,
-        false, biasA == NULL,
+        false, biasA == NULL, center,
         lam_user, lam_item,
         scale_lam,
         m, n,

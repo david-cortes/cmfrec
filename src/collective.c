@@ -6086,7 +6086,7 @@ int_t fit_collective_explicit_lbfgs_internal
 
     retval = initialize_biases(
         glob_mean, values, values + (user_bias? m_max : 0),
-        user_bias, item_bias,
+        user_bias, item_bias, center,
         (lam_unique == NULL)? (lam) : (lam_unique[0]),
         (lam_unique == NULL)? (lam) : (lam_unique[1]),
         false,
@@ -6100,24 +6100,6 @@ int_t fit_collective_explicit_lbfgs_internal
         nthreads
     );
     if (retval != 0) goto cleanup;
-
-    if (!center)
-    {
-        if (Xfull != NULL)
-        {
-            for (size_t row = 0; row < (size_t)m; row++)
-                for (size_t col = 0; col < (size_t)n; col++)
-                    Xfull[col + row*(size_t)n] += *glob_mean;
-        }
-
-        else if (nnz)
-        {
-            for (size_t ix = 0; ix < nnz; ix++)
-                X[ix] += *glob_mean;
-        }
-        
-        *glob_mean = 0.;
-    }
 
     if (U != NULL || U_sp != NULL) {
         retval = center_by_cols(
@@ -6715,9 +6697,9 @@ int_t fit_collective_explicit_als
     {
         if (user_bias && item_bias)
         {
-            retval = fit_most_popular(
+            retval = fit_most_popular_internal(
                 biasA, biasB,
-                glob_mean,
+                glob_mean, center,
                 (lam_unique == NULL)? (lam) : (lam_unique[0]),
                 (lam_unique == NULL)? (lam) : (lam_unique[1]),
                 scale_lam,
@@ -6738,7 +6720,7 @@ int_t fit_collective_explicit_als
         {
             retval = initialize_biases(
                 glob_mean, biasA, biasB,
-                user_bias, item_bias,
+                user_bias, item_bias, center,
                 (lam_unique == NULL)? (lam) : (lam_unique[0]),
                 (lam_unique == NULL)? (lam) : (lam_unique[1]),
                 scale_lam,
@@ -6752,44 +6734,6 @@ int_t fit_collective_explicit_als
                 nthreads
             );
             if (retval != 0) goto throw_oom;
-        }
-
-        if (!center)
-        {
-            if (Xfull != NULL)
-            {
-                for (size_t row = 0; row < (size_t)m; row++)
-                    for (size_t col = 0; col < (size_t)n; col++)
-                        Xfull[col + row*(size_t)n] += *glob_mean;
-            }
-
-            else if (nnz)
-            {
-                for (size_t ix = 0; ix < nnz; ix++)
-                    X[ix] += *glob_mean;
-            }
-
-            if (user_bias && item_bias)
-            {
-                for (size_t row = 0; row < (size_t)m; row++)
-                    biasA[row] += *glob_mean / 2.;
-                for (size_t col = 0; col < (size_t)n; col++)
-                    biasB[col] += *glob_mean / 2.;
-            }
-
-            else if (user_bias)
-            {
-                for (size_t row = 0; row < (size_t)m; row++)
-                    biasA[row] += *glob_mean;
-            }
-
-            else if (item_bias)
-            {
-                for (size_t col = 0; col < (size_t)n; col++)
-                    biasB[col] += *glob_mean;
-            }
-
-            *glob_mean = 0.;
         }
     }
 
@@ -6813,12 +6757,6 @@ int_t fit_collective_explicit_als
                 (compensated_sum(weight, nnz)
                     + (long double)((size_t)m*(size_t)n - nnz));
             }
-
-            // if (fabs_t(*glob_mean) < 1e-8)
-            // {
-            //     *glob_mean = 0.;
-            //     center = false;
-            // }
         }
 
         else {

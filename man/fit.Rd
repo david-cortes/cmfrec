@@ -521,12 +521,17 @@ and `OMF_implicit` models.}
 In order for this to work correctly, the `X` input data must also be
 non-negative. This constraint will also be applied to the `Ai`
 and `Bi` matrices if passing `add_implicit_features=TRUE`.
+
+\bold{Important:} be aware that the default options are to perform mean
+centering and to add user and item biases, which might be undesirable and
+hinder performance when having non-negativity constraints (especially mean centering).
+
 This option is not available when using the L-BFGS method.
 Note that, when determining non-negative factors, it will always
 use a coordinate descent method, regardless of the value passed
 for `use_cg` and `finalize_chol`.
 When used for recommender systems, one usually wants to pass `FALSE` here.
-For better results, do not use biases alongside this option,
+For better results, do not use centering alongside this option,
 and use a higher regularization coupled with more iterations..}
 
 \item{nonneg_C}{Whether to constrain the `C` matrix to be non-negative.
