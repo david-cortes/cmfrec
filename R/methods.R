@@ -5,7 +5,7 @@
 #' \link{CMF_implicit}, \link{MostPopular}, \link{ContentBased},
 #' \link{OMF_explicit}, \link{OMF_implicit}.
 #' @param ... Extra arguments (not used).
-#' @return No return value (information is printed).
+#' @return Returns the same model object that was passes as input.
 #' @export
 print.cmfrec <- function(x, ...) {
     cat(sprintf("'%s' Model Object\n\n", class(x)[1]))
@@ -61,6 +61,8 @@ print.cmfrec <- function(x, ...) {
     
     if (NROW(x$precomputed$BtB))
         cat("(Model has precomputed matrices for predictions)\n")
+    
+    return(invisible(x))
 }
 
 #' @title Get information about factorization model

@@ -14,7 +14,7 @@
 \item{...}{Extra arguments (not used).}
 }
 \value{
-No return value (information is printed).
+Returns the same model object that was passes as input.
 }
 \description{
 Print basic properties of a `cmfrec` object (a base class
