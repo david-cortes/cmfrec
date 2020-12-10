@@ -142,6 +142,9 @@ class _CMF:
             alpha = float(alpha) if isinstance(alpha, int) else alpha
             assert isinstance(alpha, float) and alpha > 0.
 
+        if (center and nonneg):
+            warnings.warn("Warning: will fit a model with centering and non-negativity constraints.")
+
         self.k = k
         self.k_user = k_user
         self.k_item = k_item

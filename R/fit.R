@@ -1056,6 +1056,9 @@ validate.inputs <- function(model, implicit=FALSE,
         }
     }
     
+    if (nonneg && center)
+        warning("Warning: fitting a model with centering and non-negativity constraints.")
+    
     return(list(
         processed_X = processed_X,
         processed_U = processed_U,
