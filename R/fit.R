@@ -1058,6 +1058,8 @@ validate.inputs <- function(model, implicit=FALSE,
     
     if (nonneg && center)
         warning("Warning: fitting a model with centering and non-negativity constraints.")
+    if (NA_as_zero && add_implicit_features)
+        warning("Warning: will add implicit features while having 'NA_as_zero'.")
     
     return(list(
         processed_X = processed_X,

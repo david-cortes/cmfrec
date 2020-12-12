@@ -144,6 +144,8 @@ class _CMF:
 
         if (center and nonneg):
             warnings.warn("Warning: will fit a model with centering and non-negativity constraints.")
+        if (NA_as_zero and add_implicit_features):
+            warnings.warn("Warning: will add implicit features while having 'NA_as_zero'.")
 
         self.k = k
         self.k_user = k_user
