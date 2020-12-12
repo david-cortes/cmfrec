@@ -8,7 +8,7 @@
 #' @return Returns the same model object that was passes as input.
 #' @export
 print.cmfrec <- function(x, ...) {
-    cat(sprintf("'%s' Model Object\n\n", class(x)[1]))
+    cat(sprintf("'%s' Model Object\n\n", class(x)[1L]))
     if (!("MostPopular" %in% class(x))) {
         cat(sprintf("Dimensions: %d x %d\n", NCOL(x$matrices$A), NCOL(x$matrices$B)))
         cat(sprintf("Latent factors (shared): %d\n\n", x$info$k))
@@ -28,7 +28,7 @@ print.cmfrec <- function(x, ...) {
             cat(sprintf(" k_sec: %d", x$info$k_sec))
         cat("\n")
     }
-    if (NROW(x$info$lambda) == 1) {
+    if (NROW(x$info$lambda) == 1L) {
         cat(sprintf("Regularization: %.2g\n", x$info$lambda))
     } else {
         cat("Using different regularization parameters\n")

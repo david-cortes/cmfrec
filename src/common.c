@@ -1982,7 +1982,7 @@ size_t buffer_size_optimizeA
         if (use_cg)
             size_thread_buffer = max2(size_thread_buffer, (3 * k));
         if (use_cg && !has_dense)
-            size_thread_buffer = (3 * k) + (NA_as_zero? n : 0);
+            size_thread_buffer = (3 * k) + ((NA_as_zero && k >= n)? n : 0);
         if (nonneg)
             size_thread_buffer += k;
         else if (has_l1)
@@ -2461,7 +2461,8 @@ void optimizeA
         if (use_cg)
             size_buffer = max2(size_buffer, (size_t)(3 * k));
         if (use_cg && Xfull == NULL)
-            size_buffer = (size_t)(3 * k) + (size_t)(NA_as_zero? n : 0);
+            size_buffer = (size_t)(3 * k)
+                        + (size_t)((NA_as_zero && k >= n)? n : 0);
         if (nonneg)
             size_buffer += k;
         else if (l1_lam || l1_lam_last)

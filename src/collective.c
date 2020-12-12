@@ -4109,6 +4109,8 @@ size_t buffer_size_optimizeA_collective
             if (do_B)
                 buffer_thread += n;
             buffer_thread += use_cg? (3*k_totA) : (square(k_totA));
+            if (use_cg && NA_as_zero_X && !has_dense && (k+k_main) >= n)
+                buffer_thread += n;
             if (nonneg)
                 buffer_thread += k_totA;
             else if (has_l1)
@@ -4181,7 +4183,7 @@ size_t buffer_size_optimizeA_collective
             buffer_thread += k_totA;
         else if (has_l1)
             buffer_thread += (size_t)3*k_totA;
-        if (use_cg && !has_dense && NA_as_zero_X && has_weights)
+        if (use_cg && !has_dense && NA_as_zero_X && (k+k_main) >= n)
             buffer_thread += n;
 
         buffer_size += buffer_thread * nthreads;
@@ -4939,6 +4941,8 @@ void optimizeA_collective
             if (do_B)
                 buffer_real_t += (size_t)n*(size_t)nthreads;
             size_t size_buffer = use_cg? (3*k_totA) : (square(k_totA));
+            if (use_cg && NA_as_zero_X && Xfull == NULL && (k+k_main) >= n)
+                size_buffer += n;
             if (nonneg)
                 size_buffer += k_totA;
             else if (l1_lam || l1_lam_bias)
@@ -5279,7 +5283,7 @@ void optimizeA_collective
             size_buffer += k_totA;
         else if (l1_lam || l1_lam_bias)
             size_buffer += (size_t)3*(size_t)k_totA;
-        if (use_cg && Xfull == NULL && NA_as_zero_X && weight != NULL)
+        if (use_cg && Xfull == NULL && NA_as_zero_X && (k+k_main) >= n)
             size_buffer += n;
 
         if (!p && U_csr_p == NULL) {
@@ -6906,7 +6910,7 @@ int_t fit_collective_explicit_als
             B_bias = B_plus_bias;
         if (A_bias == NULL || B_bias == NULL) goto throw_oom;
         
-        if (Xcsr != NULL)
+        if (Xcsr != NULL && Xfull == NULL)
         {
             if (item_bias && !NA_as_zero_X) {
                 Xcsr_orig = (real_t*)malloc(nnz*sizeof(real_t));
@@ -7614,7 +7618,7 @@ int_t fit_collective_explicit_als
                 nonneg, max_cd_steps,
                 (buffer_BtX != NULL && (center || user_bias))?
                     (buffer_BtX) : ((real_t*)NULL),
-                (buffer_BtX != NULL && (center || user_bias))?
+                (buffer_BtX != NULL && user_bias)?
                     (biasA) : ((real_t*)NULL),
                 *glob_mean,
                 false,
@@ -7652,7 +7656,7 @@ int_t fit_collective_explicit_als
                 nonneg, max_cd_steps,
                 (buffer_BtX != NULL && (center || user_bias))?
                     (buffer_BtX) : ((real_t*)NULL),
-                (buffer_BtX != NULL && (center || user_bias))?
+                (buffer_BtX != NULL && user_bias)?
                     (biasA) : ((real_t*)NULL),
                 *glob_mean,
                 false,
@@ -7788,7 +7792,7 @@ int_t fit_collective_explicit_als
                 nonneg, max_cd_steps,
                 (buffer_BtX != NULL && (center || item_bias))?
                     (buffer_BtX) : ((real_t*)NULL),
-                (buffer_BtX != NULL && (center || item_bias))?
+                (buffer_BtX != NULL && item_bias)?
                     (biasB) : ((real_t*)NULL),
                 *glob_mean,
                 precompute_for_predictions,
@@ -7821,7 +7825,7 @@ int_t fit_collective_explicit_als
                 nonneg, max_cd_steps,
                 (buffer_BtX != NULL && (center || item_bias))?
                     (buffer_BtX) : ((real_t*)NULL),
-                (buffer_BtX != NULL && (center || item_bias))?
+                (buffer_BtX != NULL && item_bias)?
                     (biasB) : ((real_t*)NULL),
                 *glob_mean,
                 iter == niter - 1,
