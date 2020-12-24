@@ -99,6 +99,7 @@ process.inputs.topN <- function(model, obj, user=NULL, a_vec=NULL, a_bias=NULL,
                   output_score=FALSE, reindex=TRUE) {
     outp_ix <- integer(length = n)
     outp_score <- numeric(length = ifelse(output_score, n, 0L))
+    if (is.null(a_bias)) a_bias <- 0.
     
     if (model == "CMF") {
         ret_code <- .Call("call_topN_old_collective_explicit",
