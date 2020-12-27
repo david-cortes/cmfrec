@@ -1070,6 +1070,14 @@ class _CMF:
         
             if user.shape[0] == 1:
                 if (user[0] == -1) or (item[0] == -1):
+                    if isinstance(self, CMF):
+                        out = self.glob_mean_
+                        if (user[0] >= 0) and (self.user_bias):
+                            out += self.user_bias_[user]
+                        if (item[0] >= 0) and (self.item_bias):
+                            out += self.item_bias_[item]
+                        if (self.center) or (self.user_bias and user[0] >= 0) or (self.item_bias and item[0] >= 0):
+                            return out
                     return np.nan
                 else:
                     out = self._A_pred[user, self.k_user:].dot(self._B_pred[item, self.k_item:].T).reshape(-1)[0]
@@ -1084,17 +1092,30 @@ class _CMF:
             else:
                 n_users = max(self._A_pred.shape[0], self.user_bias_.shape[0])
                 n_items = max(self._B_pred.shape[0], self.item_bias_.shape[0])
-                return c_funs.call_predict_multiple(
-                    self._A_pred,
-                    self._B_pred,
-                    self.user_bias_,
-                    self.item_bias_,
-                    self.glob_mean_,
-                    np.array(user).astype(ctypes.c_int),
-                    np.array(item).astype(ctypes.c_int),
-                    self._k_pred, self.k_user, self.k_item, self._k_main_col,
-                    self.nthreads
-                )
+                if isinstance(self, CMF):
+                    return c_funs.call_predict_X_old_collective_explicit(
+                        self._A_pred,
+                        self._B_pred,
+                        self.user_bias_,
+                        self.item_bias_,
+                        self.glob_mean_,
+                        np.array(user).astype(ctypes.c_int),
+                        np.array(item).astype(ctypes.c_int),
+                        self._k_pred, self.k_user, self.k_item, self._k_main_col,
+                        self.nthreads
+                    )
+                else:
+                    return c_funs.call_predict_multiple(
+                        self._A_pred,
+                        self._B_pred,
+                        self.user_bias_,
+                        self.item_bias_,
+                        self.glob_mean_,
+                        np.array(user).astype(ctypes.c_int),
+                        np.array(item).astype(ctypes.c_int),
+                        self._k_pred, self.k_user, self.k_item, self._k_main_col,
+                        self.nthreads
+                    )
 
         #### When passing the factors directly
         else:
@@ -1118,37 +1139,18 @@ class _CMF:
         if user.shape[0] != n:
             raise ValueError("'user' must have the same number of entries as item info.")
 
-        if ~np.any(nan_entries):
-            return c_funs.call_predict_multiple(
-                        self._A_pred,
-                        B,
-                        self.user_bias_,
-                        np.zeros(n, dtype=self.dtype_) if self.item_bias \
-                            else np.empty(0, dtype=self.dtype_),
-                        self.glob_mean_,
-                        np.array(user).astype(ctypes.c_int),
-                        np.arange(n).astype(ctypes.c_int),
-                        self._k_pred, self.k_user, self.k_item, self._k_main_col,
-                        self.nthreads
-                    )
-        else:
-            non_na_user = ~nan_entries
-            outp = c_funs.call_predict_multiple(
-                        self._A_pred,
-                        B,
-                        self.user_bias_,
-                        np.zeros(n, dtype=self.dtype_) if self.item_bias \
-                            else np.empty(0, dtype=self.dtype_),
-                        self.glob_mean_,
-                        np.array(user).astype(ctypes.c_int),
-                        np.where(non_na_user,
-                                 np.arange(n).astype(ctypes.c_int),
-                                 np.zeros(n, dtype=ctypes.c_int)),
-                        self._k_pred, self.k_user, self.k_item, self._k_main_col,
-                        self.nthreads
-                    )
-            outp[nan_entries] = np.nan
-            return outp
+        return c_funs.call_predict_multiple(
+                    self._A_pred,
+                    B,
+                    self.user_bias_,
+                    np.zeros(n, dtype=self.dtype_) if self.item_bias \
+                        else np.empty(0, dtype=self.dtype_),
+                    self.glob_mean_,
+                    np.array(user).astype(ctypes.c_int),
+                    np.arange(n).astype(ctypes.c_int),
+                    self._k_pred, self.k_user, self.k_item, self._k_main_col,
+                    self.nthreads
+                )
 
     def _predict_user_multiple(self, A, item, bias=None):
         m = A.shape[0]
@@ -1165,8 +1167,8 @@ class _CMF:
             bias = np.zeros(m, dtype=self.dtype_) if self.user_bias \
                         else np.empty(0, dtype=self.dtype_)
 
-        if ~np.any(nan_entries):
-            return c_funs.call_predict_multiple(
+        if isinstance(self, CMF):
+            return c_funs.call_predict_X_old_collective_explicit(
                         A,
                         self._B_pred,
                         bias,
@@ -1178,22 +1180,17 @@ class _CMF:
                         self.nthreads
                     )
         else:
-            non_na_item = ~nan_entries
-            outp = c_funs.call_predict_multiple(
+            return c_funs.call_predict_multiple(
                         A,
                         self._B_pred,
                         bias,
                         self.item_bias_,
                         self.glob_mean_,
-                        np.where(non_na_item,
-                                 np.arange(m).astype(ctypes.c_int),
-                                 np.zeros(m, dtype=ctypes.c_int)),
+                        np.arange(m).astype(ctypes.c_int),
                         np.array(item).astype(ctypes.c_int),
                         self._k_pred, self.k_user, self.k_item, self._k_main_col,
                         self.nthreads
                     )
-            outp[nan_entries] = np.nan
-            return outp
 
     def topN(self, user, n=10, include=None, exclude=None, output_score=False):
         """

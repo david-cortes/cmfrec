@@ -252,6 +252,16 @@ cdef extern from "cmfrec.h":
         int_t nthreads
     )
 
+    int_t predict_X_old_collective_explicit(
+        int_t row[], int_t col[], real_t *predicted, size_t n_predict,
+        real_t *A, real_t *biasA,
+        real_t *B, real_t *biasB,
+        real_t glob_mean,
+        int_t k, int_t k_user, int_t k_item, int_t k_main,
+        int_t m, int_t n_max,
+        int_t nthreads
+    )
+
     int_t topN(
         real_t *a_vec, int_t k_user,
         real_t *B, int_t k_item,
@@ -2389,6 +2399,40 @@ def call_predict_multiple(
         nthreads
     )
     return outp
+
+def call_predict_X_old_collective_explicit(
+        np.ndarray[real_t, ndim=2] A,
+        np.ndarray[real_t, ndim=2] B,
+        np.ndarray[real_t, ndim=1] biasA,
+        np.ndarray[real_t, ndim=1] biasB,
+        real_t glob_mean,
+        np.ndarray[int_t, ndim=1] predA,
+        np.ndarray[int_t, ndim=1] predB,
+        int_t k, int_t k_user = 0, int_t k_item = 0, int_t k_main = 0,
+        int_t nthreads = 1
+    ):
+    cdef real_t *ptr_biasA = NULL
+    cdef real_t *ptr_biasB = NULL
+    if biasA.shape[0]:
+        ptr_biasA = &biasA[0]
+    if biasB.shape[0]:
+        ptr_biasB = &biasB[0]
+
+    cdef np.ndarray[real_t, ndim=1] outp = np.empty(predA.shape[0], dtype=c_real_t)
+    if outp.shape[0] == 0:
+        return outp
+
+    predict_X_old_collective_explicit(
+        &predA[0], &predB[0], &outp[0], predA.shape[0],
+        &A[0,0], ptr_biasA,
+        &B[0,0], ptr_biasB,
+        glob_mean,
+        k, k_user, k_item, k_main,
+        A.shape[0], B.shape[0],
+        nthreads
+    )
+    return outp
+    
 
 def call_topN(
         np.ndarray[real_t, ndim=1] a_vec,
