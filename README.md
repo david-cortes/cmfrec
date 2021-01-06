@@ -89,12 +89,6 @@ Will also by default use MKL if it finds it - for OpenBLAS can set an environmen
 
 * R:
 
-Latest version (recommended):
-```r
-remotes::install_github("david-cortes/cmfrec")
-```
-
-Older version from CRAN (has some minor bugs):
 ```r
 install.packages("cmfrec")
 ```
