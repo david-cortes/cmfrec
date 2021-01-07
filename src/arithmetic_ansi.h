@@ -30,10 +30,12 @@
 #include "cmfrec.h"
 
 // #if     LBFGS_FLOAT == 32 && LBFGS_IEEE_FLOAT
-// #define fsigndiff(x, y) (((*(uint32_t*)(x)) ^ (*(uint32_t*)(y))) & 0x80000000U)
-// #else
+#ifdef USE_FLOAT
+#define fsigndiff(x, y) (((*(uint32_t*)(x)) ^ (*(uint32_t*)(y))) & 0x80000000U)
+#else
 #define fsigndiff(x, y) (*(x) * (*(y) / fabs(*(y))) < 0.)
 // #endif/*LBFGS_IEEE_FLOAT*/
+#endif
 
 // inline static void* vecalloc(size_t size)
 // {

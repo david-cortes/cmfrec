@@ -46,15 +46,6 @@
 #' ### These will throw the same result
 #' topN(model, user=2, n=3)
 #' topN(model.restored, user=2, n=3)
-#' 
-#' \donttest{
-#' ### The procedure did not create any deep copies
-#' ptr_A <- tracemem(model$matrices$A)
-#' ptr_B <- tracemem(model.swapped$matrices$B)
-#' ptr_A == ptr_B
-#' untracemem(model$matrices$A)
-#' untracemem(model.swapped$matrices$B)
-#' }
 swap.users.and.items <- function(model, precompute = TRUE) {
     if (!("cmfrec" %in% class(model)))
         stop("Method is only applicable to objects from this package.")
