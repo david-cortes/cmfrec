@@ -581,12 +581,6 @@ extern "C" {
                     Recommended value: true
     @param print_every  Every how many L-BFGS iterations to print information.
                         Recommended value: 100
-    @param handle_interrupt  Whether to handle interrupt singals (SIGINT) by
-                             terminating the procedure earlier. The results
-                             from the matrices will still be usable if
-                             interrupted. Note however that the signal will be
-                             lost after this, which might be problematic when
-                             calling the functions from another language.
     
     
     --- When using the prediction API ---
@@ -693,12 +687,13 @@ extern "C" {
              the pointers are not NULL when they shouldn't be, it won't make
              such checks).
              If a function runs out of memory, will return 2.
+    @empty
     
 *******************************************************************************/
 
 
 /* For ease of reading - these structs/enums are not used by the library */
-enum CmfReturnCode {Success=0, OutOfMemory=1, InvalidInput=2};
+enum CmfReturnCode {Success=0, OutOfMemory=1, InvalidInput=2, ReceivedInterrupt=3};
 
 struct CollectiveExplicitModel {
     /* Model parameters and their dimensions */
@@ -787,7 +782,7 @@ int_t fit_collective_explicit_lbfgs
     real_t w_main, real_t w_user, real_t w_item,
     int_t n_corr_pairs, size_t maxiter,
     int_t nthreads, bool prefer_onepass,
-    bool verbose, int_t print_every, bool handle_interrupt,
+    bool verbose, int_t print_every,
     int_t *niter, int_t *nfev,
     bool precompute_for_predictions,
     bool include_all_X,
@@ -823,7 +818,7 @@ int_t fit_collective_explicit_als
     bool NA_as_zero_X, bool NA_as_zero_U, bool NA_as_zero_I,
     int_t k_main, int_t k_user, int_t k_item,
     real_t w_main, real_t w_user, real_t w_item, real_t w_implicit,
-    int_t niter, int_t nthreads, bool verbose, bool handle_interrupt,
+    int_t niter, int_t nthreads, bool verbose,
     bool use_cg, int_t max_cg_steps, bool finalize_chol,
     bool nonneg, int_t max_cd_steps, bool nonneg_C, bool nonneg_D,
     bool precompute_for_predictions,
@@ -856,7 +851,7 @@ int_t fit_collective_implicit_als
     real_t w_main, real_t w_user, real_t w_item,
     real_t *w_main_multiplier,
     real_t alpha, bool adjust_weight, bool apply_log_transf,
-    int_t niter, int_t nthreads, bool verbose, bool handle_interrupt,
+    int_t niter, int_t nthreads, bool verbose,
     bool use_cg, int_t max_cg_steps, bool finalize_chol,
     bool nonneg, int_t max_cd_steps, bool nonneg_C, bool nonneg_D,
     bool precompute_for_predictions,
@@ -1570,7 +1565,7 @@ int_t fit_content_based_lbfgs
     int_t I_row[], int_t I_col[], real_t *I_sp, size_t nnz_I,
     int_t n_corr_pairs, size_t maxiter,
     int_t nthreads, bool prefer_onepass,
-    bool verbose, int_t print_every, bool handle_interrupt,
+    bool verbose, int_t print_every,
     int_t *niter, int_t *nfev,
     real_t *Am, real_t *Bm
 );
@@ -1820,7 +1815,7 @@ int_t fit_offsets_explicit_lbfgs
     real_t w_user, real_t w_item,
     int_t n_corr_pairs, size_t maxiter,
     int_t nthreads, bool prefer_onepass,
-    bool verbose, int_t print_every, bool handle_interrupt,
+    bool verbose, int_t print_every,
     int_t *niter, int_t *nfev,
     bool precompute_for_predictions,
     real_t *Am, real_t *Bm,
@@ -1848,7 +1843,7 @@ int_t fit_offsets_explicit_als
     int_t niter,
     int_t nthreads, bool use_cg,
     int_t max_cg_steps, bool finalize_chol,
-    bool verbose, bool handle_interrupt,
+    bool verbose,
     bool precompute_for_predictions,
     real_t *Am, real_t *Bm,
     real_t *Bm_plus_bias,
@@ -1871,7 +1866,7 @@ int_t fit_offsets_implicit_als
     int_t niter,
     int_t nthreads, bool use_cg,
     int_t max_cg_steps, bool finalize_chol,
-    bool verbose, bool handle_interrupt,
+    bool verbose,
     bool precompute_for_predictions,
     real_t *Am, real_t *Bm,
     real_t *precomputedBtB

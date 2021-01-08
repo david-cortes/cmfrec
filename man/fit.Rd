@@ -576,14 +576,11 @@ interrupt signals.}
 \item{print_every}{Print L-BFGS convergence messages every n-iterations. Ignored
 when not using the L-BFGS method.}
 
-\item{handle_interrupt}{Whether to respond to interrupt signals in the optimization procedure.
-If passing `TRUE`, whenever it receives an interrupt signal during the
-optimzation procedure, it will termnate earlier, taking the current values
-of the variables without finishing, instead of raising an error.
-If passing `FALSE`, will raise an error when it is interrupted, which
-will only be catched after the procedure is finished, and the obtained
-object will not be usable. Note that, for models fitted with the L-BFGS method, will
-only respond to interrupt signals when using `verbose=TRUE`.}
+\item{handle_interrupt}{When receiving an interrupt signal, whether the model should stop
+early and leave a usable object with the parameters obtained up
+to the point when it was interrupted (when passing `TRUE`), or
+raise an interrupt exception without producing a fitted model object
+(when passing `FALSE`).}
 
 \item{nthreads}{Number of parallel threads to use. Note that, the more threads that
 are used, the higher the memory consumption.}

@@ -1133,7 +1133,7 @@ int_t fit_offsets_explicit_lbfgs_internal
     real_t w_user, real_t w_item,
     int_t n_corr_pairs, size_t maxiter, int_t seed,
     int_t nthreads, bool prefer_onepass,
-    bool verbose, int_t print_every, bool handle_interrupt,
+    bool verbose, int_t print_every,
     int_t *restrict niter, int_t *restrict nfev,
     real_t *restrict Am, real_t *restrict Bm,
     real_t *restrict Bm_plus_bias
@@ -1233,6 +1233,8 @@ int_t fit_offsets_explicit_lbfgs_internal
     bool full_dense = false;
     if (Xfull != NULL)
         full_dense = (count_NAs(Xfull, (size_t)m*(size_t)n, nthreads)) == 0;
+
+    sig_t_ old_interrupt_handle = NULL;
     
     #ifdef _OPENMP
     if (nthreads > 1 && Xfull == NULL)
@@ -1354,15 +1356,12 @@ int_t fit_offsets_explicit_lbfgs_internal
         nthreads,
         buffer_real_t,
         buffer_mt,
-        print_every, 0, 0,
-        handle_interrupt
+        print_every, 0, 0
     };
 
-    if (handle_interrupt)
-        signal(SIGINT, set_interrup_global_variable);
+    old_interrupt_handle = signal(SIGINT, set_interrup_global_variable);
     if (should_stop_procedure)
     {
-        should_stop_procedure = false;
         fprintf(stderr, "Procedure terminated before starting optimization\n");
         #if !defined(_FOR_R)
         fflush(stderr);
@@ -1457,10 +1456,14 @@ int_t fit_offsets_explicit_lbfgs_internal
         free(I_csc_p);
         free(I_csc_i);
         free(I_csc);
+        signal(SIGINT, old_interrupt_handle);
+        if (should_stop_procedure) retval = 3;
+        should_stop_procedure = false;
     if (retval == 1)
     {
         if (verbose)
             print_oom_message();
+        should_stop_procedure = false;
     }
     return retval;
 }
@@ -1488,7 +1491,7 @@ int_t fit_offsets_explicit_lbfgs
     real_t w_user, real_t w_item,
     int_t n_corr_pairs, size_t maxiter,
     int_t nthreads, bool prefer_onepass,
-    bool verbose, int_t print_every, bool handle_interrupt,
+    bool verbose, int_t print_every,
     int_t *restrict niter, int_t *restrict nfev,
     bool precompute_for_predictions,
     real_t *restrict Am, real_t *restrict Bm,
@@ -1578,12 +1581,12 @@ int_t fit_offsets_explicit_lbfgs
         w_user, w_item,
         n_corr_pairs, maxiter, seed,
         nthreads, prefer_onepass,
-        verbose, print_every, handle_interrupt,
+        verbose, print_every,
         niter, nfev,
         Am, Bm,
         Bm_plus_bias
     );
-    if (retval != 0) goto cleanup;
+    if (retval != 0 && retval != 3) goto cleanup;
 
     if (true)
     {
@@ -1621,6 +1624,7 @@ int_t fit_offsets_explicit_lbfgs
 
     if (precompute_for_predictions)
     {
+        if (retval == 3) should_stop_procedure = true;
         retval = precompute_collective_explicit(
             Bm, n, n, true,
             (real_t*)NULL, 0,
@@ -1641,7 +1645,10 @@ int_t fit_offsets_explicit_lbfgs
             (real_t*)NULL,
             (real_t*)NULL
         );
-        if (retval != 0) goto cleanup;
+        if (should_stop_procedure && retval == 0) {
+            should_stop_procedure = false;
+            retval = 3;
+        }
     }
 
     cleanup:
@@ -1677,7 +1684,7 @@ int_t fit_offsets_als
     int_t niter,
     int_t nthreads, bool use_cg,
     int_t max_cg_steps, bool finalize_chol,
-    bool verbose, bool handle_interrupt,
+    bool verbose,
     bool precompute_for_predictions,
     real_t *restrict Am, real_t *restrict Bm,
     real_t *restrict Bm_plus_bias,
@@ -1760,7 +1767,7 @@ int_t fit_offsets_als
                     NA_as_zero_X, false, false,
                     0, 0, 0,
                     1., 1., 1., 1.,
-                    niter, nthreads, verbose, handle_interrupt,
+                    niter, nthreads, verbose,
                     use_cg, max_cg_steps, finalize_chol,
                     false, 0, false, false,
                     precompute_for_predictions,
@@ -1792,7 +1799,7 @@ int_t fit_offsets_als
                     1., 1., 1.,
                     &placeholder,
                     alpha, false, apply_log_transf,
-                    niter, nthreads, verbose, handle_interrupt,
+                    niter, nthreads, verbose,
                     use_cg, max_cg_steps, finalize_chol,
                     false, 0, false, false,
                     precompute_for_predictions,
@@ -1999,7 +2006,7 @@ int_t fit_offsets_explicit_als
     int_t niter,
     int_t nthreads, bool use_cg,
     int_t max_cg_steps, bool finalize_chol,
-    bool verbose, bool handle_interrupt,
+    bool verbose,
     bool precompute_for_predictions,
     real_t *restrict Am, real_t *restrict Bm,
     real_t *restrict Bm_plus_bias,
@@ -2026,7 +2033,7 @@ int_t fit_offsets_explicit_als
         niter,
         nthreads, use_cg,
         max_cg_steps, finalize_chol,
-        verbose, handle_interrupt,
+        verbose,
         precompute_for_predictions,
         Am, Bm,
         Bm_plus_bias,
@@ -2051,7 +2058,7 @@ int_t fit_offsets_implicit_als
     int_t niter,
     int_t nthreads, bool use_cg,
     int_t max_cg_steps, bool finalize_chol,
-    bool verbose, bool handle_interrupt,
+    bool verbose,
     bool precompute_for_predictions,
     real_t *restrict Am, real_t *restrict Bm,
     real_t *restrict precomputedBtB
@@ -2077,7 +2084,7 @@ int_t fit_offsets_implicit_als
         niter,
         nthreads, use_cg,
         max_cg_steps, finalize_chol,
-        verbose, handle_interrupt,
+        verbose,
         precompute_for_predictions,
         Am, Bm,
         (real_t*)NULL,
@@ -3090,7 +3097,7 @@ int_t fit_content_based_lbfgs
     int_t I_row[], int_t I_col[], real_t *restrict I_sp, size_t nnz_I,
     int_t n_corr_pairs, size_t maxiter,
     int_t nthreads, bool prefer_onepass,
-    bool verbose, int_t print_every, bool handle_interrupt,
+    bool verbose, int_t print_every,
     int_t *restrict niter, int_t *restrict nfev,
     real_t *restrict Am, real_t *restrict Bm
 )
@@ -3186,14 +3193,14 @@ int_t fit_content_based_lbfgs
             10,
             nthreads, true,
             3, false,
-            verbose, handle_interrupt,
+            verbose,
             false,
             (real_t*)NULL, (real_t*)NULL,
             (real_t*)NULL,
             (real_t*)NULL,
             (real_t*)NULL
         );
-        if (retval != 0)
+        if (retval != 0 && retval != 3)
             goto cleanup;
 
         free(tempA); tempA = NULL;
@@ -3238,30 +3245,31 @@ int_t fit_content_based_lbfgs
         values = user_bias? biasA : (item_bias? biasB : C);
     }
 
-    retval = fit_offsets_explicit_lbfgs_internal(
-        values, reset_values,
-        glob_mean,
-        m, n, 0,
-        ixA, ixB, X, nnz,
-        Xfull,
-        weight,
-        user_bias, item_bias, true,
-        add_intercepts,
-        lam, lam_unique,
-        U, p,
-        II, q,
-        U_row, U_col, U_sp, nnz_U,
-        I_row, I_col, I_sp, nnz_I,
-        0, k,
-        1., 1.,
-        n_corr_pairs, maxiter, seed,
-        nthreads, prefer_onepass,
-        verbose, print_every, handle_interrupt,
-        niter, nfev,
-        Am, Bm,
-        (real_t*)NULL
-    );
-    if (retval != 0)
+    if (retval != 3)
+        retval = fit_offsets_explicit_lbfgs_internal(
+            values, reset_values,
+            glob_mean,
+            m, n, 0,
+            ixA, ixB, X, nnz,
+            Xfull,
+            weight,
+            user_bias, item_bias, true,
+            add_intercepts,
+            lam, lam_unique,
+            U, p,
+            II, q,
+            U_row, U_col, U_sp, nnz_U,
+            I_row, I_col, I_sp, nnz_I,
+            0, k,
+            1., 1.,
+            n_corr_pairs, maxiter, seed,
+            nthreads, prefer_onepass,
+            verbose, print_every,
+            niter, nfev,
+            Am, Bm,
+            (real_t*)NULL
+        );
+    if (retval != 0 && retval != 3)
         goto cleanup;
 
     if (free_values)

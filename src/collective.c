@@ -5959,7 +5959,7 @@ int_t fit_collective_explicit_lbfgs_internal
     real_t w_main, real_t w_user, real_t w_item,
     int_t n_corr_pairs, size_t maxiter, int_t seed,
     int_t nthreads, bool prefer_onepass,
-    bool verbose, int_t print_every, bool handle_interrupt,
+    bool verbose, int_t print_every,
     int_t *restrict niter, int_t *restrict nfev,
     real_t *restrict B_plus_bias
 )
@@ -6027,6 +6027,8 @@ int_t fit_collective_explicit_lbfgs_internal
     if (Ub != NULL) R_nan_to_C_nan(Ub, (size_t)m_ubin*(size_t)pbin);
     if (Ib != NULL) R_nan_to_C_nan(Ib, (size_t)n_ibin*(size_t)qbin);
     #endif
+
+    sig_t_ old_interrupt_handle = signal(SIGINT, set_interrup_global_variable);
 
     #ifdef _OPENMP
     bool ignore = false;
@@ -6182,8 +6184,7 @@ int_t fit_collective_explicit_lbfgs_internal
         buffer_real_t, buffer_mt,
         k_main, k_user, k_item,
         w_main, w_user, w_item,
-        nthreads, print_every, 0, 0,
-        handle_interrupt
+        nthreads, print_every, 0, 0
     };
 
 
@@ -6247,14 +6248,17 @@ int_t fit_collective_explicit_lbfgs_internal
         free(I_csc_p);
         free(I_csc_i);
         free(I_csc);
+        signal(SIGINT, old_interrupt_handle);
+        if (should_stop_procedure) retval = 3;
+        should_stop_procedure = false;
     if (retval == 1)
     {
         if (verbose)
             print_oom_message();
-        return 1;
+        should_stop_procedure = false;
     }
 
-    return 0;
+    return retval;
 }
 
 int_t fit_collective_explicit_lbfgs
@@ -6282,7 +6286,7 @@ int_t fit_collective_explicit_lbfgs
     real_t w_main, real_t w_user, real_t w_item,
     int_t n_corr_pairs, size_t maxiter,
     int_t nthreads, bool prefer_onepass,
-    bool verbose, int_t print_every, bool handle_interrupt,
+    bool verbose, int_t print_every,
     int_t *restrict niter, int_t *restrict nfev,
     bool precompute_for_predictions,
     bool include_all_X,
@@ -6369,11 +6373,11 @@ int_t fit_collective_explicit_lbfgs
         w_main, w_user, w_item,
         n_corr_pairs, maxiter, seed,
         nthreads, prefer_onepass,
-        verbose, print_every, handle_interrupt,
+        verbose, print_every,
         niter, nfev,
         B_plus_bias
     );
-    if (retval != 0)
+    if (retval != 0 && retval != 3)
         goto cleanup;
 
 
@@ -6412,6 +6416,7 @@ int_t fit_collective_explicit_lbfgs
 
     if (precompute_for_predictions)
     {
+        if (retval == 3) should_stop_procedure = true;
         retval = precompute_collective_explicit(
             B, n, n_max, include_all_X,
             C, p,
@@ -6432,6 +6437,10 @@ int_t fit_collective_explicit_lbfgs
             precomputedTransCtCinvCt,
             precomputedCtCw
         );
+        if (should_stop_procedure && retval == 0) {
+            should_stop_procedure = false;
+            retval = 3;
+        }
     }
 
     cleanup:
@@ -6477,7 +6486,7 @@ int_t fit_collective_explicit_als
     bool NA_as_zero_X, bool NA_as_zero_U, bool NA_as_zero_I,
     int_t k_main, int_t k_user, int_t k_item,
     real_t w_main, real_t w_user, real_t w_item, real_t w_implicit,
-    int_t niter, int_t nthreads, bool verbose, bool handle_interrupt,
+    int_t niter, int_t nthreads, bool verbose,
     bool use_cg, int_t max_cg_steps, bool finalize_chol,
     bool nonneg, int_t max_cd_steps, bool nonneg_C, bool nonneg_D,
     bool precompute_for_predictions,
@@ -6651,6 +6660,8 @@ int_t fit_collective_explicit_als
     }
 
     if (!use_cg) finalize_chol = false;
+
+    sig_t_ old_interrupt_handle = signal(SIGINT, set_interrup_global_variable);
 
     /* This avoids differences in the scaling of the precomputed matrices */
     if (w_main != 1.)
@@ -7220,18 +7231,6 @@ int_t fit_collective_explicit_als
                  = 1.;
     }
 
-    // #if !defined(_WIN32) && !defined(_WIN64) && !defined(_MSC_VER)
-    #if defined USE_SIGACTION
-    struct sigaction sig_handle;
-    memset(&sig_handle, 0, sizeof(sig_handle));
-    if (handle_interrupt)
-    {
-        sig_handle.sa_flags = SA_RESETHAND;
-        sig_handle.sa_handler = set_interrup_global_variable;
-        sigemptyset(&sig_handle.sa_mask);
-    }
-    #endif
-
     if (verbose) {
         printf("Starting ALS optimization routine\n\n");
         #if !defined(_FOR_R)
@@ -7248,13 +7247,6 @@ int_t fit_collective_explicit_als
         }
 
         /* Optimize C and D (they are independent of each other) */
-        if (handle_interrupt)
-            // #if !defined(_WIN32) && !defined(_WIN64) && !defined(_MSC_VER)
-            #if defined USE_SIGACTION
-            sigaction(SIGINT, &sig_handle, NULL);
-            #else
-            signal(SIGINT, set_interrup_global_variable);
-            #endif
         if (should_stop_procedure) goto check_interrupt;
         if (U != NULL || nnz_U) {
             if (verbose) {
@@ -7310,13 +7302,6 @@ int_t fit_collective_explicit_als
             }
         }
 
-        if (handle_interrupt)
-            // #if !defined(_WIN32) && !defined(_WIN64) && !defined(_MSC_VER)
-            #if defined USE_SIGACTION
-            sigaction(SIGINT, &sig_handle, NULL);
-            #else
-            signal(SIGINT, set_interrup_global_variable);
-            #endif
         if (should_stop_procedure) goto check_interrupt;
         if (II != NULL || nnz_I) {
             if (verbose) {
@@ -7379,13 +7364,6 @@ int_t fit_collective_explicit_als
         /* Optimizing implicit-features matrices (also independent) */
         if (add_implicit_features)
         {
-            if (handle_interrupt)
-                //#if !defined(_WIN32) && !defined(_WIN64) && !defined(_MSC_VER)
-                #if defined USE_SIGACTION
-                sigaction(SIGINT, &sig_handle, NULL);
-                #else
-                signal(SIGINT, set_interrup_global_variable);
-                #endif
             if (should_stop_procedure) goto check_interrupt;
             if (verbose) {
                 printf("Updating Bi...");
@@ -7431,13 +7409,6 @@ int_t fit_collective_explicit_als
             }
 
 
-            if (handle_interrupt)
-                //#if !defined(_WIN32) && !defined(_WIN64) && !defined(_MSC_VER)
-                #if defined USE_SIGACTION
-                sigaction(SIGINT, &sig_handle, NULL);
-                #else
-                signal(SIGINT, set_interrup_global_variable);
-                #endif
             if (should_stop_procedure) goto check_interrupt;
             if (verbose) {
                 printf("Updating Ai...");
@@ -7559,13 +7530,6 @@ int_t fit_collective_explicit_als
         }
 
         /* Optimize B */
-        if (handle_interrupt)
-            // #if !defined(_WIN32) && !defined(_WIN64) && !defined(_MSC_VER)
-            #if defined USE_SIGACTION
-            sigaction(SIGINT, &sig_handle, NULL);
-            #else
-            signal(SIGINT, set_interrup_global_variable);
-            #endif
         if (should_stop_procedure) goto check_interrupt;
         if (verbose) {
             printf("Updating B ...");
@@ -7750,13 +7714,6 @@ int_t fit_collective_explicit_als
         filled_BtB = false;
         filled_CtCw = false;
         filled_BeTBeChol = false;
-        if (handle_interrupt)
-            // #if !defined(_WIN32) && !defined(_WIN64) && !defined(_MSC_VER)
-            #if defined USE_SIGACTION
-            sigaction(SIGINT, &sig_handle, NULL);
-            #else
-            signal(SIGINT, set_interrup_global_variable);
-            #endif
         if (should_stop_procedure) goto check_interrupt;
         if (verbose) {
             printf("Updating A ...");
@@ -7850,9 +7807,12 @@ int_t fit_collective_explicit_als
             #endif
         }
         check_interrupt:
-            if (should_stop_procedure) {
-                should_stop_procedure = false;
-                goto cleanup;
+            if (should_stop_procedure)
+            {
+                if (precompute_for_predictions)
+                    goto terminate_early;
+                else
+                    goto cleanup;
             }
     }
 
@@ -7866,6 +7826,7 @@ int_t fit_collective_explicit_als
         #endif
     }
 
+    terminate_early:
     if (user_bias || item_bias)
     {
         copy_mat(
@@ -8263,6 +8224,9 @@ int_t fit_collective_explicit_als
         if (free_BiTBi) {
             free(precomputedBiTBi); precomputedBiTBi = NULL;
         }
+        signal(SIGINT, old_interrupt_handle);
+        if (should_stop_procedure) retval = 3;
+        should_stop_procedure = false;
     return retval;
 
     throw_oom:
@@ -8271,6 +8235,7 @@ int_t fit_collective_explicit_als
         back_to_precompute = false;
         if (verbose)
             print_oom_message();
+        should_stop_procedure = false;
         goto cleanup;
     }
 }
@@ -8297,7 +8262,7 @@ int_t fit_collective_implicit_als
     real_t w_main, real_t w_user, real_t w_item,
     real_t *restrict w_main_multiplier,
     real_t alpha, bool adjust_weight, bool apply_log_transf,
-    int_t niter, int_t nthreads, bool verbose, bool handle_interrupt,
+    int_t niter, int_t nthreads, bool verbose,
     bool use_cg, int_t max_cg_steps, bool finalize_chol,
     bool nonneg, int_t max_cd_steps, bool nonneg_C, bool nonneg_D,
     bool precompute_for_predictions,
@@ -8404,6 +8369,8 @@ int_t fit_collective_implicit_als
     real_t *restrict l1_lam_unique_copy = NULL;
 
     if (!use_cg) finalize_chol = false;
+
+    sig_t_ old_interrupt_handle = signal(SIGINT, set_interrup_global_variable);
 
     if (Xcsr_p == NULL || Xcsr_i == NULL || Xcsr == NULL ||
         Xcsc_p == NULL || Xcsc_i == NULL || Xcsc == NULL)
@@ -8634,31 +8601,12 @@ int_t fit_collective_implicit_als
         #endif
     }
 
-    // #if !defined(_WIN32) && !defined(_WIN64) && !defined(_MSC_VER)
-    #if defined USE_SIGACTION
-    struct sigaction sig_handle;
-    memset(&sig_handle, 0, sizeof(sig_handle));
-    if (handle_interrupt)
-    {
-        sig_handle.sa_flags = SA_RESETHAND;
-        sig_handle.sa_handler = set_interrup_global_variable;
-        sigemptyset(&sig_handle.sa_mask);
-    }
-    #endif
-
     for (int_t iter = 0; iter < niter; iter++)
     {
         if (iter == niter - 1 && use_cg && finalize_chol)
             use_cg = false;
 
         /* Optimize C and D (they are independent of each other) */
-        if (handle_interrupt)
-            // #if !defined(_WIN32) && !defined(_WIN64) && !defined(_MSC_VER)
-            #if defined USE_SIGACTION
-            sigaction(SIGINT, &sig_handle, NULL);
-            #else
-            signal(SIGINT, set_interrup_global_variable);
-            #endif
         if (should_stop_procedure) goto check_interrupt;
         if (U != NULL || nnz_U) {
             if (verbose) {
@@ -8707,13 +8655,6 @@ int_t fit_collective_implicit_als
             }
         }
 
-        if (handle_interrupt)
-            // #if !defined(_WIN32) && !defined(_WIN64) && !defined(_MSC_VER)
-            #if defined USE_SIGACTION
-            sigaction(SIGINT, &sig_handle, NULL);
-            #else
-            signal(SIGINT, set_interrup_global_variable);
-            #endif
         if (should_stop_procedure) goto check_interrupt;
         if (II != NULL || nnz_I) {
             if (verbose) {
@@ -8763,13 +8704,6 @@ int_t fit_collective_implicit_als
         }
 
         /* Optimize B */
-        if (handle_interrupt)
-            // #if !defined(_WIN32) && !defined(_WIN64) && !defined(_MSC_VER)
-            #if defined USE_SIGACTION
-            sigaction(SIGINT, &sig_handle, NULL);
-            #else
-            signal(SIGINT, set_interrup_global_variable);
-            #endif
         if (should_stop_procedure) goto check_interrupt;
         if (verbose) {
             printf("Updating B...");
@@ -8825,13 +8759,6 @@ int_t fit_collective_implicit_als
         }
 
         /* Optimize A */
-        if (handle_interrupt)
-            // #if !defined(_WIN32) && !defined(_WIN64) && !defined(_MSC_VER)
-            #if defined USE_SIGACTION
-            sigaction(SIGINT, &sig_handle, NULL);
-            #else
-            signal(SIGINT, set_interrup_global_variable);
-            #endif
         if (should_stop_procedure) goto check_interrupt;
         if (verbose) {
             printf("Updating A...");
@@ -8891,16 +8818,12 @@ int_t fit_collective_implicit_als
             #endif
         }
         check_interrupt:
-            if (should_stop_procedure) {
-                should_stop_procedure = false;
+            if (should_stop_procedure)
+            {
                 if (precompute_for_predictions)
-                {
-                    printf("Finishing precomputed matrices...");
-                    #if !defined(_FOR_R)
-                    fflush(stdout);
-                    #endif
-                }
-                goto cleanup;
+                    goto precompute;
+                else
+                    goto cleanup;
             }
 
     }
@@ -8915,6 +8838,7 @@ int_t fit_collective_implicit_als
         #endif
     }
 
+    precompute:
     if (precompute_for_predictions)
     {
         if (verbose) {
@@ -9017,6 +8941,9 @@ int_t fit_collective_implicit_als
         free(seed_arr);
         free(lam_unique_copy);
         free(l1_lam_unique_copy);
+        signal(SIGINT, old_interrupt_handle);
+        if (should_stop_procedure) retval = 3;
+        should_stop_procedure = false;
     return retval;
 
     throw_oom:
@@ -9024,6 +8951,7 @@ int_t fit_collective_implicit_als
         retval = 1;
         if (verbose)
             print_oom_message();
+        should_stop_procedure = false;
         goto cleanup;
     }
 }

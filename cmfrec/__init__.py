@@ -2448,13 +2448,11 @@ class CMF(_CMF):
         and extra memory usage. Ignored when passing the data as matrices
         and arrays instead of data frames.
     handle_interrupt : bool
-        Whether to respond to interrupt signals in the optimization procedure.
-        If passing 'True', whenever it receives an interrupt signal during the
-        optimzation procedure, it will termnate earlier, taking the current values
-        of the variables without finishing, instead of raising an error.
-        If passing 'False', will raise an error when it is interrupted, which
-        will only be catched after the procedure is finished, and the obtained
-        object will not be usable.
+        When receiving an interrupt signal, whether the model should stop
+        early and leave a usable object with the parameters obtained up
+        to the point when it was interrupted (when passing 'True'), or
+        raise an interrupt exception without producing a fitted model object
+        (when passing 'False').
     copy_data : bool
         Whether to make copies of the input data that is passed to this
         object's methods (``fit``, ``predict``, etc.), in order to avoid
@@ -3894,13 +3892,11 @@ class CMF_implicit(_CMF):
         and extra memory usage. Ignored when passing the data as matrices
         and arrays instead of data frames.
     handle_interrupt : bool
-        Whether to respond to interrupt signals in the optimization procedure.
-        If passing 'True', whenever it receives an interrupt signal during the
-        optimzation procedure, it will termnate earlier, taking the current values
-        of the variables without finishing, instead of raising an error.
-        If passing 'False', will raise an error when it is interrupted, which
-        will only be catched after the procedure is finished, and the obtained
-        object will not be usable.
+        When receiving an interrupt signal, whether the model should stop
+        early and leave a usable object with the parameters obtained up
+        to the point when it was interrupted (when passing 'True'), or
+        raise an interrupt exception without producing a fitted model object
+        (when passing 'False').
     copy_data : bool
         Whether to make copies of the input data that is passed to this
         object's methods (``fit``, ``predict``, etc.), in order to avoid
@@ -5299,13 +5295,11 @@ class OMF_explicit(_OMF):
         Print L-BFGS convergence messages every n-iterations. Ignored
         when passing ``verbose=False`` or ``method='als'``.
     handle_interrupt : bool
-        Whether to respond to interrupt signals in the optimization procedure.
-        If passing 'True', whenever it receives an interrupt signal during the
-        optimzation procedure, it will termnate earlier, taking the current values
-        of the variables without finishing, instead of raising an error.
-        If passing 'False', will raise an error when it is interrupted, which
-        will only be catched after the procedure is finished, and the obtained
-        object will not be usable.
+        When receiving an interrupt signal, whether the model should stop
+        early and leave a usable object with the parameters obtained up
+        to the point when it was interrupted (when passing 'True'), or
+        raise an interrupt exception without producing a fitted model object
+        (when passing 'False').
     produce_dicts : bool
         Whether to produce Python dicts from the mappings between user/item
         IDs passed to 'fit' and the internal IDs used by the class. Having
@@ -6172,13 +6166,11 @@ class OMF_implicit(_OMF):
         Jupyter notebook, these messages will be printed in the console,
         not in the notebook itself.
     handle_interrupt : bool
-        Whether to respond to interrupt signals in the optimization procedure.
-        If passing 'True', whenever it receives an interrupt signal during the
-        optimzation procedure, it will termnate earlier, taking the current values
-        of the variables without finishing, instead of raising an error.
-        If passing 'False', will raise an error when it is interrupted, which
-        will only be catched after the procedure is finished, and the obtained
-        object will not be usable.
+        When receiving an interrupt signal, whether the model should stop
+        early and leave a usable object with the parameters obtained up
+        to the point when it was interrupted (when passing 'True'), or
+        raise an interrupt exception without producing a fitted model object
+        (when passing 'False').
     produce_dicts : bool
         Whether to produce Python dicts from the mappings between user/item
         IDs passed to 'fit' and the internal IDs used by the class. Having
@@ -6683,13 +6675,11 @@ class ContentBased(_OMF_Base):
         and extra memory usage. Ignored when passing the data as matrices
         and arrays instead of data frames.
     handle_interrupt : bool
-        Whether to respond to interrupt signals in the optimization procedure.
-        If passing 'True', whenever it receives an interrupt signal during the
-        optimzation procedure, it will termnate earlier, taking the current values
-        of the variables without finishing, instead of raising an error.
-        If passing 'False', will raise an error when it is interrupted, which
-        will only be catched after the procedure is finished, and the obtained
-        object will not be usable.
+        When receiving an interrupt signal, whether the model should stop
+        early and leave a usable object with the parameters obtained up
+        to the point when it was interrupted (when passing 'True'), or
+        raise an interrupt exception without producing a fitted model object
+        (when passing 'False').
     start_with_ALS : bool
         Whether to determine the initial coefficients through an ALS procedure.
         This might help to speed up the procedure by starting closer to an

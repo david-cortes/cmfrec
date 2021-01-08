@@ -125,7 +125,7 @@ int main()
         false, false, false,
         0, 0, 0,
         1., 0., 0., 0.,
-        10, 1, false, false,
+        10, 1, false,
         use_cg, max_cg_steps, finalize_chol,
         false, 0, false, false,
         false,

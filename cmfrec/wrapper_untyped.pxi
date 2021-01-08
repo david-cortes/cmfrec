@@ -73,7 +73,7 @@ cdef extern from "cmfrec.h":
         real_t w_main, real_t w_user, real_t w_item,
         int_t n_corr_pairs, size_t maxiter, int_t seed,
         int_t nthreads, bint prefer_onepass,
-        bint verbose, int_t print_every, bint handle_interrupt,
+        bint verbose, int_t print_every,
         int_t *niter, int_t *nfev,
         real_t *B_plus_bias
     )
@@ -96,7 +96,7 @@ cdef extern from "cmfrec.h":
         real_t w_user, real_t w_item,
         int_t n_corr_pairs, size_t maxiter, int_t seed,
         int_t nthreads, bint prefer_onepass,
-        bint verbose, int_t print_every, bint handle_interrupt,
+        bint verbose, int_t print_every,
         int_t *niter, int_t *nfev,
         real_t *Am, real_t *Bm,
         real_t *B_plus_bias
@@ -126,7 +126,7 @@ cdef extern from "cmfrec.h":
         bint NA_as_zero_X, bint NA_as_zero_U, bint NA_as_zero_I,
         int_t k_main, int_t k_user, int_t k_item,
         real_t w_main, real_t w_user, real_t w_item, real_t w_implicit,
-        int_t niter, int_t nthreads, bint verbose, bint handle_interrupt,
+        int_t niter, int_t nthreads, bint verbose,
         bint use_cg, int_t max_cg_steps, bint finalize_chol,
         bint nonneg, int_t max_cd_steps, bint nonneg_C, bint nonneg_D,
         bint precompute_for_predictions,
@@ -159,7 +159,7 @@ cdef extern from "cmfrec.h":
         real_t w_main, real_t w_user, real_t w_item,
         real_t *w_main_multiplier,
         real_t alpha, bint adjust_weight, bint apply_log_transf,
-        int_t niter, int_t nthreads, bint verbose, bint handle_interrupt,
+        int_t niter, int_t nthreads, bint verbose,
         bint use_cg, int_t max_cg_steps, bint finalize_chol,
         bint nonneg, int_t max_cd_steps, bint nonneg_C, bint nonneg_D,
         bint precompute_for_predictions,
@@ -188,7 +188,7 @@ cdef extern from "cmfrec.h":
         int_t niter,
         int_t nthreads, bint use_cg,
         int_t max_cg_steps, bint finalize_chol,
-        bint verbose, bint handle_interrupt,
+        bint verbose,
         bint precompute_for_predictions,
         real_t *Am, real_t *Bm,
         real_t *Bm_plus_bias,
@@ -392,7 +392,7 @@ cdef extern from "cmfrec.h":
         int_t I_row[], int_t I_col[], real_t *I_sp, size_t nnz_I,
         int_t n_corr_pairs, size_t maxiter,
         int_t nthreads, bint prefer_onepass,
-        bint verbose, int_t print_every, bint handle_interrupt,
+        bint verbose, int_t print_every,
         int_t *niter, int_t *nfev,
         real_t *Am, real_t *Bm
     )
@@ -721,13 +721,15 @@ def call_fit_collective_explicit_lbfgs(
         w_main, w_user, w_item,
         n_corr_pairs, maxiter, 1,
         nthreads, prefer_onepass,
-        verbose, print_every, handle_interrupt,
+        verbose, print_every,
         &niter, &nfev,
         ptr_B_plus_bias
     )
 
     if retval == 1:
         raise MemoryError("Could not allocate sufficient memory.")
+    elif (retval == 3) and (not handle_interrupt):
+        raise InterruptedError("Procedure was interrupted")
 
     return glob_mean, U_colmeans, I_colmeans, values, niter, nfev, B_plus_bias
 
@@ -908,7 +910,7 @@ def call_fit_offsets_explicit_lbfgs_internal(
         w_user, w_item,
         n_corr_pairs, maxiter, 1,
         nthreads, prefer_onepass,
-        verbose, print_every, handle_interrupt,
+        verbose, print_every,
         &niter, &nfev,
         &Am[0,0], &Bm[0,0],
         ptr_Bm_plus_bias
@@ -916,6 +918,8 @@ def call_fit_offsets_explicit_lbfgs_internal(
 
     if retval == 1:
         raise MemoryError("Could not allocate sufficient memory.")
+    elif (retval == 3) and (not handle_interrupt):
+        raise InterruptedError("Procedure was interrupted")
 
     return glob_mean, Am, Bm, values, niter, nfev, Bm_plus_bias
 
@@ -1211,7 +1215,7 @@ def call_fit_collective_explicit_als(
         NA_as_zero_X, NA_as_zero_U, NA_as_zero_I,
         k_main, k_user, k_item,
         w_main, w_user, w_item, w_implicit,
-        niter, nthreads, verbose, handle_interrupt,
+        niter, nthreads, verbose,
         use_cg, max_cg_steps, finalize_chol,
         nonneg, max_cd_steps, nonneg_C, nonneg_D,
         precompute_for_predictions,
@@ -1228,6 +1232,8 @@ def call_fit_collective_explicit_als(
 
     if retval == 1:
         raise MemoryError("Could not allocate sufficient memory.")
+    elif (retval == 3) and (not handle_interrupt):
+        raise InterruptedError("Procedure was interrupted")
 
     return biasA, biasB, A, B, C, D, Ai, Bi, \
            glob_mean, U_colmeans, I_colmeans, \
@@ -1417,7 +1423,7 @@ def call_fit_collective_implicit_als(
         w_main, w_user, w_item,
         &w_main_multiplier,
         alpha, adjust_weight, apply_log_transf,
-        niter, nthreads, verbose, handle_interrupt,
+        niter, nthreads, verbose,
         use_cg, max_cg_steps, finalize_chol,
         nonneg, max_cd_steps, nonneg_C, nonneg_D,
         precompute_for_predictions,
@@ -1426,6 +1432,8 @@ def call_fit_collective_implicit_als(
 
     if retval == 1:
         raise MemoryError("Could not allocate sufficient memory.")
+    elif (retval == 3) and (not handle_interrupt):
+        raise InterruptedError("Procedure was interrupted")
 
     return A, B, C, D, \
            U_colmeans, I_colmeans, w_main_multiplier, \
@@ -1567,7 +1575,7 @@ def call_fit_offsets_explicit_als(
         niter,
         nthreads,
         use_cg, max_cg_steps, finalize_chol,
-        verbose, handle_interrupt,
+        verbose,
         precompute_for_predictions,
         ptr_Am, ptr_Bm,
         ptr_Bm_plus_bias,
@@ -1579,6 +1587,8 @@ def call_fit_offsets_explicit_als(
         raise MemoryError("Could not allocate sufficient memory.")
     elif retval == 2:
         raise ValueError("Invalid parameter combination.")
+    elif (retval == 3) and (not handle_interrupt):
+        raise InterruptedError("Procedure was interrupted")
 
     return biasA, biasB, A, B, C, D, C_bias, D_bias, \
            Am, Bm, glob_mean, \
@@ -1683,7 +1693,7 @@ def call_fit_offsets_implicit_als(
         niter,
         nthreads, use_cg,
         max_cg_steps, finalize_chol,
-        verbose, handle_interrupt,
+        verbose,
         precompute_for_predictions,
         ptr_Am, ptr_Bm,
         <real_t*>NULL,
@@ -1695,6 +1705,8 @@ def call_fit_offsets_implicit_als(
         raise MemoryError("Could not allocate sufficient memory.")
     elif retval == 2:
         raise ValueError("Invalid parameter combination.")
+    elif (retval == 3) and (not handle_interrupt):
+        raise InterruptedError("Procedure was interrupted")
 
     return A, B, C, D, \
            Am, Bm, BtB
@@ -2930,12 +2942,14 @@ def call_fit_content_based_lbfgs(
         ptr_I_row, ptr_I_col, ptr_I_sp, nnz_I,
         n_corr_pairs, maxiter,
         nthreads, prefer_onepass,
-        verbose, print_every, handle_interrupt,
+        verbose, print_every,
         &niter, &nfev,
         &Am[0,0], &Bm[0,0]
     )
     if retval == 1:
         raise MemoryError("Could not allocate sufficient memory.")
+    elif (retval == 3) and (not handle_interrupt):
+        raise InterruptedError("Procedure was interrupted")
 
     return biasA, biasB, C, D, C_bias, D_bias, Am, Bm, glob_mean, niter, nfev
 

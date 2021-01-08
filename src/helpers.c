@@ -1033,12 +1033,8 @@ int_t lbfgs_printer_collective
         fflush(stdout);
         #endif
     }
-    if (((data_collective_fun_grad*)instance)->handle_interrupt)
-        signal(SIGINT, set_interrup_global_variable);
-    if (should_stop_procedure) {
-        should_stop_procedure = false;
+    if (should_stop_procedure)
         return 1;
-    }
     return 0;
 }
 
@@ -1065,12 +1061,8 @@ int_t lbfgs_printer_offsets
         fflush(stdout);
         #endif
     }
-    if (((data_offsets_fun_grad*)instance)->handle_interrupt)
-        signal(SIGINT, set_interrup_global_variable);
-    if (should_stop_procedure) {
-        should_stop_procedure = false;
+    if (should_stop_procedure)
         return 1;
-    }
     return 0;
 }
 

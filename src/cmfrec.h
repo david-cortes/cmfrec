@@ -82,7 +82,6 @@ extern "C" {
 #include <string.h>
 #include <stdbool.h>
 #include <math.h>
-#include <signal.h>
 #ifndef _FOR_R
     #include <stdio.h>
 #endif
@@ -91,6 +90,8 @@ extern "C" {
 #else
     #define omp_get_thread_num() (0)
 #endif
+#include <signal.h>
+typedef void (*sig_t_)(int);
 
 #ifdef _FOR_PYTHON
     /* This contains the standard cblas.h header */
@@ -1255,7 +1256,6 @@ typedef struct data_collective_fun_grad {
     real_t w_main; real_t w_user; real_t w_item;
     int_t nthreads;
     int_t print_every; int_t nfev; int_t niter;
-    bool handle_interrupt;
 } data_collective_fun_grad;
 int_t fit_collective_explicit_lbfgs_internal
 (
@@ -1278,7 +1278,7 @@ int_t fit_collective_explicit_lbfgs_internal
     real_t w_main, real_t w_user, real_t w_item,
     int_t n_corr_pairs, size_t maxiter, int_t seed,
     int_t nthreads, bool prefer_onepass,
-    bool verbose, int_t print_every, bool handle_interrupt,
+    bool verbose, int_t print_every,
     int_t *restrict niter, int_t *restrict nfev,
     real_t *restrict B_plus_bias
 );
@@ -1307,7 +1307,7 @@ int_t fit_collective_explicit_lbfgs
     real_t w_main, real_t w_user, real_t w_item,
     int_t n_corr_pairs, size_t maxiter,
     int_t nthreads, bool prefer_onepass,
-    bool verbose, int_t print_every, bool handle_interrupt,
+    bool verbose, int_t print_every,
     int_t *restrict niter, int_t *restrict nfev,
     bool precompute_for_predictions,
     bool include_all_X,
@@ -1343,7 +1343,7 @@ int_t fit_collective_explicit_als
     bool NA_as_zero_X, bool NA_as_zero_U, bool NA_as_zero_I,
     int_t k_main, int_t k_user, int_t k_item,
     real_t w_main, real_t w_user, real_t w_item, real_t w_implicit,
-    int_t niter, int_t nthreads, bool verbose, bool handle_interrupt,
+    int_t niter, int_t nthreads, bool verbose,
     bool use_cg, int_t max_cg_steps, bool finalize_chol,
     bool nonneg, int_t max_cd_steps, bool nonneg_C, bool nonneg_D,
     bool precompute_for_predictions,
@@ -1376,7 +1376,7 @@ int_t fit_collective_implicit_als
     real_t w_main, real_t w_user, real_t w_item,
     real_t *restrict w_main_multiplier,
     real_t alpha, bool adjust_weight, bool apply_log_transf,
-    int_t niter, int_t nthreads, bool verbose, bool handle_interrupt,
+    int_t niter, int_t nthreads, bool verbose,
     bool use_cg, int_t max_cg_steps, bool finalize_chol,
     bool nonneg, int_t max_cd_steps, bool nonneg_C, bool nonneg_D,
     bool precompute_for_predictions,
@@ -1884,7 +1884,6 @@ typedef struct data_offsets_fun_grad {
     real_t *buffer_real_t;
     real_t *buffer_mt;
     int_t print_every; int_t nfev; int_t niter;
-    bool handle_interrupt;
 } data_offsets_fun_grad;
 real_t wrapper_offsets_fun_grad
 (
@@ -1913,7 +1912,7 @@ int_t fit_offsets_explicit_lbfgs_internal
     real_t w_user, real_t w_item,
     int_t n_corr_pairs, size_t maxiter, int_t seed,
     int_t nthreads, bool prefer_onepass,
-    bool verbose, int_t print_every, bool handle_interrupt,
+    bool verbose, int_t print_every,
     int_t *restrict niter, int_t *restrict nfev,
     real_t *restrict Am, real_t *restrict Bm,
     real_t *restrict Bm_plus_bias
@@ -1941,7 +1940,7 @@ int_t fit_offsets_explicit_lbfgs
     real_t w_user, real_t w_item,
     int_t n_corr_pairs, size_t maxiter,
     int_t nthreads, bool prefer_onepass,
-    bool verbose, int_t print_every, bool handle_interrupt,
+    bool verbose, int_t print_every,
     int_t *restrict niter, int_t *restrict nfev,
     bool precompute_for_predictions,
     real_t *restrict Am, real_t *restrict Bm,
@@ -1970,7 +1969,7 @@ int_t fit_offsets_als
     int_t niter,
     int_t nthreads, bool use_cg,
     int_t max_cg_steps, bool finalize_chol,
-    bool verbose, bool handle_interrupt,
+    bool verbose,
     bool precompute_for_predictions,
     real_t *restrict Am, real_t *restrict Bm,
     real_t *restrict Bm_plus_bias,
@@ -1997,7 +1996,7 @@ int_t fit_offsets_explicit_als
     int_t niter,
     int_t nthreads, bool use_cg,
     int_t max_cg_steps, bool finalize_chol,
-    bool verbose, bool handle_interrupt,
+    bool verbose,
     bool precompute_for_predictions,
     real_t *restrict Am, real_t *restrict Bm,
     real_t *restrict Bm_plus_bias,
@@ -2020,7 +2019,7 @@ int_t fit_offsets_implicit_als
     int_t niter,
     int_t nthreads, bool use_cg,
     int_t max_cg_steps, bool finalize_chol,
-    bool verbose, bool handle_interrupt,
+    bool verbose,
     bool precompute_for_predictions,
     real_t *restrict Am, real_t *restrict Bm,
     real_t *restrict precomputedBtB
@@ -2257,7 +2256,7 @@ int_t fit_content_based_lbfgs
     int_t I_row[], int_t I_col[], real_t *restrict I_sp, size_t nnz_I,
     int_t n_corr_pairs, size_t maxiter,
     int_t nthreads, bool prefer_onepass,
-    bool verbose, int_t print_every, bool handle_interrupt,
+    bool verbose, int_t print_every,
     int_t *restrict niter, int_t *restrict nfev,
     real_t *restrict Am, real_t *restrict Bm
 );

@@ -402,6 +402,8 @@ check.ret.code <- function(ret_code) {
         stop("Could not allocate sufficient memory.")
     if (ret_code == 2L)
         stop("Invalid parameter combination.")
+    if (ret_code == 3L)
+        stop("Procedure was interrupted.")
 }
 
 process.new.X.single <- function(X, X_col, X_val, weight, info, n_max) {

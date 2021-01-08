@@ -300,7 +300,7 @@ cdef extern from "cmfrec.h":
 
     int initialize_biases(
         double *glob_mean, double *biasA, double *biasB,
-        bint user_bias, bint item_bias,
+        bint user_bias, bint item_bias, bint center,
         double lam_user, double lam_item,
         bint scale_lam,
         int m, int n,
@@ -1575,7 +1575,7 @@ def py_initialize_biases(
     cdef double glob_mean
     initialize_biases(
         &glob_mean, ptr_biasA, ptr_biasB,
-        user_bias, item_bias,
+        user_bias, item_bias, 1,
         0., 0., 0,
         m, n,
         m, n,

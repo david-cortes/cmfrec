@@ -504,14 +504,11 @@ NULL
 #' Recommended values are between 3 and 7. Note that higher values
 #' translate into higher memory requirements. Ignored when 
 #' using the ALS method.
-#' @param handle_interrupt Whether to respond to interrupt signals in the optimization procedure.
-#' If passing `TRUE`, whenever it receives an interrupt signal during the
-#' optimzation procedure, it will termnate earlier, taking the current values
-#' of the variables without finishing, instead of raising an error.
-#' If passing `FALSE`, will raise an error when it is interrupted, which
-#' will only be catched after the procedure is finished, and the obtained
-#' object will not be usable. Note that, for models fitted with the L-BFGS method, will
-#' only respond to interrupt signals when using `verbose=TRUE`.
+#' @param handle_interrupt When receiving an interrupt signal, whether the model should stop
+#' early and leave a usable object with the parameters obtained up
+#' to the point when it was interrupted (when passing `TRUE`), or
+#' raise an interrupt exception without producing a fitted model object
+#' (when passing `FALSE`).
 #' @param nthreads Number of parallel threads to use. Note that, the more threads that
 #' are used, the higher the memory consumption.
 #' @return Returns a model object (class named just like the function that produced it,
@@ -1367,7 +1364,7 @@ CMF_implicit <- function(X, U=NULL, I=NULL,
                           NA_as_zero, NA_as_zero_user, NA_as_zero_item,
                           k_main_k_user_k_item,
                           w_main_w_user_w_item_w_implicit,
-                          niter, nthreads, verbose, handle_interrupt,
+                          niter, nthreads, verbose,
                           use_cg, max_cg_steps, finalize_chol,
                           nonneg, max_cd_steps, nonneg_CD,
                           precompute_for_predictions,
@@ -1406,7 +1403,7 @@ CMF_implicit <- function(X, U=NULL, I=NULL,
                           corr_pairs, maxiter, print_every,
                           nupd, nfev,
                           parallelize == "single",
-                          nthreads, verbose, handle_interrupt,
+                          nthreads, verbose,
                           precompute_for_predictions,
                           include_all_X,
                           this$precomputed$B_plus_bias,
@@ -1520,7 +1517,7 @@ CMF_implicit <- function(X, U=NULL, I=NULL,
                       NA_as_zero_user, NA_as_zero_item,
                       k_main, k_user, k_item,
                       w_main, w_user, w_item,
-                      niter, nthreads, verbose, handle_interrupt,
+                      niter, nthreads, verbose,
                       use_cg, max_cg_steps, finalize_chol,
                       nonneg, max_cd_steps, nonneg_C, nonneg_D,
                       this$info$alpha, downweight, this$info$apply_log_transf,
@@ -1715,7 +1712,7 @@ ContentBased <- function(X, U, I, weight=NULL,
                       processed_I$Urow, processed_I$Ucol, processed_I$Uval,
                       corr_pairs, maxiter,
                       nthreads, parallelize != "separate",
-                      verbose, print_every, handle_interrupt,
+                      verbose, print_every,
                       nupd, nfev,
                       this$matrices$Am, this$matrices$Bm)
     
@@ -1863,7 +1860,7 @@ OMF_explicit <- function(X, U=NULL, I=NULL, weight=NULL,
                           w_user, w_item,
                           corr_pairs, maxiter,
                           nthreads, parallelize == "single",
-                          verbose, print_every, handle_interrupt,
+                          verbose, print_every,
                           nupd, nfev,
                           TRUE,
                           this$matrices$Am, this$matrices$Bm,
@@ -1889,7 +1886,7 @@ OMF_explicit <- function(X, U=NULL, I=NULL, weight=NULL,
                           niter,
                           nthreads, use_cg,
                           max_cg_steps, finalize_chol,
-                          verbose, handle_interrupt,
+                          verbose,
                           TRUE,
                           this$matrices$Am, this$matrices$Bm,
                           this$precomputed$Bm_plus_bias,
@@ -2005,7 +2002,7 @@ OMF_implicit <- function(X, U=NULL, I=NULL,
                       niter,
                       this$info$nthreads, use_cg,
                       max_cg_steps, finalize_chol,
-                      verbose, handle_interrupt,
+                      verbose,
                       TRUE,
                       this$matrices$Am, this$matrices$Bm,
                       this$precomputed$BtB)
