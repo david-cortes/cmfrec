@@ -123,7 +123,7 @@ NULL
 #' If using the package `softImpute`, objects of type `incomplete` from that package
 #' can be converted to `Matrix` objects through e.g. `as(X, "TsparseMatrix")`.
 #' Sparse matrices can be created through e.g.
-#' `Matrix::sparseMatrix(..., giveCsparse=FALSE)`.
+#' `Matrix::sparseMatrix(..., repr="T")`.
 #' 
 #' It is recommended for faster fitting times to pass the `X` data as a matrix
 #' (either sparse or dense) as then it will avoid internal reindexes.
