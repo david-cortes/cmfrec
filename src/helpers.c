@@ -1003,11 +1003,14 @@ void row_means_csr(size_t indptr[], real_t *restrict values,
 bool should_stop_procedure = false;
 void set_interrup_global_variable(int_t s)
 {
-    fprintf(stderr, "Error: procedure was interrupted\n");
-    #if !defined(_FOR_R)
-    fflush(stderr);
-    #endif
-    should_stop_procedure = true;
+    #pragma omp critical
+    {
+        fprintf(stderr, "Error: procedure was interrupted\n");
+        #if !defined(_FOR_R)
+        fflush(stderr);
+        #endif
+        should_stop_procedure = true;
+    }
 }
 
 int_t lbfgs_printer_collective
