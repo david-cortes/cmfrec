@@ -1418,6 +1418,8 @@ CMF_implicit <- function(X, U=NULL, I=NULL,
     this$info$nfev  <-  nfev
     this$matrices$glob_mean <- glob_mean
     
+    if (handle_interrupt && ret_code == 3L)
+        ret_code <- 0L
     check.ret.code(ret_code)
     class(this) <- c("CMF", "cmfrec")
     return(this)
@@ -1528,6 +1530,8 @@ CMF_implicit <- function(X, U=NULL, I=NULL,
     
     this$info$w_main_multiplier <- w_main_multiplier
     
+    if (handle_interrupt && ret_code == 3L)
+        ret_code <- 0L
     check.ret.code(ret_code)
     class(this) <- c("CMF_implicit", "cmfrec")
     return(this)
@@ -1721,6 +1725,8 @@ ContentBased <- function(X, U, I, weight=NULL,
     this$matrices$glob_mean <- glob_mean
     
     
+    if (handle_interrupt && ret_code == 3L)
+        ret_code <- 0L
     check.ret.code(ret_code)
     class(this) <- c("ContentBased", "cmfrec")
     return(this)
@@ -1899,6 +1905,8 @@ OMF_explicit <- function(X, U=NULL, I=NULL, weight=NULL,
     this$matrices$glob_mean <- glob_mean
     
     
+    if (handle_interrupt && ret_code == 3L)
+        ret_code <- 0L
     check.ret.code(ret_code)
     class(this) <- c("OMF_explicit", "cmfrec")
     return(this)
@@ -2008,6 +2016,8 @@ OMF_implicit <- function(X, U=NULL, I=NULL,
                       this$precomputed$BtB)
     
     
+    if (handle_interrupt && ret_code == 3L)
+        ret_code <- 0L
     check.ret.code(ret_code)
     class(this) <- c("OMF_implicit", "cmfrec")
     return(this)
