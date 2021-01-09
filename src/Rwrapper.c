@@ -148,7 +148,7 @@ SEXP call_fit_collective_explicit_lbfgs
     SEXP n_corr_pairs, SEXP maxiter, SEXP print_every,
     SEXP nupd, SEXP nfev,
     SEXP prefer_onepass,
-    SEXP nthreads, SEXP verbose,
+    SEXP nthreads, SEXP verbose, SEXP handle_interrupt,
     SEXP precompute,
     SEXP include_all_X,
     SEXP B_plus_bias,
@@ -195,6 +195,7 @@ SEXP call_fit_collective_explicit_lbfgs
         Rf_asInteger(n_corr_pairs), (size_t) Rf_asInteger(maxiter),
         Rf_asInteger(nthreads), (bool) Rf_asLogical(prefer_onepass),
         (bool) Rf_asLogical(verbose), Rf_asInteger(print_every),
+        (bool) Rf_asLogical(handle_interrupt),
         INTEGER(nupd), INTEGER(nfev),
         (bool) Rf_asLogical(precompute),
         (bool) Rf_asLogical(include_all_X),
@@ -205,6 +206,9 @@ SEXP call_fit_collective_explicit_lbfgs
         get_ptr(TransCtCinvCt),
         get_ptr(CtCw)
     );
+
+    if (!((bool) Rf_asLogical(handle_interrupt)))
+        R_CheckUserInterrupt();
 
 
     SEXP out = PROTECT(Rf_allocVector(INTSXP, 1));
@@ -236,7 +240,7 @@ SEXP call_fit_collective_explicit_als
     SEXP NA_as_zero_X, SEXP NA_as_zero_U, SEXP NA_as_zero_I,
     SEXP k_main_k_user_k_item,
     SEXP w_main_w_user_w_item_w_implicit,
-    SEXP niter, SEXP nthreads, SEXP verbose,
+    SEXP niter, SEXP nthreads, SEXP verbose, SEXP handle_interrupt,
     SEXP use_cg, SEXP max_cg_steps, SEXP finalize_chol,
     SEXP nonneg, SEXP max_cd_steps, SEXP nonneg_CD,
     SEXP precompute,
@@ -307,6 +311,7 @@ SEXP call_fit_collective_explicit_als
         k_main, k_user, k_item,
         w_main, w_user, w_item, w_implicit,
         Rf_asInteger(niter), Rf_asInteger(nthreads), (bool) Rf_asLogical(verbose),
+        (bool) Rf_asLogical(handle_interrupt),
         (bool) Rf_asLogical(use_cg), Rf_asInteger(max_cg_steps), (bool) Rf_asLogical(finalize_chol),
         (bool) Rf_asLogical(nonneg), (size_t) Rf_asInteger(max_cd_steps),
         nonneg_C, nonneg_D,
@@ -321,6 +326,9 @@ SEXP call_fit_collective_explicit_als
         get_ptr(TransCtCinvCt),
         get_ptr(CtCw)
     );
+
+    if (!((bool) Rf_asLogical(handle_interrupt)))
+        R_CheckUserInterrupt();
 
 
     SEXP out = PROTECT(Rf_allocVector(INTSXP, 1));
@@ -345,7 +353,7 @@ SEXP call_fit_collective_implicit_als
     SEXP NA_as_zero_U, SEXP NA_as_zero_I,
     SEXP k_main, SEXP k_user, SEXP k_item,
     SEXP w_main, SEXP w_user, SEXP w_item,
-    SEXP niter, SEXP nthreads, SEXP verbose,
+    SEXP niter, SEXP nthreads, SEXP verbose, SEXP handle_interrupt,
     SEXP use_cg, SEXP max_cg_steps, SEXP finalize_chol,
     SEXP nonneg, SEXP max_cd_steps, SEXP nonneg_C, SEXP nonneg_D,
     SEXP alpha, SEXP adjust_weight, SEXP apply_log_transf,
@@ -388,6 +396,7 @@ SEXP call_fit_collective_implicit_als
         Rf_asReal(alpha), (bool) Rf_asLogical(adjust_weight),
         (bool) Rf_asLogical(apply_log_transf),
         Rf_asInteger(niter), Rf_asInteger(nthreads), (bool) Rf_asLogical(verbose),
+        (bool) Rf_asLogical(handle_interrupt),
         (bool) Rf_asLogical(use_cg), Rf_asInteger(max_cg_steps), (bool) Rf_asLogical(finalize_chol),
         (bool) Rf_asLogical(nonneg), (size_t) Rf_asInteger(max_cd_steps),
         (bool) Rf_asLogical(nonneg_C), (bool) Rf_asLogical(nonneg_D),
@@ -396,6 +405,9 @@ SEXP call_fit_collective_implicit_als
         get_ptr(BeTBe),
         get_ptr(BeTBeChol)
     );
+
+    if (!((bool) Rf_asLogical(handle_interrupt)))
+        R_CheckUserInterrupt();
 
 
     SEXP out = PROTECT(Rf_allocVector(INTSXP, 1));
@@ -490,7 +502,7 @@ SEXP call_fit_content_based_lbfgs
     SEXP I_row, SEXP I_col, SEXP I_sp,
     SEXP n_corr_pairs, SEXP maxiter,
     SEXP nthreads, SEXP prefer_onepass,
-    SEXP verbose, SEXP print_every,
+    SEXP verbose, SEXP print_every, SEXP handle_interrupt,
     SEXP niter, SEXP nfev,
     SEXP Am, SEXP Bm
 )
@@ -527,9 +539,13 @@ SEXP call_fit_content_based_lbfgs
         Rf_asInteger(n_corr_pairs), (size_t) Rf_asInteger(maxiter),
         Rf_asInteger(nthreads), (bool) Rf_asLogical(prefer_onepass),
         (bool) Rf_asLogical(verbose), Rf_asInteger(print_every),
+        (bool) Rf_asLogical(handle_interrupt),
         INTEGER(niter), INTEGER(nfev),
         REAL(Am), REAL(Bm)
     );
+
+    if (!((bool) Rf_asLogical(handle_interrupt)))
+        R_CheckUserInterrupt();
 
 
     SEXP out = PROTECT(Rf_allocVector(INTSXP, 1));
@@ -561,7 +577,7 @@ SEXP call_fit_offsets_explicit_lbfgs
     SEXP w_user, SEXP w_item,
     SEXP n_corr_pairs, SEXP maxiter,
     SEXP nthreads, SEXP prefer_onepass,
-    SEXP verbose, SEXP print_every,
+    SEXP verbose, SEXP print_every, SEXP handle_interrupt,
     SEXP niter, SEXP nfev,
     SEXP precompute,
     SEXP Am, SEXP Bm,
@@ -603,6 +619,7 @@ SEXP call_fit_offsets_explicit_lbfgs
         Rf_asInteger(n_corr_pairs), (size_t) Rf_asInteger(maxiter),
         Rf_asInteger(nthreads), (bool) Rf_asLogical(prefer_onepass),
         (bool) Rf_asLogical(verbose), Rf_asInteger(print_every),
+        (bool) Rf_asLogical(handle_interrupt),
         INTEGER(niter), INTEGER(nfev),
         (bool) Rf_asLogical(precompute),
         get_ptr(Am), get_ptr(Bm),
@@ -610,6 +627,9 @@ SEXP call_fit_offsets_explicit_lbfgs
         get_ptr(BtB),
         get_ptr(TransBtBinvBt)
     );
+
+    if (!((bool) Rf_asLogical(handle_interrupt)))
+        R_CheckUserInterrupt();
 
 
     SEXP out = PROTECT(Rf_allocVector(INTSXP, 1));
@@ -638,7 +658,7 @@ SEXP call_fit_offsets_explicit_als
     SEXP niter,
     SEXP nthreads, SEXP use_cg,
     SEXP max_cg_steps, SEXP finalize_chol,
-    SEXP verbose,
+    SEXP verbose, SEXP handle_interrupt,
     SEXP precompute,
     SEXP Am, SEXP Bm,
     SEXP Bm_plus_bias,
@@ -672,13 +692,16 @@ SEXP call_fit_offsets_explicit_als
         Rf_asInteger(niter),
         Rf_asInteger(nthreads), (bool) Rf_asLogical(use_cg),
         Rf_asInteger(max_cg_steps), (bool) Rf_asLogical(finalize_chol),
-        (bool) Rf_asLogical(verbose),
+        (bool) Rf_asLogical(verbose), (bool) Rf_asLogical(handle_interrupt),
         (bool) Rf_asLogical(precompute),
         get_ptr(Am), get_ptr(Bm),
         get_ptr(Bm_plus_bias),
         get_ptr(BtB),
         get_ptr(TransBtBinvBt)
     );
+
+    if (!((bool) Rf_asLogical(handle_interrupt)))
+        R_CheckUserInterrupt();
 
     SEXP out = PROTECT(Rf_allocVector(INTSXP, 1));
     INTEGER(out)[0] = retval;
@@ -701,7 +724,7 @@ SEXP call_fit_offsets_implicit_als
     SEXP niter,
     SEXP nthreads, SEXP use_cg,
     SEXP max_cg_steps, SEXP finalize_chol,
-    SEXP verbose,
+    SEXP verbose, SEXP handle_interrupt,
     SEXP precompute,
     SEXP Am, SEXP Bm,
     SEXP BtB
@@ -722,11 +745,14 @@ SEXP call_fit_offsets_implicit_als
         Rf_asInteger(niter),
         Rf_asInteger(nthreads), (bool) Rf_asLogical(use_cg),
         Rf_asInteger(max_cg_steps), (bool) Rf_asLogical(finalize_chol),
-        (bool) Rf_asLogical(verbose),
+        (bool) Rf_asLogical(verbose), (bool) Rf_asLogical(handle_interrupt),
         (bool) Rf_asLogical(precompute),
         get_ptr(Am), get_ptr(Bm),
         get_ptr(BtB)
     );
+
+    if (!((bool) Rf_asLogical(handle_interrupt)))
+        R_CheckUserInterrupt();
 
     SEXP out = PROTECT(Rf_allocVector(INTSXP, 1));
     INTEGER(out)[0] = retval;
@@ -2371,14 +2397,14 @@ static const R_CallMethodDef callMethods [] = {
     {"deep_copy", (DL_FUNC) &deep_copy, 1},
     {"as_size_t", (DL_FUNC) &as_size_t, 1},
     /* ---------------------------------------------------- */
-    {"call_fit_collective_explicit_lbfgs", (DL_FUNC) &call_fit_collective_explicit_lbfgs, 64},
-    {"call_fit_collective_explicit_als", (DL_FUNC) &call_fit_collective_explicit_als, 64},
-    {"call_fit_collective_implicit_als", (DL_FUNC) &call_fit_collective_implicit_als, 52},
+    {"call_fit_collective_explicit_lbfgs", (DL_FUNC) &call_fit_collective_explicit_lbfgs, 65},
+    {"call_fit_collective_explicit_als", (DL_FUNC) &call_fit_collective_explicit_als, 65},
+    {"call_fit_collective_implicit_als", (DL_FUNC) &call_fit_collective_implicit_als, 53},
     {"call_fit_most_popular", (DL_FUNC) &call_fit_most_popular, 20},
-    {"call_fit_content_based_lbfgs", (DL_FUNC) &call_fit_content_based_lbfgs, 41},
-    {"call_fit_offsets_explicit_lbfgs", (DL_FUNC) &call_fit_offsets_explicit_lbfgs, 51},
-    {"call_fit_offsets_explicit_als", (DL_FUNC) &call_fit_offsets_explicit_als, 40},
-    {"call_fit_offsets_implicit_als", (DL_FUNC) &call_fit_offsets_implicit_als, 30},
+    {"call_fit_content_based_lbfgs", (DL_FUNC) &call_fit_content_based_lbfgs, 42},
+    {"call_fit_offsets_explicit_lbfgs", (DL_FUNC) &call_fit_offsets_explicit_lbfgs, 52},
+    {"call_fit_offsets_explicit_als", (DL_FUNC) &call_fit_offsets_explicit_als, 41},
+    {"call_fit_offsets_implicit_als", (DL_FUNC) &call_fit_offsets_implicit_als, 31},
     /* ---------------------------------------------------- */
     {"call_precompute_collective_explicit", (DL_FUNC) &call_precompute_collective_explicit, 31},
     {"call_precompute_collective_implicit", (DL_FUNC) &call_precompute_collective_implicit, 17},

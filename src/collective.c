@@ -5959,7 +5959,7 @@ int_t fit_collective_explicit_lbfgs_internal
     real_t w_main, real_t w_user, real_t w_item,
     int_t n_corr_pairs, size_t maxiter, int_t seed,
     int_t nthreads, bool prefer_onepass,
-    bool verbose, int_t print_every,
+    bool verbose, int_t print_every, bool handle_interrupt,
     int_t *restrict niter, int_t *restrict nfev,
     real_t *restrict B_plus_bias
 )
@@ -6187,6 +6187,13 @@ int_t fit_collective_explicit_lbfgs_internal
         nthreads, print_every, 0, 0
     };
 
+    if (should_stop_procedure)
+    {
+        print_err_msg("Procedure aborted before starting optimization.\n");
+        retval = 3;
+        goto cleanup;
+    }
+
 
     retval = lbfgs(
         nvars,
@@ -6251,6 +6258,7 @@ int_t fit_collective_explicit_lbfgs_internal
         signal(SIGINT, old_interrupt_handle);
         if (should_stop_procedure) retval = 3;
         should_stop_procedure = false;
+        act_on_interrupt(retval, handle_interrupt);
     if (retval == 1)
     {
         if (verbose)
@@ -6286,7 +6294,7 @@ int_t fit_collective_explicit_lbfgs
     real_t w_main, real_t w_user, real_t w_item,
     int_t n_corr_pairs, size_t maxiter,
     int_t nthreads, bool prefer_onepass,
-    bool verbose, int_t print_every,
+    bool verbose, int_t print_every, bool handle_interrupt,
     int_t *restrict niter, int_t *restrict nfev,
     bool precompute_for_predictions,
     bool include_all_X,
@@ -6373,11 +6381,11 @@ int_t fit_collective_explicit_lbfgs
         w_main, w_user, w_item,
         n_corr_pairs, maxiter, seed,
         nthreads, prefer_onepass,
-        verbose, print_every,
+        verbose, print_every, true,
         niter, nfev,
         B_plus_bias
     );
-    if (retval != 0 && retval != 3)
+    if ((retval != 0 && retval != 3) || (retval == 3 && !handle_interrupt))
         goto cleanup;
 
 
@@ -6445,6 +6453,7 @@ int_t fit_collective_explicit_lbfgs
 
     cleanup:
         free(values);
+        act_on_interrupt(retval, handle_interrupt);
         return retval;
     throw_oom:
     {
@@ -6486,7 +6495,7 @@ int_t fit_collective_explicit_als
     bool NA_as_zero_X, bool NA_as_zero_U, bool NA_as_zero_I,
     int_t k_main, int_t k_user, int_t k_item,
     real_t w_main, real_t w_user, real_t w_item, real_t w_implicit,
-    int_t niter, int_t nthreads, bool verbose,
+    int_t niter, int_t nthreads, bool verbose, bool handle_interrupt,
     bool use_cg, int_t max_cg_steps, bool finalize_chol,
     bool nonneg, int_t max_cd_steps, bool nonneg_C, bool nonneg_D,
     bool precompute_for_predictions,
@@ -7231,6 +7240,16 @@ int_t fit_collective_explicit_als
                  = 1.;
     }
 
+    if (should_stop_procedure)
+    {
+        print_err_msg("Procedure aborted before starting optimization.\n");
+        retval = 3;
+        if (!handle_interrupt)
+            goto cleanup;
+        else
+            goto terminate_early;
+    }
+
     if (verbose) {
         printf("Starting ALS optimization routine\n\n");
         #if !defined(_FOR_R)
@@ -7809,7 +7828,7 @@ int_t fit_collective_explicit_als
         check_interrupt:
             if (should_stop_procedure)
             {
-                if (precompute_for_predictions)
+                if (precompute_for_predictions && handle_interrupt)
                     goto terminate_early;
                 else
                     goto cleanup;
@@ -8227,6 +8246,7 @@ int_t fit_collective_explicit_als
         signal(SIGINT, old_interrupt_handle);
         if (should_stop_procedure) retval = 3;
         should_stop_procedure = false;
+        act_on_interrupt(retval, handle_interrupt);
     return retval;
 
     throw_oom:
@@ -8262,7 +8282,7 @@ int_t fit_collective_implicit_als
     real_t w_main, real_t w_user, real_t w_item,
     real_t *restrict w_main_multiplier,
     real_t alpha, bool adjust_weight, bool apply_log_transf,
-    int_t niter, int_t nthreads, bool verbose,
+    int_t niter, int_t nthreads, bool verbose, bool handle_interrupt,
     bool use_cg, int_t max_cg_steps, bool finalize_chol,
     bool nonneg, int_t max_cd_steps, bool nonneg_C, bool nonneg_D,
     bool precompute_for_predictions,
@@ -8592,6 +8612,14 @@ int_t fit_collective_implicit_als
         }
         w_main = 1.;
     }
+
+    if (should_stop_procedure)
+    {
+        if (!handle_interrupt)
+            goto cleanup;
+        else
+            goto precompute;
+    }
     
 
     if (verbose) {
@@ -8820,6 +8848,8 @@ int_t fit_collective_implicit_als
         check_interrupt:
             if (should_stop_procedure)
             {
+                if (!handle_interrupt)
+                    goto cleanup;
                 if (precompute_for_predictions)
                     goto precompute;
                 else
@@ -8944,6 +8974,7 @@ int_t fit_collective_implicit_als
         signal(SIGINT, old_interrupt_handle);
         if (should_stop_procedure) retval = 3;
         should_stop_procedure = false;
+        act_on_interrupt(retval, handle_interrupt);
     return retval;
 
     throw_oom:

@@ -1133,7 +1133,7 @@ int_t fit_offsets_explicit_lbfgs_internal
     real_t w_user, real_t w_item,
     int_t n_corr_pairs, size_t maxiter, int_t seed,
     int_t nthreads, bool prefer_onepass,
-    bool verbose, int_t print_every,
+    bool verbose, int_t print_every, bool handle_interrupt,
     int_t *restrict niter, int_t *restrict nfev,
     real_t *restrict Am, real_t *restrict Bm,
     real_t *restrict Bm_plus_bias
@@ -1459,6 +1459,7 @@ int_t fit_offsets_explicit_lbfgs_internal
         signal(SIGINT, old_interrupt_handle);
         if (should_stop_procedure) retval = 3;
         should_stop_procedure = false;
+        act_on_interrupt(retval, handle_interrupt);
     if (retval == 1)
     {
         if (verbose)
@@ -1491,7 +1492,7 @@ int_t fit_offsets_explicit_lbfgs
     real_t w_user, real_t w_item,
     int_t n_corr_pairs, size_t maxiter,
     int_t nthreads, bool prefer_onepass,
-    bool verbose, int_t print_every,
+    bool verbose, int_t print_every, bool handle_interrupt,
     int_t *restrict niter, int_t *restrict nfev,
     bool precompute_for_predictions,
     real_t *restrict Am, real_t *restrict Bm,
@@ -1581,12 +1582,13 @@ int_t fit_offsets_explicit_lbfgs
         w_user, w_item,
         n_corr_pairs, maxiter, seed,
         nthreads, prefer_onepass,
-        verbose, print_every,
+        verbose, print_every, true,
         niter, nfev,
         Am, Bm,
         Bm_plus_bias
     );
-    if (retval != 0 && retval != 3) goto cleanup;
+    if ((retval != 0 && retval != 3) || (retval == 3 && !handle_interrupt))
+        goto cleanup;
 
     if (true)
     {
@@ -1653,6 +1655,7 @@ int_t fit_offsets_explicit_lbfgs
 
     cleanup:
         free(values);
+        act_on_interrupt(retval, handle_interrupt);
         return retval;
     throw_oom:
     {
@@ -1684,7 +1687,7 @@ int_t fit_offsets_als
     int_t niter,
     int_t nthreads, bool use_cg,
     int_t max_cg_steps, bool finalize_chol,
-    bool verbose,
+    bool verbose, bool handle_interrupt,
     bool precompute_for_predictions,
     real_t *restrict Am, real_t *restrict Bm,
     real_t *restrict Bm_plus_bias,
@@ -1767,7 +1770,7 @@ int_t fit_offsets_als
                     NA_as_zero_X, false, false,
                     0, 0, 0,
                     1., 1., 1., 1.,
-                    niter, nthreads, verbose,
+                    niter, nthreads, verbose, true,
                     use_cg, max_cg_steps, finalize_chol,
                     false, 0, false, false,
                     precompute_for_predictions,
@@ -1799,7 +1802,7 @@ int_t fit_offsets_als
                     1., 1., 1.,
                     &placeholder,
                     alpha, false, apply_log_transf,
-                    niter, nthreads, verbose,
+                    niter, nthreads, verbose, true,
                     use_cg, max_cg_steps, finalize_chol,
                     false, 0, false, false,
                     precompute_for_predictions,
@@ -1808,6 +1811,10 @@ int_t fit_offsets_als
                 );
     if (retval == 1)
         goto throw_oom;
+    else if (retval == 3) {
+        if (!handle_interrupt)
+            goto cleanup;
+    }
     else if (retval != 0) {
         if (verbose) {
             fprintf(stderr, "Unexpected error\n");
@@ -1975,6 +1982,7 @@ int_t fit_offsets_als
             free(I_plus_bias);
         free(sv);
         free(buffer_iwork);
+        act_on_interrupt(retval, handle_interrupt);
     return retval;
 
     throw_oom:
@@ -2006,7 +2014,7 @@ int_t fit_offsets_explicit_als
     int_t niter,
     int_t nthreads, bool use_cg,
     int_t max_cg_steps, bool finalize_chol,
-    bool verbose,
+    bool verbose, bool handle_interrupt,
     bool precompute_for_predictions,
     real_t *restrict Am, real_t *restrict Bm,
     real_t *restrict Bm_plus_bias,
@@ -2033,7 +2041,7 @@ int_t fit_offsets_explicit_als
         niter,
         nthreads, use_cg,
         max_cg_steps, finalize_chol,
-        verbose,
+        verbose, handle_interrupt,
         precompute_for_predictions,
         Am, Bm,
         Bm_plus_bias,
@@ -2058,7 +2066,7 @@ int_t fit_offsets_implicit_als
     int_t niter,
     int_t nthreads, bool use_cg,
     int_t max_cg_steps, bool finalize_chol,
-    bool verbose,
+    bool verbose, bool handle_interrupt,
     bool precompute_for_predictions,
     real_t *restrict Am, real_t *restrict Bm,
     real_t *restrict precomputedBtB
@@ -2084,7 +2092,7 @@ int_t fit_offsets_implicit_als
         niter,
         nthreads, use_cg,
         max_cg_steps, finalize_chol,
-        verbose,
+        verbose, handle_interrupt,
         precompute_for_predictions,
         Am, Bm,
         (real_t*)NULL,
@@ -3097,7 +3105,7 @@ int_t fit_content_based_lbfgs
     int_t I_row[], int_t I_col[], real_t *restrict I_sp, size_t nnz_I,
     int_t n_corr_pairs, size_t maxiter,
     int_t nthreads, bool prefer_onepass,
-    bool verbose, int_t print_every,
+    bool verbose, int_t print_every, bool handle_interrupt,
     int_t *restrict niter, int_t *restrict nfev,
     real_t *restrict Am, real_t *restrict Bm
 )
@@ -3193,14 +3201,14 @@ int_t fit_content_based_lbfgs
             10,
             nthreads, true,
             3, false,
-            verbose,
+            verbose, true,
             false,
             (real_t*)NULL, (real_t*)NULL,
             (real_t*)NULL,
             (real_t*)NULL,
             (real_t*)NULL
         );
-        if (retval != 0 && retval != 3)
+        if ((retval != 0 && retval != 3) || (retval == 3 && !handle_interrupt))
             goto cleanup;
 
         free(tempA); tempA = NULL;
@@ -3264,12 +3272,12 @@ int_t fit_content_based_lbfgs
             1., 1.,
             n_corr_pairs, maxiter, seed,
             nthreads, prefer_onepass,
-            verbose, print_every,
+            verbose, print_every, true,
             niter, nfev,
             Am, Bm,
             (real_t*)NULL
         );
-    if (retval != 0 && retval != 3)
+    if ((retval != 0 && retval != 3) || (retval == 3 && !handle_interrupt))
         goto cleanup;
 
     if (free_values)
@@ -3303,6 +3311,7 @@ int_t fit_content_based_lbfgs
         free(tempA);
         free(tempB);
         free(Xorig);
+        act_on_interrupt(retval, handle_interrupt);
         return retval;
     throw_oom:
     {

@@ -1005,10 +1005,6 @@ void set_interrup_global_variable(int_t s)
 {
     #pragma omp critical
     {
-        fprintf(stderr, "Error: procedure was interrupted\n");
-        #if !defined(_FOR_R)
-        fflush(stderr);
-        #endif
         should_stop_procedure = true;
     }
 }
@@ -1145,11 +1141,25 @@ void fill_lower_triangle(real_t A[], size_t n, size_t lda)
             A[col + row*lda] = A[row + col*lda];
 }
 
-void print_oom_message(void)
+void print_err_msg(const char *msg)
 {
-    fprintf(stderr, "Error: could not allocate enough memory.\n");
+    fprintf(stderr, msg);
     #ifndef _FOR_R
     fflush(stderr);
+    #endif
+}
+
+void print_oom_message(void)
+{
+    print_err_msg("Error: could not allocate enough memory.\n");
+}
+
+void act_on_interrupt(int retval, bool handle_interrupt)
+{
+    if (retval == 3)
+        print_err_msg(" Error: procedure was interrupted.\n");
+    #if !defined(_WIN32) && !defined(_WIN64) && !defined(_MSC_VER)
+    if (!handle_interrupt && retval == 3) kill(getpid(), SIGINT);
     #endif
 }
 
