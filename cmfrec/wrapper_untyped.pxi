@@ -1,5 +1,6 @@
 import numpy as np
 cimport numpy as np
+from cython cimport boundscheck, nonecheck, wraparound
 import ctypes
 
 ctypedef int int_t
@@ -76,7 +77,7 @@ cdef extern from "cmfrec.h":
         bint verbose, int_t print_every, bint handle_interrupt,
         int_t *niter, int_t *nfev,
         real_t *B_plus_bias
-    )
+    ) nogil
 
     int_t fit_offsets_explicit_lbfgs_internal(
         real_t *values, bint reset_values,
@@ -100,7 +101,7 @@ cdef extern from "cmfrec.h":
         int_t *niter, int_t *nfev,
         real_t *Am, real_t *Bm,
         real_t *B_plus_bias
-    )
+    ) nogil
 
     int_t fit_collective_explicit_als(
         real_t *biasA, real_t *biasB,
@@ -139,7 +140,7 @@ cdef extern from "cmfrec.h":
         real_t *precomputedBiTBi,
         real_t *precomputedTransCtCinvCt,
         real_t *precomputedCtCw
-    )
+    ) nogil
 
     int_t fit_collective_implicit_als(
         real_t *A, real_t *B,
@@ -166,7 +167,7 @@ cdef extern from "cmfrec.h":
         real_t *precomputedBtB,
         real_t *precomputedBeTBe,
         real_t *precomputedBeTBeChol
-    )
+    ) nogil
 
     int_t fit_offsets_als(
         real_t *biasA, real_t *biasB,
@@ -194,8 +195,7 @@ cdef extern from "cmfrec.h":
         real_t *Bm_plus_bias,
         real_t *precomputedBtB,
         real_t *precomputedTransBtBinvBt
-
-    )
+    ) nogil
 
     int_t precompute_collective_explicit(
         real_t *B, int_t n, int_t n_max, bint include_all_X,
@@ -216,7 +216,7 @@ cdef extern from "cmfrec.h":
         real_t *BiTBi,
         real_t *TransCtCinvCt,
         real_t *CtCw
-    )
+    ) nogil
 
     int_t precompute_collective_implicit(
         real_t *B, int_t n,
@@ -228,7 +228,7 @@ cdef extern from "cmfrec.h":
         real_t *BtB,
         real_t *BeTBe,
         real_t *BeTBeChol
-    )
+    ) nogil
 
     int_t offsets_factors_cold(
         real_t *a_vec,
@@ -238,7 +238,7 @@ cdef extern from "cmfrec.h":
         real_t *C_bias,
         int_t k, int_t k_sec, int_t k_main,
         real_t w_user
-    )
+    ) nogil
 
     void predict_multiple(
         real_t *A, int_t k_user,
@@ -250,7 +250,7 @@ cdef extern from "cmfrec.h":
         int_t predA[], int_t predB[], size_t nnz,
         real_t *outp,
         int_t nthreads
-    )
+    ) nogil
 
     int_t predict_X_old_collective_explicit(
         int_t row[], int_t col[], real_t *predicted, size_t n_predict,
@@ -260,7 +260,7 @@ cdef extern from "cmfrec.h":
         int_t k, int_t k_user, int_t k_item, int_t k_main,
         int_t m, int_t n_max,
         int_t nthreads
-    )
+    ) nogil
 
     int_t topN(
         real_t *a_vec, int_t k_user,
@@ -272,7 +272,7 @@ cdef extern from "cmfrec.h":
         int_t *exclude_ix, int_t n_exclude,
         int_t *outp_ix, real_t *outp_score,
         int_t n_top, int_t n, int_t nthreads
-    )
+    ) nogil
 
     int_t topN_new_content_based(
         int_t k, int_t n_new,
@@ -286,7 +286,7 @@ cdef extern from "cmfrec.h":
         real_t glob_mean,
         int_t *outp_ix, real_t *outp_score,
         int_t n_top, int_t nthreads
-    )
+    ) nogil
 
     int_t fit_most_popular(
         real_t *biasA, real_t *biasB,
@@ -302,7 +302,7 @@ cdef extern from "cmfrec.h":
         bint nonneg,
         real_t *w_main_multiplier,
         int_t nthreads
-    )
+    ) nogil
 
     int_t impute_X_collective_explicit(
         int_t m, bint user_bias,
@@ -333,7 +333,7 @@ cdef extern from "cmfrec.h":
         real_t *CtCw,
         real_t *B_plus_bias,
         int_t nthreads
-    )
+    ) nogil
 
     int_t predict_X_old_content_based(
         real_t *predicted, size_t n_predict,
@@ -348,7 +348,7 @@ cdef extern from "cmfrec.h":
         real_t *Bm, real_t *biasB,
         real_t glob_mean,
         int_t nthreads
-    )
+    ) nogil
 
     int_t predict_X_new_content_based(
         real_t *predicted, size_t n_predict,
@@ -364,14 +364,14 @@ cdef extern from "cmfrec.h":
         real_t *D, real_t *D_bias,
         real_t glob_mean,
         int_t nthreads
-    )
+    ) nogil
 
     int_t factors_content_based_single(
         real_t *a_vec, int_t k,
         real_t *u_vec, int_t p,
         real_t *u_vec_sp, int_t u_vec_ixB[], size_t nnz_u_vec,
         real_t *C, real_t *C_bias
-    )
+    ) nogil
 
     int_t fit_content_based_lbfgs(
         real_t *biasA, real_t *biasB,
@@ -395,7 +395,7 @@ cdef extern from "cmfrec.h":
         bint verbose, int_t print_every, bint handle_interrupt,
         int_t *niter, int_t *nfev,
         real_t *Am, real_t *Bm
-    )
+    ) nogil
 
     int_t factors_collective_explicit_single(
         real_t *a_vec, real_t *a_bias,
@@ -426,7 +426,7 @@ cdef extern from "cmfrec.h":
         real_t *CtCw,
         real_t *TransCtCinvCt,
         real_t *B_plus_bias
-    )
+    ) nogil
 
     int_t factors_collective_implicit_single(
         real_t *a_vec,
@@ -444,7 +444,7 @@ cdef extern from "cmfrec.h":
         real_t *BeTBe,
         real_t *BtB,
         real_t *BeTBeChol
-    )
+    ) nogil
 
     int_t factors_collective_explicit_multiple(
         real_t *A, real_t *biasA, int_t m,
@@ -478,7 +478,7 @@ cdef extern from "cmfrec.h":
         real_t *CtCw,
         real_t *B_plus_bias,
         int_t nthreads
-    )
+    ) nogil
 
     int_t factors_collective_implicit_multiple(
         real_t *A, int_t m,
@@ -500,7 +500,7 @@ cdef extern from "cmfrec.h":
         real_t *BtB,
         real_t *BeTBeChol,
         int_t nthreads
-    )
+    ) nogil
 
     int_t factors_offsets_explicit_single(
         real_t *a_vec, real_t *a_bias, real_t *output_a,
@@ -519,7 +519,7 @@ cdef extern from "cmfrec.h":
         real_t *precomputedTransBtBinvBt,
         real_t *precomputedBtB,
         real_t *Bm_plus_bias
-    )
+    ) nogil
 
     int_t factors_offsets_implicit_single(
         real_t *a_vec,
@@ -533,7 +533,7 @@ cdef extern from "cmfrec.h":
         bint apply_log_transf,
         real_t *precomputedBtB,
         real_t *output_a
-    )
+    ) nogil
 
     int_t factors_offsets_explicit_multiple(
         real_t *Am, real_t *biasA,
@@ -555,7 +555,7 @@ cdef extern from "cmfrec.h":
         real_t *precomputedBtB,
         real_t *Bm_plus_bias,
         int_t nthreads
-    )
+    ) nogil
 
     int_t factors_offsets_implicit_multiple(
         real_t *Am, int_t m,
@@ -572,7 +572,7 @@ cdef extern from "cmfrec.h":
         bint apply_log_transf,
         real_t *precomputedBtB,
         int_t nthreads
-    )
+    ) nogil
 
 
 def call_fit_collective_explicit_lbfgs(
@@ -701,30 +701,32 @@ def call_fit_collective_explicit_lbfgs(
 
     cdef real_t glob_mean
     cdef int_t niter, nfev
-    cdef int_t retval = fit_collective_explicit_lbfgs_internal(
-        &values[0], 0,
-        &glob_mean,
-        ptr_U_colmeans, ptr_I_colmeans,
-        m, n, k,
-        ptr_ixA, ptr_ixB, ptr_X, nnz,
-        ptr_Xfull,
-        ptr_weight,
-        user_bias, item_bias, center,
-        lam, ptr_lam_unique,
-        ptr_U, m_u, p,
-        ptr_I, n_i, q,
-        ptr_Ub, m_ubin, pbin,
-        ptr_Ib, n_ibin, qbin,
-        ptr_U_row, ptr_U_col, ptr_U_sp, nnz_U,
-        ptr_I_row, ptr_I_col, ptr_I_sp, nnz_I,
-        k_main, k_user, k_item,
-        w_main, w_user, w_item,
-        n_corr_pairs, maxiter, 1,
-        nthreads, prefer_onepass,
-        verbose, print_every, handle_interrupt,
-        &niter, &nfev,
-        ptr_B_plus_bias
-    )
+    cdef int_t retval = 0
+    with nogil, boundscheck(False), nonecheck(False), wraparound(False):
+        retval = fit_collective_explicit_lbfgs_internal(
+            &values[0], 0,
+            &glob_mean,
+            ptr_U_colmeans, ptr_I_colmeans,
+            m, n, k,
+            ptr_ixA, ptr_ixB, ptr_X, nnz,
+            ptr_Xfull,
+            ptr_weight,
+            user_bias, item_bias, center,
+            lam, ptr_lam_unique,
+            ptr_U, m_u, p,
+            ptr_I, n_i, q,
+            ptr_Ub, m_ubin, pbin,
+            ptr_Ib, n_ibin, qbin,
+            ptr_U_row, ptr_U_col, ptr_U_sp, nnz_U,
+            ptr_I_row, ptr_I_col, ptr_I_sp, nnz_I,
+            k_main, k_user, k_item,
+            w_main, w_user, w_item,
+            n_corr_pairs, maxiter, 1,
+            nthreads, prefer_onepass,
+            verbose, print_every, handle_interrupt,
+            &niter, &nfev,
+            ptr_B_plus_bias
+        )
 
     if retval == 1:
         raise MemoryError("Could not allocate sufficient memory.")
@@ -892,29 +894,31 @@ def call_fit_offsets_explicit_lbfgs_internal(
 
     cdef real_t glob_mean
     cdef int_t niter, nfev
-    cdef int_t retval = fit_offsets_explicit_lbfgs_internal(
-        &values[0], 0,
-        &glob_mean,
-        m, n, k,
-        ptr_ixA, ptr_ixB, ptr_X, nnz,
-        ptr_Xfull,
-        ptr_weight,
-        user_bias, item_bias, center,
-        add_intercepts,
-        lam, ptr_lam_unique,
-        ptr_U, p,
-        ptr_I, q,
-        ptr_U_row, ptr_U_col, ptr_U_sp, nnz_U,
-        ptr_I_row, ptr_I_col, ptr_I_sp, nnz_I,
-        k_main, k_sec,
-        w_user, w_item,
-        n_corr_pairs, maxiter, 1,
-        nthreads, prefer_onepass,
-        verbose, print_every, handle_interrupt,
-        &niter, &nfev,
-        &Am[0,0], &Bm[0,0],
-        ptr_Bm_plus_bias
-    )
+    cdef int_t retval = 0
+    with nogil, boundscheck(False), nonecheck(False), wraparound(False):
+        retval = fit_offsets_explicit_lbfgs_internal(
+            &values[0], 0,
+            &glob_mean,
+            m, n, k,
+            ptr_ixA, ptr_ixB, ptr_X, nnz,
+            ptr_Xfull,
+            ptr_weight,
+            user_bias, item_bias, center,
+            add_intercepts,
+            lam, ptr_lam_unique,
+            ptr_U, p,
+            ptr_I, q,
+            ptr_U_row, ptr_U_col, ptr_U_sp, nnz_U,
+            ptr_I_row, ptr_I_col, ptr_I_sp, nnz_I,
+            k_main, k_sec,
+            w_user, w_item,
+            n_corr_pairs, maxiter, 1,
+            nthreads, prefer_onepass,
+            verbose, print_every, handle_interrupt,
+            &niter, &nfev,
+            &Am[0,0], &Bm[0,0],
+            ptr_Bm_plus_bias
+        )
 
     if retval == 1:
         raise MemoryError("Could not allocate sufficient memory.")
@@ -1192,43 +1196,45 @@ def call_fit_collective_explicit_als(
 
     cdef real_t glob_mean = 0
 
-    cdef int_t retval = fit_collective_explicit_als(
-        ptr_biasA, ptr_biasB,
-        ptr_A, ptr_B, ptr_C, ptr_D,
-        ptr_Ai, ptr_Bi,
-        add_implicit_features,
-        0, 0,
-        &glob_mean,
-        ptr_U_colmeans, ptr_I_colmeans,
-        m, n, k,
-        ptr_ixA, ptr_ixB, ptr_X, nnz,
-        ptr_Xfull,
-        ptr_weight,
-        user_bias, item_bias, center,
-        lam, ptr_lam_unique,
-        l1_lam, ptr_l1_lam_unique,
-        scale_lam, scale_lam_sideinfo,
-        ptr_U, m_u, p,
-        ptr_I, n_i, q,
-        ptr_U_row, ptr_U_col, ptr_U_sp, nnz_U,
-        ptr_I_row, ptr_I_col, ptr_I_sp, nnz_I,
-        NA_as_zero_X, NA_as_zero_U, NA_as_zero_I,
-        k_main, k_user, k_item,
-        w_main, w_user, w_item, w_implicit,
-        niter, nthreads, verbose, handle_interrupt,
-        use_cg, max_cg_steps, finalize_chol,
-        nonneg, max_cd_steps, nonneg_C, nonneg_D,
-        precompute_for_predictions,
-        include_all_X,
-        ptr_B_plus_bias,
-        ptr_BtB,
-        ptr_TransBtBinvBt,
-        ptr_BtXbias,
-        ptr_BeTBeChol,
-        ptr_BiTBi,
-        ptr_TransCtCinvCt,
-        ptr_CtCw
-    )
+    cdef int_t retval = 0
+    with nogil, boundscheck(False), nonecheck(False), wraparound(False):
+        retval = fit_collective_explicit_als(
+            ptr_biasA, ptr_biasB,
+            ptr_A, ptr_B, ptr_C, ptr_D,
+            ptr_Ai, ptr_Bi,
+            add_implicit_features,
+            0, 0,
+            &glob_mean,
+            ptr_U_colmeans, ptr_I_colmeans,
+            m, n, k,
+            ptr_ixA, ptr_ixB, ptr_X, nnz,
+            ptr_Xfull,
+            ptr_weight,
+            user_bias, item_bias, center,
+            lam, ptr_lam_unique,
+            l1_lam, ptr_l1_lam_unique,
+            scale_lam, scale_lam_sideinfo,
+            ptr_U, m_u, p,
+            ptr_I, n_i, q,
+            ptr_U_row, ptr_U_col, ptr_U_sp, nnz_U,
+            ptr_I_row, ptr_I_col, ptr_I_sp, nnz_I,
+            NA_as_zero_X, NA_as_zero_U, NA_as_zero_I,
+            k_main, k_user, k_item,
+            w_main, w_user, w_item, w_implicit,
+            niter, nthreads, verbose, handle_interrupt,
+            use_cg, max_cg_steps, finalize_chol,
+            nonneg, max_cd_steps, nonneg_C, nonneg_D,
+            precompute_for_predictions,
+            include_all_X,
+            ptr_B_plus_bias,
+            ptr_BtB,
+            ptr_TransBtBinvBt,
+            ptr_BtXbias,
+            ptr_BeTBeChol,
+            ptr_BiTBi,
+            ptr_TransCtCinvCt,
+            ptr_CtCw
+        )
 
     if retval == 1:
         raise MemoryError("Could not allocate sufficient memory.")
@@ -1406,29 +1412,31 @@ def call_fit_collective_implicit_als(
 
     cdef real_t w_main_multiplier = 1.
 
-    cdef int_t retval = fit_collective_implicit_als(
-        ptr_A, ptr_B, ptr_C, ptr_D,
-        0, 0,
-        ptr_U_colmeans, ptr_I_colmeans,
-        m, n, k,
-        &ixA[0], &ixB[0], &X[0], X.shape[0],
-        lam, ptr_lam_unique,
-        l1_lam, ptr_l1_lam_unique,
-        ptr_U, m_u, p,
-        ptr_I, n_i, q,
-        ptr_U_row, ptr_U_col, ptr_U_sp, nnz_U,
-        ptr_I_row, ptr_I_col, ptr_I_sp, nnz_I,
-        NA_as_zero_U, NA_as_zero_I,
-        k_main, k_user, k_item,
-        w_main, w_user, w_item,
-        &w_main_multiplier,
-        alpha, adjust_weight, apply_log_transf,
-        niter, nthreads, verbose, handle_interrupt,
-        use_cg, max_cg_steps, finalize_chol,
-        nonneg, max_cd_steps, nonneg_C, nonneg_D,
-        precompute_for_predictions,
-        ptr_BtB, ptr_BeTBe, ptr_BeTBeChol
-    )
+    cdef int_t retval = 0
+    with nogil, boundscheck(False), nonecheck(False), wraparound(False):
+        reval = fit_collective_implicit_als(
+            ptr_A, ptr_B, ptr_C, ptr_D,
+            0, 0,
+            ptr_U_colmeans, ptr_I_colmeans,
+            m, n, k,
+            &ixA[0], &ixB[0], &X[0], X.shape[0],
+            lam, ptr_lam_unique,
+            l1_lam, ptr_l1_lam_unique,
+            ptr_U, m_u, p,
+            ptr_I, n_i, q,
+            ptr_U_row, ptr_U_col, ptr_U_sp, nnz_U,
+            ptr_I_row, ptr_I_col, ptr_I_sp, nnz_I,
+            NA_as_zero_U, NA_as_zero_I,
+            k_main, k_user, k_item,
+            w_main, w_user, w_item,
+            &w_main_multiplier,
+            alpha, adjust_weight, apply_log_transf,
+            niter, nthreads, verbose, handle_interrupt,
+            use_cg, max_cg_steps, finalize_chol,
+            nonneg, max_cd_steps, nonneg_C, nonneg_D,
+            precompute_for_predictions,
+            ptr_BtB, ptr_BeTBe, ptr_BeTBeChol
+        )
 
     if retval == 1:
         raise MemoryError("Could not allocate sufficient memory.")
@@ -1556,32 +1564,34 @@ def call_fit_offsets_explicit_als(
 
     cdef real_t glob_mean = 0
 
-    cdef int_t retval = fit_offsets_als(
-        ptr_biasA, ptr_biasB,
-        ptr_A, ptr_B,
-        ptr_C, ptr_C_bias,
-        ptr_D, ptr_D_bias,
-        0, 0,
-        &glob_mean,
-        m, n, k,
-        ptr_ixA, ptr_ixB, ptr_X, nnz,
-        ptr_Xfull,
-        ptr_weight,
-        user_bias, item_bias, center, add_intercepts,
-        lam,
-        ptr_U, p,
-        ptr_I, q,
-        0, NA_as_zero_X, 0., 0,
-        niter,
-        nthreads,
-        use_cg, max_cg_steps, finalize_chol,
-        verbose, handle_interrupt,
-        precompute_for_predictions,
-        ptr_Am, ptr_Bm,
-        ptr_Bm_plus_bias,
-        ptr_BtB,
-        ptr_TransBtBinvBt
-    )
+    cdef int_t retval = 0
+    with nogil, boundscheck(False), nonecheck(False), wraparound(False):
+        retval = fit_offsets_als(
+            ptr_biasA, ptr_biasB,
+            ptr_A, ptr_B,
+            ptr_C, ptr_C_bias,
+            ptr_D, ptr_D_bias,
+            0, 0,
+            &glob_mean,
+            m, n, k,
+            ptr_ixA, ptr_ixB, ptr_X, nnz,
+            ptr_Xfull,
+            ptr_weight,
+            user_bias, item_bias, center, add_intercepts,
+            lam,
+            ptr_U, p,
+            ptr_I, q,
+            0, NA_as_zero_X, 0., 0,
+            niter,
+            nthreads,
+            use_cg, max_cg_steps, finalize_chol,
+            verbose, handle_interrupt,
+            precompute_for_predictions,
+            ptr_Am, ptr_Bm,
+            ptr_Bm_plus_bias,
+            ptr_BtB,
+            ptr_TransBtBinvBt
+        )
 
     if retval == 1:
         raise MemoryError("Could not allocate sufficient memory.")
@@ -1675,31 +1685,33 @@ def call_fit_offsets_implicit_als(
 
     cdef real_t placeholder = 0
 
-    cdef int_t retval = fit_offsets_als(
-        <real_t*>NULL, <real_t*>NULL,
-        ptr_A, ptr_B, ptr_C, ptr_C_bias, ptr_D, ptr_D_bias,
-        0, 0,
-        &placeholder,
-        m, n, k,
-        ptr_ixA, ptr_ixB, ptr_X, nnz,
-        <real_t*>NULL,
-        <real_t*>NULL,
-        0, 0, 0, add_intercepts,
-        lam,
-        ptr_U, p,
-        ptr_I, q,
-        1, 0,
-        alpha, apply_log_transf,
-        niter,
-        nthreads, use_cg,
-        max_cg_steps, finalize_chol,
-        verbose, handle_interrupt,
-        precompute_for_predictions,
-        ptr_Am, ptr_Bm,
-        <real_t*>NULL,
-        ptr_BtB,
-        <real_t*>NULL
-    )
+    cdef int_t retval = 0
+    with nogil, boundscheck(False), nonecheck(False), wraparound(False):
+        retval = fit_offsets_als(
+            <real_t*>NULL, <real_t*>NULL,
+            ptr_A, ptr_B, ptr_C, ptr_C_bias, ptr_D, ptr_D_bias,
+            0, 0,
+            &placeholder,
+            m, n, k,
+            ptr_ixA, ptr_ixB, ptr_X, nnz,
+            <real_t*>NULL,
+            <real_t*>NULL,
+            0, 0, 0, add_intercepts,
+            lam,
+            ptr_U, p,
+            ptr_I, q,
+            1, 0,
+            alpha, apply_log_transf,
+            niter,
+            nthreads, use_cg,
+            max_cg_steps, finalize_chol,
+            verbose, handle_interrupt,
+            precompute_for_predictions,
+            ptr_Am, ptr_Bm,
+            <real_t*>NULL,
+            ptr_BtB,
+            <real_t*>NULL
+        )
 
     if retval == 1:
         raise MemoryError("Could not allocate sufficient memory.")
@@ -1799,26 +1811,28 @@ def precompute_matrices_collective_explicit(
         lam_unique[2] = lam
         ptr_lam_unique = &lam_unique[0]
 
-    cdef int_t retval = precompute_collective_explicit(
-        ptr_B, n_orig, n_max, include_all_X,
-        ptr_C, p,
-        ptr_Bi, add_implicit_features,
-        ptr_biasB, glob_mean, NA_as_zero_X,
-        k, k_user, k_item, k_main,
-        user_bias,
-        nonneg,
-        lam, ptr_lam_unique,
-        scale_lam, scale_lam_sideinfo,
-        w_main, w_user, w_implicit,
-        ptr_B_plus_bias,
-        ptr_BtB,
-        ptr_TransBtBinvBt,
-        ptr_BtXbias,
-        ptr_BeTBeChol,
-        ptr_BiTBi,
-        ptr_TransCtCinvCt,
-        ptr_CtCw
-    )
+    cdef int_t retval = 0
+    with nogil, boundscheck(False), nonecheck(False), wraparound(False):
+        retval = precompute_collective_explicit(
+            ptr_B, n_orig, n_max, include_all_X,
+            ptr_C, p,
+            ptr_Bi, add_implicit_features,
+            ptr_biasB, glob_mean, NA_as_zero_X,
+            k, k_user, k_item, k_main,
+            user_bias,
+            nonneg,
+            lam, ptr_lam_unique,
+            scale_lam, scale_lam_sideinfo,
+            w_main, w_user, w_implicit,
+            ptr_B_plus_bias,
+            ptr_BtB,
+            ptr_TransBtBinvBt,
+            ptr_BtXbias,
+            ptr_BeTBeChol,
+            ptr_BiTBi,
+            ptr_TransCtCinvCt,
+            ptr_CtCw
+        )
     if retval == 1:
         raise MemoryError("Could not allocate sufficient memory.")
 
@@ -1856,15 +1870,17 @@ def precompute_matrices_collective_implicit(
         p = C.shape[0]
         ptr_C = &C[0,0]
 
-    cdef int_t retval = precompute_collective_implicit(
-        &B[0,0], B.shape[0],
-        ptr_C, p,
-        k, k_user, k_item, k_main,
-        lam, w_main, w_user, w_main_multiplier,
-        nonneg,
-        1,
-        ptr_BtB, ptr_BeTBe, ptr_BeTBeChol
-    )
+    cdef int_t retval = 0
+    with nogil, boundscheck(False), nonecheck(False), wraparound(False):
+        retval = precompute_collective_implicit(
+            &B[0,0], B.shape[0],
+            ptr_C, p,
+            k, k_user, k_item, k_main,
+            lam, w_main, w_user, w_main_multiplier,
+            nonneg,
+            1,
+            ptr_BtB, ptr_BeTBe, ptr_BeTBeChol
+        )
     if retval == 1:
         raise MemoryError("Could not allocate sufficient memory.")
 
@@ -1899,7 +1915,7 @@ def call_factors_collective_explicit_single(
         int_t k, int_t k_user = 0, int_t k_item = 0, int_t k_main = 0,
         real_t lam = 1e2, real_t lam_bias = 1e2,
         real_t l1_lam = 0., real_t l1_lam_bias = 0.,
-        bint scale_lam = 0, scale_lam_sideinfo = 0,
+        bint scale_lam = 0, bint scale_lam_sideinfo = 0,
         real_t w_user = 1., real_t w_main = 1., real_t w_implicit = 0.5,
         bint user_bias = 1,
         bint NA_as_zero_U = 0, bint NA_as_zero_X = 0,
@@ -2006,36 +2022,38 @@ def call_factors_collective_explicit_single(
         ptr_l1_lam_unique = &l1_lam_unique[0]
 
     cdef np.ndarray[real_t, ndim=1] A = np.empty(k_user+k+k_main, dtype=c_real_t)
-    cdef int_t retval = factors_collective_explicit_single(
-        &A[0], ptr_Abias,
-        ptr_U, C.shape[0],
-        ptr_U_sp, ptr_U_sp_i, U_sp.shape[0],
-        ptr_U_bin, C_bin.shape[0],
-        NA_as_zero_U, NA_as_zero_X,
-        nonneg,
-        ptr_C, ptr_C_bin,
-        glob_mean, ptr_biasB,
-        ptr_U_colmeans,
-        ptr_Xa, ptr_Xa_i, Xa.shape[0],
-        ptr_Xa_dense, n_orig,
-        ptr_weight,
-        &B[0,0],
-        ptr_Bi, add_implicit_features,
-        k, k_user, k_item, k_main,
-        lam, ptr_lam_unique,
-        l1_lam, ptr_l1_lam_unique,
-        scale_lam, scale_lam_sideinfo,
-        w_main, w_user, w_implicit,
-        n_max, include_all_X,
-        ptr_BtB,
-        ptr_TransBtBinvBt,
-        ptr_BtXbias,
-        ptr_BeTBeChol,
-        ptr_BiTBi,
-        ptr_CtCw,
-        ptr_TransCtCinvCt,
-        ptr_B_plus_bias
-    )
+    cdef int_t retval = 0
+    with nogil, boundscheck(False), nonecheck(False), wraparound(False):
+        retval = factors_collective_explicit_single(
+            &A[0], ptr_Abias,
+            ptr_U, C.shape[0],
+            ptr_U_sp, ptr_U_sp_i, U_sp.shape[0],
+            ptr_U_bin, C_bin.shape[0],
+            NA_as_zero_U, NA_as_zero_X,
+            nonneg,
+            ptr_C, ptr_C_bin,
+            glob_mean, ptr_biasB,
+            ptr_U_colmeans,
+            ptr_Xa, ptr_Xa_i, Xa.shape[0],
+            ptr_Xa_dense, n_orig,
+            ptr_weight,
+            &B[0,0],
+            ptr_Bi, add_implicit_features,
+            k, k_user, k_item, k_main,
+            lam, ptr_lam_unique,
+            l1_lam, ptr_l1_lam_unique,
+            scale_lam, scale_lam_sideinfo,
+            w_main, w_user, w_implicit,
+            n_max, include_all_X,
+            ptr_BtB,
+            ptr_TransBtBinvBt,
+            ptr_BtXbias,
+            ptr_BeTBeChol,
+            ptr_BiTBi,
+            ptr_CtCw,
+            ptr_TransCtCinvCt,
+            ptr_B_plus_bias
+        )
     if retval == 1:
         raise MemoryError("Could not allocate sufficient memory.")
 
@@ -2092,23 +2110,25 @@ def call_factors_collective_implicit_single(
         ptr_BeTBeChol = &BeTBeChol[0,0]
 
     cdef np.ndarray[real_t, ndim=1] A = np.empty(k_user+k+k_main, dtype=c_real_t)
-    cdef int retval = factors_collective_implicit_single(
-        &A[0],
-        ptr_U, p,
-        ptr_U_sp, ptr_U_sp_i, U_sp.shape[0],
-        NA_as_zero_U,
-        nonneg,
-        ptr_U_colmeans,
-        &B[0,0], B.shape[0], ptr_C,
-        &Xa[0], &Xa_i[0], Xa.shape[0],
-        k, k_user, k_item, k_main,
-        lam, l1_lam, alpha, w_main, w_user,
-        w_main_multiplier,
-        apply_log_transf,
-        ptr_BeTBe,
-        ptr_BtB,
-        ptr_BeTBeChol
-    )
+    cdef int retval = 0
+    with nogil, boundscheck(False), nonecheck(False), wraparound(False):
+        retval = factors_collective_implicit_single(
+            &A[0],
+            ptr_U, p,
+            ptr_U_sp, ptr_U_sp_i, U_sp.shape[0],
+            NA_as_zero_U,
+            nonneg,
+            ptr_U_colmeans,
+            &B[0,0], B.shape[0], ptr_C,
+            &Xa[0], &Xa_i[0], Xa.shape[0],
+            k, k_user, k_item, k_main,
+            lam, l1_lam, alpha, w_main, w_user,
+            w_main_multiplier,
+            apply_log_transf,
+            ptr_BeTBe,
+            ptr_BtB,
+            ptr_BeTBeChol
+        )
     if retval == 1:
         raise MemoryError("Could not allocate sufficient memory.")
 
@@ -2139,15 +2159,17 @@ def call_factors_offsets_cold(
 
     cdef np.ndarray[real_t, ndim=1] A = np.empty(k_sec+k+k_main, dtype=c_real_t)
 
-    cdef int_t retval = offsets_factors_cold(
-        &A[0],
-        ptr_U,
-        ptr_U_sp_i, ptr_U_sp, U_sp.shape[0],
-        &C[0,0], C.shape[0],
-        ptr_C_bias,
-        k, k_sec, k_main,
-        w_user
-    )
+    cdef int_t retval = 0
+    with nogil, boundscheck(False), nonecheck(False), wraparound(False):
+        retval = offsets_factors_cold(
+            &A[0],
+            ptr_U,
+            ptr_U_sp_i, ptr_U_sp, U_sp.shape[0],
+            &C[0,0], C.shape[0],
+            ptr_C_bias,
+            k, k_sec, k_main,
+            w_user
+        )
     if retval == 1:
         raise MemoryError("Could not allocate sufficient memory.")
 
@@ -2247,24 +2269,26 @@ def call_factors_offsets_explicit_single(
         ptr_lam_unique = &lam_unique[0]
 
     cdef np.ndarray[real_t, ndim=1] Am = np.empty(k_sec+k+k_main, dtype=c_real_t)
-    cdef int_t retval = factors_offsets_explicit_single(
-        &Am[0], ptr_Amean, ptr_A,
-        ptr_U, p,
-        ptr_U_sp, ptr_U_sp_i, U_sp.shape[0],
-        ptr_Xa, ptr_Xa_i, Xa.shape[0],
-        ptr_Xa_dense, Bm.shape[0],
-        ptr_weight,
-        &Bm[0,0], ptr_C,
-        ptr_C_bias,
-        glob_mean, ptr_biasB,
-        k, k_sec, k_main,
-        w_user,
-        lam, ptr_lam_unique,
-        exact,
-        ptr_TransBtBinvBt,
-        ptr_BtB,
-        ptr_Bm_plus_bias
-    )
+    cdef int_t retval = 0
+    with nogil, boundscheck(False), nonecheck(False), wraparound(False):
+        retval = factors_offsets_explicit_single(
+            &Am[0], ptr_Amean, ptr_A,
+            ptr_U, p,
+            ptr_U_sp, ptr_U_sp_i, U_sp.shape[0],
+            ptr_Xa, ptr_Xa_i, Xa.shape[0],
+            ptr_Xa_dense, Bm.shape[0],
+            ptr_weight,
+            &Bm[0,0], ptr_C,
+            ptr_C_bias,
+            glob_mean, ptr_biasB,
+            k, k_sec, k_main,
+            w_user,
+            lam, ptr_lam_unique,
+            exact,
+            ptr_TransBtBinvBt,
+            ptr_BtB,
+            ptr_Bm_plus_bias
+        )
     if retval == 1:
         raise MemoryError("Could not allocate sufficient memory.")
 
@@ -2328,19 +2352,21 @@ def call_factors_offsets_implicit_single(
         p = C.shape[0]
 
     cdef np.ndarray[real_t, ndim=1] Am = np.empty(k, dtype=c_real_t)
-    cdef int_t retval = factors_offsets_implicit_single(
-        &Am[0],
-        ptr_U, p,
-        ptr_U_sp, ptr_U_sp_i, U_sp.shape[0],
-        ptr_Xa, ptr_Xa_i, Xa.shape[0],
-        &Bm[0,0], ptr_C,
-        ptr_C_bias,
-        Am.shape[1], Bm.shape[0],
-        lam, alpha,
-        apply_log_transf,
-        ptr_BtB,
-        ptr_A
-    )
+    cdef int_t retval = 0
+    with nogil, boundscheck(False), nonecheck(False), wraparound(False):
+        retval = factors_offsets_implicit_single(
+            &Am[0],
+            ptr_U, p,
+            ptr_U_sp, ptr_U_sp_i, U_sp.shape[0],
+            ptr_Xa, ptr_Xa_i, Xa.shape[0],
+            &Bm[0,0], ptr_C,
+            ptr_C_bias,
+            Am.shape[1], Bm.shape[0],
+            lam, alpha,
+            apply_log_transf,
+            ptr_BtB,
+            ptr_A
+        )
     if retval == 1:
         raise MemoryError("Could not allocate sufficient memory.")
 
@@ -2367,12 +2393,14 @@ def call_factors_content_based_single(
         ptr_C_bias = &C_bias[0]
     
     cdef np.ndarray[real_t, ndim=1] a_vec = np.empty(C.shape[1], dtype=c_real_t)
-    cdef int_t retval = factors_content_based_single(
-        &a_vec[0], C.shape[1],
-        ptr_U, C.shape[0],
-        ptr_U_sp, ptr_U_sp_i, U_sp.shape[0],
-        &C[0,0], ptr_C_bias
-    )
+    cdef int_t retval = 0
+    with nogil, boundscheck(False), nonecheck(False), wraparound(False):
+        retval = factors_content_based_single(
+            &a_vec[0], C.shape[1],
+            ptr_U, C.shape[0],
+            ptr_U_sp, ptr_U_sp_i, U_sp.shape[0],
+            &C[0,0], ptr_C_bias
+        )
     if retval == 1:
         raise MemoryError("Could not allocate sufficient memory.")
     return a_vec
@@ -2399,17 +2427,18 @@ def call_predict_multiple(
     if outp.shape[0] == 0:
         return outp
 
-    predict_multiple(
-        &A[0,0], k_user,
-        &B[0,0], k_item,
-        ptr_biasA, ptr_biasB,
-        glob_mean,
-        k, k_main,
-        A.shape[0], B.shape[0],
-        &predA[0], &predB[0], predA.shape[0],
-        &outp[0],
-        nthreads
-    )
+    with nogil, boundscheck(False), nonecheck(False), wraparound(False):
+        predict_multiple(
+            &A[0,0], k_user,
+            &B[0,0], k_item,
+            ptr_biasA, ptr_biasB,
+            glob_mean,
+            k, k_main,
+            A.shape[0], B.shape[0],
+            &predA[0], &predB[0], predA.shape[0],
+            &outp[0],
+            nthreads
+        )
     return outp
 
 def call_predict_X_old_collective_explicit(
@@ -2434,15 +2463,16 @@ def call_predict_X_old_collective_explicit(
     if outp.shape[0] == 0:
         return outp
 
-    predict_X_old_collective_explicit(
-        &predA[0], &predB[0], &outp[0], predA.shape[0],
-        &A[0,0], ptr_biasA,
-        &B[0,0], ptr_biasB,
-        glob_mean,
-        k, k_user, k_item, k_main,
-        A.shape[0], B.shape[0],
-        nthreads
-    )
+    with nogil, boundscheck(False), nonecheck(False), wraparound(False):
+        predict_X_old_collective_explicit(
+            &predA[0], &predB[0], &outp[0], predA.shape[0],
+            &A[0,0], ptr_biasA,
+            &B[0,0], ptr_biasB,
+            glob_mean,
+            k, k_user, k_item, k_main,
+            A.shape[0], B.shape[0],
+            nthreads
+        )
     return outp
     
 
@@ -2476,17 +2506,19 @@ def call_topN(
         outp_score = np.empty(n_top, dtype=c_real_t)
         ptr_outp_score = &outp_score[0]
     cdef np.ndarray[int_t, ndim=1] outp_ix = np.empty(n_top, dtype=ctypes.c_int)
-    cdef int_t retval = topN(
-        &a_vec[0], k_user,
-        &B[0,0], k_item,
-        ptr_biasB,
-        glob_mean, biasA,
-        k, k_main,
-        ptr_include, include_ix.shape[0],
-        ptr_exclude, exclude_ix.shape[0],
-        &outp_ix[0], ptr_outp_score,
-        n_top, B.shape[0], nthreads
-    )
+    cdef int_t retval = 0
+    with nogil, boundscheck(False), nonecheck(False), wraparound(False):
+        retval = topN(
+            &a_vec[0], k_user,
+            &B[0,0], k_item,
+            ptr_biasB,
+            glob_mean, biasA,
+            k, k_main,
+            ptr_include, include_ix.shape[0],
+            ptr_exclude, exclude_ix.shape[0],
+            &outp_ix[0], ptr_outp_score,
+            n_top, B.shape[0], nthreads
+        )
     if retval == 1:
         raise MemoryError("Could not allocate sufficient memory.")
 
@@ -2542,18 +2574,20 @@ def call_predict_X_old_content_based(
     cdef np.ndarray[real_t, ndim=1] scores_new = np.empty(n_new, dtype=c_real_t)
     cdef int_t k = C.shape[1]
     
-    cdef int_t retval = predict_X_old_content_based(
-        &scores_new[0], n_new, n_new, k,
-        <int_t*>NULL, &ixB[0],
-        0, Bm.shape[0],
-        ptr_U, C.shape[0],
-        ptr_U_row, ptr_U_col, ptr_U_sp, nnz_U,
-        ptr_U_csr_p, ptr_U_csr_i, ptr_U_csr,
-        &C[0,0], ptr_C_bias,
-        &Bm[0,0], ptr_biasB,
-        glob_mean,
-        nthreads
-    )
+    cdef int_t retval = 0
+    with nogil, boundscheck(False), nonecheck(False), wraparound(False):
+        retval = predict_X_old_content_based(
+            &scores_new[0], n_new, n_new, k,
+            <int_t*>NULL, &ixB[0],
+            0, Bm.shape[0],
+            ptr_U, C.shape[0],
+            ptr_U_row, ptr_U_col, ptr_U_sp, nnz_U,
+            ptr_U_csr_p, ptr_U_csr_i, ptr_U_csr,
+            &C[0,0], ptr_C_bias,
+            &Bm[0,0], ptr_biasB,
+            glob_mean,
+            nthreads
+        )
     if retval == 1:
         raise MemoryError("Could not allocate sufficient memory.")
 
@@ -2635,21 +2669,23 @@ def call_predict_X_new_content_based(
     
     cdef np.ndarray[real_t, ndim=1] scores_new = np.empty(n_new, dtype=c_real_t)
     cdef int_t k = C.shape[1]
-    cdef int_t retval = predict_X_new_content_based(
-        &scores_new[0], n_new,
-        n_new, n_new, k,
-        <int_t*>NULL, <int_t*>NULL,
-        ptr_U, C.shape[0],
-        ptr_U_row, ptr_U_col, ptr_U_sp, nnz_U,
-        ptr_U_csr_p, ptr_U_csr_i, ptr_U_csr,
-        ptr_I, D.shape[0],
-        ptr_I_row, ptr_I_col, ptr_I_sp, nnz_I,
-        ptr_I_csr_p, ptr_I_csr_i, ptr_I_csr,
-        &C[0,0], ptr_C_bias,
-        &D[0,0], ptr_D_bias,
-        glob_mean,
-        nthreads
-    )
+    cdef int_t retval = 0
+    with nogil, boundscheck(False), nonecheck(False), wraparound(False):
+        retval = predict_X_new_content_based(
+            &scores_new[0], n_new,
+            n_new, n_new, k,
+            <int_t*>NULL, <int_t*>NULL,
+            ptr_U, C.shape[0],
+            ptr_U_row, ptr_U_col, ptr_U_sp, nnz_U,
+            ptr_U_csr_p, ptr_U_csr_i, ptr_U_csr,
+            ptr_I, D.shape[0],
+            ptr_I_row, ptr_I_col, ptr_I_sp, nnz_I,
+            ptr_I_csr_p, ptr_I_csr_i, ptr_I_csr,
+            &C[0,0], ptr_C_bias,
+            &D[0,0], ptr_D_bias,
+            glob_mean,
+            nthreads
+        )
     if retval == 1:
         raise MemoryError("Could not allocate sufficient memory.")
 
@@ -2724,19 +2760,21 @@ def call_topN_new_content_based(
     cdef np.ndarray[int_t, ndim=1] rank_new = np.empty(n_top, dtype=ctypes.c_int)
     cdef int_t k = C.shape[1]
     
-    cdef int_t retval = topN_new_content_based(
-        k, n_new_I,
-        ptr_U, C.shape[0],
-        ptr_U_sp, ptr_U_sp_i, U_sp.shape[0],
-        ptr_I, D.shape[0],
-        ptr_I_row, ptr_I_col, ptr_I_sp, nnz_I,
-        ptr_I_csr_p, ptr_I_csr_i, ptr_I_csr,
-        &C[0,0], ptr_C_bias,
-        &D[0,0], ptr_D_bias,
-        glob_mean,
-        &rank_new[0], ptr_scores_new,
-        n_top, nthreads
-    )
+    cdef int_t retval = 0
+    with nogil, boundscheck(False), nonecheck(False), wraparound(False):
+        retval = topN_new_content_based(
+            k, n_new_I,
+            ptr_U, C.shape[0],
+            ptr_U_sp, ptr_U_sp_i, U_sp.shape[0],
+            ptr_I, D.shape[0],
+            ptr_I_row, ptr_I_col, ptr_I_sp, nnz_I,
+            ptr_I_csr_p, ptr_I_csr_i, ptr_I_csr,
+            &C[0,0], ptr_C_bias,
+            &D[0,0], ptr_D_bias,
+            glob_mean,
+            &rank_new[0], ptr_scores_new,
+            n_top, nthreads
+        )
     if retval == 1:
         raise MemoryError("Could not allocate sufficient memory.")
 
@@ -2792,21 +2830,23 @@ def call_fit_most_popular(
 
     cdef real_t w_main_multiplier = 1.
 
-    cdef int_t retval = fit_most_popular(
-        ptr_biasA, ptr_biasB,
-        &glob_mean,
-        lam_user, lam_item,
-        scale_lam,
-        alpha,
-        m, n,
-        ptr_ixA, ptr_ixB, ptr_X, nnz,
-        ptr_Xfull,
-        ptr_weight,
-        implicit, adjust_weight, apply_log_transf,
-        nonneg,
-        &w_main_multiplier,
-        nthreads
-    )
+    cdef int_t retval = 0
+    with nogil, boundscheck(False), nonecheck(False), wraparound(False):
+        retval = fit_most_popular(
+            ptr_biasA, ptr_biasB,
+            &glob_mean,
+            lam_user, lam_item,
+            scale_lam,
+            alpha,
+            m, n,
+            ptr_ixA, ptr_ixB, ptr_X, nnz,
+            ptr_Xfull,
+            ptr_weight,
+            implicit, adjust_weight, apply_log_transf,
+            nonneg,
+            &w_main_multiplier,
+            nthreads
+        )
     if retval == 1:
         raise MemoryError("Could not allocate sufficient memory.")
 
@@ -2923,29 +2963,31 @@ def call_fit_content_based_lbfgs(
     cdef real_t glob_mean
     cdef int_t niter, nfev
 
-    cdef int_t retval = fit_content_based_lbfgs(
-        ptr_biasA, ptr_biasB,
-        ptr_C, ptr_C_bias,
-        ptr_D, ptr_D_bias,
-        start_with_ALS, 0, 0,
-        &glob_mean,
-        m, n, k,
-        ptr_ixA, ptr_ixB, ptr_X, nnz,
-        ptr_Xfull,
-        ptr_weight,
-        user_bias, item_bias,
-        add_intercepts,
-        lam, ptr_lam_unique,
-        ptr_U, p,
-        ptr_I, q,
-        ptr_U_row, ptr_U_col, ptr_U_sp, nnz_U,
-        ptr_I_row, ptr_I_col, ptr_I_sp, nnz_I,
-        n_corr_pairs, maxiter,
-        nthreads, prefer_onepass,
-        verbose, print_every, handle_interrupt,
-        &niter, &nfev,
-        &Am[0,0], &Bm[0,0]
-    )
+    cdef int_t retval = 0
+    with nogil, boundscheck(False), nonecheck(False), wraparound(False):
+        retval = fit_content_based_lbfgs(
+            ptr_biasA, ptr_biasB,
+            ptr_C, ptr_C_bias,
+            ptr_D, ptr_D_bias,
+            start_with_ALS, 0, 0,
+            &glob_mean,
+            m, n, k,
+            ptr_ixA, ptr_ixB, ptr_X, nnz,
+            ptr_Xfull,
+            ptr_weight,
+            user_bias, item_bias,
+            add_intercepts,
+            lam, ptr_lam_unique,
+            ptr_U, p,
+            ptr_I, q,
+            ptr_U_row, ptr_U_col, ptr_U_sp, nnz_U,
+            ptr_I_row, ptr_I_col, ptr_I_sp, nnz_I,
+            n_corr_pairs, maxiter,
+            nthreads, prefer_onepass,
+            verbose, print_every, handle_interrupt,
+            &niter, &nfev,
+            &Am[0,0], &Bm[0,0]
+        )
     if retval == 1:
         raise MemoryError("Could not allocate sufficient memory.")
     elif (retval == 3) and (not handle_interrupt):
@@ -3130,39 +3172,41 @@ def call_factors_collective_explicit_multiple(
     if (Xfull.shape[1]) and (Xfull.shape[1] != n_orig):
         n_orig = Xfull.shape[1]
 
-    cdef int_t retval = factors_collective_explicit_multiple(
-        &A[0,0], ptr_biasA, m,
-        ptr_U, m_u, p,
-        NA_as_zero_U, NA_as_zero_X,
-        nonneg,
-        ptr_U_row, ptr_U_col, ptr_U_sp, nnz_U,
-        ptr_U_csr_p, ptr_U_csr_i, ptr_U_csr,
-        ptr_Ub, m_ubin, pbin,
-        ptr_C, ptr_C_bin,
-        glob_mean, ptr_biasB,
-        ptr_U_colmeans,
-        ptr_X, ptr_ixA, ptr_ixB, nnz,
-        ptr_Xcsr_p, ptr_Xcsr_i, ptr_Xcsr,
-        ptr_Xfull, n_orig,
-        ptr_weight,
-        &B[0,0],
-        ptr_Bi, add_implicit_features,
-        k, k_user, k_item, k_main,
-        lam, ptr_lam_unique,
-        l1_lam, ptr_l1_lam_unique,
-        scale_lam, scale_lam_sideinfo,
-        w_main, w_user, w_implicit,
-        B.shape[0], include_all_X,
-        ptr_BtB,
-        ptr_TransBtBinvBt,
-        ptr_BtXbias,
-        ptr_BeTBeChol,
-        ptr_BiTBi,
-        ptr_TransCtCinvCt,
-        ptr_CtCw,
-        ptr_B_plus_bias,
-        nthreads
-    )
+    cdef int_t retval = 0
+    with nogil, boundscheck(False), nonecheck(False), wraparound(False):
+        retval = factors_collective_explicit_multiple(
+            &A[0,0], ptr_biasA, m,
+            ptr_U, m_u, p,
+            NA_as_zero_U, NA_as_zero_X,
+            nonneg,
+            ptr_U_row, ptr_U_col, ptr_U_sp, nnz_U,
+            ptr_U_csr_p, ptr_U_csr_i, ptr_U_csr,
+            ptr_Ub, m_ubin, pbin,
+            ptr_C, ptr_C_bin,
+            glob_mean, ptr_biasB,
+            ptr_U_colmeans,
+            ptr_X, ptr_ixA, ptr_ixB, nnz,
+            ptr_Xcsr_p, ptr_Xcsr_i, ptr_Xcsr,
+            ptr_Xfull, n_orig,
+            ptr_weight,
+            &B[0,0],
+            ptr_Bi, add_implicit_features,
+            k, k_user, k_item, k_main,
+            lam, ptr_lam_unique,
+            l1_lam, ptr_l1_lam_unique,
+            scale_lam, scale_lam_sideinfo,
+            w_main, w_user, w_implicit,
+            B.shape[0], include_all_X,
+            ptr_BtB,
+            ptr_TransBtBinvBt,
+            ptr_BtXbias,
+            ptr_BeTBeChol,
+            ptr_BiTBi,
+            ptr_TransCtCinvCt,
+            ptr_CtCw,
+            ptr_B_plus_bias,
+            nthreads
+        )
     if retval == 1:
         raise MemoryError("Could not allocate sufficient memory.")
 
@@ -3260,27 +3304,29 @@ def call_factors_collective_implicit_multiple(
     if m == 0:
         return A
 
-    cdef int_t retval = factors_collective_implicit_multiple(
-        &A[0,0], m,
-        ptr_U, m_u, C.shape[0],
-        NA_as_zero_U,
-        nonneg,
-        ptr_U_row, ptr_U_col, ptr_U_sp, nnz_U,
-        ptr_U_csr_p, ptr_U_csr_i, ptr_U_csr,
-        ptr_X, ptr_ixA, ptr_ixB, nnz,
-        ptr_Xcsr_p, ptr_Xcsr_i, ptr_Xcsr,
-        &B[0,0], n,
-        ptr_C,
-        ptr_U_colmeans,
-        k, k_user, k_item, k_main,
-        lam, l1_lam, alpha, w_main, w_user,
-        w_main_multiplier,
-        apply_log_transf,
-        ptr_BeTBe,
-        ptr_BtB,
-        ptr_BeTBeChol,
-        nthreads
-    )
+    cdef int_t retval = 0
+    with nogil, boundscheck(False), nonecheck(False), wraparound(False):
+        retval = factors_collective_implicit_multiple(
+            &A[0,0], m,
+            ptr_U, m_u, C.shape[0],
+            NA_as_zero_U,
+            nonneg,
+            ptr_U_row, ptr_U_col, ptr_U_sp, nnz_U,
+            ptr_U_csr_p, ptr_U_csr_i, ptr_U_csr,
+            ptr_X, ptr_ixA, ptr_ixB, nnz,
+            ptr_Xcsr_p, ptr_Xcsr_i, ptr_Xcsr,
+            &B[0,0], n,
+            ptr_C,
+            ptr_U_colmeans,
+            k, k_user, k_item, k_main,
+            lam, l1_lam, alpha, w_main, w_user,
+            w_main_multiplier,
+            apply_log_transf,
+            ptr_BeTBe,
+            ptr_BtB,
+            ptr_BeTBeChol,
+            nthreads
+        )
     if retval == 1:
         raise MemoryError("Could not allocate sufficient memory.")
 
@@ -3415,27 +3461,29 @@ def call_factors_offsets_explicit_multiple(
 
     cdef int_t p = C.shape[0]
 
-    cdef int_t retval =  factors_offsets_explicit_multiple(
-        &Am[0,0], ptr_biasA,
-        ptr_A, m,
-        ptr_U, p,
-        ptr_U_row, ptr_U_col, ptr_U_sp, nnz_U,
-        ptr_U_csr_p, ptr_U_csr_i, ptr_U_csr,
-        ptr_X, ptr_ixA, ptr_ixB, nnz,
-        ptr_Xcsr_p, ptr_Xcsr_i, ptr_Xcsr,
-        ptr_Xfull, n,
-        ptr_weight,
-        &Bm[0,0], ptr_C,
-        ptr_C_bias,
-        glob_mean, ptr_biasB,
-        k, k_sec, k_main,
-        w_user,
-        lam, ptr_lam_unique, exact,
-        ptr_TransBtBinvBt,
-        ptr_BtB,
-        ptr_Bm_plus_bias,
-        nthreads
-    )
+    cdef int_t retval = 0
+    with nogil, boundscheck(False), nonecheck(False), wraparound(False):
+        retval = factors_offsets_explicit_multiple(
+            &Am[0,0], ptr_biasA,
+            ptr_A, m,
+            ptr_U, p,
+            ptr_U_row, ptr_U_col, ptr_U_sp, nnz_U,
+            ptr_U_csr_p, ptr_U_csr_i, ptr_U_csr,
+            ptr_X, ptr_ixA, ptr_ixB, nnz,
+            ptr_Xcsr_p, ptr_Xcsr_i, ptr_Xcsr,
+            ptr_Xfull, n,
+            ptr_weight,
+            &Bm[0,0], ptr_C,
+            ptr_C_bias,
+            glob_mean, ptr_biasB,
+            k, k_sec, k_main,
+            w_user,
+            lam, ptr_lam_unique, exact,
+            ptr_TransBtBinvBt,
+            ptr_BtB,
+            ptr_Bm_plus_bias,
+            nthreads
+        )
     if retval == 1:
         raise MemoryError("Could not allocate sufficient memory.")
 
@@ -3529,22 +3577,24 @@ def call_factors_offsets_implicit_multiple(
 
     cdef int_t p = C.shape[0]
 
-    cdef int_t retval =  factors_offsets_implicit_multiple(
-        &Am[0,0], m,
-        ptr_A,
-        ptr_U, p,
-        ptr_U_row, ptr_U_col, ptr_U_sp, nnz_U,
-        ptr_U_csr_p, ptr_U_csr_i, ptr_U_csr,
-        ptr_X, ptr_ixA, ptr_ixB, nnz,
-        ptr_Xcsr_p, ptr_Xcsr_i, ptr_Xcsr,
-        &Bm[0,0], ptr_C,
-        ptr_C_bias,
-        k, n,
-        lam, alpha,
-        apply_log_transf,
-        ptr_BtB,
-        nthreads
-    )
+    cdef int_t retval = 0
+    with nogil, boundscheck(False), nonecheck(False), wraparound(False):
+        retval = factors_offsets_implicit_multiple(
+            &Am[0,0], m,
+            ptr_A,
+            ptr_U, p,
+            ptr_U_row, ptr_U_col, ptr_U_sp, nnz_U,
+            ptr_U_csr_p, ptr_U_csr_i, ptr_U_csr,
+            ptr_X, ptr_ixA, ptr_ixB, nnz,
+            ptr_Xcsr_p, ptr_Xcsr_i, ptr_Xcsr,
+            &Bm[0,0], ptr_C,
+            ptr_C_bias,
+            k, n,
+            lam, alpha,
+            apply_log_transf,
+            ptr_BtB,
+            nthreads
+        )
     if retval == 1:
         raise MemoryError("Could not allocate sufficient memory.")
 
@@ -3688,36 +3738,38 @@ def call_impute_X_collective_explicit(
     if (Xfull.shape[1]) and (Xfull.shape[1] != n_orig):
         n_orig = Xfull.shape[1]
 
-    cdef int_t retval = impute_X_collective_explicit(
-        m, user_bias,
-        ptr_U, m_u, p,
-        NA_as_zero_U,
-        nonneg,
-        ptr_U_row, ptr_U_col, ptr_U_sp, nnz_U,
-        ptr_U_csr_p, ptr_U_csr_i, ptr_U_csr,
-        ptr_Ub, m_ubin, pbin,
-        ptr_C, ptr_C_bin,
-        glob_mean, ptr_biasB,
-        ptr_U_colmeans,
-        ptr_Xfull, n_orig,
-        ptr_weight,
-        ptr_B,
-        ptr_Bi, add_implicit_features,
-        k, k_user, k_item, k_main,
-        lam, ptr_lam_unique,
-        l1_lam, ptr_l1_lam_unique,
-        scale_lam, scale_lam_sideinfo,
-        w_main, w_user, w_implicit,
-        n_max, include_all_X,
-        ptr_BtB,
-        ptr_TransBtBinvBt,
-        ptr_BeTBeChol,
-        ptr_BiTBi,
-        ptr_TransCtCinvCt,
-        ptr_CtCw,
-        ptr_B_plus_bias,
-        nthreads
-    )
+    cdef int_t retval = 0
+    with nogil, boundscheck(False), nonecheck(False), wraparound(False):
+        retval = impute_X_collective_explicit(
+            m, user_bias,
+            ptr_U, m_u, p,
+            NA_as_zero_U,
+            nonneg,
+            ptr_U_row, ptr_U_col, ptr_U_sp, nnz_U,
+            ptr_U_csr_p, ptr_U_csr_i, ptr_U_csr,
+            ptr_Ub, m_ubin, pbin,
+            ptr_C, ptr_C_bin,
+            glob_mean, ptr_biasB,
+            ptr_U_colmeans,
+            ptr_Xfull, n_orig,
+            ptr_weight,
+            ptr_B,
+            ptr_Bi, add_implicit_features,
+            k, k_user, k_item, k_main,
+            lam, ptr_lam_unique,
+            l1_lam, ptr_l1_lam_unique,
+            scale_lam, scale_lam_sideinfo,
+            w_main, w_user, w_implicit,
+            n_max, include_all_X,
+            ptr_BtB,
+            ptr_TransBtBinvBt,
+            ptr_BeTBeChol,
+            ptr_BiTBi,
+            ptr_TransCtCinvCt,
+            ptr_CtCw,
+            ptr_B_plus_bias,
+            nthreads
+        )
     if retval == 1:
         raise MemoryError("Could not allocate sufficient memory.")
 
