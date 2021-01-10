@@ -1158,9 +1158,8 @@ void act_on_interrupt(int retval, bool handle_interrupt)
 {
     if (retval == 3)
         print_err_msg(" Error: procedure was interrupted.\n");
-    #if !defined(_WIN32) && !defined(_WIN64) && !defined(_MSC_VER)
-    if (!handle_interrupt && retval == 3) kill(getpid(), SIGINT);
-    #endif
+    if (!handle_interrupt && retval == 3)
+        raise(SIGINT);
 }
 
 #ifdef _FOR_R
