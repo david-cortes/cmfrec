@@ -1235,6 +1235,11 @@ int_t fit_offsets_explicit_lbfgs_internal
         full_dense = (count_NAs(Xfull, (size_t)m*(size_t)n, nthreads)) == 0;
 
     sig_t_ old_interrupt_handle = NULL;
+    #pragma omp critical
+    {
+        should_stop_procedure = false;
+        old_interrupt_handle = signal(SIGINT, set_interrup_global_variable);
+    }
     
     #ifdef _OPENMP
     if (nthreads > 1 && Xfull == NULL)
@@ -1359,7 +1364,6 @@ int_t fit_offsets_explicit_lbfgs_internal
         print_every, 0, 0
     };
 
-    old_interrupt_handle = signal(SIGINT, set_interrup_global_variable);
     if (should_stop_procedure)
     {
         fprintf(stderr, "Procedure terminated before starting optimization\n");
@@ -1456,15 +1460,20 @@ int_t fit_offsets_explicit_lbfgs_internal
         free(I_csc_p);
         free(I_csc_i);
         free(I_csc);
-        signal(SIGINT, old_interrupt_handle);
-        if (should_stop_procedure) retval = 3;
-        should_stop_procedure = false;
-        act_on_interrupt(retval, handle_interrupt);
+        #pragma omp critical
+        {
+            signal(SIGINT, old_interrupt_handle);
+            if (should_stop_procedure)
+            {
+                act_on_interrupt(3, handle_interrupt);
+                if (retval != 1) retval = 3;
+            }
+            should_stop_procedure = false;
+        }
     if (retval == 1)
     {
         if (verbose)
             print_oom_message();
-        should_stop_procedure = false;
     }
     return retval;
 }
@@ -1626,7 +1635,10 @@ int_t fit_offsets_explicit_lbfgs
 
     if (precompute_for_predictions)
     {
-        if (retval == 3) should_stop_procedure = true;
+        #pragma omp critical
+        {
+            if (retval == 3) should_stop_procedure = true;
+        }
         retval = precompute_collective_explicit(
             Bm, n, n, true,
             (real_t*)NULL, 0,
@@ -1647,9 +1659,12 @@ int_t fit_offsets_explicit_lbfgs
             (real_t*)NULL,
             (real_t*)NULL
         );
-        if (should_stop_procedure && retval == 0) {
-            should_stop_procedure = false;
-            retval = 3;
+        #pragma omp critical
+        {
+            if (should_stop_procedure && retval == 0) {
+                should_stop_procedure = false;
+                retval = 3;
+            }
         }
     }
 

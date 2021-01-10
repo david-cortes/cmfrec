@@ -1157,9 +1157,11 @@ void print_oom_message(void)
 void act_on_interrupt(int retval, bool handle_interrupt)
 {
     if (retval == 3)
+    {
         print_err_msg(" Error: procedure was interrupted.\n");
-    if (!handle_interrupt && retval == 3)
-        raise(SIGINT);
+        if (!handle_interrupt)
+            raise(SIGINT);
+    }
 }
 
 #ifdef _FOR_R
