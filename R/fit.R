@@ -702,7 +702,7 @@ NULL
 #'     
 #'     ### Print them in a more understandable format
 #'     movie_names <- colnames(X)
-#'     n_ratings <- colSums(as(MovieLense@data[, rec, drop=FALSE], "ngCMatrix"))
+#'     n_ratings <- colSums(as(MovieLense@data[, rec, drop=FALSE], "nsparseMatrix"))
 #'     avg_ratings <- colSums(MovieLense@data[, rec, drop=FALSE]) / n_ratings
 #'     cat("Recommended for user_id=10:\n",
 #'         paste(paste(1:length(rec), ". ", sep=""),
