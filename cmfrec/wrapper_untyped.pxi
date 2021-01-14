@@ -2109,6 +2109,12 @@ def call_factors_collective_implicit_single(
     if BeTBeChol.shape[0]:
         ptr_BeTBeChol = &BeTBeChol[0,0]
 
+    cdef real_t *ptr_Xa = NULL
+    cdef int_t *ptr_Xa_i = NULL
+    if Xa.shape[0]:
+    	ptr_Xa = &Xa[0]
+    	ptr_Xa_i = &Xa_i[0]
+
     cdef np.ndarray[real_t, ndim=1] A = np.empty(k_user+k+k_main, dtype=c_real_t)
     cdef int retval = 0
     with nogil, boundscheck(False), nonecheck(False), wraparound(False):
@@ -2120,7 +2126,7 @@ def call_factors_collective_implicit_single(
             nonneg,
             ptr_U_colmeans,
             &B[0,0], B.shape[0], ptr_C,
-            &Xa[0], &Xa_i[0], Xa.shape[0],
+            ptr_Xa, ptr_Xa_i, Xa.shape[0],
             k, k_user, k_item, k_main,
             lam, l1_lam, alpha, w_main, w_user,
             w_main_multiplier,
