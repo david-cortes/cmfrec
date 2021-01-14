@@ -2112,8 +2112,8 @@ def call_factors_collective_implicit_single(
     cdef real_t *ptr_Xa = NULL
     cdef int_t *ptr_Xa_i = NULL
     if Xa.shape[0]:
-    	ptr_Xa = &Xa[0]
-    	ptr_Xa_i = &Xa_i[0]
+        ptr_Xa = &Xa[0]
+        ptr_Xa_i = &Xa_i[0]
 
     cdef np.ndarray[real_t, ndim=1] A = np.empty(k_user+k+k_main, dtype=c_real_t)
     cdef int retval = 0
