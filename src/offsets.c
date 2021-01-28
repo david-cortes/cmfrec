@@ -1235,10 +1235,16 @@ int_t fit_offsets_explicit_lbfgs_internal
         full_dense = (count_NAs(Xfull, (size_t)m*(size_t)n, nthreads)) == 0;
 
     sig_t_ old_interrupt_handle = NULL;
+    bool has_lock_on_handle = false;
     #pragma omp critical
     {
-        should_stop_procedure = false;
-        old_interrupt_handle = signal(SIGINT, set_interrup_global_variable);
+        if (!handle_is_locked)
+        {
+            handle_is_locked = true;
+            has_lock_on_handle = true;
+            should_stop_procedure = false;
+            old_interrupt_handle = signal(SIGINT, set_interrup_global_variable);
+        }
     }
     
     #ifdef _OPENMP
@@ -1462,13 +1468,16 @@ int_t fit_offsets_explicit_lbfgs_internal
         free(I_csc);
         #pragma omp critical
         {
-            signal(SIGINT, old_interrupt_handle);
+            if (has_lock_on_handle && handle_is_locked)
+            {
+                handle_is_locked = false;
+                signal(SIGINT, old_interrupt_handle);
+            }
             if (should_stop_procedure)
             {
-                act_on_interrupt(3, handle_interrupt);
+                act_on_interrupt(3, handle_interrupt, true);
                 if (retval != 1) retval = 3;
             }
-            should_stop_procedure = false;
         }
     if (retval == 1)
     {
@@ -1662,7 +1671,6 @@ int_t fit_offsets_explicit_lbfgs
         #pragma omp critical
         {
             if (should_stop_procedure && retval == 0) {
-                should_stop_procedure = false;
                 retval = 3;
             }
         }
@@ -1670,7 +1678,7 @@ int_t fit_offsets_explicit_lbfgs
 
     cleanup:
         free(values);
-        act_on_interrupt(retval, handle_interrupt);
+        act_on_interrupt(retval, handle_interrupt, false);
         return retval;
     throw_oom:
     {
@@ -1997,7 +2005,7 @@ int_t fit_offsets_als
             free(I_plus_bias);
         free(sv);
         free(buffer_iwork);
-        act_on_interrupt(retval, handle_interrupt);
+        act_on_interrupt(retval, handle_interrupt, true);
     return retval;
 
     throw_oom:
@@ -3326,7 +3334,7 @@ int_t fit_content_based_lbfgs
         free(tempA);
         free(tempB);
         free(Xorig);
-        act_on_interrupt(retval, handle_interrupt);
+        act_on_interrupt(retval, handle_interrupt, false);
         return retval;
     throw_oom:
     {

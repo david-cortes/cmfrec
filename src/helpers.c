@@ -1001,6 +1001,7 @@ void row_means_csr(size_t indptr[], real_t *restrict values,
 }
 
 bool should_stop_procedure = false;
+bool handle_is_locked = false;
 void set_interrup_global_variable(int_t s)
 {
     #pragma omp critical
@@ -1154,11 +1155,12 @@ void print_oom_message(void)
     print_err_msg("Error: could not allocate enough memory.\n");
 }
 
-void act_on_interrupt(int retval, bool handle_interrupt)
+void act_on_interrupt(int retval, bool handle_interrupt, bool print_msg)
 {
     if (retval == 3)
     {
-        print_err_msg(" Error: procedure was interrupted.\n");
+        if (print_msg)
+            print_err_msg(" Error: procedure was interrupted.\n");
         if (!handle_interrupt)
             raise(SIGINT);
     }

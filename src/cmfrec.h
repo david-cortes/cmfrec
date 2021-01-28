@@ -388,6 +388,7 @@ void coo_to_csr_and_csc
 void row_means_csr(size_t indptr[], real_t *restrict values,
                    real_t *restrict output, int_t m, int_t nthreads);
 extern bool should_stop_procedure;
+extern bool handle_is_locked;
 void set_interrup_global_variable(int_t s);
 int_t lbfgs_printer_collective
 (
@@ -425,7 +426,7 @@ void append_ones_last_col
 void fill_lower_triangle(real_t A[], size_t n, size_t lda);
 void print_err_msg(const char *msg);
 void print_oom_message(void);
-void act_on_interrupt(int retval, bool handle_interrupt);
+void act_on_interrupt(int retval, bool handle_interrupt, bool print_msg);
 #ifdef _FOR_R
 void R_nan_to_C_nan(real_t arr[], size_t n);
 #endif
