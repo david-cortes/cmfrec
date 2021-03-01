@@ -9,6 +9,11 @@
 #' @export
 print.cmfrec <- function(x, ...) {
     cat(sprintf("'%s' Model Object\n\n", class(x)[1L]))
+    if (x$info$only_prediction_info) {
+        cat("(contains only essential prediction matrices)\n")
+        return(invisible(x))
+    }
+    
     if (!("MostPopular" %in% class(x))) {
         cat(sprintf("Dimensions: %d x %d\n", NCOL(x$matrices$A), NCOL(x$matrices$B)))
         cat(sprintf("Latent factors (shared): %d\n\n", x$info$k))

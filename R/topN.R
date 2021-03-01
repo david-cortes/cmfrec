@@ -318,6 +318,8 @@ topN <- function(model, user=NULL, n=10L, include=NULL, exclude=NULL, output_sco
         stop("Invalid model object - supported classes: ", paste(supported_models, collapse=", "))
     if (is.null(user) && !("MostPopular" %in% class(model)))
         stop("'user' cannot be empty for this model.")
+    if (model$info$only_prediction_info)
+        stop("Cannot use this function after dropping non-essential matrices.")
     inputs <- process.inputs.topN(class(model)[1L], model,
                                   user = user, n = n,
                                   include = include, exclude = exclude,

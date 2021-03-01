@@ -146,6 +146,9 @@ process.inputs.items <- function(model, obj, X=NULL, X_col=NULL, X_val=NULL, wei
 item_factors <- function(model, X=NULL, X_col=NULL, X_val=NULL,
                          I=NULL, I_col=NULL, I_val=NULL, I_bin=NULL,
                          weight=NULL, output_bias=FALSE) {
+    if (model$info$only_prediction_info)
+        stop("Cannot use this function after dropping non-essential matrices.")
+    
     output_bias <- check.bool(output_bias)
     inputs <- process.inputs.items(class(model)[1L], model,
                                    X = X, X_col = X_col, X_val = X_val, weight = weight,
@@ -339,6 +342,8 @@ predict_new_items <- function(model, user, item=NULL,
     if (!NROW(intersect(class(model), accepted_models)))
         stop("Method only applicable to the following models: ",
              paste(accepted_models, collapse = ", "))
+    if (model$info$only_prediction_info)
+        stop("Cannot use this function after dropping non-essential matrices.")
     if ((NROW(I)) && (!NCOL(model$matrices$D) || !NROW(model$matrices$D)))
         stop("Model was not fit to item side info.")
     if (!is.null(I_bin) && (!NCOL(model$matrices$Db) || !NROW(model$matrices$Db)))

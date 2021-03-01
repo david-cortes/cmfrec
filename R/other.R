@@ -57,6 +57,9 @@ swap.users.and.items <- function(model, precompute = TRUE) {
             stop("Swapping users/items not meaningful for MostPopular with 'user_bias=FALSE'")
     }
     
+    if (model$info$only_prediction_info)
+        stop("Cannot use this function after dropping non-essential matrices.")
+    
     new_model <- list(
         info = list(
             w_main_multiplier = model$info$w_main_multiplier,
@@ -92,6 +95,7 @@ swap.users.and.items <- function(model, precompute = TRUE) {
             center = model$info$center,
             scale_lam = model$info$scale_lam,
             scale_lam_sideinfo = model$info$scale_lam_sideinfo,
+            only_prediction_info = model$info$only_prediction_info,
             nthreads = model$info$nthreads
         ),
         matrices = list(
@@ -169,4 +173,67 @@ swap.users.and.items <- function(model, precompute = TRUE) {
     }
     
     return(new_model)
+}
+
+#' @export
+#' @title Drop matrices that are not used for prediction
+#' @description Drops all the matrices in the model object which are not
+#' used for calculating new user factors (either warm or cold), such as the
+#' user biases or the item factors.
+#' 
+#' This is intended at decreasing memory usage in production systems which
+#' use this software for calculation of user factors or top-N recommendations.
+#' 
+#' Can additionally drop some of the precomputed matrices which are only
+#' taken in special circumstances such as when passing dense data with
+#' no missing values - however, predictions that would have otherwise used
+#' these matrices will become slower afterwards.
+#' 
+#' After dropping these non-essential matrices, it will not be possible
+#' anymore to call certain methods such as `predict` or `swap.users.and.items`.
+#' The methods which are intended to continue working afterwards are:\itemize{
+#' \item \link{factors_single}
+#' \item \link{factors}
+#' \item \link{topN_new}
+#' }
+#' 
+#' This method is only available for `CMF` and `CMF_implicit` model objects.
+#' @details After calling this function and reassigning the output to the
+#' original model object, one might need to call the garbage collector (by
+#' running `gc()`) before any of the freed memory is shown as available.
+#' @param model A model object as returned by \link{CMF} or \link{CMF_implicit}.
+#' @param drop_precomputed Whether to drop the less commonly used prediction
+#' matrices (see documentation above for more details).
+#' @return The model object with the non-essential matrices dropped.
+drop.nonessential.matrices <- function(model, drop_precomputed=TRUE) {
+    if (!inherits(model, c("CMF", "CMF_implicit")))
+        stop("Method is only applicable to 'CMF' and 'CMF_implicit'.")
+    
+    drop_precomputed <- check.bool(drop_precomputed, "drop_precomputed")
+    
+    model$info$user_mapping  <-  character()
+    model$info$I_cols        <-  character()
+    model$info$I_bin_cols    <-  character()
+    
+    model$matrices$A   <-  matrix(numeric(), nrow=0L, ncol=0L)
+    model$matrices$Ai  <-  matrix(numeric(), nrow=0L, ncol=0L)
+    model$matrices$D   <-  matrix(numeric(), nrow=0L, ncol=0L)
+    model$matrices$Db  <-  matrix(numeric(), nrow=0L, ncol=0L)
+    model$matrices$Am  <-  matrix(numeric(), nrow=0L, ncol=0L)
+    model$matrices$I_colmeans  <-  numeric()
+    model$matrices$user_bias   <-  numeric()
+    model$matrices$D_bias      <-  numeric()
+    
+    if (NROW(model$precomputed$B_plus_bias))
+        model$matrices$B       <-  matrix(numeric(), nrow=0L, ncol=0L)
+    
+    if (drop_precomputed) {
+        model$precomputed$TransBtBinvBt  <-  matrix(numeric(), nrow=0L, ncol=0L)
+        model$precomputed$TransCtCinvCt  <-  matrix(numeric(), nrow=0L, ncol=0L)
+        model$precomputed$BeTBeChol      <-  matrix(numeric(), nrow=0L, ncol=0L)
+        model$precomputed$BeTBe          <-  matrix(numeric(), nrow=0L, ncol=0L)
+    }
+    
+    model$info$only_prediction_info <- TRUE
+    return(model)
 }

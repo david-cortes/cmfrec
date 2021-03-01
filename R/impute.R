@@ -91,6 +91,8 @@
 imputeX <- function(model, X, weight = NULL, U = NULL, U_bin = NULL) {
     if (!("CMF" %in% class(model)))
         stop("Method is only applicable to 'CMF' model.")
+    if (model$info$only_prediction_info)
+        stop("Cannot use this function after dropping non-essential matrices.")
     if (!("matrix" %in% class(X)))
         stop("'X' must be a matrix with NAN values.")
     if (!anyNA(X))

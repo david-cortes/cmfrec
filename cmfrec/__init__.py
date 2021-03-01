@@ -240,6 +240,7 @@ class _CMF:
         self._w_main_multiplier = 1.
 
         self.is_fitted_ = False
+        self._only_prediction_info = False
         self.nfev_ = None
         self.nupd_ = None
         self.user_mapping_ = np.array([], dtype=object)
@@ -1060,6 +1061,8 @@ class _CMF:
 
     def _predict(self, user=None, a_vec=None, a_bias=0., item=None):
         assert self.is_fitted_
+        if self._only_prediction_info:
+            raise ValueError("Cannot use this function after dropping non-essential matrices.")
 
         user, item, _1, _2 = self._process_users_items(user, item, None, None)
 
@@ -1241,6 +1244,10 @@ class _CMF:
 
     def _topN(self, user=None, a_vec=None, a_bias=0, B=None,
               n=10, include=None, exclude=None, output_score=False):
+        assert self.is_fitted_
+        if self._only_prediction_info:
+            raise ValueError("Cannot use this function after dropping non-essential matrices.")
+        
         user, _, include, exclude = self._process_users_items(user, None, include, exclude)
 
         c_funs = wrapper_float if self.use_float else wrapper_double
@@ -1731,6 +1738,8 @@ class _CMF:
 
     def _item_factors_cold(self, I=None, I_bin=None, I_col=None, I_val=None):
         assert self.is_fitted_
+        if self._only_prediction_info:
+            raise ValueError("Cannot use this function after dropping non-essential matrices.")
         if (self.D_.shape[0] == 0) and (self.Dbin_.shape[0] == 0):
             msg  = "Can only use this method when "
             msg += "fitting the model to item side info."
@@ -1983,6 +1992,8 @@ class _CMF:
             and items swapped.
         """
         assert self.is_fitted_
+        if self._only_prediction_info:
+            raise ValueError("Cannot use this function after dropping non-essential matrices.")
 
         new_lambda = self.lambda_
         if isinstance(new_lambda, np.ndarray) and (new_lambda.shape[0] == 6):
@@ -2147,6 +2158,81 @@ class _CMF:
                     )
 
         return new_model
+
+    def drop_nonessential_matrices(self, drop_precomputed=True):
+        """
+        Drop matrices that are not used for prediction
+
+        Drops all the matrices in the model object which are not
+        used for calculating new user factors (either warm or cold), such as the
+        user biases or the item factors.
+
+        This is intended at decreasing memory usage in production systems which
+        use this software for calculation of user factors or top-N recommendations.
+
+        Can additionally drop some of the precomputed matrices which are only
+        taken in special circumstances such as when passing dense data with
+        no missing values - however, predictions that would have otherwise used
+        these matrices will become slower afterwards.
+
+        After dropping these non-essential matrices, it will not be possible
+        anymore to call certain methods such as ``predict`` or ``swap_users_and_items``.
+        The methods which are intended to continue working afterwards are:
+            
+            - ``factors_warm``
+
+            - ``factors_cold``
+
+            - ``factors_multiple``
+
+            - ``topN_warm``
+
+            - ``topN_cold``
+            
+
+        Parameters
+        ----------
+        drop_precomputed : bool
+            Whether to drop the less commonly used prediction
+            matrices (see documentation above for more details).
+
+        Returns
+        -------
+        self : obj
+            This object with the non-essential matrices dropped.
+        """
+        assert self.is_fitted_
+        if (not isinstance(self, CMF)) and (not isinstance(self, CMF_implicit)):
+            raise ValueError("Method is only applicable to 'CMF' and 'CMF_implicit'.")
+
+        self._only_prediction_info = True
+
+        self.user_mapping_ = np.array([], dtype=object)
+        self.user_dict_ = dict()
+        self.item_dict_ = dict()
+        self._I_cols = np.empty(0, dtype=object)
+        self._Ib_cols = np.empty(0, dtype=object)
+
+        self.A_ = np.empty((0,0), dtype=self.dtype_)
+        self.Ai_ = np.empty((0,0), dtype=self.dtype_)
+        self.D_ = np.empty((0,0), dtype=self.dtype_)
+        self.Dbin_ = np.empty((0,0), dtype=self.dtype_)
+        self._A_pred = np.empty((0,0), dtype=self.dtype_)
+        self._I_colmeans = np.empty(0, dtype=self.dtype_)
+        self.user_bias_ = np.empty(0, dtype=self.dtype_)
+        self.D_bias_ = np.empty(0, dtype=self.dtype_)
+
+        if self._B_plus_bias.shape[0]:
+            self.B_ = np.empty((0,0), dtype=self.dtype_)
+            self._B_pred = np.empty((0,0), dtype=self.dtype_)
+
+        if drop_precomputed:
+            self._TransBtBinvBt = np.empty((0,0), dtype=self.dtype_)
+            self._TransCtCinvCt = np.empty((0,0), dtype=self.dtype_)
+            self._BeTBeChol = np.empty((0,0), dtype=self.dtype_)
+            self._BeTBe = np.empty((0,0), dtype=self.dtype_)
+
+        return self
 
 
 
@@ -3030,6 +3116,8 @@ class CMF(_CMF):
         scores : array(n,)
             Predicted ratings for the requested user-item combinations.
         """
+        if self._only_prediction_info:
+            raise ValueError("Cannot use this function after dropping non-essential matrices.")
         B = self._factors_cold_multiple(U=I, U_bin=I_bin, is_I=True)
         return self._predict_new(user, B)
 
@@ -3076,6 +3164,8 @@ class CMF(_CMF):
             when passing ``output_score=True``, in which case the result will
             be a tuple with these two entries.
         """
+        if self._only_prediction_info:
+            raise ValueError("Cannot use this function after dropping non-essential matrices.")
         B = self._factors_cold_multiple(U=I, U_bin=I_bin, is_I=True)
         return self._topN(user=user, B=B, n=n, output_score=output_score)
 
@@ -3575,6 +3665,8 @@ class CMF(_CMF):
             The 'X' matrix as a dense array with all missing entries imputed
             according to the model.
         """
+        if self._only_prediction_info:
+            raise ValueError("Cannot use this function after dropping non-essential matrices.")
         if (X is not None) and (X.__class__.__name__ != "ndarray"):
             raise ValueError("'X' must be a NumPy array.")
 
@@ -4358,6 +4450,8 @@ class CMF_implicit(_CMF):
         scores : array(n,)
             Predicted ratings for the requested user-item combinations.
         """
+        if self._only_prediction_info:
+            raise ValueError("Cannot use this function after dropping non-essential matrices.")
         B = self._factors_cold_multiple(U=I, U_bin=None, is_I=True)
         return self._predict_new(user, B)
 
@@ -4392,6 +4486,8 @@ class CMF_implicit(_CMF):
             when passing ``output_score=True``, in which case the result will
             be a tuple with these two entries.
         """
+        if self._only_prediction_info:
+            raise ValueError("Cannot use this function after dropping non-essential matrices.")
         B = self._factors_cold_multiple(U=I, U_bin=None, is_I=True)
         return self._topN(user=user, B=B, n=n, output_score=output_score)
 

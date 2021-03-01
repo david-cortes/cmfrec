@@ -65,6 +65,9 @@ process.data.predict.new <- function(model, obj, X=NULL, weight=NULL,
                                      U=NULL, U_bin=NULL,
                                      items=NULL, rows=NULL,
                                      exact=FALSE) {
+    if (model$info$only_prediction_info)
+        stop("Cannot use this function after dropping non-essential matrices.")
+    
     exact <- check.bool(exact)
     
     if (!NROW(items))

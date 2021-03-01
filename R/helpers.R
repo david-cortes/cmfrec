@@ -393,6 +393,7 @@ get.empty.info <- function() {
         center = FALSE,
         scale_lam = FALSE,
         scale_lam_sideinfo = FALSE,
+        only_prediction_info = FALSE,
         nthreads = 1L
     ))
 }

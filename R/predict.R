@@ -46,6 +46,8 @@
 #' set to the predicted values.
 #' @seealso \link{predict_new} \link{topN}
 predict.cmfrec <- function(object, user, item=NULL, ...) {
+    if (object$info$only_prediction_info)
+        stop("Cannot use this function after dropping non-essential matrices.")
     return_mat <- FALSE
     if (NROW(intersect(class(user), c("dgTMatrix", "matrix.coo", "ngTMatrix")))) {
         mat_out <- user
