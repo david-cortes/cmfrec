@@ -738,7 +738,7 @@ NULL
 #'     factors_user <- model$matrices$A[, 10, drop=TRUE]
 #' 
 #'     ### Re-calculate them based on the data
-#'     factors_new <- factors_single(model, X=x_user,)
+#'     factors_new <- factors_single(model, X=x_user, U=u_user)
 #' 
 #'     ### Should be very close, but due to numerical precision,
 #'     ### might not be exactly equal (see section 'Details')
@@ -747,7 +747,8 @@ NULL
 #'     ### Can also calculate them in batch
 #'     ### (slicing is provided by package "rsparse")
 #'     Xslice <- as(X, "RsparseMatrix")[1:10, , drop=FALSE]
-#'     factors_multiple <- factors(model, X=Xslice)
+#'     Uslice <- U[1:10, , drop=FALSE]
+#'     factors_multiple <- factors(model, X=Xslice, U=Uslice)
 #'     cat("diff: ", factors_multiple[10, , drop=TRUE] - factors_new, "\n")
 #' 
 #'     ### Can make cold-start predictions, e.g.
