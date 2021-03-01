@@ -673,71 +673,83 @@ NULL
 #'     ### (users are rows, items are columns)
 #'     data("MovieLense")
 #'     X <- as(MovieLense@data, "dgTMatrix")
-#'     
+#' 
+#'     ### Will add basic side information about the users
+#'     U <- MovieLenseUser
+#'     U$id      <- NULL
+#'     U$zipcode <- NULL
+#'     U <- model.matrix(~.-1, data=U)
+#' 
 #'     ### Will additionally use the item genres as side info
 #'     I <- MovieLenseMeta
 #'     I$title <- NULL
 #'     I$year  <- NULL
 #'     I$url   <- NULL
 #'     I <- as(as.matrix(I), "TsparseMatrix")
-#'     
+#' 
 #'     ### Fit a factorization model
 #'     ### (it's recommended to change the hyperparameters
 #'     ###  and use multiple threads)
 #'     set.seed(1)
-#'     model <- CMF(X=X, I=I, k=10L, niter=5L,
+#'     model <- CMF(X=X, U=U, I=I, k=10L, niter=5L,
 #'                  NA_as_zero_item=TRUE,
 #'                  verbose=FALSE, nthreads=1L)
-#'     
+#' 
 #'     ### Predict rating for entries X[1,3], X[2,5], X[10,9]
 #'     ### (first ID is the user, second is the movie)
 #'     predict(model, user=c(1,2,10), item=c(3,5,9))
-#'     
+#' 
 #'     ### Recommend top-5 for user ID = 10
 #'     ### (Note that "Matrix" objects start their numeration at 0)
 #'     seen_by_user <- MovieLense@data[10, , drop=FALSE]
 #'     seen_by_user <- seen_by_user@i + 1L
 #'     rec <- topN(model, user=10, n=5, exclude=seen_by_user)
 #'     rec
-#'     
+#' 
 #'     ### Print them in a more understandable format
 #'     movie_names <- colnames(X)
 #'     n_ratings <- colSums(as(MovieLense@data[, rec, drop=FALSE], "nsparseMatrix"))
 #'     avg_ratings <- colSums(MovieLense@data[, rec, drop=FALSE]) / n_ratings
-#'     cat("Recommended for user_id=10:\n",
-#'         paste(paste(1:length(rec), ". ", sep=""),
-#'               movie_names[rec],
-#'               " - Avg rating:", round(avg_ratings, 2),
-#'               ", #ratings: ", n_ratings,
-#'               collapse="\n", sep=""),
-#'          "\n", sep="")
-#'     
-#'     
+#'     print_recommended <- function(rec, txt) {
+#'         cat(txt, ":\n",
+#'             paste(paste(1:length(rec), ". ", sep=""),
+#'                   movie_names[rec],
+#'                   " - Avg rating:", round(avg_ratings, 2),
+#'                   ", #ratings: ", n_ratings,
+#'                   collapse="\n", sep=""),
+#'             "\n", sep="")
+#'     }
+#'     print_recommended(rec, "Recommended for user_id=10")
+#' 
+#' 
 #'     ### Recommend assuming it is a new user,
 #'     ### based on its data (ratings + side info)
 #'     x_user <- as(X[10, , drop=FALSE], "sparseVector")
-#'     rec_new <- topN_new(model, n=5, X=x_user, exclude=seen_by_user)
+#'     u_user <- U[10, ]
+#'     rec_new <- topN_new(model, n=5, X=x_user, U=u_user, exclude=seen_by_user)
 #'     cat("lists are identical: ", identical(rec_new, rec), "\n")
-#'     
-#'     ### (If there were user side info, could also recommend
-#'     ###  based on that side information alone)
-#'     
+#' 
+#'     ### Recommend based on side information alone
+#'     ### (a.k.a. cold-start recommendation)
+#'     rec_cold <- topN_new(model, n=5, U=u_user)
+#'     print_recommended(rec_cold, "Recommended based on side info")
+#' 
 #'     ### Obtain factors for the user
 #'     factors_user <- model$matrices$A[, 10, drop=TRUE]
-#'     
+#' 
 #'     ### Re-calculate them based on the data
-#'     factors_new <- factors_single(model, X=x_user)
-#'     
+#'     factors_new <- factors_single(model, X=x_user,)
+#' 
 #'     ### Should be very close, but due to numerical precision,
 #'     ### might not be exactly equal (see section 'Details')
 #'     cat("diff: ", factors_user - factors_new, "\n")
-#'     
+#' 
 #'     ### Can also calculate them in batch
 #'     ### (slicing is provided by package "rsparse")
 #'     Xslice <- as(X, "RsparseMatrix")[1:10, , drop=FALSE]
 #'     factors_multiple <- factors(model, X=Xslice)
 #'     cat("diff: ", factors_multiple[10, , drop=TRUE] - factors_new, "\n")
-#'     
+#' 
 #'     ### Can make cold-start predictions, e.g.
 #'     ### predict how would users [1,2,3] rate a new item,
 #'     ### given it's side information (here it's item ID = 5)
