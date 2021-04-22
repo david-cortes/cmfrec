@@ -858,7 +858,8 @@ regularization to the \eqn{\mathbf{A}, \mathbf{B}}{A, B} matrices instead.
 
 Be aware that the optimization procedures rely heavily on BLAS and LAPACK function
 calls, and as such benefit from using optimized libraries for them such as
-MKL or OpenBLAS.
+MKL or OpenBLAS. See \href{https://github.com/david-cortes/R-openblas-in-windows}{this link}
+for instructions on getting OpenBLAS for R in Windows.
 
 For reproducibility, the initializations of the model matrices (always initialized
 as `~ Normal(0, 1)`) can be controlled
