@@ -27,7 +27,7 @@ Description: Collective matrix factorization (a.k.a. multi-view or multi-way fac
 	offers alternative most-popular and content-based models, and implements functionality
 	for cold-start recommendations and imputation of 2D data.
 License: MIT + file LICENSE
-Suggests: Matrix, MatrixExtra, recommenderlab (>= 0.2-7), MASS
+Suggests: Matrix, MatrixExtra, recosystem, recommenderlab (>= 0.2-7), MASS
 Enhances: SparseM
 RoxygenNote: 7.1.1
 NeedsCompilation: yes

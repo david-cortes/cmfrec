@@ -237,3 +237,172 @@ drop.nonessential.matrices <- function(model, drop_precomputed=TRUE) {
     model$info$only_prediction_info <- TRUE
     return(model)
 }
+
+#' @export
+#' @title Create a CMF model object from fitted matrices
+#' @description Creates a `CMF` or `CMF_implicit` model object based on fitted
+#' latent factor matrices, which might have been obtained from a different software.
+#' For example, the package `recosystem` has functionality for obtaining these matrices,
+#' but not for producing recommendations or latent factors for new users, for which
+#' this function can come in handy as it will turn such model into a `CMF` model which
+#' provides all such functionality.
+#' 
+#' This is only available for models without side information, and does not support
+#' user/item mappings.
+#' @param A The obtained user factors (numeric matrix). Dimension is [k, n_users].
+#' @param B The obtained item factors (numeric matrix). Dimension is [k, n_items].
+#' @param glob_mean The obtained global mean, if the model is for explicit feedback
+#' and underwent centering. If passing zero, will assume that the values are not to
+#' be centered.
+#' @param implicit Whether this is an implicit-feedback model.
+#' @param precompute Whether to generate pre-computed matrices which can help to speed
+#' up computations on new data (see \link{fit_models} for more details).
+#' @param user_bias The obtained user biases (numeric vector).
+#' If passing `NULL`, will assume that the model did not include user biases.
+#' Dimension is [n_users].
+#' @param item_bias The obtained item biases (numeric vector).
+#' If passing `NULL`, will assume that the model did not include item biases.
+#' Dimension is [n_item].
+#' @param lambda Regularization parameter for the L2 norm of the model matrices
+#' (see \link{fit_models} for more details). Can pass different parameters for each.
+#' @param scale_lam In the explicit-feedback models, whether to scale the regularization
+#' parameter according to the number of entries. This should always be assumed `TRUE`
+#' for models that are fit through stochastic procedures.
+#' @param l1_lambda Regularization parameter for the L1 norm of the model matrices.
+#' Same format as for `lambda`.
+#' @param nonneg Whether the model matrices should be constrained to be non-negative.
+#' @param NA_as_zero When passing sparse matrices, whether to take missing entries as
+#' zero (counting them towards the optimization objective), or to ignore them.
+#' @param apply_log_transf If passing `implicit=TRUE`, whether to apply a logarithm
+#' transformation on the values of `X`.
+#' @param alpha If passing `implicit=TRUE`, multiplier to apply to the confidence scores
+#' given by `X`.
+#' @param nthreads Number of parallel threads to use for further computations.
+#' @return A `CMF` (if passing `implicit=FALSE`) or `CMF_implicit` (if passing
+#' `implicit=TRUE`) model object without side information, for which the usual
+#' prediction functions such as \link{topN} and \link{topN_new} can be used as if
+#' it had been fitted through this software.
+#' @examples 
+#' ### Example 'adopting' a model from 'recosystem'
+#' library(cmfrec)
+#' library(recosystem)
+#' library(MatrixExtra)
+#' 
+#' ### Fitting a model with 'recosystem'
+#' data("MovieLense")
+#' X <- as.coo.matrix(MovieLense@data)
+#' r <- Reco()
+#' r$train(data_memory(X@i, X@j, X@x, index1=FALSE),
+#'         out_model = file.path(tempdir(), "model.txt"),
+#'         opts = list(dim=10, costp_l2=0.1, costq_l2=0.1,
+#'                     verbose=FALSE, nthread=1))
+#' matrices <- r$output(out_memory(), out_memory())
+#' glob_mean <- mean(X@x)
+#' 
+#' ### Now converting it to CMF
+#' model <- CMF.from.model.matrices(
+#'     A=t(matrices$P), B=t(matrices$Q),
+#'     glob_mean=glob_mean,
+#'     lambda=0.1, scale_lam=TRUE,
+#'     implicit=FALSE, nonneg=FALSE,
+#'     nthreads=1
+#' )
+#' 
+#' ### Make predictions about new users
+#' factors_single(model, X[10,,drop=TRUE])
+#' topN_new(model,
+#'          X=X[10,,drop=TRUE],
+#'          exclude=X[10,,drop=TRUE])
+CMF.from.model.matrices <- function(A, B, glob_mean=0, implicit=FALSE,
+                                    precompute=TRUE,
+                                    user_bias=NULL, item_bias=NULL,
+                                    lambda=10., scale_lam=FALSE, l1_lambda=0., nonneg=FALSE,
+                                    NA_as_zero=FALSE, apply_log_transf=FALSE, alpha=1,
+                                    nthreads=parallel::detectCores()) {
+    ### Check the input data formats
+    if (!is.matrix(A))
+        stop("'A' must be a numeric matrix.")
+    if (!is.matrix(B))
+        stop("'B' must be a numeric matrix.")
+    k <- nrow(A)
+    if (nrow(B) != k)
+        stop("Dimensions of 'A' and 'B' do not match.")
+    if (!ncol(A) || !ncol(B) || !k)
+        stop("Empty model matrices not supported.")
+    
+    if (typeof(glob_mean) != "double")
+        glob_mean <- as.numeric(glob_mean)
+    if (NROW(glob_mean) != 1L)
+        stop("'glob_mean' must be a single scalar.")
+    if (is.na(glob_mean))
+        stop("'glob_mean' is NA.")
+    
+    implicit <- check.bool(implicit, "implicit")
+    nthreads <- check.pos.int(nthreads, "nthreads", TRUE)
+    NA_as_zero <- check.bool(NA_as_zero, "NA_as_zero")
+    apply_log_transf <- check.bool(apply_log_transf, "apply_log_transf")
+    scale_lam <- check.bool(scale_lam, "scale_lam")
+    nonneg <- check.bool(nonneg, "nonneg")
+    precompute <- check.bool(precompute, "precompute")
+    alpha <- check.pos.real(alpha, "alpha")
+    lambda <- check.lambda(lambda, TRUE)
+    l1_lambda <-check.lambda(l1_lambda, TRUE)
+    
+    if (!is.null(user_bias)) {
+        if (implicit)
+            stop("Biases not supported for implicit-feedback models.")
+        if (!is.vector(user_bias))
+            stop("'user_bias' must be a vector.")
+        if (length(user_bias) != ncol(A))
+            stop("'user_bias' dimension does not match with 'A'.")
+        user_bias <- as.numeric(user_bias)
+    }
+    if (!is.null(item_bias)) {
+        if (implicit)
+            stop("Biases not supported for implicit-feedback models.")
+        if (!is.vector(item_bias))
+            stop("'item_bias' must be a vector.")
+        if (length(item_bias) != ncol(B))
+            stop("'item_bias' dimension does not match with 'B'.")
+        item_bias <- as.numeric(item_bias)
+    }
+    
+    if (typeof(A) != "double")
+        mode(A) <- "double"
+    if (typeof(B) != "double")
+        mode(B) <- "double"
+    
+    this <- list(
+        info = get.empty.info(),
+        matrices = get.empty.matrices(),
+        precomputed = get.empty.precomputed()
+    )
+    
+    this$matrices$A <- A
+    this$matrices$B <- B
+    this$matrices$glob_mean <- glob_mean
+    if (!is.null(user_bias))
+        this$matrices$user_bias <- user_bias
+    if (!is.null(item_bias))
+        this$matrices$item_bias <- item_bias
+    
+    this$info$k <- k
+    this$info$lambda <- lambda
+    this$info$l1_lambda <- l1_lambda
+    this$info$alpha <- alpha
+    this$info$implicit <- implicit
+    this$info$apply_log_transf <- apply_log_transf
+    this$info$NA_as_zero <- NA_as_zero
+    this$info$nonneg <- nonneg
+    this$info$center <- glob_mean != 0
+    this$info$nthreads <- nthreads
+    
+    if (!implicit)
+        class(this) <- c("CMF", "cmfrec")
+    else
+        class(this) <- c("CMF_implicit", "cmfrec")
+    
+    if (precompute)
+        this <- precompute.for.predictions(this)
+    return(this)
+}

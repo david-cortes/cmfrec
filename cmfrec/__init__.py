@@ -3767,6 +3767,158 @@ class CMF(_CMF):
             )
         return self
 
+    @staticmethod
+    def from_model_matrices(A, B, glob_mean=0., precompute=True,
+                            user_bias=None, item_bias=None,
+                            lambda_=1e+1, scale_lam=False, l1_lambda=0., nonneg=False,
+                            NA_as_zero=False, use_float=False, nthreads=-1):
+        """
+        Create a CMF model object from fitted matrices
+
+        Creates a `CMF` model object based on fitted
+        latent factor matrices, which might have been obtained from a different software.
+        For example, the package ``python-libmf`` has functionality for obtaining these matrices,
+        but not for producing recommendations or latent factors for new users, for which
+        this function can come in handy as it will turn such model into a `CMF` model which
+        provides all such functionality.
+
+        This is only available for models without side information, and does not support
+        user/item mappings.
+
+        Note
+        ----
+        This is a static class method, should be called like this:
+            ``CMF.from_model_matrices(...)``
+        (i.e. no parentheses after 'CMF')
+
+        Parameters
+        ----------
+        A : array(n_users, k)
+            The obtained user factors.
+        B : array(n_items, k)
+            The obtained item factors.
+        glob_mean : float
+            The obtained global mean, if the model
+            underwent centering. If passing zero, will assume that the values are not to
+            be centered.
+        precompute : bool
+            Whether to generate pre-computed matrices which can help to speed
+            up computations on new data.
+        user_bias : None or array(n_users,)
+            The obtained user biases.
+            If passing ``None``, will assume that the model did not include user biases.
+        item_bias : None or array(n_items,)
+            The obtained item biases.
+            If passing ``None``, will assume that the model did not include item biases.
+        lambda_ : float or array(6,)
+            Regularization parameter.
+            See the documentation for ``__init__`` for details.
+        scale_lam : bool
+            Whether to scale (increase) the regularization parameter
+            for each row of the model matrices according
+            to the number of non-missing entries in the data for that
+            particular row.
+        l1_lambda : float or array(6,)
+            Regularization parameter to apply to the L1 norm of the model matrices.
+            See the documentation for ``__init__`` for details.
+        nonneg : bool
+            Whether to constrain the 'A' and 'B' matrices to be non-negative.
+        NA_as_zero : bool
+            Whether to take missing entries in the 'X' matrix as zeros (only
+            when the 'X' matrix is passed as sparse COO matrix)
+            instead of ignoring them.
+            See the documentation for ``__init__`` for details.
+        use_float : bool
+            Whether to use C float type for the model parameters (typically this is
+            ``np.float32``). If passing ``False``, will use C double (typically this
+            is ``np.float64``). Using float types will speed up computations and
+            use less memory, at the expense of reduced numerical precision.
+        nthreads : int
+            Number of parallel threads to use. If passing -1, will take the
+            maximum available number of threads in the system.
+
+        Returns
+        -------
+        model : CMF
+            A ``CMF`` model object without side information, for which the usual
+            prediction methods such as ``topN`` and ``topN_warm`` can be used as if
+            it had been fitted through this software.
+        """
+        if (not isinstance(A, np.ndarray)) or (not A.flags["C_CONTIGUOUS"]):
+            A = np.ascontiguousarray(A)
+        if (not isinstance(B, np.ndarray)) or (not B.flags["C_CONTIGUOUS"]):
+            B = np.ascontiguousarray(B)
+        if (len(A.shape) != 2) or (len(B.shape) != 2):
+            raise ValueError("Model matrices must be 2-dimensional.")
+
+        k = A.shape[1]
+        if (B.shape[1] != k):
+            raise ValueError("Dimensions of 'A' and 'B' do not match.")
+        if (not A.shape[0]) or (not B.shape[0]) or (not k):
+            raise ValueError("Empty model matrices not supported.")
+
+        glob_mean = float(glob_mean)
+        if pd.isnull(glob_mean):
+            raise ValueError("'glob_mean' is NA.")
+        center = glob_mean != 0.
+
+        new_model = CMF(k = k,
+                        user_bias = user_bias is not None,
+                        item_bias = item_bias is not None,
+                        center = center,
+                        lambda_ = lambda_,
+                        l1_lambda = l1_lambda,
+                        scale_lam = scale_lam,
+                        nonneg = nonneg,
+                        NA_as_zero = NA_as_zero,
+                        use_float = use_float,
+                        nthreads = nthreads)
+
+        dtype = ctypes.c_double if not use_float else ctypes.c_float
+
+        if user_bias is not None:
+            if not isinstance(user_bias, np.ndarray):
+                user_bias = np.array(user_bias).reshape(-1)
+            if user_bias.shape[0] != A.shape[0]:
+                raise ValueError("'user_bias' dimension does not match with 'A'.")
+            if not user_bias.flags["C_CONTIGUOUS"]:
+                user_bias = np.ascontiguousarray(user_bias)
+            if user_bias.dtype != dtype:
+                user_bias = user_bias.astype(dtype)
+        if item_bias is not None:
+            if not isinstance(item_bias, np.ndarray):
+                item_bias = np.array(item_bias).reshape(-1)
+            if item_bias.shape[0] != B.shape[0]:
+                raise ValueError("'item_bias' dimension does not match with 'B'.")
+            if not item_bias.flags["C_CONTIGUOUS"]:
+                item_bias = np.ascontiguousarray(item_bias)
+            if item_bias.dtype != dtype:
+                item_bias = item_bias.astype(dtype)
+
+        if (A.dtype != dtype):
+            A = A.astype(dtype)
+        if (B.dtype != dtype):
+            B = B.astype(dtype)
+
+        new_model.A_ = A
+        new_model.B_ = B
+        new_model.glob_mean_ = glob_mean
+        if user_bias is not None:
+            new_model.user_bias_ = user_bias
+        if item_bias is not None:
+            new_model.item_bias_ = item_bias
+
+        new_model._A_pred = A
+        new_model._B_pred = B
+        new_model._n_orig = B.shape[0]
+        new_model.reindex_ = False
+
+        new_model.is_fitted_ = True
+        if precompute:
+            new_model.force_precompute_for_predictions()
+        return new_model
+        
+
 class CMF_implicit(_CMF):
     """
     Collective model for implicit-feedback data
@@ -4805,6 +4957,111 @@ class CMF_implicit(_CMF):
         )
 
         return self._predict_user_multiple(A, item, bias=None)
+
+    @staticmethod
+    def from_model_matrices(A, B, precompute=True,
+                            lambda_=1e0, l1_lambda=0., nonneg=False,
+                            apply_log_transf=False, alpha=1.,
+                            use_float=False, nthreads=-1):
+        """
+        Create a CMF_implicit model object from fitted matrices
+
+        Creates a `CMF_implicit` model object based on fitted
+        latent factor matrices, which might have been obtained from a different software.
+        For example, the package ``python-libmf`` has functionality for obtaining these matrices,
+        but not for producing recommendations or latent factors for new users, for which
+        this function can come in handy as it will turn such model into a `CMF_implicit` model which
+        provides all such functionality.
+
+        This is only available for models without side information, and does not support
+        user/item mappings.
+
+        Note
+        ----
+        This is a static class method, should be called like this:
+            ``CMF_implicit.from_model_matrices(...)``
+        (i.e. no parentheses after 'CMF_implicit')
+
+        Parameters
+        ----------
+        A : array(n_users, k)
+            The obtained user factors.
+        B : array(n_items, k)
+            The obtained item factors.
+        precompute : bool
+            Whether to generate pre-computed matrices which can help to speed
+            up computations on new data.
+        lambda_ : float or array(6,)
+            Regularization parameter.
+            See the documentation for ``__init__`` for details.
+        l1_lambda : float or array(6,)
+            Regularization parameter to apply to the L1 norm of the model matrices.
+            See the documentation for ``__init__`` for details.
+        nonneg : bool
+            Whether to constrain the 'A' and 'B' matrices to be non-negative.
+        apply_log_transf : bool
+            Whether to apply a logarithm transformation on the values of 'X.
+        alpha : float
+            Multiplier to apply to the confidence scores given by 'X'.
+        use_float : bool
+            Whether to use C float type for the model parameters (typically this is
+            ``np.float32``). If passing ``False``, will use C double (typically this
+            is ``np.float64``). Using float types will speed up computations and
+            use less memory, at the expense of reduced numerical precision.
+        nthreads : int
+            Number of parallel threads to use. If passing -1, will take the
+            maximum available number of threads in the system.
+
+        Returns
+        -------
+        model : CMF_implicit
+            A ``CMF_implicit`` model object without side information, for which the usual
+            prediction methods such as ``topN`` and ``topN_warm`` can be used as if
+            it had been fitted through this software.
+        """
+        if (not isinstance(A, np.ndarray)) or (not A.flags["C_CONTIGUOUS"]):
+            A = np.ascontiguousarray(A)
+        if (not isinstance(B, np.ndarray)) or (not B.flags["C_CONTIGUOUS"]):
+            B = np.ascontiguousarray(B)
+        if (len(A.shape) != 2) or (len(B.shape) != 2):
+            raise ValueError("Model matrices must be 2-dimensional.")
+
+        k = A.shape[1]
+        if (B.shape[1] != k):
+            raise ValueError("Dimensions of 'A' and 'B' do not match.")
+        if (not A.shape[0]) or (not B.shape[0]) or (not k):
+            raise ValueError("Empty model matrices not supported.")
+
+
+        dtype = ctypes.c_double if not use_float else ctypes.c_float
+
+        new_model = CMF_implicit(k = k,
+                                 lambda_ = lambda_,
+                                 l1_lambda = l1_lambda,
+                                 nonneg = nonneg,
+                                 apply_log_transf = apply_log_transf,
+                                 alpha = alpha,
+                                 use_float = use_float,
+                                 nthreads = nthreads)
+
+        if (A.dtype != dtype):
+            A = A.astype(dtype)
+        if (B.dtype != dtype):
+            B = B.astype(dtype)
+
+        new_model.A_ = A
+        new_model.B_ = B
+
+        new_model._A_pred = A
+        new_model._B_pred = B
+        new_model._n_orig = B.shape[0]
+        new_model.reindex_ = False
+
+        new_model.is_fitted_ = True
+        if precompute:
+            new_model.force_precompute_for_predictions()
+        return new_model
+
 
 class _OMF_Base(_CMF):
     def factors_cold(self, U=None, U_col=None, U_val=None):
