@@ -1,0 +1,438 @@
+---
+title: "Matrix Factorization with Side Info"
+output:
+    rmarkdown::html_vignette:
+        toc: true
+author: "David Cortes"
+date: "`r Sys.Date()`"
+vignette: >
+    %\VignetteIndexEntry{Matrix Factorization with Side Info}
+    %\VignetteEngine{knitr::rmarkdown}
+    %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+    collapse = TRUE,
+    comment = "#>"
+)
+```
+
+This vignette illustrates the usage of the
+[cmfrec](https://cran.r-project.org/package=cmfrec) library for building recommender
+systems based on collaborative filtering models for explicit-feedback data, with or
+without side information about the users and items. Note that the library offers also content-based models and implicit-feedback models, but they are not showcased in this
+vignette.
+
+This example will use the [MovieLens100k](https://grouplens.org/datasets/movielens/100k/)
+data, as bundled in the [recommenderlab](https://cran.r-project.org/package=recommenderlab)
+package, which contains around ~ 100k movie ratings from 943 users about 1664 movies, in a
+scale from 1 to 5.
+
+In addition to the ratings, it also contains side information about the movies (genre,
+year of release) and about the users (age, occupation), which will be used here to
+construct a better recommendation model.
+
+**For a more comprehensive introduction see also the `cmfrec`
+[Python Notebook](https://nbviewer.jupyter.org/github/david-cortes/cmfrec/blob/master/example/cmfrec_movielens_sideinfo.ipynb),
+which uses the more richer MovieLens10M instead (not provided by R packages)**.
+
+## Matrix Factorization
+
+One of the most popular techniques for building recommender systems is to frame the problem
+as matrix completion, in which a large sparse matrix is built containing the ratings that
+users give to products (in this case, movies), with rows representing users, columns
+representing items, and entries corresponding to the ratings that they've given (e.g.
+"5 stars"). Most of these entries will be missing, as each users is likely to consume only
+a handful of the available products (thus, the matrix is sparse), and the goal is to
+construct a model which would be able to predict the value of the known interactions
+(i.e. predict which rating would each user give to each movie), which is compared against
+the observed values. The items to recommend to each user are then the ones with highest
+predicted values among those which the user has not yet consumed.
+
+Typically, the problem is approached by trying to approximate the interactions matrix as the
+product of two lower-dimension matrices (a.k.a. latent factor matrices), which when
+multiplied by each other would produce something that resembles the original matrix, having
+the nice property that it will produce predictions for all user-item combinations - i.e.
+
+$$
+\mathbf{X} \approx \mathbf{A} \mathbf{B}^T
+$$
+Where:
+
+* $\mathbf{X}$ is the interactions matrix (users are rows, items are columns).
+* $\mathbf{A}$ and $\mathbf{B}$ are the matrices estimated by the model (a.k.a.
+latent factors), which have a low number of columns, typically 30-100.
+
+For a better and more stable model, the $\mathbf{X}$ matrix is typically centered by
+substracting its mean, a bias/intercept is added for each user and item, and a
+regularization penalty is applied to the model matrices and biases (typically on the
+L2 norm) - i.e.:
+
+$$
+\mathbf{X} \approx \mathbf{A} \mathbf{B}^T + \mu + \mathbf{b}_A + \mathbf{b}_B
+$$
+Where:
+
+* $\mu$ is the global mean used to center $\mathbf{X}$.
+* $\mathbf{b}_A$ are user-specific biases (row vector).
+* $\mathbf{b}_B$ are item-specific biases (column vector).
+
+The matrices are typically fitted by initializing them to random numbers and then
+iteratively updating them in a way that decreases the reconstruction error
+with respect to the observed entries in $\mathbf{X}$, using either gradient-based
+procedures (e.g. stochastic gradient descent) or the ALS (alternating least-squares)
+method, which optimizes one matrix at a time while leaving the other fixed, performing
+a few sweeps until convergence.
+
+This library (`cmfrec`) will by default use the ALS method with L2 regularization, and
+will use user/item biases which are model parameters (updated at each iteration) rather
+than being pre-estimated.
+
+## Loading the data
+
+The MovieLens100k data is taken from the `recommenderlab` package. As the data is sparse,
+it is represented as sparse matrices from the
+[Matrix](https://cran.r-project.org/package=Matrix) package. The data comes in CSC format,
+whereas `cmfrec` requires COO/triplets format - the conversion is handled by the
+[MatrixExtra](https://cran.r-project.org/package=MatrixExtra) package for convenience,
+which also provides extra slicing functionality that will be used later.
+
+```{r, message=FALSE}
+library(cmfrec)
+library(Matrix)
+library(MatrixExtra)
+library(recommenderlab)
+
+data("MovieLense")
+X <- as.coo.matrix(MovieLense@data)
+str(X)
+```
+
+##### Creating a train-test split
+
+In order to evaluate models, 25% of the data will be set as a test set, while the model
+will be built with the remainder 75%. The split done here is random, but usually
+time-based splits tend to reflect more realistic scenarios for recommendation.
+
+Typically, **these splits are done in such a way that the test set contains only users
+and items which are in the train set**, but such a rule is not necessary and perhaps
+not even desirable for `cmfrec`, since it can accomodate global/user/item biases and
+thus it can make predictions based on them alone.
+
+```{r}
+subsample_coo_matrix <- function(X, indices) {
+    X@i <- X@i[indices]
+    X@j <- X@j[indices]
+    X@x <- X@x[indices]
+    return(X)
+}
+
+n_ratings <- length(X@x)
+set.seed(123)
+ix_train <- sample(n_ratings, floor(0.75 * n_ratings), replace=FALSE)
+X_train <- subsample_coo_matrix(X, ix_train)
+X_test <- subsample_coo_matrix(X, -ix_train)
+```
+
+## Classical model
+
+Now fitting the classical matrix factorization model, with global mean centering,
+user/item biases, L2 regularization which scales with the number of ratings for each
+user/item, and no side information. This is the model explained in the earlier section:
+$$
+\mathbf{X} \approx \mathbf{A} \mathbf{B}^T + \mu + \mathbf{b}_A + \mathbf{b}_B
+$$
+
+```{r}
+set.seed(1)
+model.classic <- CMF(X_train, k=25, lambda=0.1, scale_lam=TRUE, verbose=FALSE)
+```
+
+#### How good is it?
+
+The most typical way of evaluating the quality of these models is by evaluating the error
+that they have at predicting known entries, which here will be evaluated against the test
+data that was set apart earlier. The evaluation here will be done in terms of mean squared
+error (RMSE).
+
+**Note that, while widely used in the early literature for recommender systems, RMSE
+might not provide a good overview of the ranking of items (which is what matters
+for recommendations), and it's recommended to also evaluate other metrics such as
+`NDCG@K`, `P@K`, correlations, etc.**
+
+```{r}
+print_rmse <- function(X_test, X_hat, model_name) {
+  rmse <- sqrt(mean( (X_test@x - X_hat@x)^2 ))
+  cat(sprintf("RMSE for %s is: %.4f\n", model_name, rmse))
+}
+
+pred_classic <- predict(model.classic, X_test)
+print_rmse(X_test, pred_classic, "classic model")
+```
+
+i.e. it means that the ratings are off by about one star. This is better
+than a non-personalized model that would always predict the same rating for each user,
+which can also be simulated through `cmfrec`:
+```{r}
+model.baseline <- MostPopular(X_train, lambda=10, scale_lam=FALSE)
+pred_baseline <- predict(model.baseline, X_test)
+print_rmse(X_test, pred_baseline, "non-personalized model")
+```
+(_Note: it's not recommended to use scaled/dynamic regularization in a most-popular
+model, as it will tend to recommend items with only one user giving the maximum rating._)
+
+#### Improving the classical model
+
+By default, ALS-based models are broken down to small problems involving linear systems,
+which are in turned solved through the
+[Conjugate Gradient](http://rs1.sze.hu/~gtakacs/download/recsys_2011_draft.pdf) method,
+but `cmfrec` can also use a Cholesky solver for them, which is slower but tends to
+result in better-quality solutions for explicit-feedback.
+
+As well, the default number of iterations is 10, but can be increased for better models
+at the expense of longer fitting times.
+
+But more importantly, `cmfrec` offers the option of adding "implicit-features" or
+co-factoring, which will additionally factorize binarized versions of $\mathbf{X}$
+(telling whether each entry is missing or not), sharing the same latent components
+with the factorization of $\mathbf{X}$ - that is:
+$$
+\mathbf{X} \approx \mathbf{A} \mathbf{B}^T + \mu + \mathbf{b}_A + \mathbf{b}_B
+$$
+$$
+\mathbf{I}_x \approx \mathbf{A} \mathbf{B}^T_i
+\:\:\:\:
+\mathbf{I}^T_x \approx \mathbf{B} \mathbf{A}^T_i
+$$
+Where:
+
+* $\mathbf{I}_x$ is a binary matrix indicating whether each entry of $\mathbf{X}$ is
+observed or missing.
+* $\mathbf{A}_i$ and $\mathbf{B}_i$ are model matrices which are not directly used
+for $\mathbf{X}$, and not used in the prediction formula, but are still estimated in
+this new multi-objective optimization objective.
+
+```{r}
+set.seed(1)
+model.improved <- CMF(X_train, k=25, lambda=0.1, scale_lam=TRUE,
+                      add_implicit_features=TRUE, w_main=0.75, w_implicit=0.25,
+                      use_cg=FALSE, niter=30, verbose=FALSE)
+pred_improved <- predict(model.improved, X_test)
+print_rmse(X_test, pred_improved, "improved classic model")
+```
+
+## Adding side information
+
+Collective matrix factorization extends the classical model by incorporating side
+information about users/items into the formula, which is done by also factorizing
+the side information matrices, sharing the same latent components that are used for
+factorizing the $\mathbf{X}$ matrix:
+$$
+\mathbf{X} \approx \mathbf{A} \mathbf{B}^T + \mu + \mathbf{b}_A + \mathbf{b}_B
+$$
+$$
+\mathbf{U} \approx \mathbf{A} \mathbf{C}^T + \mu_U
+$$
+$$
+\mathbf{I} \approx \mathbf{B} \mathbf{D}^T + \mu_I
+$$
+$$
+\mathbf{I}_x \approx \mathbf{A} \mathbf{B}^T_i
+\:\:\:\:
+\mathbf{I}^T_x \approx \mathbf{B} \mathbf{A}^T_i
+$$
+Where:
+
+* $\mathbf{U}$ is a matrix representing side information about users, with each user
+being a row, and columns corresponding to their attributes.
+* $\mathbf{I}$ is similarly a matrix representing side information about items.
+* $\mathbf{C}$ and $\mathbf{D}$ are new latent factor matrices used for factorizing
+the side information matrices, but are not used directly for $\mathbf{X}$.
+* $\mu_U$ and $\mu_I$ are column means for the attributes, which are used in order
+to center them.
+
+Informally, the latent factors now need to explain both the interactions data as well as
+the side information, thereby making them generalize better to unseen data. This library
+in addition allows controlling aspects such as the weight that each factorization has
+in the optimization objective, different regularization for each matrix, having factors
+that are not shared, among others.
+
+** *
+
+Fetching the side information from `recommenderlab`:
+```{r}
+U <- MovieLenseUser
+U$id      <- NULL
+U$zipcode <- NULL
+U$age2    <- U$age^2
+### Note that `cmfrec` does not standardize features
+U$age     <- (U$age - mean(U$age)) / sd(U$age)
+U$age2    <- (U$age2 - mean(U$age2)) / sd(U$age2)
+U <- model.matrix(~.-1, data=U)
+
+I <- MovieLenseMeta
+I$title <- NULL
+I$url   <- NULL
+I$year  <- ifelse(is.na(I$year), median(I$year, na.rm=TRUE), I$year)
+I$year2 <- I$year^2
+I$year  <- (I$year - mean(I$year)) / sd(I$year)
+I$year2 <- (I$year2 - mean(I$year2)) / sd(I$year2)
+I <- as.coo.matrix(I)
+
+cat(dim(U), "\n")
+cat(dim(I), "\n")
+```
+
+Now fitting the model:
+```{r}
+set.seed(1)
+model.w.sideinfo <- CMF(X_train, U=U, I=I, NA_as_zero_item=TRUE,
+                        k=25, lambda=0.1, scale_lam=TRUE,
+                        niter=30, use_cg=FALSE, include_all_X=FALSE,
+                        w_main=0.75, w_user=0.5, w_item=0.5, w_implicit=0.5,
+                        verbose=FALSE)
+pred_side_info <- predict(model.w.sideinfo, X_test)
+print_rmse(X_test, pred_side_info, "model with side info")
+```
+
+** *
+Summary:
+```{r}
+library(kableExtra)
+
+calc_rmse <- function(X_test, X_hat) {
+    return(sqrt(mean( (X_test@x - X_hat@x)^2 )))
+}
+results <- data.frame(
+    NonPersonalized = calc_rmse(X_test, pred_baseline),
+    ClassicalModel = calc_rmse(X_test, pred_classic),
+    ClassicPlusImplicit = calc_rmse(X_test, pred_improved),
+    CollectiveModel = calc_rmse(X_test, pred_side_info)
+)
+results <- as.data.frame(t(results))
+names(results) <- "RMSE"
+results %>%
+    kable() %>%
+    kable_styling()
+```
+
+Important to keep in mind:
+
+* These RMSEs have high standard errors due to the small amount of data used here.
+* The model hyperparameters are not particularly tuned, and a proper tuning
+should use a validation split too.
+* The test split is using users and items which might not have been in the training set.
+* While it looks like the difference from adding side information is very small, it
+also comes with the side effect of being able to recommend items based on attributes.
+* RMSE as a metric can hide overfitting in models that tend to recommend items with
+too few ratings/interactions - these models in particular will tend to recommend many
+movies with only a handful ratings, which is typically undesirable. A model with higher
+regularization that shows higher test RMSE might in practice produce better quality
+recommendations (see the introductory
+[Python notebook](https://nbviewer.jupyter.org/github/david-cortes/cmfrec/blob/master/example/cmfrec_movielens_sideinfo.ipynb)
+for more examples on this topic).
+* The models evaluated so far have all used dynamic/scaled regularization (as proposed
+in [Large-scale Parallel Collaborative Filtering for the Netflix Prize](https://liuxiaofei.com.cn/blog/wp-content/uploads/2014/01/netflix_aaim08submitted.pdf)),
+save for the baseline most-popular model - this means that the regularization for
+each user and item is scaled by the number of present entries for it. This setting tends
+to produce dubious recommendations in small datasets like the MovieLens100k, even if it
+makes it look like it improves RMSE.
+
+## Generating Top-N recommendations
+
+The goal behind building a collaborative filtering model is typically to be able to make
+top-N recommended lists for users or to obtain latent factors for an unseen user given
+its current data. `cmfrec` has many prediction functions for these purposes depending
+on what specifically one wants to do, supporting both warm-start and cold-start
+recommendations.
+
+```{r}
+### Re-fitting the earlier model to all the data,
+### this time *without* scaled regularization
+model.classic <- CMF(X, k=20, lambda=10, scale_lam=FALSE, verbose=FALSE)
+model.w.sideinfo <- CMF(X, U=U, I=I, k=20, lambda=10, scale_lam=FALSE,
+                        w_main=0.75, w_user=0.125, w_item=0.125,
+                        verbose=FALSE)
+```
+
+### Recommendations for existing users
+
+When fitting a model, all the necessary fitted matrices are saved inside the object
+itself, which allows making predictions for existing users based just on the ID.
+The specific items consumed by each user are however not saved, so in order to avoid
+recommending already-seen items, these have to be explicitly passed for exclusion.
+
+```{r}
+user_to_recommend <- 10
+### Note: slicing of 'X' is provided by 'MatrixExtra',
+### returning a 'sparseVector' object as required by cmfrec
+topN(model.classic, user=user_to_recommend, n=10,
+     exclude=X[user_to_recommend, , drop=TRUE])
+```
+
+```{r}
+### A handy function for visualizing recommendations
+movie_names <- colnames(X)
+n_ratings <- colSums(as.csc.matrix(X, binary=TRUE))
+avg_ratings <- colSums(as.csc.matrix(X)) / n_ratings
+print_recommended <- function(rec, txt) {
+    cat(txt, ":\n",
+        paste(paste(1:length(rec), ". ", sep=""),
+              movie_names[rec],
+              " - Avg rating:", round(avg_ratings[rec], 2),
+              ", #ratings: ", n_ratings[rec],
+              collapse="\n", sep=""),
+        "\n", sep="")
+}
+recommended <- topN(model.w.sideinfo, user=user_to_recommend, n=5,
+                    exclude=X[user_to_recommend, , drop=TRUE])
+print_recommended(recommended, "Recommended for user_id=10")
+```
+### Recommendations for new users
+
+The fitted model, as it is, can only provide recommendations for the specific users
+and items to which it was fit. Typically, one wants to produce recommendations for
+new users as they go, or update the recommended lists for existing users once they
+consume more items. `cmfrec` allows obtaining latent factors and top-N recommended
+lists for new users without having to refit the whole model.
+
+This is how it would be if user 10 were to come as a new visitor:
+```{r}
+recommended_new <- topN_new(model.w.sideinfo, n=5,
+                            exclude=X[user_to_recommend, , drop=TRUE],
+                            X=X[user_to_recommend, , drop=TRUE],
+                            U=U[user_to_recommend, , drop=TRUE])
+print_recommended(recommended_new, "Recommended for user_id=10 as new user")
+```
+It is not mandatory to provide all the side information, as the ratings alone can
+also be used to generate a recommendation, even if the model was fit with side information
+(this would not be the case if passing `NA_as_zero_user=TRUE`):
+```{r}
+recommended_new <- topN_new(model.w.sideinfo, n=5,
+                            exclude=X[user_to_recommend, , drop=TRUE],
+                            X=X[user_to_recommend, , drop=TRUE])
+print_recommended(recommended_new, "Recommended for user_id=10 as new user (NO sideinfo)")
+```
+(_In this case, the top-5 recommendations did not change, as the side information has
+little effect in this particular model, but that might not always be the case - that is,
+the top-N recommended items for a different user might be different if side information
+is absent._)
+
+
+### Cold-start recommendations
+
+Conversely, it is also possible to make a recommendation based on the side information
+without having any rated movies/items. The quality of these recommendations is however
+highly dependant on the influence that the attributes have in the model, and in this
+case, the user attributes have very little associated information and thus little leverage.
+
+Nevertheless, they might still provide an improvement over a completely non-personalized
+recommendation (see
+[Cold-start recommendations in Collective Matrix Factorization](https://arxiv.org/pdf/1809.00366.pdf)):
+```{r}
+recommended_cold <- topN_new(model.w.sideinfo, n=5,
+                             exclude=X[user_to_recommend, , drop=TRUE],
+                             U=U[user_to_recommend, , drop=TRUE])
+print_recommended(recommended_cold, "Recommended for user_id=10 as new user (NO ratings)")
+```

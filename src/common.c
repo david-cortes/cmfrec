@@ -3495,7 +3495,8 @@ int_t fit_most_popular_internal
                 for (int_t ix = 0; ix < n; ix++)
                     biasB[ix] = (biasB[ix] >= 0.)? biasB[ix] : 0.;
 
-            set_to_zero(biasA, m);
+            if (iter > 0)
+                set_to_zero(biasA, m);
 
             if (weight == NULL)
             {
@@ -3571,7 +3572,8 @@ int_t fit_most_popular_internal
                 for (int_t ix = 0; ix < n; ix++)
                     biasB[ix] = (biasB[ix] >= 0.)? biasB[ix] : 0.;
 
-            set_to_zero(biasA, m);
+            if (iter > 0)
+                set_to_zero(biasA, m);
 
             if (weight == NULL)
             {

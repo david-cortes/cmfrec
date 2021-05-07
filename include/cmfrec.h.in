@@ -131,9 +131,9 @@ extern "C" {
       of "X" are treated as either zero (if missing) or one (if not missing),
       with the positive (non-missing) ones having a weight given by X+1.
     * Most-Popular: is a model with only intercepts or only one parameter per
-      item (corresponding to k=1), which can mimic either the explicit or the
-      implicit error functions. This is intended for comparison purposes as a
-      non-personalized recommender model.
+      item (corresponding to k=0 plus biases), which can mimic either the
+      explicit or the implicit error functions. This is intended for comparison
+      purposes as a non-personalized recommender model.
     * Content-Based: is a model in which instead of there being multiple
       factorizations, there is only one factorization, but the matrices are
       determined directly from the user and item attributes - that is:

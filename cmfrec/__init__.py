@@ -7257,6 +7257,10 @@ class MostPopular(_CMF):
         Whether to scale (increase) the regularization parameter for each
         estimated bias according to the number of non-missing entries in
         the data. This is only available when passing ``implicit=False``.
+
+        It is not recommended to use this option, as when passing ``True``,
+        it tends to recommend items which have a single user interaction with
+        the maximum possible value (e.g. 5-star movies from only 1 user).
     apply_log_transf : bool
         Whether to apply a logarithm transformation on the values of 'X'
         (i.e. 'X := log(X)'). This is only available with ``implicit=True``.

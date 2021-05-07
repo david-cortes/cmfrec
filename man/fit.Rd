@@ -386,8 +386,13 @@ optimal value for `lambda` will be much smaller
 (and likely below 0.1).
 This option tends to give better results, but
 requires more hyperparameter tuning.
-Only supported for the ALS method. For the `MostPopular` model,
-this is not supported when passing `implicit=TRUE`.}
+Only supported for the ALS method.
+
+For the `MostPopular` model,
+this is not supported when passing `implicit=TRUE`, and it is not recommended
+to use for it, as it will tend to
+recommend items which have a single user interaction with
+the maximum possible value (e.g. 5-star movies from only 1 user).}
 
 \item{scale_lam_sideinfo}{Whether to scale (increase) the regularization
 parameter for each row of the "A" and "B"
@@ -696,8 +701,8 @@ likes and dislikes), whereas `CMF_implicit` is intended for implicit feedback da
 dislikes and the values are treated as confidence scores).
 
 The `MostPopular` model is a simpler heuristic implemented for comparison purposes
-which is equivalent to either `CMF` or `CMF_implicit` with `k=1` (or alternatively,
-`k=0` plus user/item biases). If a personalized model is not able to beat this
+which is equivalent to either `CMF` or `CMF_implicit` with
+`k=0` plus user/item biases. If a personalized model is not able to beat this
 heuristic under the evaluation metrics of interest, chances are that such personalized
 model needs better tuning.
 
@@ -876,12 +881,13 @@ to the prediction functions. The package does not perform any indices sorting or
 de-duplication of entries of sparse matrices.
 }
 \examples{
+### See the package vignette for an extended version of this example
 library(cmfrec)
-if (require("recommenderlab") && require("Matrix") && require("rsparse")) {
+if (require("recommenderlab") && require("MatrixExtra")) {
     ### Load the ML100K dataset (movie ratings)
     ### (users are rows, items are columns)
     data("MovieLense")
-    X <- as(MovieLense@data, "dgTMatrix")
+    X <- as.coo.matrix(MovieLense@data)
 
     ### Will add basic side information about the users
     U <- MovieLenseUser
@@ -894,7 +900,7 @@ if (require("recommenderlab") && require("Matrix") && require("rsparse")) {
     I$title <- NULL
     I$year  <- NULL
     I$url   <- NULL
-    I <- as(as.matrix(I), "TsparseMatrix")
+    I <- as.coo.matrix(I)
 
     ### Fit a factorization model
     ### (it's recommended to change the hyperparameters
@@ -909,22 +915,21 @@ if (require("recommenderlab") && require("Matrix") && require("rsparse")) {
     predict(model, user=c(1,2,10), item=c(3,5,9))
 
     ### Recommend top-5 for user ID = 10
-    ### (Note that "Matrix" objects start their numeration at 0)
-    seen_by_user <- MovieLense@data[10, , drop=FALSE]
-    seen_by_user <- seen_by_user@i + 1L
+    ### (Note that 'MatrixExtra' makes this return a 'sparseVector')
+    seen_by_user <- MovieLense@data[10, , drop=TRUE]@i
     rec <- topN(model, user=10, n=5, exclude=seen_by_user)
     rec
 
     ### Print them in a more understandable format
     movie_names <- colnames(X)
-    n_ratings <- colSums(as(MovieLense@data[, rec, drop=FALSE], "nsparseMatrix"))
-    avg_ratings <- colSums(MovieLense@data[, rec, drop=FALSE]) / n_ratings
+    n_ratings <- colSums(as.csc.matrix(X, binary=TRUE))
+    avg_ratings <- colSums(as.csc.matrix(X)) / n_ratings
     print_recommended <- function(rec, txt) {
         cat(txt, ":\n",
             paste(paste(1:length(rec), ". ", sep=""),
                   movie_names[rec],
-                  " - Avg rating:", round(avg_ratings, 2),
-                  ", #ratings: ", n_ratings,
+                  " - Avg rating:", round(avg_ratings[rec], 2),
+                  ", #ratings: ", n_ratings[rec],
                   collapse="\n", sep=""),
             "\n", sep="")
     }
@@ -933,7 +938,7 @@ if (require("recommenderlab") && require("Matrix") && require("rsparse")) {
 
     ### Recommend assuming it is a new user,
     ### based on its data (ratings + side info)
-    x_user <- as(X[10, , drop=FALSE], "sparseVector")
+    x_user <- X[10, , drop=TRUE] ## <- this is a 'sparseVector'
     u_user <- U[10, ]
     rec_new <- topN_new(model, n=5, X=x_user, U=u_user, exclude=seen_by_user)
     cat("lists are identical: ", identical(rec_new, rec), "\n")
@@ -954,8 +959,8 @@ if (require("recommenderlab") && require("Matrix") && require("rsparse")) {
     cat("diff: ", factors_user - factors_new, "\n")
 
     ### Can also calculate them in batch
-    ### (slicing is provided by package "rsparse")
-    Xslice <- as(X, "RsparseMatrix")[1:10, , drop=FALSE]
+    ### (slicing is provided by package "MatrixExtra")
+    Xslice <- as.csr.matrix(X)[1:10, , drop=FALSE]
     Uslice <- U[1:10, , drop=FALSE]
     factors_multiple <- factors(model, X=Xslice, U=Uslice)
     cat("diff: ", factors_multiple[10, , drop=TRUE] - factors_new, "\n")

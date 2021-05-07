@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<meta charset="utf-8" />
+<meta name="generator" content="pandoc" />
+<meta http-equiv="X-UA-Compatible" content="IE=EDGE" />
+
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+
+<meta name="author" content="David Cortes" />
+
+<meta name="date" content="2021-05-06" />
+
+<title>Matrix Factorization with Side Info</title>
+
+<script src="data:application/javascript;base64,Ly8gUGFuZG9jIDIuOSBhZGRzIGF0dHJpYnV0ZXMgb24gYm90aCBoZWFkZXIgYW5kIGRpdi4gV2UgcmVtb3ZlIHRoZSBmb3JtZXIgKHRvCi8vIGJlIGNvbXBhdGlibGUgd2l0aCB0aGUgYmVoYXZpb3Igb2YgUGFuZG9jIDwgMi44KS4KZG9jdW1lbnQuYWRkRXZlbnRMaXN0ZW5lcignRE9NQ29udGVudExvYWRlZCcsIGZ1bmN0aW9uKGUpIHsKICB2YXIgaHMgPSBkb2N1bWVudC5xdWVyeVNlbGVjdG9yQWxsKCJkaXYuc2VjdGlvbltjbGFzcyo9J2xldmVsJ10gPiA6Zmlyc3QtY2hpbGQiKTsKICB2YXIgaSwgaCwgYTsKICBmb3IgKGkgPSAwOyBpIDwgaHMubGVuZ3RoOyBpKyspIHsKICAgIGggPSBoc1tpXTsKICAgIGlmICghL15oWzEtNl0kL2kudGVzdChoLnRhZ05hbWUpKSBjb250aW51ZTsgIC8vIGl0IHNob3VsZCBiZSBhIGhlYWRlciBoMS1oNgogICAgYSA9IGguYXR0cmlidXRlczsKICAgIHdoaWxlIChhLmxlbmd0aCA+IDApIGgucmVtb3ZlQXR0cmlidXRlKGFbMF0ubmFtZSk7CiAgfQp9KTsK"></script>
+<script src="data:application/javascript;base64,JChkb2N1bWVudCkucmVhZHkoZnVuY3Rpb24oKXsKICAgIGlmICh0eXBlb2YgJCgnW2RhdGEtdG9nZ2xlPSJ0b29sdGlwIl0nKS50b29sdGlwID09PSAnZnVuY3Rpb24nKSB7CiAgICAgICAgJCgnW2RhdGEtdG9nZ2xlPSJ0b29sdGlwIl0nKS50b29sdGlwKCk7CiAgICB9CiAgICBpZiAoJCgnW2RhdGEtdG9nZ2xlPSJwb3BvdmVyIl0nKS5wb3BvdmVyID09PSAnZnVuY3Rpb24nKSB7CiAgICAgICAgJCgnW2RhdGEtdG9nZ2xlPSJwb3BvdmVyIl0nKS5wb3BvdmVyKCk7CiAgICB9Cn0pOwo="></script>
+
+<style type="text/css">
+  code{white-space: pre-wrap;}
+  span.smallcaps{font-variant: small-caps;}
+  span.underline{text-decoration: underline;}
+  div.column{display: inline-block; vertical-align: top; width: 50%;}
+  div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+  ul.task-list{list-style: none;}
+    </style>
+
+
+<style type="text/css">code{white-space: pre;}</style>
+<style type="text/css" data-origin="pandoc">
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+    color: #aaaaaa;
+  }
+pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+code span.al { color: #ff0000; font-weight: bold; } /* Alert */
+code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
+code span.at { color: #7d9029; } /* Attribute */
+code span.bn { color: #40a070; } /* BaseN */
+code span.bu { } /* BuiltIn */
+code span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
+code span.ch { color: #4070a0; } /* Char */
+code span.cn { color: #880000; } /* Constant */
+code span.co { color: #60a0b0; font-style: italic; } /* Comment */
+code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
+code span.do { color: #ba2121; font-style: italic; } /* Documentation */
+code span.dt { color: #902000; } /* DataType */
+code span.dv { color: #40a070; } /* DecVal */
+code span.er { color: #ff0000; font-weight: bold; } /* Error */
+code span.ex { } /* Extension */
+code span.fl { color: #40a070; } /* Float */
+code span.fu { color: #06287e; } /* Function */
+code span.im { } /* Import */
+code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+code span.kw { color: #007020; font-weight: bold; } /* Keyword */
+code span.op { color: #666666; } /* Operator */
+code span.ot { color: #007020; } /* Other */
+code span.pp { color: #bc7a00; } /* Preprocessor */
+code span.sc { color: #4070a0; } /* SpecialChar */
+code span.ss { color: #bb6688; } /* SpecialString */
+code span.st { color: #4070a0; } /* String */
+code span.va { color: #19177c; } /* Variable */
+code span.vs { color: #4070a0; } /* VerbatimString */
+code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
+
+</style>
+<script>
+// apply pandoc div.sourceCode style to pre.sourceCode instead
+(function() {
+  var sheets = document.styleSheets;
+  for (var i = 0; i < sheets.length; i++) {
+    if (sheets[i].ownerNode.dataset["origin"] !== "pandoc") continue;
+    try { var rules = sheets[i].cssRules; } catch (e) { continue; }
+    for (var j = 0; j < rules.length; j++) {
+      var rule = rules[j];
+      // check if there is a div.sourceCode rule
+      if (rule.type !== rule.STYLE_RULE || rule.selectorText !== "div.sourceCode") continue;
+      var style = rule.style.cssText;
+      // check if color or background-color is set
+      if (rule.style.color === '' && rule.style.backgroundColor === '') continue;
+      // replace div.sourceCode by a pre.sourceCode rule
+      sheets[i].deleteRule(j);
+      sheets[i].insertRule('pre.sourceCode{' + style + '}', j);
+    }
+  }
+})();
+</script>
+
+
+
+
+<link rel="stylesheet" href="data:text/css,body%20%7B%0Abackground%2Dcolor%3A%20%23fff%3B%0Amargin%3A%201em%20auto%3B%0Amax%2Dwidth%3A%20700px%3B%0Aoverflow%3A%20visible%3B%0Apadding%2Dleft%3A%202em%3B%0Apadding%2Dright%3A%202em%3B%0Afont%2Dfamily%3A%20%22Open%20Sans%22%2C%20%22Helvetica%20Neue%22%2C%20Helvetica%2C%20Arial%2C%20sans%2Dserif%3B%0Afont%2Dsize%3A%2014px%3B%0Aline%2Dheight%3A%201%2E35%3B%0A%7D%0A%23TOC%20%7B%0Aclear%3A%20both%3B%0Amargin%3A%200%200%2010px%2010px%3B%0Apadding%3A%204px%3B%0Awidth%3A%20400px%3B%0Aborder%3A%201px%20solid%20%23CCCCCC%3B%0Aborder%2Dradius%3A%205px%3B%0Abackground%2Dcolor%3A%20%23f6f6f6%3B%0Afont%2Dsize%3A%2013px%3B%0Aline%2Dheight%3A%201%2E3%3B%0A%7D%0A%23TOC%20%2Etoctitle%20%7B%0Afont%2Dweight%3A%20bold%3B%0Afont%2Dsize%3A%2015px%3B%0Amargin%2Dleft%3A%205px%3B%0A%7D%0A%23TOC%20ul%20%7B%0Apadding%2Dleft%3A%2040px%3B%0Amargin%2Dleft%3A%20%2D1%2E5em%3B%0Amargin%2Dtop%3A%205px%3B%0Amargin%2Dbottom%3A%205px%3B%0A%7D%0A%23TOC%20ul%20ul%20%7B%0Amargin%2Dleft%3A%20%2D2em%3B%0A%7D%0A%23TOC%20li%20%7B%0Aline%2Dheight%3A%2016px%3B%0A%7D%0Atable%20%7B%0Amargin%3A%201em%20auto%3B%0Aborder%2Dwidth%3A%201px%3B%0Aborder%2Dcolor%3A%20%23DDDDDD%3B%0Aborder%2Dstyle%3A%20outset%3B%0Aborder%2Dcollapse%3A%20collapse%3B%0A%7D%0Atable%20th%20%7B%0Aborder%2Dwidth%3A%202px%3B%0Apadding%3A%205px%3B%0Aborder%2Dstyle%3A%20inset%3B%0A%7D%0Atable%20td%20%7B%0Aborder%2Dwidth%3A%201px%3B%0Aborder%2Dstyle%3A%20inset%3B%0Aline%2Dheight%3A%2018px%3B%0Apadding%3A%205px%205px%3B%0A%7D%0Atable%2C%20table%20th%2C%20table%20td%20%7B%0Aborder%2Dleft%2Dstyle%3A%20none%3B%0Aborder%2Dright%2Dstyle%3A%20none%3B%0A%7D%0Atable%20thead%2C%20table%20tr%2Eeven%20%7B%0Abackground%2Dcolor%3A%20%23f7f7f7%3B%0A%7D%0Ap%20%7B%0Amargin%3A%200%2E5em%200%3B%0A%7D%0Ablockquote%20%7B%0Abackground%2Dcolor%3A%20%23f6f6f6%3B%0Apadding%3A%200%2E25em%200%2E75em%3B%0A%7D%0Ahr%20%7B%0Aborder%2Dstyle%3A%20solid%3B%0Aborder%3A%20none%3B%0Aborder%2Dtop%3A%201px%20solid%20%23777%3B%0Amargin%3A%2028px%200%3B%0A%7D%0Adl%20%7B%0Amargin%2Dleft%3A%200%3B%0A%7D%0Adl%20dd%20%7B%0Amargin%2Dbottom%3A%2013px%3B%0Amargin%2Dleft%3A%2013px%3B%0A%7D%0Adl%20dt%20%7B%0Afont%2Dweight%3A%20bold%3B%0A%7D%0Aul%20%7B%0Amargin%2Dtop%3A%200%3B%0A%7D%0Aul%20li%20%7B%0Alist%2Dstyle%3A%20circle%20outside%3B%0A%7D%0Aul%20ul%20%7B%0Amargin%2Dbottom%3A%200%3B%0A%7D%0Apre%2C%20code%20%7B%0Abackground%2Dcolor%3A%20%23f7f7f7%3B%0Aborder%2Dradius%3A%203px%3B%0Acolor%3A%20%23333%3B%0Awhite%2Dspace%3A%20pre%2Dwrap%3B%20%0A%7D%0Apre%20%7B%0Aborder%2Dradius%3A%203px%3B%0Amargin%3A%205px%200px%2010px%200px%3B%0Apadding%3A%2010px%3B%0A%7D%0Apre%3Anot%28%5Bclass%5D%29%20%7B%0Abackground%2Dcolor%3A%20%23f7f7f7%3B%0A%7D%0Acode%20%7B%0Afont%2Dfamily%3A%20Consolas%2C%20Monaco%2C%20%27Courier%20New%27%2C%20monospace%3B%0Afont%2Dsize%3A%2085%25%3B%0A%7D%0Ap%20%3E%20code%2C%20li%20%3E%20code%20%7B%0Apadding%3A%202px%200px%3B%0A%7D%0Adiv%2Efigure%20%7B%0Atext%2Dalign%3A%20center%3B%0A%7D%0Aimg%20%7B%0Abackground%2Dcolor%3A%20%23FFFFFF%3B%0Apadding%3A%202px%3B%0Aborder%3A%201px%20solid%20%23DDDDDD%3B%0Aborder%2Dradius%3A%203px%3B%0Aborder%3A%201px%20solid%20%23CCCCCC%3B%0Amargin%3A%200%205px%3B%0A%7D%0Ah1%20%7B%0Amargin%2Dtop%3A%200%3B%0Afont%2Dsize%3A%2035px%3B%0Aline%2Dheight%3A%2040px%3B%0A%7D%0Ah2%20%7B%0Aborder%2Dbottom%3A%204px%20solid%20%23f7f7f7%3B%0Apadding%2Dtop%3A%2010px%3B%0Apadding%2Dbottom%3A%202px%3B%0Afont%2Dsize%3A%20145%25%3B%0A%7D%0Ah3%20%7B%0Aborder%2Dbottom%3A%202px%20solid%20%23f7f7f7%3B%0Apadding%2Dtop%3A%2010px%3B%0Afont%2Dsize%3A%20120%25%3B%0A%7D%0Ah4%20%7B%0Aborder%2Dbottom%3A%201px%20solid%20%23f7f7f7%3B%0Amargin%2Dleft%3A%208px%3B%0Afont%2Dsize%3A%20105%25%3B%0A%7D%0Ah5%2C%20h6%20%7B%0Aborder%2Dbottom%3A%201px%20solid%20%23ccc%3B%0Afont%2Dsize%3A%20105%25%3B%0A%7D%0Aa%20%7B%0Acolor%3A%20%230033dd%3B%0Atext%2Ddecoration%3A%20none%3B%0A%7D%0Aa%3Ahover%20%7B%0Acolor%3A%20%236666ff%3B%20%7D%0Aa%3Avisited%20%7B%0Acolor%3A%20%23800080%3B%20%7D%0Aa%3Avisited%3Ahover%20%7B%0Acolor%3A%20%23BB00BB%3B%20%7D%0Aa%5Bhref%5E%3D%22http%3A%22%5D%20%7B%0Atext%2Ddecoration%3A%20underline%3B%20%7D%0Aa%5Bhref%5E%3D%22https%3A%22%5D%20%7B%0Atext%2Ddecoration%3A%20underline%3B%20%7D%0A%0Acode%20%3E%20span%2Ekw%20%7B%20color%3A%20%23555%3B%20font%2Dweight%3A%20bold%3B%20%7D%20%0Acode%20%3E%20span%2Edt%20%7B%20color%3A%20%23902000%3B%20%7D%20%0Acode%20%3E%20span%2Edv%20%7B%20color%3A%20%2340a070%3B%20%7D%20%0Acode%20%3E%20span%2Ebn%20%7B%20color%3A%20%23d14%3B%20%7D%20%0Acode%20%3E%20span%2Efl%20%7B%20color%3A%20%23d14%3B%20%7D%20%0Acode%20%3E%20span%2Ech%20%7B%20color%3A%20%23d14%3B%20%7D%20%0Acode%20%3E%20span%2Est%20%7B%20color%3A%20%23d14%3B%20%7D%20%0Acode%20%3E%20span%2Eco%20%7B%20color%3A%20%23888888%3B%20font%2Dstyle%3A%20italic%3B%20%7D%20%0Acode%20%3E%20span%2Eot%20%7B%20color%3A%20%23007020%3B%20%7D%20%0Acode%20%3E%20span%2Eal%20%7B%20color%3A%20%23ff0000%3B%20font%2Dweight%3A%20bold%3B%20%7D%20%0Acode%20%3E%20span%2Efu%20%7B%20color%3A%20%23900%3B%20font%2Dweight%3A%20bold%3B%20%7D%20%0Acode%20%3E%20span%2Eer%20%7B%20color%3A%20%23a61717%3B%20background%2Dcolor%3A%20%23e3d2d2%3B%20%7D%20%0A" type="text/css" />
+
+
+
+
+</head>
+
+<body>
+
+
+
+
+<h1 class="title toc-ignore">Matrix Factorization with Side Info</h1>
+<h4 class="author">David Cortes</h4>
+<h4 class="date">2021-05-06</h4>
+
+
+<div id="TOC">
+<ul>
+<li><a href="#matrix-factorization">Matrix Factorization</a></li>
+<li><a href="#loading-the-data">Loading the data</a></li>
+<li><a href="#classical-model">Classical model</a></li>
+<li><a href="#adding-side-information">Adding side information</a></li>
+<li><a href="#generating-top-n-recommendations">Generating Top-N recommendations</a>
+<ul>
+<li><a href="#recommendations-for-existing-users">Recommendations for existing users</a></li>
+<li><a href="#recommendations-for-new-users">Recommendations for new users</a></li>
+<li><a href="#cold-start-recommendations">Cold-start recommendations</a></li>
+</ul></li>
+</ul>
+</div>
+
+<p>This vignette illustrates the usage of the <a href="https://cran.r-project.org/package=cmfrec">cmfrec</a> library for building recommender systems based on collaborative filtering models for explicit-feedback data, with or without side information about the users and items. Note that the library offers also content-based models and implicit-feedback models, but they are not showcased in this vignette.</p>
+<p>This example will use the <a href="https://grouplens.org/datasets/movielens/100k/">MovieLens100k</a> data, as bundled in the <a href="https://cran.r-project.org/package=recommenderlab">recommenderlab</a> package, which contains around ~ 100k movie ratings from 943 users about 1664 movies, in a scale from 1 to 5.</p>
+<p>In addition to the ratings, it also contains side information about the movies (genre, year of release) and about the users (age, occupation), which will be used here to construct a better recommendation model.</p>
+<p><strong>For a more comprehensive introduction see also the <code>cmfrec</code> <a href="https://nbviewer.jupyter.org/github/david-cortes/cmfrec/blob/master/example/cmfrec_movielens_sideinfo.ipynb">Python Notebook</a>, which uses the more richer MovieLens10M instead (not provided by R packages)</strong>.</p>
+<div id="matrix-factorization" class="section level2">
+<h2>Matrix Factorization</h2>
+<p>One of the most popular techniques for building recommender systems is to frame the problem as matrix completion, in which a large sparse matrix is built containing the ratings that users give to products (in this case, movies), with rows representing users, columns representing items, and entries corresponding to the ratings that they’ve given (e.g. “5 stars”). Most of these entries will be missing, as each users is likely to consume only a handful of the available products (thus, the matrix is sparse), and the goal is to construct a model which would be able to predict the value of the known interactions (i.e. predict which rating would each user give to each movie), which is compared against the observed values. The items to recommend to each user are then the ones with highest predicted values among those which the user has not yet consumed.</p>
+<p>Typically, the problem is approached by trying to approximate the interactions matrix as the product of two lower-dimension matrices (a.k.a. latent factor matrices), which when multiplied by each other would produce something that resembles the original matrix, having the nice property that it will produce predictions for all user-item combinations - i.e.</p>
+<p><span class="math display">\[
+\mathbf{X} \approx \mathbf{A} \mathbf{B}^T
+\]</span> Where:</p>
+<ul>
+<li><span class="math inline">\(\mathbf{X}\)</span> is the interactions matrix (users are rows, items are columns).</li>
+<li><span class="math inline">\(\mathbf{A}\)</span> and <span class="math inline">\(\mathbf{B}\)</span> are the matrices estimated by the model (a.k.a. latent factors), which have a low number of columns, typically 30-100.</li>
+</ul>
+<p>For a better and more stable model, the <span class="math inline">\(\mathbf{X}\)</span> matrix is typically centered by substracting its mean, a bias/intercept is added for each user and item, and a regularization penalty is applied to the model matrices and biases (typically on the L2 norm) - i.e.:</p>
+<p><span class="math display">\[
+\mathbf{X} \approx \mathbf{A} \mathbf{B}^T + \mu + \mathbf{b}_A + \mathbf{b}_B
+\]</span> Where:</p>
+<ul>
+<li><span class="math inline">\(\mu\)</span> is the global mean used to center <span class="math inline">\(\mathbf{X}\)</span>.</li>
+<li><span class="math inline">\(\mathbf{b}_A\)</span> are user-specific biases (row vector).</li>
+<li><span class="math inline">\(\mathbf{b}_B\)</span> are item-specific biases (column vector).</li>
+</ul>
+<p>The matrices are typically fitted by initializing them to random numbers and then iteratively updating them in a way that decreases the reconstruction error with respect to the observed entries in <span class="math inline">\(\mathbf{X}\)</span>, using either gradient-based procedures (e.g. stochastic gradient descent) or the ALS (alternating least-squares) method, which optimizes one matrix at a time while leaving the other fixed, performing a few sweeps until convergence.</p>
+<p>This library (<code>cmfrec</code>) will by default use the ALS method with L2 regularization, and will use user/item biases which are model parameters (updated at each iteration) rather than being pre-estimated.</p>
+</div>
+<div id="loading-the-data" class="section level2">
+<h2>Loading the data</h2>
+<p>The MovieLens100k data is taken from the <code>recommenderlab</code> package. As the data is sparse, it is represented as sparse matrices from the <a href="https://cran.r-project.org/package=Matrix">Matrix</a> package. The data comes in CSC format, whereas <code>cmfrec</code> requires COO/triplets format - the conversion is handled by the <a href="https://cran.r-project.org/package=MatrixExtra">MatrixExtra</a> package for convenience, which also provides extra slicing functionality that will be used later.</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(cmfrec)</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(Matrix)</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(MatrixExtra)</span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(recommenderlab)</span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="fu">data</span>(<span class="st">&quot;MovieLense&quot;</span>)</span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>X <span class="ot">&lt;-</span> <span class="fu">as.coo.matrix</span>(MovieLense<span class="sc">@</span>data)</span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="fu">str</span>(X)</span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; Formal class &#39;dgTMatrix&#39; [package &quot;Matrix&quot;] with 6 slots</span></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt;   ..@ i       : int [1:99392] 0 1 4 5 9 12 14 15 16 17 ...</span></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt;   ..@ j       : int [1:99392] 0 0 0 0 0 0 0 0 0 0 ...</span></span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt;   ..@ Dim     : int [1:2] 943 1664</span></span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt;   ..@ Dimnames:List of 2</span></span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt;   .. ..$ : chr [1:943] &quot;1&quot; &quot;2&quot; &quot;3&quot; &quot;4&quot; ...</span></span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt;   .. ..$ : chr [1:1664] &quot;Toy Story (1995)&quot; &quot;GoldenEye (1995)&quot; &quot;Four Rooms (1995)&quot; &quot;Get Shorty (1995)&quot; ...</span></span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt;   ..@ x       : num [1:99392] 5 4 4 4 4 3 1 5 4 5 ...</span></span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt;   ..@ factors : list()</span></span></code></pre></div>
+<div id="creating-a-train-test-split" class="section level5">
+<h5>Creating a train-test split</h5>
+<p>In order to evaluate models, 25% of the data will be set as a test set, while the model will be built with the remainder 75%. The split done here is random, but usually time-based splits tend to reflect more realistic scenarios for recommendation.</p>
+<p>Typically, <strong>these splits are done in such a way that the test set contains only users and items which are in the train set</strong>, but such a rule is not necessary and perhaps not even desirable for <code>cmfrec</code>, since it can accomodate global/user/item biases and thus it can make predictions based on them alone.</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>subsample_coo_matrix <span class="ot">&lt;-</span> <span class="cf">function</span>(X, indices) {</span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>    X<span class="sc">@</span>i <span class="ot">&lt;-</span> X<span class="sc">@</span>i[indices]</span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>    X<span class="sc">@</span>j <span class="ot">&lt;-</span> X<span class="sc">@</span>j[indices]</span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>    X<span class="sc">@</span>x <span class="ot">&lt;-</span> X<span class="sc">@</span>x[indices]</span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>    <span class="fu">return</span>(X)</span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>n_ratings <span class="ot">&lt;-</span> <span class="fu">length</span>(X<span class="sc">@</span>x)</span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">123</span>)</span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>ix_train <span class="ot">&lt;-</span> <span class="fu">sample</span>(n_ratings, <span class="fu">floor</span>(<span class="fl">0.75</span> <span class="sc">*</span> n_ratings), <span class="at">replace=</span><span class="cn">FALSE</span>)</span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>X_train <span class="ot">&lt;-</span> <span class="fu">subsample_coo_matrix</span>(X, ix_train)</span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>X_test <span class="ot">&lt;-</span> <span class="fu">subsample_coo_matrix</span>(X, <span class="sc">-</span>ix_train)</span></code></pre></div>
+</div>
+</div>
+<div id="classical-model" class="section level2">
+<h2>Classical model</h2>
+<p>Now fitting the classical matrix factorization model, with global mean centering, user/item biases, L2 regularization which scales with the number of ratings for each user/item, and no side information. This is the model explained in the earlier section: <span class="math display">\[
+\mathbf{X} \approx \mathbf{A} \mathbf{B}^T + \mu + \mathbf{b}_A + \mathbf{b}_B
+\]</span></p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">1</span>)</span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>model.classic <span class="ot">&lt;-</span> <span class="fu">CMF</span>(X_train, <span class="at">k=</span><span class="dv">25</span>, <span class="at">lambda=</span><span class="fl">0.1</span>, <span class="at">scale_lam=</span><span class="cn">TRUE</span>, <span class="at">verbose=</span><span class="cn">FALSE</span>)</span></code></pre></div>
+<div id="how-good-is-it" class="section level4">
+<h4>How good is it?</h4>
+<p>The most typical way of evaluating the quality of these models is by evaluating the error that they have at predicting known entries, which here will be evaluated against the test data that was set apart earlier. The evaluation here will be done in terms of mean squared error (RMSE).</p>
+<p><strong>Note that, while widely used in the early literature for recommender systems, RMSE might not provide a good overview of the ranking of items (which is what matters for recommendations), and it’s recommended to also evaluate other metrics such as <code>NDCG@K</code>, <code>P@K</code>, correlations, etc.</strong></p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>print_rmse <span class="ot">&lt;-</span> <span class="cf">function</span>(X_test, X_hat, model_name) {</span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>  rmse <span class="ot">&lt;-</span> <span class="fu">sqrt</span>(<span class="fu">mean</span>( (X_test<span class="sc">@</span>x <span class="sc">-</span> X_hat<span class="sc">@</span>x)<span class="sc">^</span><span class="dv">2</span> ))</span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">&quot;RMSE for %s is: %.4f</span><span class="sc">\n</span><span class="st">&quot;</span>, model_name, rmse))</span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>pred_classic <span class="ot">&lt;-</span> <span class="fu">predict</span>(model.classic, X_test)</span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a><span class="fu">print_rmse</span>(X_test, pred_classic, <span class="st">&quot;classic model&quot;</span>)</span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; RMSE for classic model is: 0.9245</span></span></code></pre></div>
+<p>i.e. it means that the ratings are off by about one star. This is better than a non-personalized model that would always predict the same rating for each user, which can also be simulated through <code>cmfrec</code>:</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>model.baseline <span class="ot">&lt;-</span> <span class="fu">MostPopular</span>(X_train, <span class="at">lambda=</span><span class="dv">10</span>, <span class="at">scale_lam=</span><span class="cn">FALSE</span>)</span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>pred_baseline <span class="ot">&lt;-</span> <span class="fu">predict</span>(model.baseline, X_test)</span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a><span class="fu">print_rmse</span>(X_test, pred_baseline, <span class="st">&quot;non-personalized model&quot;</span>)</span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; RMSE for non-personalized model is: 0.9460</span></span></code></pre></div>
+<p>(<em>Note: it’s not recommended to use scaled/dynamic regularization in a most-popular model, as it will tend to recommend items with only one user giving the maximum rating.</em>)</p>
+</div>
+<div id="improving-the-classical-model" class="section level4">
+<h4>Improving the classical model</h4>
+<p>By default, ALS-based models are broken down to small problems involving linear systems, which are in turned solved through the <a href="http://rs1.sze.hu/~gtakacs/download/recsys_2011_draft.pdf">Conjugate Gradient</a> method, but <code>cmfrec</code> can also use a Cholesky solver for them, which is slower but tends to result in better-quality solutions for explicit-feedback.</p>
+<p>As well, the default number of iterations is 10, but can be increased for better models at the expense of longer fitting times.</p>
+<p>But more importantly, <code>cmfrec</code> offers the option of adding “implicit-features” or co-factoring, which will additionally factorize binarized versions of <span class="math inline">\(\mathbf{X}\)</span> (telling whether each entry is missing or not), sharing the same latent components with the factorization of <span class="math inline">\(\mathbf{X}\)</span> - that is: <span class="math display">\[
+\mathbf{X} \approx \mathbf{A} \mathbf{B}^T + \mu + \mathbf{b}_A + \mathbf{b}_B
+\]</span> <span class="math display">\[
+\mathbf{I}_x \approx \mathbf{A} \mathbf{B}^T_i
+\:\:\:\:
+\mathbf{I}^T_x \approx \mathbf{B} \mathbf{A}^T_i
+\]</span> Where:</p>
+<ul>
+<li><span class="math inline">\(\mathbf{I}_x\)</span> is a binary matrix indicating whether each entry of <span class="math inline">\(\mathbf{X}\)</span> is observed or missing.</li>
+<li><span class="math inline">\(\mathbf{A}_i\)</span> and <span class="math inline">\(\mathbf{B}_i\)</span> are model matrices which are not directly used for <span class="math inline">\(\mathbf{X}\)</span>, and not used in the prediction formula, but are still estimated in this new multi-objective optimization objective.</li>
+</ul>
+<div class="sourceCode" id="cb6"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">1</span>)</span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>model.improved <span class="ot">&lt;-</span> <span class="fu">CMF</span>(X_train, <span class="at">k=</span><span class="dv">25</span>, <span class="at">lambda=</span><span class="fl">0.1</span>, <span class="at">scale_lam=</span><span class="cn">TRUE</span>,</span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>                      <span class="at">add_implicit_features=</span><span class="cn">TRUE</span>, <span class="at">w_main=</span><span class="fl">0.75</span>, <span class="at">w_implicit=</span><span class="fl">0.25</span>,</span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>                      <span class="at">use_cg=</span><span class="cn">FALSE</span>, <span class="at">niter=</span><span class="dv">30</span>, <span class="at">verbose=</span><span class="cn">FALSE</span>)</span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>pred_improved <span class="ot">&lt;-</span> <span class="fu">predict</span>(model.improved, X_test)</span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a><span class="fu">print_rmse</span>(X_test, pred_improved, <span class="st">&quot;improved classic model&quot;</span>)</span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; RMSE for improved classic model is: 0.9129</span></span></code></pre></div>
+</div>
+</div>
+<div id="adding-side-information" class="section level2">
+<h2>Adding side information</h2>
+<p>Collective matrix factorization extends the classical model by incorporating side information about users/items into the formula, which is done by also factorizing the side information matrices, sharing the same latent components that are used for factorizing the <span class="math inline">\(\mathbf{X}\)</span> matrix: <span class="math display">\[
+\mathbf{X} \approx \mathbf{A} \mathbf{B}^T + \mu + \mathbf{b}_A + \mathbf{b}_B
+\]</span> <span class="math display">\[
+\mathbf{U} \approx \mathbf{A} \mathbf{C}^T + \mu_U
+\]</span> <span class="math display">\[
+\mathbf{I} \approx \mathbf{B} \mathbf{D}^T + \mu_I
+\]</span> <span class="math display">\[
+\mathbf{I}_x \approx \mathbf{A} \mathbf{B}^T_i
+\:\:\:\:
+\mathbf{I}^T_x \approx \mathbf{B} \mathbf{A}^T_i
+\]</span> Where:</p>
+<ul>
+<li><span class="math inline">\(\mathbf{U}\)</span> is a matrix representing side information about users, with each user being a row, and columns corresponding to their attributes.</li>
+<li><span class="math inline">\(\mathbf{I}\)</span> is similarly a matrix representing side information about items.</li>
+<li><span class="math inline">\(\mathbf{C}\)</span> and <span class="math inline">\(\mathbf{D}\)</span> are new latent factor matrices used for factorizing the side information matrices, but are not used directly for <span class="math inline">\(\mathbf{X}\)</span>.</li>
+<li><span class="math inline">\(\mu_U\)</span> and <span class="math inline">\(\mu_I\)</span> are column means for the attributes, which are used in order to center them.</li>
+</ul>
+<p>Informally, the latent factors now need to explain both the interactions data as well as the side information, thereby making them generalize better to unseen data. This library in addition allows controlling aspects such as the weight that each factorization has in the optimization objective, different regularization for each matrix, having factors that are not shared, among others.</p>
+<hr />
+<p>Fetching the side information from <code>recommenderlab</code>:</p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>U <span class="ot">&lt;-</span> MovieLenseUser</span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>U<span class="sc">$</span>id      <span class="ot">&lt;-</span> <span class="cn">NULL</span></span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>U<span class="sc">$</span>zipcode <span class="ot">&lt;-</span> <span class="cn">NULL</span></span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>U<span class="sc">$</span>age2    <span class="ot">&lt;-</span> U<span class="sc">$</span>age<span class="sc">^</span><span class="dv">2</span></span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a><span class="do">### Note that `cmfrec` does not standardize features</span></span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>U<span class="sc">$</span>age     <span class="ot">&lt;-</span> (U<span class="sc">$</span>age <span class="sc">-</span> <span class="fu">mean</span>(U<span class="sc">$</span>age)) <span class="sc">/</span> <span class="fu">sd</span>(U<span class="sc">$</span>age)</span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a>U<span class="sc">$</span>age2    <span class="ot">&lt;-</span> (U<span class="sc">$</span>age2 <span class="sc">-</span> <span class="fu">mean</span>(U<span class="sc">$</span>age2)) <span class="sc">/</span> <span class="fu">sd</span>(U<span class="sc">$</span>age2)</span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a>U <span class="ot">&lt;-</span> <span class="fu">model.matrix</span>(<span class="sc">~</span>.<span class="sc">-</span><span class="dv">1</span>, <span class="at">data=</span>U)</span>
+<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-10"><a href="#cb7-10" aria-hidden="true" tabindex="-1"></a>I <span class="ot">&lt;-</span> MovieLenseMeta</span>
+<span id="cb7-11"><a href="#cb7-11" aria-hidden="true" tabindex="-1"></a>I<span class="sc">$</span>title <span class="ot">&lt;-</span> <span class="cn">NULL</span></span>
+<span id="cb7-12"><a href="#cb7-12" aria-hidden="true" tabindex="-1"></a>I<span class="sc">$</span>url   <span class="ot">&lt;-</span> <span class="cn">NULL</span></span>
+<span id="cb7-13"><a href="#cb7-13" aria-hidden="true" tabindex="-1"></a>I<span class="sc">$</span>year  <span class="ot">&lt;-</span> <span class="fu">ifelse</span>(<span class="fu">is.na</span>(I<span class="sc">$</span>year), <span class="fu">median</span>(I<span class="sc">$</span>year, <span class="at">na.rm=</span><span class="cn">TRUE</span>), I<span class="sc">$</span>year)</span>
+<span id="cb7-14"><a href="#cb7-14" aria-hidden="true" tabindex="-1"></a>I<span class="sc">$</span>year2 <span class="ot">&lt;-</span> I<span class="sc">$</span>year<span class="sc">^</span><span class="dv">2</span></span>
+<span id="cb7-15"><a href="#cb7-15" aria-hidden="true" tabindex="-1"></a>I<span class="sc">$</span>year  <span class="ot">&lt;-</span> (I<span class="sc">$</span>year <span class="sc">-</span> <span class="fu">mean</span>(I<span class="sc">$</span>year)) <span class="sc">/</span> <span class="fu">sd</span>(I<span class="sc">$</span>year)</span>
+<span id="cb7-16"><a href="#cb7-16" aria-hidden="true" tabindex="-1"></a>I<span class="sc">$</span>year2 <span class="ot">&lt;-</span> (I<span class="sc">$</span>year2 <span class="sc">-</span> <span class="fu">mean</span>(I<span class="sc">$</span>year2)) <span class="sc">/</span> <span class="fu">sd</span>(I<span class="sc">$</span>year2)</span>
+<span id="cb7-17"><a href="#cb7-17" aria-hidden="true" tabindex="-1"></a>I <span class="ot">&lt;-</span> <span class="fu">as.coo.matrix</span>(I)</span>
+<span id="cb7-18"><a href="#cb7-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-19"><a href="#cb7-19" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">dim</span>(U), <span class="st">&quot;</span><span class="sc">\n</span><span class="st">&quot;</span>)</span>
+<span id="cb7-20"><a href="#cb7-20" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; 943 24</span></span>
+<span id="cb7-21"><a href="#cb7-21" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">dim</span>(I), <span class="st">&quot;</span><span class="sc">\n</span><span class="st">&quot;</span>)</span>
+<span id="cb7-22"><a href="#cb7-22" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; 1664 21</span></span></code></pre></div>
+<p>Now fitting the model:</p>
+<div class="sourceCode" id="cb8"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">1</span>)</span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>model.w.sideinfo <span class="ot">&lt;-</span> <span class="fu">CMF</span>(X_train, <span class="at">U=</span>U, <span class="at">I=</span>I, <span class="at">NA_as_zero_item=</span><span class="cn">TRUE</span>,</span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>                        <span class="at">k=</span><span class="dv">25</span>, <span class="at">lambda=</span><span class="fl">0.1</span>, <span class="at">scale_lam=</span><span class="cn">TRUE</span>,</span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>                        <span class="at">niter=</span><span class="dv">30</span>, <span class="at">use_cg=</span><span class="cn">FALSE</span>, <span class="at">include_all_X=</span><span class="cn">FALSE</span>,</span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a>                        <span class="at">w_main=</span><span class="fl">0.75</span>, <span class="at">w_user=</span><span class="fl">0.5</span>, <span class="at">w_item=</span><span class="fl">0.5</span>, <span class="at">w_implicit=</span><span class="fl">0.5</span>,</span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a>                        <span class="at">verbose=</span><span class="cn">FALSE</span>)</span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a>pred_side_info <span class="ot">&lt;-</span> <span class="fu">predict</span>(model.w.sideinfo, X_test)</span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a><span class="fu">print_rmse</span>(X_test, pred_side_info, <span class="st">&quot;model with side info&quot;</span>)</span>
+<span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; RMSE for model with side info is: 0.9124</span></span></code></pre></div>
+<hr />
+<p>Summary:</p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(kableExtra)</span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>calc_rmse <span class="ot">&lt;-</span> <span class="cf">function</span>(X_test, X_hat) {</span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a>    <span class="fu">return</span>(<span class="fu">sqrt</span>(<span class="fu">mean</span>( (X_test<span class="sc">@</span>x <span class="sc">-</span> X_hat<span class="sc">@</span>x)<span class="sc">^</span><span class="dv">2</span> )))</span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a>results <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a>    <span class="at">NonPersonalized =</span> <span class="fu">calc_rmse</span>(X_test, pred_baseline),</span>
+<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a>    <span class="at">ClassicalModel =</span> <span class="fu">calc_rmse</span>(X_test, pred_classic),</span>
+<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a>    <span class="at">ClassicPlusImplicit =</span> <span class="fu">calc_rmse</span>(X_test, pred_improved),</span>
+<span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a>    <span class="at">CollectiveModel =</span> <span class="fu">calc_rmse</span>(X_test, pred_side_info)</span>
+<span id="cb9-11"><a href="#cb9-11" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb9-12"><a href="#cb9-12" aria-hidden="true" tabindex="-1"></a>results <span class="ot">&lt;-</span> <span class="fu">as.data.frame</span>(<span class="fu">t</span>(results))</span>
+<span id="cb9-13"><a href="#cb9-13" aria-hidden="true" tabindex="-1"></a><span class="fu">names</span>(results) <span class="ot">&lt;-</span> <span class="st">&quot;RMSE&quot;</span></span>
+<span id="cb9-14"><a href="#cb9-14" aria-hidden="true" tabindex="-1"></a>results <span class="sc">%&gt;%</span></span>
+<span id="cb9-15"><a href="#cb9-15" aria-hidden="true" tabindex="-1"></a>    <span class="fu">kable</span>() <span class="sc">%&gt;%</span></span>
+<span id="cb9-16"><a href="#cb9-16" aria-hidden="true" tabindex="-1"></a>    <span class="fu">kable_styling</span>()</span></code></pre></div>
+<table class="table" style="margin-left: auto; margin-right: auto;">
+<thead>
+<tr>
+<th style="text-align:left;">
+</th>
+<th style="text-align:right;">
+RMSE
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left;">
+NonPersonalized
+</td>
+<td style="text-align:right;">
+0.9460112
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+ClassicalModel
+</td>
+<td style="text-align:right;">
+0.9244950
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+ClassicPlusImplicit
+</td>
+<td style="text-align:right;">
+0.9128844
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+CollectiveModel
+</td>
+<td style="text-align:right;">
+0.9123750
+</td>
+</tr>
+</tbody>
+</table>
+<p>Important to keep in mind:</p>
+<ul>
+<li>These RMSEs have high standard errors due to the small amount of data used here.</li>
+<li>The model hyperparameters are not particularly tuned, and a proper tuning should use a validation split too.</li>
+<li>The test split is using users and items which might not have been in the training set.</li>
+<li>While it looks like the difference from adding side information is very small, it also comes with the side effect of being able to recommend items based on attributes.</li>
+<li>RMSE as a metric can hide overfitting in models that tend to recommend items with too few ratings/interactions - these models in particular will tend to recommend many movies with only a handful ratings, which is typically undesirable. A model with higher regularization that shows higher test RMSE might in practice produce better quality recommendations (see the introductory <a href="https://nbviewer.jupyter.org/github/david-cortes/cmfrec/blob/master/example/cmfrec_movielens_sideinfo.ipynb">Python notebook</a> for more examples on this topic).</li>
+<li>The models evaluated so far have all used dynamic/scaled regularization (as proposed in <a href="https://liuxiaofei.com.cn/blog/wp-content/uploads/2014/01/netflix_aaim08submitted.pdf">Large-scale Parallel Collaborative Filtering for the Netflix Prize</a>), save for the baseline most-popular model - this means that the regularization for each user and item is scaled by the number of present entries for it. This setting tends to produce dubious recommendations in small datasets like the MovieLens100k, even if it makes it look like it improves RMSE.</li>
+</ul>
+</div>
+<div id="generating-top-n-recommendations" class="section level2">
+<h2>Generating Top-N recommendations</h2>
+<p>The goal behind building a collaborative filtering model is typically to be able to make top-N recommended lists for users or to obtain latent factors for an unseen user given its current data. <code>cmfrec</code> has many prediction functions for these purposes depending on what specifically one wants to do, supporting both warm-start and cold-start recommendations.</p>
+<div class="sourceCode" id="cb10"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="do">### Re-fitting the earlier model to all the data,</span></span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a><span class="do">### this time *without* scaled regularization</span></span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>model.classic <span class="ot">&lt;-</span> <span class="fu">CMF</span>(X, <span class="at">k=</span><span class="dv">20</span>, <span class="at">lambda=</span><span class="dv">10</span>, <span class="at">scale_lam=</span><span class="cn">FALSE</span>, <span class="at">verbose=</span><span class="cn">FALSE</span>)</span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a>model.w.sideinfo <span class="ot">&lt;-</span> <span class="fu">CMF</span>(X, <span class="at">U=</span>U, <span class="at">I=</span>I, <span class="at">k=</span><span class="dv">20</span>, <span class="at">lambda=</span><span class="dv">10</span>, <span class="at">scale_lam=</span><span class="cn">FALSE</span>,</span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a>                        <span class="at">w_main=</span><span class="fl">0.75</span>, <span class="at">w_user=</span><span class="fl">0.125</span>, <span class="at">w_item=</span><span class="fl">0.125</span>,</span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a>                        <span class="at">verbose=</span><span class="cn">FALSE</span>)</span></code></pre></div>
+<div id="recommendations-for-existing-users" class="section level3">
+<h3>Recommendations for existing users</h3>
+<p>When fitting a model, all the necessary fitted matrices are saved inside the object itself, which allows making predictions for existing users based just on the ID. The specific items consumed by each user are however not saved, so in order to avoid recommending already-seen items, these have to be explicitly passed for exclusion.</p>
+<div class="sourceCode" id="cb11"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a>user_to_recommend <span class="ot">&lt;-</span> <span class="dv">10</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a><span class="do">### Note: slicing of &#39;X&#39; is provided by &#39;MatrixExtra&#39;,</span></span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a><span class="do">### returning a &#39;sparseVector&#39; object as required by cmfrec</span></span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a><span class="fu">topN</span>(model.classic, <span class="at">user=</span>user_to_recommend, <span class="at">n=</span><span class="dv">10</span>,</span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a>     <span class="at">exclude=</span>X[user_to_recommend, , <span class="at">drop=</span><span class="cn">TRUE</span>])</span>
+<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt;  [1] 316 424 405 271 169 511 524 516 420 311</span></span></code></pre></div>
+<div class="sourceCode" id="cb12"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="do">### A handy function for visualizing recommendations</span></span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>movie_names <span class="ot">&lt;-</span> <span class="fu">colnames</span>(X)</span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>n_ratings <span class="ot">&lt;-</span> <span class="fu">colSums</span>(<span class="fu">as.csc.matrix</span>(X, <span class="at">binary=</span><span class="cn">TRUE</span>))</span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a>avg_ratings <span class="ot">&lt;-</span> <span class="fu">colSums</span>(<span class="fu">as.csc.matrix</span>(X)) <span class="sc">/</span> n_ratings</span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a>print_recommended <span class="ot">&lt;-</span> <span class="cf">function</span>(rec, txt) {</span>
+<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a>    <span class="fu">cat</span>(txt, <span class="st">&quot;:</span><span class="sc">\n</span><span class="st">&quot;</span>,</span>
+<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a>        <span class="fu">paste</span>(<span class="fu">paste</span>(<span class="dv">1</span><span class="sc">:</span><span class="fu">length</span>(rec), <span class="st">&quot;. &quot;</span>, <span class="at">sep=</span><span class="st">&quot;&quot;</span>),</span>
+<span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a>              movie_names[rec],</span>
+<span id="cb12-9"><a href="#cb12-9" aria-hidden="true" tabindex="-1"></a>              <span class="st">&quot; - Avg rating:&quot;</span>, <span class="fu">round</span>(avg_ratings[rec], <span class="dv">2</span>),</span>
+<span id="cb12-10"><a href="#cb12-10" aria-hidden="true" tabindex="-1"></a>              <span class="st">&quot;, #ratings: &quot;</span>, n_ratings[rec],</span>
+<span id="cb12-11"><a href="#cb12-11" aria-hidden="true" tabindex="-1"></a>              <span class="at">collapse=</span><span class="st">&quot;</span><span class="sc">\n</span><span class="st">&quot;</span>, <span class="at">sep=</span><span class="st">&quot;&quot;</span>),</span>
+<span id="cb12-12"><a href="#cb12-12" aria-hidden="true" tabindex="-1"></a>        <span class="st">&quot;</span><span class="sc">\n</span><span class="st">&quot;</span>, <span class="at">sep=</span><span class="st">&quot;&quot;</span>)</span>
+<span id="cb12-13"><a href="#cb12-13" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb12-14"><a href="#cb12-14" aria-hidden="true" tabindex="-1"></a>recommended <span class="ot">&lt;-</span> <span class="fu">topN</span>(model.w.sideinfo, <span class="at">user=</span>user_to_recommend, <span class="at">n=</span><span class="dv">5</span>,</span>
+<span id="cb12-15"><a href="#cb12-15" aria-hidden="true" tabindex="-1"></a>                    <span class="at">exclude=</span>X[user_to_recommend, , <span class="at">drop=</span><span class="cn">TRUE</span>])</span>
+<span id="cb12-16"><a href="#cb12-16" aria-hidden="true" tabindex="-1"></a><span class="fu">print_recommended</span>(recommended, <span class="st">&quot;Recommended for user_id=10&quot;</span>)</span>
+<span id="cb12-17"><a href="#cb12-17" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; Recommended for user_id=10:</span></span>
+<span id="cb12-18"><a href="#cb12-18" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; 1. Schindler&#39;s List (1993) - Avg rating:4.47, #ratings: 298</span></span>
+<span id="cb12-19"><a href="#cb12-19" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; 2. To Kill a Mockingbird (1962) - Avg rating:4.29, #ratings: 219</span></span>
+<span id="cb12-20"><a href="#cb12-20" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; 3. Close Shave, A (1995) - Avg rating:4.49, #ratings: 112</span></span>
+<span id="cb12-21"><a href="#cb12-21" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; 4. E.T. the Extra-Terrestrial (1982) - Avg rating:3.83, #ratings: 300</span></span>
+<span id="cb12-22"><a href="#cb12-22" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; 5. Good Will Hunting (1997) - Avg rating:4.26, #ratings: 198</span></span></code></pre></div>
+</div>
+<div id="recommendations-for-new-users" class="section level3">
+<h3>Recommendations for new users</h3>
+<p>The fitted model, as it is, can only provide recommendations for the specific users and items to which it was fit. Typically, one wants to produce recommendations for new users as they go, or update the recommended lists for existing users once they consume more items. <code>cmfrec</code> allows obtaining latent factors and top-N recommended lists for new users without having to refit the whole model.</p>
+<p>This is how it would be if user 10 were to come as a new visitor:</p>
+<div class="sourceCode" id="cb13"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a>recommended_new <span class="ot">&lt;-</span> <span class="fu">topN_new</span>(model.w.sideinfo, <span class="at">n=</span><span class="dv">5</span>,</span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>                            <span class="at">exclude=</span>X[user_to_recommend, , <span class="at">drop=</span><span class="cn">TRUE</span>],</span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>                            <span class="at">X=</span>X[user_to_recommend, , <span class="at">drop=</span><span class="cn">TRUE</span>],</span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a>                            <span class="at">U=</span>U[user_to_recommend, , <span class="at">drop=</span><span class="cn">TRUE</span>])</span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a><span class="fu">print_recommended</span>(recommended_new, <span class="st">&quot;Recommended for user_id=10 as new user&quot;</span>)</span>
+<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; Recommended for user_id=10 as new user:</span></span>
+<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; 1. Schindler&#39;s List (1993) - Avg rating:4.47, #ratings: 298</span></span>
+<span id="cb13-8"><a href="#cb13-8" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; 2. To Kill a Mockingbird (1962) - Avg rating:4.29, #ratings: 219</span></span>
+<span id="cb13-9"><a href="#cb13-9" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; 3. Close Shave, A (1995) - Avg rating:4.49, #ratings: 112</span></span>
+<span id="cb13-10"><a href="#cb13-10" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; 4. E.T. the Extra-Terrestrial (1982) - Avg rating:3.83, #ratings: 300</span></span>
+<span id="cb13-11"><a href="#cb13-11" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; 5. Good Will Hunting (1997) - Avg rating:4.26, #ratings: 198</span></span></code></pre></div>
+<p>It is not mandatory to provide all the side information, as the ratings alone can also be used to generate a recommendation, even if the model was fit with side information (this would not be the case if passing <code>NA_as_zero_user=TRUE</code>):</p>
+<div class="sourceCode" id="cb14"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a>recommended_new <span class="ot">&lt;-</span> <span class="fu">topN_new</span>(model.w.sideinfo, <span class="at">n=</span><span class="dv">5</span>,</span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>                            <span class="at">exclude=</span>X[user_to_recommend, , <span class="at">drop=</span><span class="cn">TRUE</span>],</span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>                            <span class="at">X=</span>X[user_to_recommend, , <span class="at">drop=</span><span class="cn">TRUE</span>])</span>
+<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a><span class="fu">print_recommended</span>(recommended_new, <span class="st">&quot;Recommended for user_id=10 as new user (NO sideinfo)&quot;</span>)</span>
+<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; Recommended for user_id=10 as new user (NO sideinfo):</span></span>
+<span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; 1. Schindler&#39;s List (1993) - Avg rating:4.47, #ratings: 298</span></span>
+<span id="cb14-7"><a href="#cb14-7" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; 2. To Kill a Mockingbird (1962) - Avg rating:4.29, #ratings: 219</span></span>
+<span id="cb14-8"><a href="#cb14-8" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; 3. Close Shave, A (1995) - Avg rating:4.49, #ratings: 112</span></span>
+<span id="cb14-9"><a href="#cb14-9" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; 4. E.T. the Extra-Terrestrial (1982) - Avg rating:3.83, #ratings: 300</span></span>
+<span id="cb14-10"><a href="#cb14-10" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; 5. Good Will Hunting (1997) - Avg rating:4.26, #ratings: 198</span></span></code></pre></div>
+<p>(<em>In this case, the top-5 recommendations did not change, as the side information has little effect in this particular model, but that might not always be the case - that is, the top-N recommended items for a different user might be different if side information is absent.</em>)</p>
+</div>
+<div id="cold-start-recommendations" class="section level3">
+<h3>Cold-start recommendations</h3>
+<p>Conversely, it is also possible to make a recommendation based on the side information without having any rated movies/items. The quality of these recommendations is however highly dependant on the influence that the attributes have in the model, and in this case, the user attributes have very little associated information and thus little leverage.</p>
+<p>Nevertheless, they might still provide an improvement over a completely non-personalized recommendation (see <a href="https://arxiv.org/pdf/1809.00366.pdf">Cold-start recommendations in Collective Matrix Factorization</a>):</p>
+<div class="sourceCode" id="cb15"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a>recommended_cold <span class="ot">&lt;-</span> <span class="fu">topN_new</span>(model.w.sideinfo, <span class="at">n=</span><span class="dv">5</span>,</span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>                             <span class="at">exclude=</span>X[user_to_recommend, , <span class="at">drop=</span><span class="cn">TRUE</span>],</span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>                             <span class="at">U=</span>U[user_to_recommend, , <span class="at">drop=</span><span class="cn">TRUE</span>])</span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a><span class="fu">print_recommended</span>(recommended_cold, <span class="st">&quot;Recommended for user_id=10 as new user (NO ratings)&quot;</span>)</span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; Recommended for user_id=10 as new user (NO ratings):</span></span>
+<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; 1. Schindler&#39;s List (1993) - Avg rating:4.47, #ratings: 298</span></span>
+<span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; 2. Close Shave, A (1995) - Avg rating:4.49, #ratings: 112</span></span>
+<span id="cb15-8"><a href="#cb15-8" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; 3. Wrong Trousers, The (1993) - Avg rating:4.47, #ratings: 118</span></span>
+<span id="cb15-9"><a href="#cb15-9" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; 4. Good Will Hunting (1997) - Avg rating:4.26, #ratings: 198</span></span>
+<span id="cb15-10"><a href="#cb15-10" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; 5. Wallace &amp; Gromit: The Best of Aardman Animation (1996) - Avg rating:4.45, #ratings: 67</span></span></code></pre></div>
+</div>
+</div>
+
+
+
+<!-- code folding -->
+
+
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+  (function () {
+    var script = document.createElement("script");
+    script.type = "text/javascript";
+    script.src  = "https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML";
+    document.getElementsByTagName("head")[0].appendChild(script);
+  })();
+</script>
+
+</body>
+</html>

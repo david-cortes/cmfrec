@@ -12,19 +12,36 @@ For a similar package with Poisson distributions see [ctpfrec](https://github.co
 
 Written in C with Python and R interfaces. An additional Ruby interface can be found [here](https://github.com/ankane/cmfrec).
 
+For an introduction see the Python notebook [MovieLens Recommender with Side Information](http://nbviewer.jupyter.org/github/david-cortes/cmfrec/blob/master/example/cmfrec_movielens_sideinfo.ipynb) and the [R vignette](http://htmlpreview.github.io/?https://github.com/david-cortes/cmfrec/blob/master/inst/doc/cmfrec_vignette.html).
+
+## Basic Idea
+
+(See introductory notebook above for more details)
+
+The model consist in predicting the rating (or weighted confidence for implicit-feedback case) that a user would give to an item by performing a low-rank factorization of an interactions matrix `X` of size `users` x `items` (e.g. ratings)
+```
+X ~ A * B.T
+```
+(where `A` and `B` are the fitted model matrices)
+
+But does so using side information about the items (such as movie tags) and/or users (such as their demographic info) by also factorizing the item side info matrix and/or the user side info matrix
+```
+U ~ A * C.T,   I ~ B * D.T
+```
+Sharing the same item/user-factor matrix used to factorize the ratings, or sharing only some of the latent factors.
+
+This also has the side effect of allowing recommendations for users and items for which there is side information but no ratings, although these predictions might not be as high quality.
+
+Alternatively, can produce factorizations in wich the factor matrices are determined from the attributes directly (e.g. `A = U * C`), with or without a free offset.
+
+While the method was initially devised for recommender systems, can also be used as a general technique for dimensionality reduction by taking the `A` matrix as low-dimensional factors, which can be calculated for new data too.
+
 ## Update 2020-03-20
 
 The package has been rewritten in C with Python wrappers. If you've used earlier versions of this package which relied on Tensorflow for the calculations (and before that, Casadi), the optimal hyperparameters will be very different now as it has changed some details of the loss function such as not dividing some terms by the number of entries.
 
 The new version is faster, multi-threaded, and has some new functionality, but if for some reason you still need the old one, it can be found under the git branch "tensorflow".
 
-## Update 2020-10-27
-
-The package has now introduced a conjugate gradient method for the ALS procedures and has undergone many improvements in terms of speed, memory usage, and numerical precision. The models with ALS-CG are now competitive in speed against libraries such as `implicit` or `rsparse`. The C code now also contains the full prediction API.
-
-## Update 2020-11-04
-
-The package can now automatically generate so-called "implicit features" for the explicit-feedback models (see [5] and similar) and use them in addition to real side information, even if said side information is not sparse.
 
 ## Highlights
 
@@ -47,23 +64,6 @@ The package can now automatically generate so-called "implicit features" for the
 * Can work with large datasets (supports arrays/matrices larger than `INT_MAX`).
 * Supports observation weights (for the explicit-feedback models).
 
-## Basic idea
-
-The model consist in predicting the rating (weighted confidence for implicit-feedback case) that a user would give to an item by performing a low-rank factorization of an interactions matrix (e.g. ratings)
-```
-X ~ A * t(B)
-```
-Using side information about the items (such as movie tags) and/or users (such as their demographic info) by also factorizing the item side info matrix and/or the user side info matrix
-```
-U ~ A * t(C),   I ~ B * t(D)
-```
-Sharing the same item/user-factor matrix used to factorize the ratings, or sharing only some of the latent factors.
-
-This also has the side effect of allowing recommendations for users and items for which there is side information but no ratings, although these predictions might not be as high quality.
-
-Alternatively, can produce factorizations in wich the factor matrices are determined from the attributes directly (e.g. `A = U * C`), with or without a free offset.
-
-While the method was initially devised for recommender systems, can also be used as a general technique for dimensionality reduction by taking the `A` matrix as low-dimensional factors, which can be calculated for new data too.
 
 ## Instalation
 
@@ -71,6 +71,10 @@ While the method was initially devised for recommender systems, can also be used
 
 ```
 pip install cmfrec
+```
+or if that fails:
+```
+pip install --no-use-pep517 cmfrec
 ```
 
 (Note: NumPy must already be installed in the Python environment before attempting to install `cmfrec`)
@@ -85,10 +89,6 @@ pip install cmfrec
 ```
 (Alternatively, can also pass argument enable-omp to the setup.py file: python `setup.py install enable-omp`)
 
-**Note2:** the setup script uses a PEP517 environment, which means it will create an isolated virtual environment, install its build dependencies there, compile, and then copy to the actual environment. This can causes issues - for example, if one has NumPy<1.20 and the build environment installs NumPy>=1.20, there will be a binary incompatibility which will make the package fail to import. To avoid PEP517, install with:
-```
-pip install --no-use-pep517 cmfrec
-```
 
 Will also by default use MKL if it finds it - for OpenBLAS can set an environment variable `USE_OPENBLAS=1` or pass argument `openblas` to `setup.py`.
 
@@ -249,7 +249,7 @@ For more details see the online documentation.
 
 ## Getting started
 
-For a longer example with real data see the notebook [MovieLens Recommender with Side Information](http://nbviewer.jupyter.org/github/david-cortes/cmfrec/blob/master/example/cmfrec_movielens_sideinfo.ipynb).
+For a longer example with real data see the Python notebook [MovieLens Recommender with Side Information](http://nbviewer.jupyter.org/github/david-cortes/cmfrec/blob/master/example/cmfrec_movielens_sideinfo.ipynb) and the [R vignette](http://htmlpreview.github.io/?https://github.com/david-cortes/cmfrec/blob/master/inst/doc/cmfrec_vignette.html).
 
 ## Documentation
 

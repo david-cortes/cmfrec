@@ -3,6 +3,17 @@ process.inputs.topN <- function(model, obj, user=NULL, a_vec=NULL, a_bias=NULL,
                                 n=10L, include=NULL, exclude=NULL, output_score=FALSE) {
     if (!is.null(include) && !is.null(exclude))
         stop("Can only pass one of 'include' or 'exclude'.")
+    if (inherits(include, "sparseVector")) {
+        if (NROW(obj$info$item_mapping))
+            stop("Cannot pass sparse vectors when fitting a model to a 'data.frame'.")
+        include <- include@i
+    }
+    if (inherits(exclude, "sparseVector")) {
+        if (NROW(obj$info$item_mapping))
+            stop("Cannot pass sparse vectors when fitting a model to a 'data.frame'.")
+        exclude <- exclude@i
+    }
+    
     output_score <- check.bool(output_score, "output_score")
     n <- check.pos.int(n, "n", TRUE)
     if (NROW(obj$info$item_mapping)) {
@@ -224,10 +235,16 @@ process.inputs.topN <- function(model, obj, user=NULL, a_vec=NULL, a_bias=NULL,
 #' @param n Number of top-predicted items to output.
 #' @param include If passing this, will only make a ranking among the item IDs
 #' provided here. See the documentation for `user` for how the IDs should be passed.
-#' This should be an integer or character vector. Cannot be used together with `exclude`.
+#' This should be an integer or character vector, or alternatively, as a sparse vector
+#' from the `Matrix` package, from which the non-missing entries will be taken as
+#' those to include
+#' Cannot be used together with `exclude`.
 #' @param exclude If passing this, will exclude from the ranking all the item IDs
 #' provided here. See the documentation for `user` for how the IDs should be passed.
-#' This should be an integer or character vector. Cannot be used together with `exclude`.
+#' This should be an integer or character vector, or alternatively, as a sparse vector
+#' from the `Matrix` package, from which the non-missing entries will be taken as
+#' those to exclude.
+#' Cannot be used together with `include`.
 #' @param output_score Whether to also output the predicted values, in addition
 #' to the indices of the top-predicted items.
 #' @param X `X` data for a new user for which to make recommendations,
