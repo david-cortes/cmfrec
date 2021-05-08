@@ -2242,10 +2242,13 @@ class CMF(_CMF):
 
     Tries to approximate the 'X' interactions matrix  by a formula as follows:
         X ~ A * t(B)
+    
     While at the same time also approximating the user/row side information
     matrix 'U' and the item/column side information matrix 'I' as follows:
         U ~ A * t(C), 
+        
         I ~ B * t(D)
+    
     The matrices ("A", "B", "C", "D") are obtained by minimizing the error
     with respect to the non-missing entries in the input data ("X", "U", "I").
     Might apply sigmoid transformations to binary columns in U and I too.
@@ -2352,6 +2355,9 @@ class CMF(_CMF):
         entries in both "X" and the side info matrices
         "U" and "I". If passing "True" here, ``scale_lam``
         will also be assumed to be "True".
+
+        Warning: in smaller datasets, using this option can result in top-N
+        recommendations having mostly items with very few interactions.
     k_user : int
         Number of factors in the factorizing A and C matrices which will be used
         only for the 'U' and 'U_bin' matrices, while being ignored for the 'X' matrix.

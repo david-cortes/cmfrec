@@ -263,6 +263,9 @@ NULL
 #' to use for it, as it will tend to
 #' recommend items which have a single user interaction with
 #' the maximum possible value (e.g. 5-star movies from only 1 user).
+
+#' Warning: in smaller datasets, using this option can result in top-N
+#' recommendations having mostly items with very few interactions.
 #' @param scale_lam_sideinfo Whether to scale (increase) the regularization
 #' parameter for each row of the "A" and "B"
 #' matrices according to the number of non-missing
