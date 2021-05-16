@@ -32,8 +32,9 @@
             non-negative least squares problem."
             International Conference on Computer Analysis of Images
             and Patterns. Springer, Berlin, Heidelberg, 2005.
-        (e) Zhou, Yunhong, et al.
-            "Large-scale parallel collaborative filtering for the netflix prize."
+        (g) Zhou, Yunhong, et al.
+            "Large-scale parallel collaborative filtering for
+             the netflix prize."
             International conference on algorithmic applications in management.
             Springer, Berlin, Heidelberg, 2008.
 
@@ -49,7 +50,7 @@
 
     MIT License:
 
-    Copyright (c) 2021 David Cortes
+    Copyright (c) 2020-2021 David Cortes
 
     All rights reserved.
 
@@ -220,7 +221,7 @@ real_t fun_grad_cannonical_form
     real_t scaling,
     real_t *restrict buffer_real_t,
     real_t *restrict buffer_mt,
-    int_t nthreads
+    int nthreads
 )
 {
     #if defined(_OPENMP) && \
@@ -632,7 +633,7 @@ void factors_closed_form
     real_t *restrict buffer_real_t,
     real_t lam, real_t lam_last,
     real_t l1_lam, real_t l1_lam_last,
-    bool scale_lam,
+    bool scale_lam, bool scale_bias_const, real_t wsum,
     real_t *restrict precomputedTransBtBinvBt,
     real_t *restrict precomputedBtB, int_t cnt_NA, int_t ld_BtB,
     bool BtB_has_diag, bool BtB_is_scaled, real_t scale_BtB, int_t n_BtB,
@@ -640,6 +641,7 @@ void factors_closed_form
     bool use_cg, int_t max_cg_steps,/* <- 'cg' should not be used for new data*/
     bool nonneg, int_t max_cd_steps,
     real_t *restrict bias_BtX, real_t *restrict bias_X, real_t bias_X_glob,
+    real_t multiplier_bias_BtX,
     bool force_add_diag
 )
 {
@@ -656,21 +658,6 @@ void factors_closed_form
     if (precomputedBtB == NULL)
         prefer_BtB = false;
 
-    if (scale_lam)
-    {
-        real_t multiplier_lam = 1.;
-        if (Xa_dense != NULL)
-            multiplier_lam = (real_t)(n - (full_dense? 0 : cnt_NA));
-        else if (NA_as_zero)
-            multiplier_lam = (real_t)n;
-        else
-            multiplier_lam = (real_t)nnz;
-        lam *= multiplier_lam;
-        lam_last *= multiplier_lam;
-        l1_lam *= multiplier_lam;
-        l1_lam_last *= multiplier_lam;
-    }
-
     /* Note: if passing 'NA_as_zero', 'n' and 'n_BtB' cannot be different */
 
     /* Potential bad inputs */
@@ -678,8 +665,55 @@ void factors_closed_form
             (Xa_dense == NULL && nnz == 0)  )
         && !(NA_as_zero && bias_BtX != NULL))
     {
+        zero_out:
         set_to_zero(a_vec, k);
         return;
+    }
+
+    if (scale_lam)
+    {
+        real_t multiplier_lam = 1.;
+
+        if (weight == NULL)
+        {
+            if (Xa_dense != NULL)
+                multiplier_lam = (real_t)(n - (full_dense? 0 : cnt_NA));
+            else if (NA_as_zero)
+                multiplier_lam = (real_t)n;
+            else
+                multiplier_lam = (real_t)nnz;
+        }
+
+        else
+        {
+            if (wsum <= 0)
+            {
+                wsum = 0.;
+                if (Xa_dense != NULL) {
+                    for (int_t ix = 0; ix < n; ix++)
+                        wsum += isnan(Xa_dense[ix])? 0. : weight[ix];
+                }
+
+                else {
+                    for (size_t ix = 0; ix < nnz; ix++)
+                        wsum += weight[ix];
+                }
+
+                if (NA_as_zero && Xa_dense == NULL)
+                    wsum += (real_t)(n - (int_t)nnz);
+            }
+
+            if (fabs_t(wsum) < EPSILON_T && bias_BtX == NULL) goto zero_out;
+
+            multiplier_lam = wsum;
+        }
+        
+        lam *= multiplier_lam;
+        l1_lam *= multiplier_lam;
+        if (!scale_bias_const) {
+            lam_last *= multiplier_lam;
+            l1_lam_last *= multiplier_lam;
+        }
     }
 
     if (nonneg) use_cg = false;
@@ -759,7 +793,7 @@ void factors_closed_form
                        ixB, Xa, nnz,
                        a_vec);
         if (bias_BtX != NULL)
-            cblas_taxpy(k, 1., bias_BtX, 1, a_vec, 1);
+            cblas_taxpy(k, 1./multiplier_bias_BtX, bias_BtX, 1, a_vec, 1);
         tpotrs_(&lo, &k, &one,
                 precomputedBtBchol, &k,
                 a_vec, &k,
@@ -828,6 +862,9 @@ void factors_closed_form
        solution using the conjugate gradient method.
        In this case, will exit the function afterwards as it will
        not need to calculate the Cholesky. */
+    /* Note: 'multiplier_bias_BtX' will only be encountered when solving for
+       'A' given 'U' alone in the prediction functions, thus it's not necessary
+       to include here. */
     else if (use_cg)
     {
         if (Xa_dense != NULL)
@@ -849,6 +886,7 @@ void factors_closed_form
                 weight,
                 precomputedBtB, ld_BtB,
                 bias_BtX, bias_X, bias_X_glob,
+                multiplier_bias_BtX,
                 buffer_real_t,
                 lam, lam_last,
                 max_cg_steps
@@ -959,7 +997,7 @@ void factors_closed_form
         if (lam_last != lam) bufferBtB[square(k)-1] += (lam_last - lam);
     }
     if (bias_BtX != NULL && NA_as_zero)
-        cblas_taxpy(k, 1., bias_BtX, 1, a_vec, 1);
+        cblas_taxpy(k, 1./multiplier_bias_BtX, bias_BtX, 1, a_vec, 1);
 
     if (!nonneg && l1_lam == 0. && l1_lam_last == 0.)
         tposv_(&lo, &k, &one,
@@ -1072,6 +1110,7 @@ void factors_explicit_cg_NA_as_zero_weighted
     real_t *restrict weight,
     real_t *restrict precomputedBtB, int_t ld_BtB,
     real_t *restrict bias_BtX, real_t *restrict bias_X, real_t bias_X_glob,
+    real_t multiplier_bias_BtX,
     real_t *restrict buffer_real_t,
     real_t lam, real_t lam_last,
     int_t max_cg_steps
@@ -1138,7 +1177,7 @@ void factors_explicit_cg_NA_as_zero_weighted
 
     if (bias_BtX != NULL)
     {
-        cblas_taxpy(k, 1., bias_BtX, 1, r, 1);
+        cblas_taxpy(k, 1./multiplier_bias_BtX, bias_BtX, 1, r, 1);
     }
 
     cblas_taxpy(k, -lam, a_vec, 1, r, 1);
@@ -1693,7 +1732,7 @@ real_t fun_grad_Adense
     real_t *restrict Xfull, real_t *restrict weight,
     real_t lam, real_t w, real_t lam_last,
     bool do_B, bool reset_grad,
-    int_t nthreads,
+    int nthreads,
     real_t *restrict buffer_real_t
 )
 {
@@ -1762,7 +1801,7 @@ void add_lam_to_grad_and_fun
     real_t *restrict grad,
     real_t *restrict A,
     int_t m, int_t k, int_t lda,
-    real_t lam, int_t nthreads
+    real_t lam, int nthreads
 )
 {
     #if defined(_OPENMP) && \
@@ -1846,6 +1885,7 @@ size_t buffer_size_optimizeA
     bool has_dense, bool has_weights, bool NA_as_zero,
     bool nonneg, bool has_l1,
     size_t k, size_t nthreads,
+    bool has_bias_static,
     bool pass_allocated_BtB, bool keep_precomputedBtB,
     bool use_cg, bool finalize_chol
 )
@@ -1858,6 +1898,7 @@ size_t buffer_size_optimizeA
                         has_dense, has_weights, NA_as_zero,
                         nonneg, has_l1,
                         k, nthreads,
+                        has_bias_static,
                         pass_allocated_BtB, keep_precomputedBtB,
                         true, false
                 ),
@@ -1866,6 +1907,7 @@ size_t buffer_size_optimizeA
                     has_dense, has_weights, NA_as_zero,
                     nonneg, has_l1,
                     k, nthreads,
+                    has_bias_static,
                     pass_allocated_BtB, keep_precomputedBtB,
                     false, false
                 )
@@ -1958,6 +2000,8 @@ size_t buffer_size_optimizeA
             buffer_size += k*nthreads;
         else if (has_l1)
             buffer_size += (size_t)3*k*nthreads;
+        if (has_bias_static)
+            buffer_size += k;
         return buffer_size;
     }
 
@@ -2036,12 +2080,14 @@ void optimizeA
     int_t cnt_NA[], real_t *restrict weight, bool NA_as_zero,
     real_t lam, real_t lam_last,
     real_t l1_lam, real_t l1_lam_last,
-    bool scale_lam,
+    bool scale_lam, bool scale_bias_const, real_t *restrict wsumA,
     bool do_B, bool is_first_iter,
-    int_t nthreads,
+    int nthreads,
     bool use_cg, int_t max_cg_steps,
     bool nonneg, int_t max_cd_steps,
+    real_t *restrict bias_restore,
     real_t *restrict bias_BtX, real_t *restrict bias_X, real_t bias_X_glob,
+    real_t *restrict bias_static, real_t multiplier_bias_BtX,
     bool keep_precomputedBtB,
     real_t *restrict precomputedBtB, bool *filled_BtB,
     real_t *restrict buffer_real_t
@@ -2182,6 +2228,7 @@ void optimizeA
                 max_cd_steps,
                 nthreads
             );
+
         /* If there are some few rows with missing values, now do a
            post-hoc pass over them only */
         if (!full_dense)
@@ -2195,7 +2242,8 @@ void optimizeA
                 size_buffer += (size_t)3*(size_t)k;
 
             #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
-                    shared(A, lda, B, ldb, ldX, m, n, k, scale_lam, \
+                    shared(A, lda, B, ldb, ldX, m, n, k, \
+                           scale_lam, scale_bias_const, \
                            lam, lam_last, l1_lam, l1_lam_last, weight,\
                            cnt_NA, Xfull, buffer_real_t, bufferBtBcopy, \
                            nthreads, use_cg, nonneg, max_cd_steps) \
@@ -2216,7 +2264,11 @@ void optimizeA
                             + ((size_t)n*(size_t)omp_get_thread_num()), 1);
 
                     if (use_cg)
+                    {
                         set_to_zero(A + ix*(size_t)lda, k);
+                        if (bias_restore != NULL)
+                            A[ix*(size_t)lda + (size_t)(k-1)] =bias_restore[ix];
+                    }
 
                     factors_closed_form(
                         A + ix*(size_t)lda, k,
@@ -2231,14 +2283,14 @@ void optimizeA
                          + size_buffer * (size_t)omp_get_thread_num(),
                         lam, lam_last,
                         l1_lam, l1_lam_last,
-                        scale_lam,
+                        scale_lam, scale_bias_const, 0.,
                         (real_t*)NULL,
                         bufferBtBcopy, cnt_NA[ix], k,
                         true, false, 1., n,
                         (real_t*)NULL, false,
                         use_cg, k, /* <- A was reset to zero, need more steps */
                         nonneg, max_cd_steps,
-                        (real_t*)NULL, (real_t*)NULL, 0.,
+                        (real_t*)NULL, (real_t*)NULL, 0., 1.,
                         false
                     );
                 }
@@ -2293,7 +2345,8 @@ void optimizeA
 
         #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
                 shared(Xfull, weight, do_B, m, n, k, A, lda, B, ldb, ldX, \
-                       lam, lam_last, l1_lam, l1_lam_last, scale_lam, \
+                       lam, lam_last, l1_lam, l1_lam_last, \
+                       scale_lam, scale_bias_const, wsumA, \
                        bufferBtB, cnt_NA, buffer_remainder, \
                        use_cg, max_cg_steps, nonneg, max_cd_steps) \
                 firstprivate(bufferX, bufferW)
@@ -2329,14 +2382,15 @@ void optimizeA
                 buffer_remainder + size_buffer*(size_t)omp_get_thread_num(),
                 lam, lam_last,
                 l1_lam, l1_lam_last,
-                scale_lam,
+                scale_lam, scale_bias_const,
+                (weight == NULL || wsumA == NULL)? 0. : wsumA[ix],
                 (real_t*)NULL,
                 bufferBtB, cnt_NA[ix], k,
                 true, false, 1., n,
                 (real_t*)NULL, false,
                 use_cg, max_cg_steps,
                 nonneg, max_cd_steps,
-                (real_t*)NULL, (real_t*)NULL, 0.,
+                (real_t*)NULL, (real_t*)NULL, 0., 1.,
                 false
             );
         }
@@ -2383,9 +2437,26 @@ void optimizeA
             A, (size_t)lda,
             nthreads
         );
-        if (bias_BtX != NULL)
+        if (bias_BtX != NULL) {
+            multiplier_bias_BtX = 1./multiplier_bias_BtX;
             for (size_t row = 0; row < (size_t)m; row++)
-                cblas_taxpy(k, 1., bias_BtX, 1, A + row*(size_t)lda, 1);
+                cblas_taxpy(k, multiplier_bias_BtX,
+                            bias_BtX, 1, A + row*(size_t)lda, 1);
+        }
+        else if (bias_static != NULL) {
+            /* Note: this should only be encountered when optimizing the side
+               info matrices, thus there are no extra routes for the other
+               cases, as it can only happen in this particular situation. */
+            real_t *restrict buffer_colsumsB = buffer_real_t;
+            buffer_real_t += k;
+
+            set_to_zero(buffer_colsumsB, k);
+            sum_by_cols(B, buffer_colsumsB, n, k, ldb, nthreads);
+            cblas_tger(CblasRowMajor, m, k,
+                       1., bias_static, 1,
+                       buffer_colsumsB, 1,
+                       A, lda);
+        }
 
         if (!nonneg && !l1_lam && !l1_lam_last)
             tposv_(&uplo, &k, &m,
@@ -2421,7 +2492,11 @@ void optimizeA
     else
     {
         if (is_first_iter)
+        {
             set_to_zero_(A, (size_t)m*(size_t)lda - (size_t)(lda-k), nthreads);
+            if (use_cg && bias_restore != NULL)
+                cblas_tcopy(m, bias_restore, 1, A + (k-1), lda);
+        }
 
         /* When NAs are treated as zeros, can use a precomputed t(B)*B */
         real_t *restrict bufferBtB = NULL;
@@ -2469,11 +2544,13 @@ void optimizeA
             size_buffer += (size_t)3*(size_t)k;
 
         #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
-                shared(A, lda, B, ldb, m, n, k, scale_lam, \
+                shared(A, lda, B, ldb, m, n, k, \
+                       scale_lam, scale_bias_const, wsumA, \
                        lam, lam_last, l1_lam, l1_lam_last, weight, cnt_NA, \
                        Xcsr_p, Xcsr_i, Xcsr, buffer_real_t, NA_as_zero, \
                        bufferBtB, size_buffer, use_cg, \
-                       nonneg, max_cd_steps, bias_BtX, bias_X, bias_X_glob)
+                       nonneg, max_cd_steps, bias_BtX, bias_X, \
+                       bias_X_glob, multiplier_bias_BtX)
         for (size_t_for ix = 0; ix < (size_t)m; ix++)
         {
             if ((Xcsr_p[ix+(size_t)1] > Xcsr_p[ix]) ||
@@ -2489,14 +2566,15 @@ void optimizeA
                     buffer_real_t + ((size_t)omp_get_thread_num()*size_buffer),
                     lam, lam_last,
                     l1_lam, l1_lam_last,
-                    scale_lam,
+                    scale_lam, scale_bias_const,
+                    (weight == NULL || wsumA == NULL)? 0. : wsumA[ix],
                     (real_t*)NULL,
                     bufferBtB, 0, k,
                     add_diag_to_BtB, false, 1., n,
                     (real_t*)NULL, NA_as_zero,
                     use_cg, max_cg_steps,
                     nonneg, max_cd_steps,
-                    bias_BtX, bias_X, bias_X_glob,
+                    bias_BtX, bias_X, bias_X_glob, multiplier_bias_BtX,
                     false
                 );
             }
@@ -2511,7 +2589,7 @@ void optimizeA_implicit
     int_t m, int_t n, int_t k,
     size_t Xcsr_p[], int_t Xcsr_i[], real_t *restrict Xcsr,
     real_t lam, real_t l1_lam,
-    int_t nthreads,
+    int nthreads,
     bool use_cg, int_t max_cg_steps, bool force_set_to_zero,
     bool nonneg, int_t max_cd_steps,
     real_t *restrict precomputedBtB, /* <- will be calculated if not passed */
@@ -2584,50 +2662,44 @@ void optimizeA_implicit
     }
 }
 
-int_t initialize_biases
+void calc_mean_and_center
 (
-    real_t *restrict glob_mean, real_t *restrict biasA, real_t *restrict biasB,
-    bool user_bias, bool item_bias, bool center,
-    real_t lam_user, real_t lam_item,
-    bool scale_lam,
-    int_t m, int_t n,
-    int_t m_bias, int_t n_bias,
     int_t ixA[], int_t ixB[], real_t *restrict X, size_t nnz,
     real_t *restrict Xfull, real_t *restrict Xtrans,
+    int_t m, int_t n,
     size_t Xcsr_p[], int_t Xcsr_i[], real_t *restrict Xcsr,
     size_t Xcsc_p[], int_t Xcsc_i[], real_t *restrict Xcsc,
-    bool nonneg,
-    int_t nthreads
+    real_t *restrict weight,
+    bool NA_as_zero, bool nonneg, bool center, int nthreads,
+    real_t *restrict glob_mean
 )
 {
-    size_t m_by_n = (size_t)m * (size_t)n;
-    #if defined(_OPENMP) && \
-                ( (_OPENMP < 200801)  /* OpenMP < 3.0 */ \
-                  || defined(_WIN32) || defined(_WIN64) \
-                )
-    long long ix, row, col;
-    #endif
+    if (glob_mean == NULL)
+        return;
+    if (!center)
+    {
+        *glob_mean = 0;
+        return;
+    }
 
-    if (nonneg && glob_mean != NULL)
-        *glob_mean = 0.;
+    size_t m_by_n = (Xfull == NULL)? 0 : ((size_t)m * (size_t)n);
 
-    size_t *buffer_cnt = (size_t*)calloc(max2(m,n), sizeof(size_t));
-    if (buffer_cnt == NULL && (Xfull != NULL || Xcsr == NULL)) return 1;
-
-    /* First calculate the global mean */
     double xsum = 0.;
+    double wsum = 0.;
     size_t cnt = 0;
-    if (center)
+
+    if (weight == NULL)
     {
         if (Xfull != NULL)
         {
             #ifdef _OPENMP
             if (nthreads >= 8)
             {
-                #pragma omp parallel for schedule(static) num_threads(nthreads)\
+                #pragma omp parallel for schedule(static) \
+                        num_threads(nthreads) \
                         reduction(+:xsum,cnt) shared(Xfull, m_by_n)
                 for (size_t_for ix = 0; ix < m_by_n; ix++) {
-                    xsum += (!isnan(Xfull[ix]))? (Xfull[ix]) : (0);
+                    xsum += (!isnan(Xfull[ix]))? Xfull[ix] : 0;
                     cnt += !isnan(Xfull[ix]);
                 }
                 *glob_mean = (real_t)(xsum / (double)cnt);
@@ -2637,20 +2709,23 @@ int_t initialize_biases
             #endif
             {
                 for (size_t ix = 0; ix < m_by_n; ix++) {
-                    if (!isnan(Xfull[ix])) {
-                        xsum += (Xfull[ix] - xsum) / (double)(++cnt);
-                    }
+                    xsum += isnan(Xfull[ix])?
+                              0 : ((Xfull[ix] - xsum) / (double)(++cnt));
                 }
                 *glob_mean = xsum;
             }
+
+            if (!cnt)
+                fprintf(stderr, "Warning: 'X' has all entries missing.\n");
         }
 
         else
         {
             #ifdef _OPENMP
-            if (nthreads >= 4)
+            if (nthreads >= 8)
             {
-                #pragma omp parallel for schedule(static) num_threads(nthreads)\
+                #pragma omp parallel for schedule(static) \
+                        num_threads(nthreads) \
                         reduction(+:xsum) shared(X, nnz)
                 for (size_t_for ix = 0; ix < nnz; ix++)
                     xsum += X[ix];
@@ -2660,22 +2735,113 @@ int_t initialize_biases
             else
             #endif
             {
-                for (size_t ix = 0; ix < nnz; ix++) {
+                for (size_t ix = 0; ix < nnz; ix++)
                     xsum += (X[ix] - xsum) / (double)(++cnt);
+                *glob_mean = xsum;
+            }
+
+            if (!xsum)
+                fprintf(stderr, "Warning: 'X' has only zeros.\n");
+
+            if (NA_as_zero)
+                *glob_mean = (long double)(*glob_mean)
+                                *
+                             ((long double)nnz
+                                    / 
+                              ((long double)m * (long double)n));
+        }
+    }
+
+    else /* <- has weights */
+    {
+        if (Xfull != NULL)
+        {
+            #ifdef _OPENMP
+            if (nthreads >= 8)
+            {
+                #pragma omp parallel for schedule(static) \
+                        num_threads(nthreads) \
+                        reduction(+:xsum,wsum) shared(Xfull, weight, m_by_n)
+                for (size_t_for ix = 0; ix < m_by_n; ix++) {
+                    xsum += (!isnan(Xfull[ix]))? (Xfull[ix]) : (0);
+                    wsum += isnan(Xfull[ix])? 0. : weight[ix];
+                }
+                *glob_mean = (real_t)(xsum / wsum);
+            }
+
+            else
+            #endif
+            {
+                wsum = DBL_EPSILON;
+                for (size_t ix = 0; ix < m_by_n; ix++) {
+                    xsum += isnan(Xfull[ix])?
+                              0 : (((Xfull[ix] - xsum) * weight[ix])
+                                        /
+                                   (wsum += weight[ix]));
                 }
                 *glob_mean = xsum;
             }
         }
 
-        /* Now center X in-place */
+        else
+        {
+            #ifdef _OPENMP
+            if (nthreads >= 8)
+            {
+                #pragma omp parallel for schedule(static) \
+                        num_threads(nthreads) \
+                        reduction(+:xsum,wsum) shared(X, weight, nnz)
+                for (size_t_for ix = 0; ix < nnz; ix++) {
+                    xsum += X[ix];
+                    wsum += weight[ix];
+                }
+                *glob_mean = (real_t)(xsum / wsum);
+            }
+
+            else
+            #endif
+            {
+                wsum = DBL_EPSILON;
+                for (size_t ix = 0; ix < nnz; ix++) {
+                    xsum += ((X[ix] - xsum) * weight[ix])
+                                /
+                            (wsum += weight[ix]);
+                }
+                *glob_mean = xsum;
+            }
+
+            if (NA_as_zero)
+            {
+                long double wsum_l = compensated_sum(weight, nnz);
+                *glob_mean = (long double)(*glob_mean)
+                                /
+                             (wsum_l / (wsum_l + ((long double)m*(long double)n
+                                                   - (long double)nnz)));
+            }
+        }
+
+        if (wsum <= 0)
+            fprintf(stderr, "Warning: weights are not positive.\n");
+    }
+
+    if (nonneg)
+        *glob_mean = fmax_t(*glob_mean, 0);
+
+    /* If the obtained mean is too small, simply ignore it */
+    if (fabs_t(*glob_mean) < sqrt_t(EPSILON_T))
+        *glob_mean = 0;
+
+    /* Now center X in-place */
+    if (*glob_mean != 0 && !(Xfull == NULL && NA_as_zero))
+    {
         if (Xfull != NULL) {
             for (size_t_for ix = 0; ix < m_by_n; ix++)
                 Xfull[ix] = isnan(Xfull[ix])?
-                                (NAN_) : (Xfull[ix] - *glob_mean);
+                              (NAN_) : (Xfull[ix] - (*glob_mean));
             if (Xtrans != NULL) {
                 for (size_t_for ix = 0; ix < m_by_n; ix++)
                     Xtrans[ix] = isnan(Xtrans[ix])?
-                                    (NAN_):(Xtrans[ix]-*glob_mean);
+                                   (NAN_) : (Xtrans[ix] - (*glob_mean));
             }
         } else if (Xcsr != NULL) {
             for (size_t_for ix = 0; ix < nnz; ix++) {
@@ -2687,6 +2853,143 @@ int_t initialize_biases
                 X[ix] -= *glob_mean;
         }
     }
+}
+
+/* TODO: factor out this function */
+int_t initialize_biases
+(
+    real_t *restrict glob_mean, real_t *restrict biasA, real_t *restrict biasB,
+    bool user_bias, bool item_bias, bool center,
+    real_t lam_user, real_t lam_item,
+    bool scale_lam, bool scale_bias_const,
+    bool force_calc_user_scale, bool force_calc_item_scale,
+    real_t *restrict scaling_biasA, real_t *restrict scaling_biasB,
+    int_t m, int_t n,
+    int_t m_bias, int_t n_bias,
+    int_t ixA[], int_t ixB[], real_t *restrict X, size_t nnz,
+    real_t *restrict Xfull, real_t *restrict Xtrans,
+    size_t Xcsr_p[], int_t Xcsr_i[], real_t *restrict Xcsr,
+    size_t Xcsc_p[], int_t Xcsc_i[], real_t *restrict Xcsc,
+    real_t *restrict weight, real_t *restrict Wtrans,
+    real_t *restrict weightR, real_t *restrict weightC,
+    bool nonneg,
+    int nthreads
+)
+{
+    int_t retval = 0;
+    size_t m_by_n = (Xfull == NULL)? (size_t)0 : ((size_t)m * (size_t)n);
+    #if defined(_OPENMP) && \
+                ( (_OPENMP < 200801)  /* OpenMP < 3.0 */ \
+                  || defined(_WIN32) || defined(_WIN64) \
+                )
+    long long ix, row, col;
+    #endif
+
+    size_t *restrict buffer_cnt = NULL;
+    double *restrict buffer_w = NULL;
+
+    if (user_bias || item_bias)
+    {
+        size_t dim_buffer = (user_bias && item_bias)?
+                                max2(m_bias, n_bias)
+                                    :
+                                (user_bias? m_bias : n_bias);
+        if (weight == NULL)
+        {
+            buffer_cnt = (size_t*)calloc(dim_buffer, sizeof(size_t));
+            if (buffer_cnt == NULL) goto throw_oom;
+        }
+
+        else
+        {
+            buffer_w = (double*)calloc(dim_buffer, sizeof(double));
+            if (buffer_w == NULL) goto throw_oom;
+        }
+    }
+
+    size_t cnt = 0;
+    long double wsum = 0;
+
+
+    /* First calculate the global mean */
+    if (center)
+    {
+        calc_mean_and_center(
+            ixA, ixB, X, nnz,
+            Xfull, Xtrans,
+            m, n,
+            Xcsr_p, Xcsr_i, Xcsr,
+            Xcsc_p, Xcsc_i, Xcsc,
+            weight,
+            false, nonneg, center, nthreads,
+            glob_mean
+        );
+    }
+
+    /* If not centering, might still need to know the number of non-missing
+       entries in order to calculate the scaling of the biases. */
+    else if ((Xfull != NULL || weight != NULL) &&
+             (user_bias || item_bias ||
+              force_calc_user_scale || force_calc_item_scale) &&
+             scale_lam && scale_bias_const)
+    {
+        if (weight == NULL)
+        {
+            if (Xfull != NULL)
+                for (size_t ix = 0; ix < m_by_n; ix++)
+                    cnt += !isnan(Xfull[ix]);
+        }
+
+        else
+        {
+            if (Xfull != NULL)
+                for (size_t ix = 0; ix < m_by_n; ix++)
+                    wsum += isnan(Xfull[ix])? 0. : weight[ix];
+            else
+                for (size_t ix = 0; ix < nnz; ix++)
+                    wsum += weight[ix];
+        }
+    }
+
+    if ((user_bias || item_bias ||
+         force_calc_user_scale || force_calc_item_scale) &&
+        scale_lam && scale_bias_const)
+    {
+        if (weight == NULL)
+        {
+            if (Xfull != NULL)
+            {
+                if (user_bias || force_calc_user_scale)
+                    *scaling_biasA = (long double)cnt / (long double)m;
+                if (item_bias || force_calc_item_scale)
+                    *scaling_biasB = (long double)cnt / (long double)n;
+            }
+
+            else
+            {
+                if (user_bias || force_calc_user_scale)
+                    *scaling_biasA = (long double)nnz / (long double)m;
+                if (item_bias || force_calc_item_scale)
+                    *scaling_biasB = (long double)nnz / (long double)n;
+            }
+        }
+
+        else
+        {
+            if (user_bias || force_calc_user_scale)
+                *scaling_biasA = (long double)wsum / (long double)m;
+            if (item_bias || force_calc_item_scale)
+                *scaling_biasB = (long double)wsum / (long double)n;
+        }
+
+        if (user_bias || force_calc_user_scale)
+            lam_user *= *scaling_biasA;
+        if (item_bias || force_calc_item_scale)
+            lam_item *= *scaling_biasB;
+        scale_lam = false;
+        scale_bias_const = false;
+    }
+
 
     /* Note: the original papers suggested starting these values by
        obtaining user biases first, then item biases, but I've found
@@ -2699,67 +3002,157 @@ int_t initialize_biases
     /* Calculate item biases, but don't apply them to X */
     if (item_bias)
     {
-        set_to_zero(biasB, n_bias);
         if (Xtrans != NULL)
         {
-            #pragma omp parallel for schedule(static) num_threads(nthreads) \
-                    shared(m, n, Xtrans, biasB, buffer_cnt)
-            for (size_t_for col = 0; col < (size_t)n; col++)
-                for (size_t row = 0; row < (size_t)m; row++) {
-                    biasB[col] += (!isnan(Xtrans[row + col*(size_t)m]))?
-                                   (Xtrans[row + col*(size_t)m]) : (0.);
-                    buffer_cnt[col] += !isnan(Xtrans[row + col*(size_t)m]);
+            if (weight == NULL)
+            {
+                #pragma omp parallel for schedule(static) \
+                        num_threads(cap_to_4(nthreads)) \
+                        shared(m, n_bias, Xtrans, biasB, buffer_cnt)
+                for (size_t_for col = 0; col < (size_t)n_bias; col++)
+                {
+                    double bsum = 0;
+                    size_t cnt = 0;
+                    for (size_t row = 0; row < (size_t)m; row++)
+                    {
+                        bsum += (!isnan(Xtrans[row + col*(size_t)m]))?
+                                    Xtrans[row + col*(size_t)m] : 0.;
+                        cnt += !isnan(Xtrans[row + col*(size_t)m]);
+                    }
+                    biasB[col] = bsum;
+                    buffer_cnt[col] = cnt;
                 }
+            }
+
+            else
+            {
+                #pragma omp parallel for schedule(static) \
+                        num_threads(cap_to_4(nthreads)) \
+                        shared(m, n_bias, Xtrans, Wtrans, biasB, buffer_w)
+                for (size_t_for col = 0; col < (size_t)n_bias; col++)
+                {
+                    double bsum = 0;
+                    double wsum = 0;
+                    for (size_t row = 0; row < (size_t)m; row++)
+                    {
+                        bsum += (!isnan(Xtrans[row + col*(size_t)m]))?
+                                    Xtrans[row + col*(size_t)m] : 0.;
+                        wsum += (!isnan(Xtrans[row + col*(size_t)m]))?
+                                    Wtrans[row + col*(size_t)m] : 0.;
+                    }
+                    biasB[col] = bsum;
+                    buffer_w[col] = wsum;
+                }
+            }
 
         }
 
         else if (Xfull != NULL)
         {
-            for (size_t row = 0; row < (size_t)m; row++)
-                for (size_t col = 0; col < (size_t)n; col++) {
-                    biasB[col] += (!isnan(Xfull[col + row*(size_t)n]))?
-                                   (Xfull[col + row*(size_t)n]) : (0.);
-                    buffer_cnt[col] += !isnan(Xfull[col + row*(size_t)n]);
-                }
+            if (weight == NULL)
+            {
+                for (size_t row = 0; row < (size_t)m; row++)
+                    for (size_t col = 0; col < (size_t)n_bias; col++) {
+                        biasB[col] += (!isnan(Xfull[col + row*(size_t)n]))?
+                                       (Xfull[col + row*(size_t)n]) : (0.);
+                        buffer_cnt[col] += !isnan(Xfull[col + row*(size_t)n]);
+                    }
+            }
+
+            else
+            {
+                for (size_t row = 0; row < (size_t)m; row++)
+                    for (size_t col = 0; col < (size_t)n_bias; col++) {
+                        biasB[col] += (!isnan(Xfull[col + row*(size_t)n]))?
+                                       (Xfull[col + row*(size_t)n]) : (0.);
+                        buffer_w[col] += (!isnan(Xfull[col + row*(size_t)n]))?
+                                          (weight[col + row*(size_t)n]) : (0.);
+                    }
+            }
         }
 
         else if (Xcsc != NULL)
         {
-            #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
-                    shared(n, Xcsc_p, Xcsc, biasB)
-            for (size_t_for col = 0; col < (size_t)n; col++)
-                for (size_t ix = Xcsc_p[col]; ix < Xcsc_p[col+(size_t)1]; ix++)
-                    biasB[col] += (Xcsc[ix] - biasB[col])
-                                   / ((double)(ix - Xcsc_p[col] +(size_t)1)
-                                      + (lam_item
-                                            *
-                                        (scale_lam?
-                                            (real_t)(Xcsc_p[col+(size_t)1]
-                                                        -
-                                                     Xcsc_p[col]) : 1.)));
+            if (weight == NULL)
+            {
+                #pragma omp parallel for schedule(dynamic) \
+                        num_threads(cap_to_4(nthreads)) \
+                        shared(n_bias, Xcsc_p, Xcsc, biasB, buffer_cnt)
+                for (size_t_for col = 0; col < (size_t)n_bias; col++)
+                {
+                    buffer_cnt[col] = Xcsc_p[col+(size_t)1] - Xcsc_p[col];
+                    double bsum = 0;
+                    for (size_t ix=Xcsc_p[col]; ix < Xcsc_p[col+(size_t)1];ix++)
+                    {
+                        bsum += Xcsc[ix];
+                    }
+                    biasB[col] = bsum;
+                }
+            }
+
+            else
+            {
+                #pragma omp parallel for schedule(dynamic) \
+                        num_threads(cap_to_4(nthreads)) \
+                        shared(n_bias, Xcsc_p, Xcsc, biasB, weightC, buffer_w)
+                for (size_t_for col = 0; col < (size_t)n_bias; col++)
+                {
+                    double bsum = 0;
+                    double wsum = 0;
+                    for (size_t ix=Xcsc_p[col]; ix < Xcsc_p[col+(size_t)1];ix++)
+                    {
+                        bsum += Xcsc[ix];
+                        wsum += weightC[ix];
+                    }
+                    biasB[col] = bsum;
+                    buffer_w[col] = wsum;
+                }
+            }
         }
 
         else
         {
-            for (size_t ix = 0; ix < nnz; ix++) {
-                biasB[ixB[ix]] += X[ix];
-                buffer_cnt[ixB[ix]]++;
+            if (weight == NULL)
+            {
+                for (size_t ix = 0; ix < nnz; ix++) {
+                    biasB[ixB[ix]] += X[ix];
+                    buffer_cnt[ixB[ix]]++;
+                }
+            }
+
+            else
+            {
+                for (size_t ix = 0; ix < nnz; ix++) {
+                    biasB[ixB[ix]] += X[ix];
+                    buffer_w[ixB[ix]] += weight[ix];
+                }
             }
         }
 
-        if (Xfull != NULL || Xcsc == NULL)
-            for (int_t ix = 0; ix < n; ix++)
+        if (weight == NULL)
+        {
+            for (int_t ix = 0; ix < n_bias; ix++)
                 biasB[ix] /= ((double)buffer_cnt[ix]
                                 + (lam_item
                                     *
                                    (scale_lam? (double)buffer_cnt[ix] : 1.)));
+        }
 
-        for (int_t ix = 0; ix < n; ix++)
+        else
+        {
+            for (int_t ix = 0; ix < n_bias; ix++)
+                biasB[ix] /= (buffer_w[ix]
+                                + (lam_item
+                                    *
+                                   (scale_lam? buffer_w[ix] : 1.)));
+        }
+
+        for (int_t ix = 0; ix < n_bias; ix++)
             biasB[ix] = (!isnan(biasB[ix]))? biasB[ix] : 0.;
 
         if (nonneg)
         {
-            for (int_t ix = 0; ix < n; ix++)
+            for (int_t ix = 0; ix < n_bias; ix++)
                 biasB[ix] = (biasB[ix] >= 0.)? biasB[ix] : 0.;
         }
     }
@@ -2767,68 +3160,922 @@ int_t initialize_biases
     /* Finally, user biases */
     if (user_bias)
     {
-        set_to_zero(biasA, m_bias);
-        if (item_bias) memset(buffer_cnt, 0, (size_t)m*sizeof(size_t));
+        if (item_bias)
+        {
+            if (buffer_cnt != NULL)
+                memset(buffer_cnt, 0, (size_t)m_bias*sizeof(size_t));
+            if (buffer_w != NULL)
+                memset(buffer_w, 0, (size_t)m_bias*sizeof(double));
+        }
 
         if (Xfull != NULL)
         {
-            #pragma omp parallel for schedule(static) num_threads(nthreads) \
-                    shared(m, n, Xfull, biasA, biasB, buffer_cnt)
-            for (size_t_for row = 0; row < (size_t)m; row++)
-                for (size_t col = 0; col < (size_t)n; col++) {
-                    biasA[row] += (!isnan(Xfull[col + row*(size_t)n]))?
-                                   (Xfull[col + row*(size_t)n]
-                                     - (item_bias? biasB[col] : 0.))
-                                   : (0.);
-                    buffer_cnt[row] += !isnan(Xfull[col + row*(size_t)n]);
+            if (weight == NULL)
+            {
+                #pragma omp parallel for schedule(static) \
+                        num_threads(cap_to_4(nthreads)) \
+                        shared(m_bias, n, Xfull, biasA, biasB, buffer_cnt)
+                for (size_t_for row = 0; row < (size_t)m_bias; row++)
+                {
+                    double asum = 0;
+                    size_t cnt = 0;
+                    for (size_t col = 0; col < (size_t)n; col++) {
+                        asum += (!isnan(Xfull[col + row*(size_t)n]))?
+                                    (Xfull[col + row*(size_t)n]
+                                       - (item_bias? biasB[col] : 0.))
+                                     : (0.);
+                        cnt += !isnan(Xfull[col + row*(size_t)n]);
+                    }
+                    biasA[row] = asum;
+                    buffer_cnt[row] = cnt;
                 }
+            }
+
+            else
+            {
+                #pragma omp parallel for schedule(static) \
+                        num_threads(cap_to_4(nthreads)) \
+                        shared(m_bias, n, Xfull, biasA, biasB, buffer_w)
+                for (size_t_for row = 0; row < (size_t)m_bias; row++)
+                {
+                    double asum = 0;
+                    double wsum = 0;
+                    for (size_t col = 0; col < (size_t)n; col++) {
+                        asum += (!isnan(Xfull[col + row*(size_t)n]))?
+                                    (Xfull[col + row*(size_t)n]
+                                      - (item_bias? biasB[col] : 0.))
+                                    : (0.);
+                        wsum += (!isnan(Xfull[col + row*(size_t)n]))?
+                                    weight[col + row*(size_t)n] : 0.;
+                    }
+                    biasA[row] = asum;
+                    buffer_w[row] = wsum;
+                }
+            }
         }
 
         else if (Xcsr != NULL)
         {
-            #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
-                    shared(m, Xcsr_p, Xcsr_i, Xcsr, biasA, biasB, item_bias)
-            for (size_t_for row = 0; row < (size_t)m; row++)
-                for (size_t ix = Xcsr_p[row]; ix < Xcsr_p[row+(size_t)1]; ix++)
-                    biasA[row] += (Xcsr[ix]
-                                    - (item_bias? (biasB[Xcsr_i[ix]]) : (0.))
-                                    - biasA[row])
-                                   / ((double)(ix - Xcsr_p[row] +(size_t)1)
-                                      + (lam_user
-                                            *
-                                         (scale_lam?
-                                            (real_t)(Xcsr_p[row+(size_t)1]
-                                                        -
-                                                     Xcsr_p[row]) : 1.)));
+            if (weight == NULL)
+            {
+                #pragma omp parallel for schedule(dynamic) \
+                        num_threads(nthreads) \
+                        shared(m_bias, Xcsr_p, Xcsr_i, Xcsr, biasA, biasB, \
+                               item_bias, buffer_cnt)
+                for (size_t_for row = 0; row < (size_t)m_bias; row++)
+                {
+                    buffer_cnt[row] = Xcsr_p[row+(size_t)1] - Xcsr_p[row];
+                    double asum = 0;
+                    for (size_t ix=Xcsr_p[row]; ix < Xcsr_p[row+(size_t)1];ix++)
+                    {
+                        asum += Xcsr[ix] - (item_bias? biasB[Xcsr_i[ix]] : 0.);
+                    }
+                    biasA[row] = asum;
+                }
+            }
+
+            else
+            {
+                #pragma omp parallel for schedule(dynamic) \
+                        num_threads(cap_to_4(nthreads)) \
+                        shared(m_bias, Xcsr_p, Xcsr_i, Xcsr, biasA, biasB, \
+                               item_bias, buffer_w, weightR)
+                for (size_t_for row = 0; row < (size_t)m_bias; row++)
+                {
+                    double asum = 0;
+                    double wsum = 0;
+                    for (size_t ix=Xcsr_p[row]; ix < Xcsr_p[row+(size_t)1];ix++)
+                    {
+                        asum += Xcsr[ix] - (item_bias? biasB[Xcsr_i[ix]] : 0.);
+                        wsum += weightR[ix];
+                    }
+                    biasA[row] = asum;
+                    buffer_w[row] = wsum;
+                }
+            }
         }
 
         else
         {
-            for (size_t ix = 0; ix < nnz; ix++) {
-                biasA[ixA[ix]] += X[ix] - (item_bias? (biasB[ixB[ix]]) : (0.));
-                buffer_cnt[ixA[ix]]++;
+            if (weight == NULL)
+            {
+                for (size_t ix = 0; ix < nnz; ix++) {
+                    biasA[ixA[ix]]
+                        +=
+                    X[ix] - (item_bias? (biasB[ixB[ix]]) : (0.));
+                    buffer_cnt[ixA[ix]]++;
+                }
+            }
+
+            else
+            {
+                for (size_t ix = 0; ix < nnz; ix++) {
+                    biasA[ixA[ix]]
+                        +=
+                    X[ix] - (item_bias? (biasB[ixB[ix]]) : (0.));
+                    buffer_w[ixA[ix]] += weight[ix];
+                }
             }
         }
 
-        if (Xfull != NULL || Xcsr == NULL)
-            for (int_t ix = 0; ix < m; ix++)
+        if (weight == NULL)
+        {
+            for (int_t ix = 0; ix < m_bias; ix++)
                 biasA[ix] /= ((double)buffer_cnt[ix]
                                 + (lam_user
                                     *
                                    (scale_lam? (double)buffer_cnt[ix] : 1.)));
+        }
 
-        for (int_t ix = 0; ix < m; ix++)
+        else
+        {
+            for (int_t ix = 0; ix < m_bias; ix++)
+                biasA[ix] /= (buffer_w[ix]
+                                + (lam_user
+                                    *
+                                   (scale_lam? buffer_w[ix] : 1.)));
+        }
+
+        for (int_t ix = 0; ix < m_bias; ix++)
             biasA[ix] = (!isnan(biasA[ix]))? biasA[ix] : 0.;
 
         if (nonneg)
         {
-            for (int_t ix = 0; ix < m; ix++)
+            for (int_t ix = 0; ix < m_bias; ix++)
                 biasA[ix] = (biasA[ix] >= 0.)? biasA[ix] : 0.;
         }
     }
 
-    free(buffer_cnt);
+    cleanup:
+        free(buffer_cnt);
+        free(buffer_w);
+    return retval;
+
+    throw_oom:
+        retval = 1;
+        goto cleanup;
+}
+
+/* Here, 'X' should already be centered, unless using 'NA_as_zero'. */
+int_t initialize_biases_onesided
+(
+    real_t *restrict Xfull, int_t m, int_t n, bool do_B, int_t *restrict cnt_NA,
+    size_t Xcsr_p[], int_t Xcsr_i[], real_t *restrict Xcsr,
+    real_t *restrict weight, real_t *restrict weightR,
+    real_t glob_mean, bool NA_as_zero, bool nonneg,
+    real_t lam, bool scale_lam,
+    real_t *restrict wsumA,
+    real_t *restrict biasA,
+    int nthreads
+)
+{
+    #if defined(_OPENMP) && \
+                ( (_OPENMP < 200801)  /* OpenMP < 3.0 */ \
+                  || defined(_WIN32) || defined(_WIN64) \
+                )
+    long long ix;
+    #endif
+
+    if (fabs_t(lam) < EPSILON_T)
+        lam = EPSILON_T;
+
+    if (Xfull != NULL && weight == NULL)
+    {
+        if (!do_B)
+        {
+            #pragma omp parallel for schedule(static) \
+                    num_threads(cap_to_4(nthreads)) \
+                    shared(Xfull, m, n, biasA, wsumA, scale_lam, lam)
+            for (size_t_for row = 0; row < (size_t)m; row++)
+            {
+                double bmean = 0;
+                int_t cnt = 0;
+                for (size_t col = 0; col < (size_t)n; col++)
+                {
+                    bmean += (isnan(Xfull[col + row*n]))?
+                                (0) : ((Xfull[col + row*n] - bmean)
+                                            /
+                                       (double)(++cnt));
+                }
+                bmean *= (double)cnt
+                            /
+                         ((double)cnt
+                            +
+                          (lam * ((wsumA != NULL)?
+                                    ((double)wsumA[row])
+                                        :
+                                    (scale_lam? (double)max2(cnt,1) : 1.))));
+                biasA[row] = bmean;
+            }
+        }
+
+        else /* <- in this case, X is transposed */
+        {
+            set_to_zero(biasA, m);
+            int_t tmp = m; m = n; n = tmp;
+            real_t *restrict biasB = biasA;
+            for (size_t row = 0; row < (size_t)m; row++)
+                for (size_t col = 0; col < (size_t)n; col++)
+                    biasB[col] += (isnan(Xfull[col + row*n]))?
+                                    0 : Xfull[col + row*n];
+            for (int_t col = 0; col < n; col++)
+                biasB[col] /= (double)(n - cnt_NA[col])
+                                +
+                              (lam * ((wsumA != NULL)?
+                                  ((double)wsumA[col])
+                                      :
+                                  (scale_lam?
+                                    (double)max2(n - cnt_NA[col], 1) : 1.)));
+        }
+    }
+
+    else if (Xfull != NULL) /* <- has weights */
+    {
+        if (!do_B)
+        {
+            #pragma omp parallel for schedule(static) \
+                    num_threads(cap_to_4(nthreads)) \
+                    shared(Xfull, m, n, biasA, weight, wsumA, scale_lam, lam)
+            for (size_t_for row = 0; row < (size_t)m; row++)
+            {
+                double bmean = 0;
+                double wsum = DBL_EPSILON;
+                for (size_t col = 0; col < (size_t)n; col++)
+                {
+                    bmean += (isnan(Xfull[col + row*n]))?
+                                (0) : ( ( (Xfull[col + row*n] - bmean)
+                                           * weight[col + row*n])
+                                                /
+                                        (double)(wsum += weight[col + row*n]) );
+                }
+                
+                if (m > cnt_NA[row]) {
+                    bmean *= wsum
+                                /
+                             (wsum
+                                +
+                              (lam * ((wsumA != NULL)?
+                                        (wsumA[row])
+                                            :
+                                        (scale_lam? wsum : (real_t)1.))));
+                }
+                biasA[row] = bmean;
+            }
+        }
+
+        else /* <- in this case, X is transposed */
+        {
+            set_to_zero(biasA, m);
+            int_t tmp = m; m = n; n = tmp;
+            real_t *restrict biasB = biasA;
+            real_t *restrict wsum = (real_t*)calloc(n, sizeof(real_t));
+            if (wsum == NULL) return 1;
+            for (size_t row = 0; row < (size_t)m; row++)
+            {
+                for (size_t col = 0; col < (size_t)n; col++)
+                {
+                    biasB[col] += (isnan(Xfull[col + row*n]))?
+                                    0 : Xfull[col + row*n];
+                    wsum[col]  += (isnan(Xfull[col + row*n]))?
+                                    0 : weight[col + row*n];
+                }
+            }
+            for (int_t col = 0; col < n; col++)
+                wsum[col] = (cnt_NA[col] < n)? wsum[col] : 1;
+            for (int_t col = 0; col < n; col++)
+                biasB[col] /= wsum[col]
+                                +
+                              (lam * ((wsumA != NULL)?
+                                  ((double)wsumA[col])
+                                      :
+                                  (scale_lam? wsum[col] : (real_t)1.)));
+            free(wsum);
+        }
+    }
+
+    else if (weightR == NULL && !NA_as_zero)
+    {
+        #pragma omp parallel for schedule(dynamic) \
+                num_threads(cap_to_4(nthreads)) \
+                shared(Xcsr_p, Xcsr, m, biasA, wsumA, scale_lam, lam)
+        for (size_t_for row = 0; row < (size_t)m; row++)
+        {
+            double bmean = 0;
+            for (size_t ix = Xcsr_p[row]; ix < Xcsr_p[row+1]; ix++)
+                bmean += (Xcsr[ix] - bmean) / (double)(ix - Xcsr_p[row] + 1);
+            bmean *= (double)(Xcsr_p[row+1] - Xcsr_p[row])
+                        /
+                     ((double)(Xcsr_p[row+1] - Xcsr_p[row])
+                        + lam * ((wsumA != NULL)?
+                                    (double)wsumA[row]
+                                        :
+                                    (scale_lam?
+                                        (double)max2(
+                                                    Xcsr_p[row+1] - Xcsr_p[row],
+                                                    1)
+                                            :
+                                        1.)));
+            biasA[row] = bmean;
+        }
+    }
+
+    else if (!NA_as_zero) /* <- has weights */
+    {
+        #pragma omp parallel for schedule(dynamic) \
+                num_threads(cap_to_4(nthreads)) \
+                shared(Xcsr_p, Xcsr, weightR, m, biasA, wsumA, scale_lam, lam)
+        for (size_t_for row = 0; row < (size_t)m; row++)
+        {
+            double bmean = 0;
+            double wsum = DBL_EPSILON;
+            for (size_t ix = Xcsr_p[row]; ix < Xcsr_p[row+1]; ix++)
+                bmean += ((Xcsr[ix] - bmean) * weightR[ix])
+                            /
+                         (wsum += weightR[ix]);
+            wsum = (Xcsr_p[row+1] > Xcsr_p[row])? wsum : 0;
+            bmean *= wsum
+                        /
+                     (wsum
+                        + lam * ((wsumA != NULL)?
+                                    (double)wsumA[row]
+                                        :
+                                    (scale_lam? max2(wsum, DBL_EPSILON) : 1.)));
+            biasA[row] = bmean;
+        }
+    }
+
+    else if (weightR == NULL) /* <- has NA_as_zero */
+    {
+        #pragma omp parallel for schedule(dynamic) \
+                num_threads(cap_to_4(nthreads)) \
+                shared(Xcsr_p, Xcsr, m, biasA, wsumA, n, \
+                       scale_lam, lam, glob_mean)
+        for (size_t_for row = 0; row < (size_t)m; row++)
+        {
+            double bmean = 0;
+            for (size_t ix = Xcsr_p[row]; ix < Xcsr_p[row+1]; ix++)
+                bmean += (Xcsr[ix] - bmean) / (double)(ix - Xcsr_p[row] + 1);
+            bmean -= glob_mean
+                        / 
+                     ((double)(Xcsr_p[row+1] - Xcsr_p[row]) / (double)n);
+            bmean *= (double)(Xcsr_p[row+1] - Xcsr_p[row])
+                        /
+                     ((double)n
+                        + lam * ((wsumA != NULL)?
+                                    (double)wsumA[row]
+                                        :
+                                    (scale_lam? (double)n : 1.)));
+            biasA[row] = bmean;
+        }
+    }
+
+    else  /* <- has NA_as_zero and weights */
+    {
+        #pragma omp parallel for schedule(dynamic) \
+                num_threads(cap_to_4(nthreads)) \
+                shared(Xcsr_p, Xcsr, m, biasA, wsumA, n, scale_lam, \
+                       weightR, glob_mean)
+        for (size_t_for row = 0; row < (size_t)m; row++)
+        {
+            double bmean = 0;
+            double wsum = DBL_EPSILON;
+            for (size_t ix = Xcsr_p[row]; ix < Xcsr_p[row+1]; ix++)
+                bmean += ((Xcsr[ix] - bmean) * weightR[ix])
+                            /
+                         (wsum += weightR[ix]);
+            wsum = (Xcsr_p[row+1] > Xcsr_p[row])? wsum : 0;
+            bmean -= glob_mean
+                        /
+                     (wsum / ((double)(n
+                                       - (int_t)(Xcsr_p[row+1] - Xcsr_p[row]))
+                                       + wsum));
+            bmean *= wsum
+                        /
+                     (((double)(n - (Xcsr_p[row+1] - Xcsr_p[row])) + wsum)
+                        + lam * ((wsumA != NULL)?
+                                    (double)wsumA[row]
+                                        :
+                                    (scale_lam?
+                                        ((double)(n
+                                                  -(int_t)(Xcsr_p[row+1]
+                                                           -Xcsr_p[row]))
+                                          + wsum)
+                                            :
+                                        1.)));
+            biasA[row] = bmean;
+        }
+    }
+
+    if (nonneg)
+    {
+        for (int_t row = 0; row < m; row++)
+            biasA[row] = (biasA[row] >= 0)? biasA[row] : 0;
+    }
+
     return 0;
+}
+
+int_t initialize_biases_twosided
+(
+    real_t *restrict Xfull, real_t *restrict Xtrans,
+    int_t *restrict cnt_NA_byrow, int_t *restrict cnt_NA_bycol,
+    int_t m, int_t n,
+    bool NA_as_zero, bool nonneg, double glob_mean,
+    size_t *restrict Xcsr_p, int_t *restrict Xcsr_i, real_t *Xcsr,
+    size_t *restrict Xcsc_p, int_t *restrict Xcsc_i, real_t *Xcsc,
+    real_t *restrict weight, real_t *restrict Wtrans,
+    real_t *restrict weightR, real_t *restrict weightC,
+    real_t lam_user, real_t lam_item, bool scale_lam,
+    real_t *restrict wsumA, real_t *restrict wsumB,
+    real_t *restrict biasA, real_t *restrict biasB,
+    int nthreads
+)
+{
+    #if defined(_OPENMP) && \
+                ( (_OPENMP < 200801)  /* OpenMP < 3.0 */ \
+                  || defined(_WIN32) || defined(_WIN64) \
+                )
+    long long row, col;
+    #endif
+
+    if (fabs_t(lam_user) < EPSILON_T)
+        lam_user = EPSILON_T;
+    if (fabs_t(lam_item) < EPSILON_T)
+        lam_item = EPSILON_T;
+
+    int_t retval = 0;
+    double *restrict meanA = NULL;
+    double *restrict meanB = NULL;
+    double *restrict adjA = NULL;
+    double *restrict adjB = NULL;
+    real_t *restrict wsum_B = NULL;
+
+    if (NA_as_zero)
+    {
+        meanA = (double*)malloc((size_t)m*sizeof(double));
+        meanB = (double*)malloc((size_t)n*sizeof(double));
+        if (meanA == NULL || meanB == NULL) goto throw_oom;
+
+        if (weight != NULL)
+        {
+            adjA = (double*)malloc((size_t)m*sizeof(double));
+            adjB = (double*)malloc((size_t)n*sizeof(double));
+            if (adjA == NULL || adjB == NULL) goto throw_oom;
+        }
+
+        if (weight == NULL)
+        {
+            for (int_t row = 0; row < m; row++) {
+                double xmean = 0;
+                for (size_t ix = Xcsr_p[row]; ix < Xcsr_p[row+1]; ix++)
+                    xmean += (Xcsr[ix] - xmean) / (double)(ix - Xcsr_p[row] +1);
+                xmean *= (double)(Xcsr_p[row+1] - Xcsr_p[row]) / (double)n;
+                meanA[row] = xmean;
+            }
+
+            for (int_t col = 0; col < n; col++) {
+                double xmean = 0;
+                for (size_t ix = Xcsc_p[col]; ix < Xcsc_p[col+1]; ix++)
+                    xmean += (Xcsc[ix] - xmean) / (double)(ix - Xcsc_p[col] +1);
+                xmean *= (double)(Xcsc_p[col+1] - Xcsc_p[col]) / (double)m;
+                meanB[col] = xmean;
+            }
+        }
+
+        else
+        {
+            #pragma omp parallel for schedule(dynamic) \
+                    num_threads(cap_to_4(nthreads)) \
+                    shared(Xcsr_p, Xcsr, weightR, m, n, meanA, \
+                           adjA, scale_lam, wsumA, lam_user)
+            for (size_t_for row = 0; row < (size_t)m; row++)
+            {
+                double xmean = 0;
+                double wsum = DBL_EPSILON;
+                for (size_t ix = Xcsr_p[row]; ix < Xcsr_p[row+1]; ix++)
+                    xmean += (weightR[ix] * (Xcsr[ix] - xmean))
+                              / (wsum += weightR[ix]);
+                wsum = (Xcsr_p[row+1] > Xcsr_p[row])? wsum : 0;
+                xmean *= wsum
+                         / (wsum + (double)(n - (Xcsr_p[row+1] - Xcsr_p[row])));
+                wsum += (double)(n - (Xcsr_p[row+1] - Xcsr_p[row]));
+                wsum /= (wsum + lam_user * ((wsumA != NULL)?
+                                                (wsumA[row])
+                                                    :
+                                                (scale_lam? wsum : 1.)));
+                meanA[row] = xmean;
+                adjA[row] = wsum;
+            }
+
+            #pragma omp parallel for schedule(dynamic) \
+                    num_threads(cap_to_4(nthreads)) \
+                    shared(Xcsc_p, Xcsc, weightC, m, n, meanB, \
+                           adjB, scale_lam, wsumB, lam_item)
+            for (size_t_for col = 0; col < (size_t)n; col++)
+            {
+                double xmean = 0;
+                double wsum = DBL_EPSILON;
+                for (size_t ix = Xcsc_p[col]; ix < Xcsc_p[col+1]; ix++)
+                    xmean += (weightC[ix] * (Xcsc[ix] - xmean))
+                              / (wsum += weightC[ix]);
+                wsum = (Xcsc_p[col+1] > Xcsc_p[col])? wsum : 0;
+                xmean *= wsum
+                         / (wsum + (double)(m - (Xcsc_p[col+1] - Xcsc_p[col])));
+                wsum += (double)(m - (Xcsc_p[col+1] - Xcsc_p[col]));
+                wsum /= (wsum + lam_item * ((wsumB != NULL)?
+                                                (wsumB[col])
+                                                    :
+                                                (scale_lam? wsum : 1.)));
+                meanB[col] = xmean;
+                adjB[col] = wsum;
+            }
+        }
+    }
+
+    if (Xtrans == NULL && Xfull != NULL && weight != NULL)
+    {
+        wsum_B = (real_t*)malloc((size_t)n*sizeof(int_t));
+        if (wsum_B == NULL) goto throw_oom;
+    }
+
+    set_to_zero(biasA, m);
+    set_to_zero(biasB, n);
+
+    int niter = nonneg? 15 : 5;
+
+    for (int iter = 0; iter < niter; iter++)
+    {
+        /* First by items */
+
+        if (Xtrans != NULL && weight == NULL)
+        {
+            #pragma omp parallel for schedule(dynamic) \
+                    num_threads(cap_to_4(nthreads)) \
+                    shared(Xtrans, m, n, biasA, biasB, lam_item)
+            for (size_t_for col = 0; col < (size_t)n; col++)
+            {
+                double xmean = 0;
+                int_t cnt = 0;
+                for (size_t row = 0; row < (size_t)m; row++)
+                    xmean += (isnan(Xtrans[row + col*(size_t)m]))?
+                                0 : ((Xtrans[row + col*(size_t)m]
+                                      - biasA[row]
+                                      - xmean)
+                                      / (double)(++cnt));
+                xmean *= (double)cnt
+                         / ((double)cnt
+                                + lam_item * ((wsumB != NULL)?
+                                                wsumB[col]
+                                                    :
+                                                (scale_lam?
+                                                    (double)max2(cnt,1) : 1.)));
+                biasB[col] = xmean;
+                             
+            }
+        }
+
+        else if (Xtrans != NULL) /* <- has weights */
+        {
+            #pragma omp parallel for schedule(dynamic) \
+                    num_threads(cap_to_4(nthreads)) \
+                    shared(Xtrans, m, n, biasA, biasB, Wtrans, lam_item)
+            for (size_t_for col = 0; col < (size_t)n; col++)
+            {
+                double xmean = 0;
+                double wsum = DBL_EPSILON;
+                for (size_t row = 0; row < (size_t)m; row++)
+                    xmean += (isnan(Xtrans[row + col*(size_t)m]))?
+                                0 : ((Wtrans[row + col*(size_t)m]
+                                      * (Xtrans[row + col*(size_t)m]
+                                         - biasA[row]
+                                         - xmean))
+                                      / (wsum += Wtrans[row + col*(size_t)m]));
+                if (cnt_NA_bycol[col] < m)
+                    xmean *= wsum
+                             / (wsum + lam_item * ((wsumB != NULL)?
+                                                        wsumB[col]
+                                                            :
+                                                        (scale_lam? wsum :1.)));
+                biasB[col] = xmean;
+            }
+        }
+
+        else if (Xfull != NULL && weight == NULL)
+        {
+            set_to_zero(biasB, n);
+            for (size_t row = 0; row < (size_t)m; row++)
+            {
+                for (size_t col = 0; col < (size_t)n; col++)
+                {
+                    biasB[col] += (isnan(Xfull[col + row*(size_t)n]))?
+                                     0 : Xfull[col + row*(size_t)n];
+                }
+            }
+            for (int_t col = 0; col < n; col++)
+                biasB[col] /= (real_t)(m - cnt_NA_bycol[col])
+                              + lam_item * ((wsumB != NULL)?
+                                                wsumB[col]
+                                                    :
+                                                (scale_lam?
+                                                   (real_t)max2(
+                                                            m-cnt_NA_bycol[col],
+                                                            1)
+                                                    :
+                                                    1.));
+        }
+
+        else if (Xfull != NULL) /* <- has weights */
+        {
+            set_to_zero(biasB, n);
+            set_to_zero(wsum_B, n);
+            for (size_t row = 0; row < (size_t)m; row++)
+            {
+                for (size_t col = 0; col < (size_t)n; col++)
+                {
+                    biasB[col] += (isnan(Xfull[col + row*(size_t)n]))?
+                                     0 : Xfull[col + row*(size_t)n];
+                    wsum_B[col] += (isnan(Xfull[col + row*(size_t)n]))?
+                                      0 : weight[col + row*(size_t)n];
+                }
+            }
+            for (int_t col = 0; col < n; col++)
+                wsum_B[col] = (cnt_NA_bycol[col] == m)? wsum_B[col] : 1;
+            for (int_t col = 0; col < n; col++)
+                biasB[col] /= wsum_B[col]
+                              + lam_item * ((wsumB != NULL)?
+                                                wsumB[col]
+                                                    :
+                                                (scale_lam? wsum_B[col] : 1.));
+        }
+
+        else if (!NA_as_zero && weight == NULL)
+        {
+            #pragma omp parallel for schedule(dynamic) \
+                    num_threads(cap_to_4(nthreads)) \
+                    shared(Xcsc_p, Xcsc_i, Xcsc, biasA, biasB, \
+                           n, wsumB, scale_lam, lam_item)
+            for (size_t_for col = 0; col < (size_t)n; col++)
+            {
+                double bmean = 0;
+                for (size_t ix = Xcsc_p[col]; ix < Xcsc_p[col+1]; ix++)
+                    bmean += (Xcsc[ix] - biasA[Xcsc_i[ix]] - bmean)
+                             / (double)(ix - Xcsc_p[col] + 1);
+                bmean *= (double)(Xcsc_p[col+1] - Xcsc_p[col])
+                            /
+                         ((double)(Xcsc_p[col+1] - Xcsc_p[col])
+                            + lam_item * ((wsumB != NULL)?
+                                            ((double)wsumB[col])
+                                              :
+                                            (scale_lam?
+                                             (double)max2(
+                                                      Xcsc_p[col+1]-Xcsc_p[col],
+                                                      1)
+                                               :
+                                             1.)));
+                biasB[col] = bmean;
+            }
+        }
+
+        else if (!NA_as_zero) /* <- has weights */
+        {
+            #pragma omp parallel for schedule(dynamic) \
+                    num_threads(cap_to_4(nthreads)) \
+                    shared(Xcsc_p, Xcsc_i, Xcsc, weightC, biasA, biasB, \
+                           m, n, wsumB, scale_lam, lam_item)
+            for (size_t_for col = 0; col < (size_t)n; col++)
+            {
+                double bmean = 0;
+                double wsum = DBL_EPSILON;
+                for (size_t ix = Xcsc_p[col]; ix < Xcsc_p[col+1]; ix++)
+                    bmean += (weightC[ix] * (Xcsc[ix]-biasA[Xcsc_i[ix]]-bmean))
+                              / (wsum += weightC[ix]);
+               if (Xcsc_p[col+1] > Xcsc_p[col])
+                    bmean *= wsum / (wsum + lam_item * ((wsumB != NULL)?
+                                                            wsumB[col]
+                                                              :
+                                                            (scale_lam?
+                                                                wsum : 1.)));
+                biasB[col] = bmean;
+            }
+        }
+
+        else if (weight == NULL) /* <- has 'NA_as_zero' */
+        {
+            double bmean = 0;
+            if (iter > 0) {
+                for (int_t row = 0; row < n; row++)
+                    bmean += (biasA[row] - bmean) / (double)(row+1);
+            }
+
+            for (int_t col = 0; col < n; col++)
+                biasB[col] = (meanB[col] - bmean - glob_mean)
+                             * ( (double)m
+                                    /
+                                ((double)m + lam_item * ((wsumB != NULL)?
+                                                            wsumB[col]
+                                                              :
+                                                            (scale_lam?
+                                                                (double)m
+                                                                    :
+                                                                1.))) );
+        }
+
+        else /* <- has 'NA_as_zero' and weights */
+        {
+            double bmean = 0;
+            if (iter > 0) {
+                for (int_t row = 0; row < n; row++)
+                    bmean += (biasA[row] - bmean) / (double)(row+1);
+            }
+
+            #pragma omp parallel for schedule(dynamic) \
+                    num_threads(cap_to_4(nthreads)) \
+                    shared(Xcsc_p, Xcsc_i, m, n, weightC, bmean, \
+                           biasB, meanB, adjB, glob_mean)
+            for (size_t_for col = 0; col < (size_t)n; col++)
+            {
+                double wsum = m;
+                double bmean_this = bmean;
+                for (size_t ix = Xcsc_p[col]; ix < Xcsc_p[col+1]; ix++)
+                    bmean_this += (  (weightC[ix] - 1)
+                                     * (biasB[Xcsc_i[ix]] - bmean_this)  )
+                                  / (wsum += (weightC[ix] - 1));
+                biasB[col] = (meanB[col] - bmean_this - glob_mean) * adjB[col];
+            }
+        }
+
+        if (nonneg)
+            for (int_t col = 0; col < n; col++)
+                biasB[col] = (biasB[col] >= (real_t)0)? biasB[col] : (real_t)0;
+        
+
+        /* Then by users */
+
+        if (Xfull != NULL && weight == NULL)
+        {
+            #pragma omp parallel for schedule(dynamic) \
+                    num_threads(cap_to_4(nthreads)) \
+                    shared(Xfull, m, n, biasA, biasB, lam_user)
+            for (size_t_for row = 0; row < (size_t)m; row++)
+            {
+                double xmean = 0;
+                int_t cnt = 0;
+                for (size_t col = 0; col < (size_t)n; col++)
+                    xmean += (isnan(Xfull[col + row*(size_t)n]))?
+                                0 : ((Xfull[col + row*(size_t)n]
+                                      - biasB[col]
+                                      - xmean)
+                                      / (double)(++cnt));
+                xmean *= (double)cnt
+                         / ((double)cnt + lam_user * ((wsumA != NULL)?
+                                                        wsumA[row]
+                                                            :
+                                                        (scale_lam?
+                                                            (double)max2(cnt,1)
+                                                            :
+                                                            1.)));
+                biasA[row] = xmean;
+            }
+        }
+
+        else if (Xfull != NULL) /* <- has weights */
+        {
+            #pragma omp parallel for schedule(dynamic) \
+                    num_threads(cap_to_4(nthreads)) \
+                    shared(Xfull, m, n, biasA, biasB, weight, lam_user)
+            for (size_t_for row = 0; row < (size_t)m; row++)
+            {
+                double xmean = 0;
+                double wsum = DBL_EPSILON;
+                for (size_t col = 0; col < (size_t)n; col++)
+                    xmean += (isnan(Xfull[col + row*(size_t)n]))?
+                                0 : ((weight[col + row*(size_t)n]
+                                      * (Xfull[col + row*(size_t)n]
+                                         - biasB[col]
+                                         - xmean))
+                                      / (wsum += weight[col + row*(size_t)n]));
+                if (cnt_NA_byrow[row] < n)
+                    xmean *= wsum
+                             / (wsum + lam_user * ((wsumA != NULL)?
+                                                        wsumA[row]
+                                                            :
+                                                        (scale_lam? wsum :1.)));
+                biasA[row] = xmean;
+            }
+        }
+
+        else if (!NA_as_zero && weight == NULL)
+        {
+            #pragma omp parallel for schedule(dynamic) \
+                    num_threads(cap_to_4(nthreads)) \
+                    shared(Xcsr_p, Xcsr_i, Xcsr, biasA, biasB, \
+                           m, wsumA, scale_lam, lam_user)
+            for (size_t_for row = 0; row < (size_t)m; row++)
+            {
+                double bmean = 0;
+                for (size_t ix = Xcsr_p[row]; ix < Xcsr_p[row+1]; ix++)
+                    bmean += (Xcsr[ix] - biasB[Xcsr_i[ix]] - bmean)
+                             / (double)(ix - Xcsr_p[row] + 1);
+                if (Xcsr_p[row+1] > Xcsr_p[row])
+                    bmean *= (double)(Xcsr_p[row+1] - Xcsr_p[row])
+                                /
+                             ((double)(Xcsr_p[row+1] - Xcsr_p[row])
+                                + lam_user * ((wsumA != NULL)?
+                                                ((double)wsumA[row])
+                                                    :
+                                                (scale_lam?
+                                                    (double)(Xcsr_p[row+1]
+                                                             -Xcsr_p[row])
+                                                    :
+                                                    1.)));
+                biasA[row] = bmean;
+            }
+        }
+
+        else if (!NA_as_zero) /* <- has weights */
+        {
+            #pragma omp parallel for schedule(dynamic) \
+                    num_threads(cap_to_4(nthreads)) \
+                    shared(Xcsr_p, Xcsr_i, Xcsr, weightR, biasA, biasB, \
+                           m, n, wsumA, scale_lam, lam_user)
+            for (size_t_for row = 0; row < (size_t)m; row++)
+            {
+                double bmean = 0;
+                double wsum = DBL_EPSILON;
+                for (size_t ix = Xcsr_p[row]; ix < Xcsr_p[row+1]; ix++)
+                    bmean += (weightR[ix] * (Xcsr[ix]-biasB[Xcsr_i[ix]]-bmean))
+                              / (wsum += weightR[ix]);
+                if (Xcsr_p[row+1] > Xcsr_p[row])
+                    bmean *= wsum
+                             / (wsum + lam_user * ((wsumA != NULL)?
+                                                        wsumA[row]
+                                                            :
+                                                        (scale_lam? wsum :1.)));
+                biasA[row] = bmean;
+            }
+        }
+
+        else if (weight == NULL) /* <- has 'NA_as_zero' */
+        {
+            double bmean = 0;
+            if (iter > 0) {
+                for (int_t col = 0; col < n; col++)
+                    bmean += (biasB[col] - bmean) / (double)(col+1);
+            }
+
+            for (int_t row = 0; row < m; row++)
+                biasA[row] = (meanA[row] - bmean - glob_mean)
+                             * ( (double)n
+                                    /
+                                ((double)n + lam_user * ((wsumA != NULL)?
+                                                            wsumA[row]
+                                                                :
+                                                            (scale_lam?
+                                                                (double)n
+                                                                    :
+                                                                1.))) );
+        }
+
+        else /* <- has weights and 'NA_as_zero' */
+        {
+            double bmean = 0;
+            if (iter > 0) {
+                for (int_t col = 0; col < n; col++)
+                    bmean += (biasB[col] - bmean) / (double)(col+1);
+            }
+
+            #pragma omp parallel for schedule(dynamic) \
+                    num_threads(cap_to_4(nthreads)) \
+                    shared(Xcsr_p, Xcsr_i, m, n, weightR, bmean, \
+                           biasA, meanA, adjA, glob_mean)
+            for (size_t_for row = 0; row < (size_t)m; row++)
+            {
+                double wsum = n;
+                double bmean_this = bmean;
+                for (size_t ix = Xcsr_p[row]; ix < Xcsr_p[row+1]; ix++)
+                    bmean_this += (  (weightR[ix] - 1)
+                                     * (biasB[Xcsr_i[ix]] - bmean_this)  )
+                                  / (wsum += (weightR[ix] - 1));
+                biasA[row] = (meanA[row] - bmean_this - glob_mean) * adjA[row];
+            }
+        }
+
+        if (nonneg)
+            for (int_t row = 0; row < m; row++)
+                biasA[row] = (biasA[row] >= (real_t)0)? biasA[row] : (real_t)0;
+
+    }
+
+    cleanup:
+        free(meanA);
+        free(meanB);
+        free(adjA);
+        free(adjB);
+        free(wsum_B);
+    return retval;
+    throw_oom:
+        retval = 1;
+        goto cleanup;
 }
 
 int_t center_by_cols
@@ -2838,7 +4085,7 @@ int_t center_by_cols
     int_t ixA[], int_t ixB[], real_t *restrict X, size_t nnz,
     size_t Xcsr_p[], int_t Xcsr_i[], real_t *restrict Xcsr,
     size_t Xcsc_p[], int_t Xcsc_i[], real_t *restrict Xcsc,
-    int_t nthreads
+    int nthreads
 )
 {
     #if defined(_OPENMP) && \
@@ -2869,8 +4116,12 @@ int_t center_by_cols
         #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
                 shared(n, Xcsc, Xcsc_p, col_means)
         for (size_t_for ib = 0; ib < (size_t)n; ib++)
+        {
+            double csum = 0;
             for (size_t ix = Xcsc_p[ib]; ix < Xcsc_p[ib+(size_t)1]; ix++)
-                col_means[ib] += Xcsc[ix];
+                csum += Xcsc[ix];
+            col_means[ib] = csum;
+        }
     }
 
     else if (Xcsr != NULL && X == NULL)
@@ -2977,7 +4228,7 @@ void predict_multiple
     int_t m, int_t n,
     int_t predA[], int_t predB[], size_t nnz,
     real_t *restrict outp,
-    int_t nthreads
+    int nthreads
 )
 {
     size_t lda = (size_t)k_user + (size_t)k + (size_t)k_main;
@@ -3031,7 +4282,7 @@ int_t topN
     int_t *restrict include_ix, int_t n_include,
     int_t *restrict exclude_ix, int_t n_exclude,
     int_t *restrict outp_ix, real_t *restrict outp_score,
-    int_t n_top, int_t n, int_t nthreads
+    int_t n_top, int_t n, int nthreads
 )
 {
     int_t retval = 0;
@@ -3259,23 +4510,281 @@ int_t fit_most_popular
     real_t *restrict biasA, real_t *restrict biasB,
     real_t *restrict glob_mean,
     real_t lam_user, real_t lam_item,
-    bool scale_lam,
+    bool scale_lam, bool scale_bias_const,
     real_t alpha,
     int_t m, int_t n,
     int_t ixA[], int_t ixB[], real_t *restrict X, size_t nnz,
     real_t *restrict Xfull,
     real_t *restrict weight,
     bool implicit, bool adjust_weight, bool apply_log_transf,
-    bool nonneg,
+    bool nonneg, bool NA_as_zero,
     real_t *restrict w_main_multiplier,
-    int_t nthreads
+    int nthreads
 )
 {
+    if (implicit)
+    {
+        if (NA_as_zero) {
+            fprintf(stderr,
+                    "Warning: 'NA_as_zero' ignored with 'implicit=true'.\n");
+            NA_as_zero = false;
+        }
+
+        if (scale_lam) {
+            fprintf(stderr,
+                    "Warning: 'scale_lam' ignored with 'implicit=true'.\n");
+            scale_lam = false;
+        }
+
+        if (weight != NULL) {
+            fprintf(stderr,
+                    "Warning: 'weight' ignored with 'implicit=true'.\n");
+            weight = NULL;
+        }
+
+        if (Xfull != NULL) {
+            fprintf(stderr,
+                    "Error: cannot pass dense 'X' with 'implicit=true'.\n");
+            return 2;
+        }
+    }
+
+    else
+    {
+        if (adjust_weight) {
+            fprintf(stderr,
+                "Warning: 'adjust_weight' ignored with 'implicit=false'.\n");
+            adjust_weight = false;
+        }
+
+        if (apply_log_transf) {
+            fprintf(stderr,
+                "Warning: 'apply_log_transf' ignored with 'implicit=false'.\n");
+            apply_log_transf = false;
+        }
+    }
+
+    if (biasB == NULL)
+    {
+        fprintf(stderr, "Error: must pass 'biasB'.\n");
+        return 2;
+    }
+
+    if (!scale_lam) scale_bias_const = false;
+
+    int_t retval = 0;
+    if (glob_mean != NULL)
+        *glob_mean = 0;
+
+    size_t *restrict Xcsr_p = NULL;
+    int_t *restrict Xcsr_i = NULL;
+    real_t *restrict Xcsr = NULL;
+    size_t *restrict Xcsc_p = NULL;
+    int_t *restrict Xcsc_i = NULL;
+    real_t *restrict Xcsc = NULL;
+    real_t *restrict weightR = NULL;
+    real_t *restrict weightC = NULL;
+    real_t *restrict ones = NULL;
+    real_t *restrict wsumA = NULL;
+    real_t *restrict wsumB = NULL;
+
+    if (NA_as_zero && Xfull == NULL)
+    {
+        if (glob_mean != NULL)
+            calc_mean_and_center(
+                ixA, ixB, X, nnz,
+                (real_t*)NULL, (real_t*)NULL,
+                m, n,
+                (size_t*)NULL, (int_t*)NULL, (real_t*)NULL,
+                (size_t*)NULL, (int_t*)NULL, (real_t*)NULL,
+                weight,
+                NA_as_zero, nonneg, true, nthreads,
+                glob_mean
+            );
+
+        if (biasA != NULL)
+        {
+            retval = coo_to_csr_plus_alloc(
+                ixA, ixB, X,
+                weight,
+                m, n, nnz,
+                &Xcsr_p, &Xcsr_i, &Xcsr,
+                &weightR
+            );
+            if (retval == 1) goto throw_oom;
+            if (retval != 0) goto cleanup;
+        }
+
+        if (biasB != NULL)
+        {
+            retval = coo_to_csr_plus_alloc(
+                ixB, ixA, X,
+                weight,
+                n, m, nnz,
+                &Xcsc_p, &Xcsc_i, &Xcsc,
+                &weightC
+            );
+            if (retval == 1) goto throw_oom;
+            if (retval != 0) goto cleanup;
+        }
+
+        if (scale_lam && weight != NULL)
+        {
+            if (biasA != NULL)
+            {
+                wsumA = (real_t*)calloc(m, sizeof(real_t));
+                if (wsumA == NULL) goto throw_oom;
+
+                for (int_t row = 0; row < m; row++) {
+                    for (size_t ix = Xcsr_p[row]; ix < Xcsr_p[row+1]; ix++)
+                        wsumA[row] += weightR[ix];
+                    wsumA[row] /= wsumA[row]
+                                  + (real_t)(n - (Xcsr_p[row+1] - Xcsr_p[row]));
+                }
+            }
+
+            if (biasB != NULL)
+            {
+                wsumB = (real_t*)calloc(n, sizeof(real_t));
+                if (wsumB == NULL) goto throw_oom;
+
+                for (int_t col = 0; col < n; col++) {
+                    for (size_t ix = Xcsc_p[col]; ix < Xcsc_p[col+1]; ix++)
+                        wsumB[col] += weightC[ix];
+                    wsumB[col] /= wsumB[col]
+                                  + (real_t)(m - (Xcsc_p[col+1] - Xcsc_p[col]));
+                }
+            }
+        }
+
+        if (scale_bias_const)
+        {
+            scale_bias_const = false;
+            scale_lam = false;
+            if (weight == NULL)
+            {
+                lam_user *= n;
+                lam_item *= m;
+            }
+
+            else
+            {
+                double wmean = 0;
+                if (biasA != NULL)
+                {
+                    for (int_t row = 0; row < m; row++)
+                        wmean += (wsumA[row] - wmean) / (double)(row+1);
+                    lam_user *= wmean;
+                }
+
+                wmean = 0;
+                if (biasB != NULL)
+                {
+                    for (int_t col = 0; col < n; col++)
+                        wmean += (wsumB[col] - wmean) / (double)(col+1);
+                    lam_item *= wmean;
+                }
+
+                free(wsumA); wsumA = NULL;
+                free(wsumB); wsumB = NULL;
+            }
+        }
+
+        if (biasA != NULL && biasB != NULL)
+            retval = initialize_biases_twosided(
+                (real_t*)NULL, (real_t*)NULL,
+                (int_t*)NULL, (int_t*)NULL,
+                m, n,
+                NA_as_zero, nonneg, (glob_mean == NULL)? 0. : (*glob_mean),
+                Xcsr_p, Xcsr_i, Xcsr,
+                Xcsc_p, Xcsc_i, Xcsc,
+                weight, (real_t*)NULL,
+                weightR, weightC,
+                lam_user, lam_item, scale_lam,
+                wsumA, wsumB,
+                biasA, biasB,
+                nthreads
+            );
+        else
+            initialize_biases_onesided(
+                (real_t*)NULL, n, m, false, (int_t*)NULL,
+                Xcsc_p, Xcsc_i, Xcsc,
+                weight, weightC,
+                (glob_mean == NULL)? 0. : (*glob_mean), NA_as_zero, nonneg,
+                lam_item, scale_lam,
+                wsumB,
+                biasB,
+                nthreads
+            );
+
+        if (retval == 1) goto throw_oom;
+        goto cleanup;
+    }
+
+    if (implicit && biasA != NULL)
+    {
+        for (size_t ix = 0; ix < nnz; ix++)
+            X[ix] += 1;
+        if (apply_log_transf)
+            for (size_t ix = 0; ix < nnz; ix++)
+                X[ix] = log_t(X[ix]);
+
+        retval = coo_to_csr_plus_alloc(
+            ixA, ixB, X,
+            (real_t*)NULL,
+            m, n, nnz,
+            &Xcsr_p, &Xcsr_i, &Xcsr,
+            (real_t**)NULL
+        );
+        if (retval == 1) goto throw_oom;
+        if (retval != 0) goto cleanup;
+
+        retval = coo_to_csr_plus_alloc(
+            ixB, ixA, X,
+            (real_t*)NULL,
+            n, m, nnz,
+            &Xcsc_p, &Xcsc_i, &Xcsc,
+            (real_t**)NULL
+        );
+        if (retval == 1) goto throw_oom;
+        if (retval != 0) goto cleanup;
+
+        ones = (real_t*)malloc(nnz*sizeof(real_t));
+        if (ones == NULL) goto throw_oom;
+        for (size_t ix = 0; ix < nnz; ix++) ones[ix] = 1;
+
+        if (adjust_weight)
+        {
+            *w_main_multiplier
+                =
+            (long double)nnz / ((long double)m * (long double)n);
+            lam_item /= *w_main_multiplier;
+            lam_user /= *w_main_multiplier;
+        }
+
+        retval = initialize_biases_twosided(
+            (real_t*)NULL, (real_t*)NULL,
+            (int_t*)NULL, (int_t*)NULL,
+            m, n,
+            true, nonneg, 0.,
+            Xcsr_p, Xcsr_i, ones,
+            Xcsc_p, Xcsc_i, ones,
+            X, (real_t*)NULL,
+            Xcsr, Xcsc,
+            lam_user, lam_item, false,
+            (real_t*)NULL, (real_t*)NULL,
+            biasA, biasB,
+            nthreads
+        );
+        if (retval == 1) goto throw_oom;
+        goto cleanup;
+    }
+
     return fit_most_popular_internal(
         biasA, biasB,
-        glob_mean, true,
+        glob_mean, glob_mean != NULL,
         lam_user, lam_item,
-        scale_lam,
+        scale_lam, scale_bias_const,
         alpha,
         m, n,
         ixA, ixB, X, nnz,
@@ -3286,15 +4795,34 @@ int_t fit_most_popular
         w_main_multiplier,
         nthreads
     );
+
+    cleanup:
+        free(Xcsr_p);
+        free(Xcsr_i);
+        free(Xcsr);
+        free(Xcsc_p);
+        free(Xcsc_i);
+        free(Xcsc);
+        free(weightR);
+        free(weightC);
+        free(ones);
+        free(wsumA);
+        free(wsumB);
+    return retval;
+    throw_oom:
+        retval = 1;
+        print_oom_message();
+        goto cleanup;
 }
 
 
+/* TODO: factor out this function */
 int_t fit_most_popular_internal
 (
     real_t *restrict biasA, real_t *restrict biasB,
     real_t *restrict glob_mean, bool center,
     real_t lam_user, real_t lam_item,
-    bool scale_lam,
+    bool scale_lam, bool scale_bias_const,
     real_t alpha,
     int_t m, int_t n,
     int_t ixA[], int_t ixB[], real_t *restrict X, size_t nnz,
@@ -3303,7 +4831,7 @@ int_t fit_most_popular_internal
     bool implicit, bool adjust_weight, bool apply_log_transf,
     bool nonneg,
     real_t *restrict w_main_multiplier,
-    int_t nthreads
+    int nthreads
 )
 {
     int_t retval = 0;
@@ -3313,8 +4841,6 @@ int_t fit_most_popular_internal
     real_t *restrict sum_by_row = NULL;
     int_t maxiter = 5;
 
-    if (glob_mean != NULL)
-        *glob_mean = 0;
 
     if (implicit)
     {
@@ -3361,7 +4887,9 @@ int_t fit_most_popular_internal
             nnz = 0;
             for (int_t ix = 0; ix < n; ix++)
                 nnz += (size_t)cnt_by_col[ix];
-            *w_main_multiplier = (double)nnz / ((double)m * (double)n);
+            *w_main_multiplier
+                =
+            (long double)nnz / ((long double)m * (long double)n);
             lam_item /= *w_main_multiplier;
         }
 
@@ -3395,13 +4923,17 @@ int_t fit_most_popular_internal
         glob_mean, biasA, biasB,
         false, biasA == NULL, center,
         lam_user, lam_item,
-        scale_lam,
+        scale_lam, scale_bias_const,
+        biasA != NULL, biasB != NULL,
+        (real_t*)NULL, (real_t*)NULL,
         m, n,
         m, n,
         ixA, ixB, X, nnz,
         Xfull, (real_t*)NULL,
         (size_t*)NULL, (int_t*)NULL, (real_t*)NULL,
         (size_t*)NULL, (int_t*)NULL, (real_t*)NULL,
+        weight, (real_t*)NULL,
+        (real_t*)NULL, (real_t*)NULL,
         nonneg,
         nthreads
     );
@@ -3447,6 +4979,38 @@ int_t fit_most_popular_internal
             }
     }
 
+    if (scale_lam && scale_bias_const)
+    {
+        if (weight != NULL)
+        {
+            double wmean = 0;
+            for (int_t row = 0; row < m; row++)
+                wmean += (sum_by_row[row] - wmean) / (double)(row+1);
+            lam_user *= wmean;
+
+            wmean = 0;
+            for (int_t col = 0; col < n; col++)
+                wmean += (sum_by_col[col] - wmean) / (double)(col+1);
+            lam_item *= wmean;
+        }
+        
+        else
+        {
+            double cmean = 0;
+            for (int_t row = 0; row < m; row++)
+                cmean += ((double)cnt_by_row[row] - cmean) / (double)(row+1);
+            lam_user *= cmean;
+
+            cmean = 0;
+            for (int_t col = 0; col < n; col++)
+                cmean += ((double)cnt_by_col[col] - cmean) / (double)(col+1);
+            lam_item *= cmean;
+        }
+        
+        scale_bias_const = false;
+        scale_lam = false;
+    }
+
     set_to_zero(biasA, m);
     set_to_zero(biasB, n);
 
@@ -3485,7 +5049,7 @@ int_t fit_most_popular_internal
                                     + (lam_item
                                         *
                                        (scale_lam?
-                                            (double)cnt_by_col[ix] : 1.)));
+                                            (double)sum_by_col[ix] : 1.)));
             }
 
             for (int_t ix = 0; ix < n; ix++)
@@ -3525,7 +5089,7 @@ int_t fit_most_popular_internal
                                     + (lam_user
                                         *
                                        (scale_lam?
-                                            (double)cnt_by_row[ix] : 1.)));
+                                            (double)sum_by_row[ix] : 1.)));
             }
 
             for (int_t ix = 0; ix < m; ix++)
@@ -3562,7 +5126,7 @@ int_t fit_most_popular_internal
                                     + (lam_item
                                         *
                                        (scale_lam?
-                                            (double)cnt_by_col[ix] : 1.)));
+                                            (double)sum_by_col[ix] : 1.)));
             }
 
             for (int_t ix = 0; ix < n; ix++)
@@ -3596,7 +5160,7 @@ int_t fit_most_popular_internal
                                     + (lam_user
                                         *
                                        (scale_lam?
-                                            (double)cnt_by_row[ix] : 1.)));
+                                            (double)sum_by_row[ix] : 1.)));
             }
 
             for (int_t ix = 0; ix < m; ix++)
@@ -3613,8 +5177,8 @@ int_t fit_most_popular_internal
         free(cnt_by_row);
         free(sum_by_col);
         free(sum_by_row);
-
     return retval;
+    
     throw_oom:
     {
         retval = 1;

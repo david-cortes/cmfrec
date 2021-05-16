@@ -12,7 +12,7 @@
 
 <meta name="author" content="David Cortes" />
 
-<meta name="date" content="2021-05-06" />
+<meta name="date" content="2021-05-16" />
 
 <title>Matrix Factorization with Side Info</title>
 
@@ -135,7 +135,7 @@ code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warni
 
 <h1 class="title toc-ignore">Matrix Factorization with Side Info</h1>
 <h4 class="author">David Cortes</h4>
-<h4 class="date">2021-05-06</h4>
+<h4 class="date">2021-05-16</h4>
 
 
 <div id="TOC">
@@ -236,7 +236,7 @@ code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warni
 <span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>pred_classic <span class="ot">&lt;-</span> <span class="fu">predict</span>(model.classic, X_test)</span>
 <span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a><span class="fu">print_rmse</span>(X_test, pred_classic, <span class="st">&quot;classic model&quot;</span>)</span>
-<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; RMSE for classic model is: 0.9245</span></span></code></pre></div>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; RMSE for classic model is: 0.9243</span></span></code></pre></div>
 <p>i.e. it means that the ratings are off by about one star. This is better than a non-personalized model that would always predict the same rating for each user, which can also be simulated through <code>cmfrec</code>:</p>
 <div class="sourceCode" id="cb5"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>model.baseline <span class="ot">&lt;-</span> <span class="fu">MostPopular</span>(X_train, <span class="at">lambda=</span><span class="dv">10</span>, <span class="at">scale_lam=</span><span class="cn">FALSE</span>)</span>
 <span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>pred_baseline <span class="ot">&lt;-</span> <span class="fu">predict</span>(model.baseline, X_test)</span>
@@ -294,7 +294,7 @@ code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warni
 <span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>U<span class="sc">$</span>id      <span class="ot">&lt;-</span> <span class="cn">NULL</span></span>
 <span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>U<span class="sc">$</span>zipcode <span class="ot">&lt;-</span> <span class="cn">NULL</span></span>
 <span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>U<span class="sc">$</span>age2    <span class="ot">&lt;-</span> U<span class="sc">$</span>age<span class="sc">^</span><span class="dv">2</span></span>
-<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a><span class="do">### Note that `cmfrec` does not standardize features</span></span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a><span class="do">### Note that `cmfrec` does not standardize features beyond mean centering</span></span>
 <span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>U<span class="sc">$</span>age     <span class="ot">&lt;-</span> (U<span class="sc">$</span>age <span class="sc">-</span> <span class="fu">mean</span>(U<span class="sc">$</span>age)) <span class="sc">/</span> <span class="fu">sd</span>(U<span class="sc">$</span>age)</span>
 <span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a>U<span class="sc">$</span>age2    <span class="ot">&lt;-</span> (U<span class="sc">$</span>age2 <span class="sc">-</span> <span class="fu">mean</span>(U<span class="sc">$</span>age2)) <span class="sc">/</span> <span class="fu">sd</span>(U<span class="sc">$</span>age2)</span>
 <span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a>U <span class="ot">&lt;-</span> <span class="fu">model.matrix</span>(<span class="sc">~</span>.<span class="sc">-</span><span class="dv">1</span>, <span class="at">data=</span>U)</span>
@@ -321,7 +321,7 @@ code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warni
 <span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a>                        <span class="at">verbose=</span><span class="cn">FALSE</span>)</span>
 <span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a>pred_side_info <span class="ot">&lt;-</span> <span class="fu">predict</span>(model.w.sideinfo, X_test)</span>
 <span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a><span class="fu">print_rmse</span>(X_test, pred_side_info, <span class="st">&quot;model with side info&quot;</span>)</span>
-<span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; RMSE for model with side info is: 0.9124</span></span></code></pre></div>
+<span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; RMSE for model with side info is: 0.9105</span></span></code></pre></div>
 <hr />
 <p>Summary:</p>
 <div class="sourceCode" id="cb9"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(kableExtra)</span>
@@ -364,7 +364,7 @@ NonPersonalized
 ClassicalModel
 </td>
 <td style="text-align:right;">
-0.9244950
+0.9243341
 </td>
 </tr>
 <tr>
@@ -372,7 +372,7 @@ ClassicalModel
 ClassicPlusImplicit
 </td>
 <td style="text-align:right;">
-0.9128844
+0.9129302
 </td>
 </tr>
 <tr>
@@ -380,7 +380,7 @@ ClassicPlusImplicit
 CollectiveModel
 </td>
 <td style="text-align:right;">
-0.9123750
+0.9105305
 </td>
 </tr>
 </tbody>
@@ -412,7 +412,7 @@ CollectiveModel
 <span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a><span class="do">### returning a &#39;sparseVector&#39; object as required by cmfrec</span></span>
 <span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a><span class="fu">topN</span>(model.classic, <span class="at">user=</span>user_to_recommend, <span class="at">n=</span><span class="dv">10</span>,</span>
 <span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a>     <span class="at">exclude=</span>X[user_to_recommend, , <span class="at">drop=</span><span class="cn">TRUE</span>])</span>
-<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt;  [1] 316 424 405 271 169 511 524 516 420 311</span></span></code></pre></div>
+<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt;  [1] 316 424 405 271 511 169 524 314 516 657</span></span></code></pre></div>
 <div class="sourceCode" id="cb12"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="do">### A handy function for visualizing recommendations</span></span>
 <span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>movie_names <span class="ot">&lt;-</span> <span class="fu">colnames</span>(X)</span>
 <span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>n_ratings <span class="ot">&lt;-</span> <span class="fu">colSums</span>(<span class="fu">as.csc.matrix</span>(X, <span class="at">binary=</span><span class="cn">TRUE</span>))</span>

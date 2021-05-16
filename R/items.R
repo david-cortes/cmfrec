@@ -60,6 +60,14 @@ process.inputs.items <- function(model, obj, X=NULL, X_col=NULL, X_val=NULL, wei
         !NROW(processed_I$U) && !NROW(processed_I$U_val) &&
         !NROW(processed_I_bin$U))
         stop("Inputs contain no data.")
+
+    if (!NROW(processed_X$X) && NROW(obj$precomputed$A) && obj$info$NA_as_zero) {
+        processed_X$n <- ncol(obj$matrices$A)
+    }
+
+    if (!NROW(processed_I$U) && NROW(obj$matrices$D) && obj$info$NA_as_zero_item) {
+        processed_I$p <- nrow(obj$matrices$D)
+    }
     
     return(list(
         processed_X = processed_X,
@@ -178,8 +186,10 @@ item_factors <- function(model, X=NULL, X_col=NULL, X_val=NULL,
                           model$info$k, model$info$k_item, model$info$k_user, model$info$k_main,
                           lambda, l1_lambda,
                           model$info$scale_lam, model$info$scale_lam_sideinfo,
+                          model$info$scale_bias_const, model$matrices$scaling_biasB,
                           model$info$w_main, model$info$w_item, model$info$w_implicit,
                           NCOL(model$matrices$A), TRUE,
+                          numeric(),
                           numeric(),
                           numeric(),
                           numeric(),
@@ -205,6 +215,7 @@ item_factors <- function(model, X=NULL, X_col=NULL, X_val=NULL,
                           lambda, l1_lambda, model$info$alpha, model$info$w_main, model$info$w_item,
                           model$info$w_main_multiplier,
                           model$info$apply_log_transf,
+                          numeric(),
                           numeric(),
                           numeric(),
                           numeric())
@@ -445,8 +456,10 @@ predict_new_items <- function(model, user, item=NULL,
                           model$info$k, model$info$k_item, model$info$k_user, model$info$k_main,
                           swap.lambda(model$info$lambda), swap.lambda(model$info$l1_lambda),
                           model$info$scale_lam, model$info$scale_lam_sideinfo,
+                          model$info$scale_bias_const, model$matrices$scaling_biasB,
                           model$info$w_main, model$info$w_item, model$info$w_implicit,
                           NCOL(model$matrices$A), model$info$include_all_X,
+                          numeric(),
                           numeric(),
                           numeric(),
                           numeric(),
@@ -485,6 +498,7 @@ predict_new_items <- function(model, user, item=NULL,
                           lambda, l1_lambda, model$info$alpha, model$info$w_main, model$info$w_item,
                           model$info$w_main_multiplier,
                           model$info$apply_log_transf,
+                          numeric(),
                           numeric(),
                           numeric(),
                           numeric(),

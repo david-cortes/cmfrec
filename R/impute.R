@@ -120,6 +120,7 @@ imputeX <- function(model, X, weight = NULL, U = NULL, U_bin = NULL) {
                       model$info$k, model$info$k_user, model$info$k_item, model$info$k_main,
                       model$info$lambda, model$info$l1_lambda,
                       model$info$scale_lam, model$info$scale_lam_sideinfo,
+                      model$info$scale_bias_const, model$matrices$scaling_biasA,
                       model$info$w_main, model$info$w_user, model$info$w_implicit,
                       NCOL(model$matrices$B), model$info$include_all_X,
                       model$precomputed$BtB,
@@ -129,6 +130,7 @@ imputeX <- function(model, X, weight = NULL, U = NULL, U_bin = NULL) {
                       model$precomputed$TransCtCinvCt,
                       model$precomputed$CtC,
                       model$precomputed$B_plus_bias,
+                      model$precomputed$CtUbias,
                       model$info$nthreads)
     check.ret.code(ret_code)
     inputs$processed_X$Xarr <- matrix(inputs$processed_X$Xarr, ncol = nrow(X), nrow = ncol(X))

@@ -73,7 +73,7 @@ cdef extern from "cmfrec.h":
         int_t k_main, int_t k_user, int_t k_item,
         real_t w_main, real_t w_user, real_t w_item,
         int_t n_corr_pairs, size_t maxiter, int_t seed,
-        int_t nthreads, bint prefer_onepass,
+        int nthreads, bint prefer_onepass,
         bint verbose, int_t print_every, bint handle_interrupt,
         int_t *niter, int_t *nfev,
         real_t *B_plus_bias
@@ -96,7 +96,7 @@ cdef extern from "cmfrec.h":
         int_t k_main, int_t k_sec,
         real_t w_user, real_t w_item,
         int_t n_corr_pairs, size_t maxiter, int_t seed,
-        int_t nthreads, bint prefer_onepass,
+        int nthreads, bint prefer_onepass,
         bint verbose, int_t print_every, bint handle_interrupt,
         int_t *niter, int_t *nfev,
         real_t *Am, real_t *Bm,
@@ -119,7 +119,8 @@ cdef extern from "cmfrec.h":
         bint user_bias, bint item_bias, bint center,
         real_t lam, real_t *lam_unique,
         real_t l1_lam, real_t *l1_lam_unique,
-        bint scale_lam, bint scale_lam_sideinfo,
+        bint scale_lam, bint scale_lam_sideinfo, bint scale_bias_const,
+        real_t *scaling_biasA, real_t *scaling_biasB,
         real_t *U, int_t m_u, int_t p,
         real_t *II, int_t n_i, int_t q,
         int_t U_row[], int_t U_col[], real_t *U_sp, size_t nnz_U,
@@ -127,7 +128,7 @@ cdef extern from "cmfrec.h":
         bint NA_as_zero_X, bint NA_as_zero_U, bint NA_as_zero_I,
         int_t k_main, int_t k_user, int_t k_item,
         real_t w_main, real_t w_user, real_t w_item, real_t w_implicit,
-        int_t niter, int_t nthreads, bint verbose, bint handle_interrupt,
+        int_t niter, int nthreads, bint verbose, bint handle_interrupt,
         bint use_cg, int_t max_cg_steps, bint finalize_chol,
         bint nonneg, int_t max_cd_steps, bint nonneg_C, bint nonneg_D,
         bint precompute_for_predictions,
@@ -139,7 +140,8 @@ cdef extern from "cmfrec.h":
         real_t *precomputedBeTBeChol,
         real_t *precomputedBiTBi,
         real_t *precomputedTransCtCinvCt,
-        real_t *precomputedCtCw
+        real_t *precomputedCtCw,
+        real_t *precomputedCtUbias
     ) nogil
 
     int_t fit_collective_implicit_als(
@@ -160,13 +162,14 @@ cdef extern from "cmfrec.h":
         real_t w_main, real_t w_user, real_t w_item,
         real_t *w_main_multiplier,
         real_t alpha, bint adjust_weight, bint apply_log_transf,
-        int_t niter, int_t nthreads, bint verbose, bint handle_interrupt,
+        int_t niter, int nthreads, bint verbose, bint handle_interrupt,
         bint use_cg, int_t max_cg_steps, bint finalize_chol,
         bint nonneg, int_t max_cd_steps, bint nonneg_C, bint nonneg_D,
         bint precompute_for_predictions,
         real_t *precomputedBtB,
         real_t *precomputedBeTBe,
-        real_t *precomputedBeTBeChol
+        real_t *precomputedBeTBeChol,
+        real_t *precomputedCtUbias
     ) nogil
 
     int_t fit_offsets_als(
@@ -187,7 +190,7 @@ cdef extern from "cmfrec.h":
         bint implicit, bint NA_as_zero_X,
         real_t alpha, bint apply_log_transf,
         int_t niter,
-        int_t nthreads, bint use_cg,
+        int nthreads, bint use_cg,
         int_t max_cg_steps, bint finalize_chol,
         bint verbose, bint handle_interrupt,
         bint precompute_for_predictions,
@@ -202,11 +205,13 @@ cdef extern from "cmfrec.h":
         real_t *C, int_t p,
         real_t *Bi, bint add_implicit_features,
         real_t *biasB, real_t glob_mean, bint NA_as_zero_X,
+        real_t *U_colmeans, bint NA_as_zero_U,
         int_t k, int_t k_user, int_t k_item, int_t k_main,
         bint user_bias,
         bint nonneg,
         real_t lam, real_t *lam_unique,
         bint scale_lam, bint scale_lam_sideinfo,
+        bint scale_bias_const, real_t scaling_biasA,
         real_t w_main, real_t w_user, real_t w_item,
         real_t *B_plus_bias,
         real_t *BtB,
@@ -215,19 +220,22 @@ cdef extern from "cmfrec.h":
         real_t *BeTBeChol,
         real_t *BiTBi,
         real_t *TransCtCinvCt,
-        real_t *CtCw
+        real_t *CtCw,
+        real_t *CtUbias
     ) nogil
 
     int_t precompute_collective_implicit(
         real_t *B, int_t n,
         real_t *C, int_t p,
+        real_t *U_colmeans, bint NA_as_zero_U,
         int_t k, int_t k_user, int_t k_item, int_t k_main,
         real_t lam, real_t w_main, real_t w_user, real_t w_main_multiplier,
         bint nonneg,
         bint extra_precision,
         real_t *BtB,
         real_t *BeTBe,
-        real_t *BeTBeChol
+        real_t *BeTBeChol,
+        real_t *CtUbias
     ) nogil
 
     int_t offsets_factors_cold(
@@ -249,7 +257,7 @@ cdef extern from "cmfrec.h":
         int_t m, int_t n,
         int_t predA[], int_t predB[], size_t nnz,
         real_t *outp,
-        int_t nthreads
+        int nthreads
     ) nogil
 
     int_t predict_X_old_collective_explicit(
@@ -259,7 +267,7 @@ cdef extern from "cmfrec.h":
         real_t glob_mean,
         int_t k, int_t k_user, int_t k_item, int_t k_main,
         int_t m, int_t n_max,
-        int_t nthreads
+        int nthreads
     ) nogil
 
     int_t topN(
@@ -271,7 +279,7 @@ cdef extern from "cmfrec.h":
         int_t *include_ix, int_t n_include,
         int_t *exclude_ix, int_t n_exclude,
         int_t *outp_ix, real_t *outp_score,
-        int_t n_top, int_t n, int_t nthreads
+        int_t n_top, int_t n, int nthreads
     ) nogil
 
     int_t topN_new_content_based(
@@ -285,23 +293,23 @@ cdef extern from "cmfrec.h":
         real_t *D, real_t *D_bias,
         real_t glob_mean,
         int_t *outp_ix, real_t *outp_score,
-        int_t n_top, int_t nthreads
+        int_t n_top, int nthreads
     ) nogil
 
     int_t fit_most_popular(
         real_t *biasA, real_t *biasB,
         real_t *glob_mean,
-        real_t lam_bias, real_t lam_item,
-        bint scale_lam,
+        real_t lam_user, real_t lam_item,
+        bint scale_lam, bint scale_bias_const,
         real_t alpha,
         int_t m, int_t n,
         int_t ixA[], int_t ixB[], real_t *X, size_t nnz,
         real_t *Xfull,
         real_t *weight,
         bint implicit, bint adjust_weight, bint apply_log_transf,
-        bint nonneg,
+        bint nonneg, bint NA_as_zero,
         real_t *w_main_multiplier,
-        int_t nthreads
+        int nthreads
     ) nogil
 
     int_t impute_X_collective_explicit(
@@ -323,6 +331,7 @@ cdef extern from "cmfrec.h":
         real_t lam, real_t *lam_unique,
         real_t l1_lam, real_t *l1_lam_unique,
         bint scale_lam, bint scale_lam_sideinfo,
+        bint scale_bias_const, real_t scaling_biasA,
         real_t w_main, real_t w_user, real_t w_implicit,
         int_t n_max, bint include_all_X,
         real_t *BtB,
@@ -331,8 +340,9 @@ cdef extern from "cmfrec.h":
         real_t *BiTBi,
         real_t *TransCtCinvCt,
         real_t *CtCw,
+        real_t *CtUbias,
         real_t *B_plus_bias,
-        int_t nthreads
+        int nthreads
     ) nogil
 
     int_t predict_X_old_content_based(
@@ -347,7 +357,7 @@ cdef extern from "cmfrec.h":
         real_t *C, real_t *C_bias,
         real_t *Bm, real_t *biasB,
         real_t glob_mean,
-        int_t nthreads
+        int nthreads
     ) nogil
 
     int_t predict_X_new_content_based(
@@ -363,7 +373,7 @@ cdef extern from "cmfrec.h":
         real_t *C, real_t *C_bias,
         real_t *D, real_t *D_bias,
         real_t glob_mean,
-        int_t nthreads
+        int nthreads
     ) nogil
 
     int_t factors_content_based_single(
@@ -391,7 +401,7 @@ cdef extern from "cmfrec.h":
         int_t U_row[], int_t U_col[], real_t *U_sp, size_t nnz_U,
         int_t I_row[], int_t I_col[], real_t *I_sp, size_t nnz_I,
         int_t n_corr_pairs, size_t maxiter,
-        int_t nthreads, bint prefer_onepass,
+        int nthreads, bint prefer_onepass,
         bint verbose, int_t print_every, bint handle_interrupt,
         int_t *niter, int_t *nfev,
         real_t *Am, real_t *Bm
@@ -416,6 +426,7 @@ cdef extern from "cmfrec.h":
         real_t lam, real_t *lam_unique,
         real_t l1_lam, real_t *l1_lam_unique,
         bint scale_lam, bint scale_lam_sideinfo,
+        bint scale_bias_const, real_t scaling_biasA,
         real_t w_main, real_t w_user, real_t w_implicit,
         int_t n_max, bint include_all_X,
         real_t *BtB,
@@ -425,6 +436,7 @@ cdef extern from "cmfrec.h":
         real_t *BiTBi,
         real_t *CtCw,
         real_t *TransCtCinvCt,
+        real_t *CtUbias,
         real_t *B_plus_bias
     ) nogil
 
@@ -443,7 +455,8 @@ cdef extern from "cmfrec.h":
         bint apply_log_transf,
         real_t *BeTBe,
         real_t *BtB,
-        real_t *BeTBeChol
+        real_t *BeTBeChol,
+        real_t *CtUbias
     ) nogil
 
     int_t factors_collective_explicit_multiple(
@@ -467,6 +480,7 @@ cdef extern from "cmfrec.h":
         real_t lam, real_t *lam_unique,
         real_t l1_lam, real_t *l1_lam_unique,
         bint scale_lam, bint scale_lam_sideinfo,
+        bint scale_bias_const, real_t scaling_biasA,
         real_t w_main, real_t w_user, real_t w_implicit,
         int_t n_max, bint include_all_X,
         real_t *BtB,
@@ -476,8 +490,9 @@ cdef extern from "cmfrec.h":
         real_t *BiTBi,
         real_t *TransCtCinvCt,
         real_t *CtCw,
+        real_t *CtUbias,
         real_t *B_plus_bias,
-        int_t nthreads
+        int nthreads
     ) nogil
 
     int_t factors_collective_implicit_multiple(
@@ -499,7 +514,8 @@ cdef extern from "cmfrec.h":
         real_t *BeTBe,
         real_t *BtB,
         real_t *BeTBeChol,
-        int_t nthreads
+        real_t *CtUbias,
+        int nthreads
     ) nogil
 
     int_t factors_offsets_explicit_single(
@@ -554,7 +570,7 @@ cdef extern from "cmfrec.h":
         real_t *precomputedTransBtBinvBt,
         real_t *precomputedBtB,
         real_t *Bm_plus_bias,
-        int_t nthreads
+        int nthreads
     ) nogil
 
     int_t factors_offsets_implicit_multiple(
@@ -571,7 +587,7 @@ cdef extern from "cmfrec.h":
         real_t lam, real_t alpha,
         bint apply_log_transf,
         real_t *precomputedBtB,
-        int_t nthreads
+        int nthreads
     ) nogil
 
 
@@ -600,7 +616,7 @@ def call_fit_collective_explicit_lbfgs(
         np.ndarray[real_t, ndim=1] lam_unique=np.empty(0, dtype=c_real_t),
         bint verbose=1, int_t print_every=10,
         int_t n_corr_pairs=5, int_t maxiter=400,
-        int_t nthreads=1, bint prefer_onepass=0,
+        int nthreads=1, bint prefer_onepass=0,
         int_t seed=1, bint handle_interrupt=1
     ):
 
@@ -691,7 +707,7 @@ def call_fit_collective_explicit_lbfgs(
     if Ib.shape[0]:
         nvars += <size_t>qbin * <size_t>(k_item + k)
     rs = np.random.Generator(np.random.MT19937(seed = seed))
-    cdef np.ndarray[real_t, ndim=1] values = rs.standard_normal(size = nvars, dtype = c_real_t)
+    cdef np.ndarray[real_t, ndim=1] values = rs.standard_normal(size = nvars, dtype = c_real_t) / 100
 
     cdef np.ndarray[real_t, ndim=2] B_plus_bias = np.empty((0,0), dtype=c_real_t)
     cdef real_t *ptr_B_plus_bias = NULL
@@ -811,7 +827,7 @@ def call_fit_offsets_explicit_lbfgs_internal(
         np.ndarray[real_t, ndim=1] lam_unique=np.empty(0, dtype=c_real_t),
         bint verbose=1, int_t print_every=10,
         int_t n_corr_pairs=5, int_t maxiter=400,
-        int_t nthreads=1, bint prefer_onepass=0,
+        int nthreads=1, bint prefer_onepass=0,
         int_t seed=1, bint handle_interrupt=1
     ):
     
@@ -884,7 +900,7 @@ def call_fit_offsets_explicit_lbfgs_internal(
     cdef np.ndarray[real_t, ndim=2] Bm = np.empty((n, k_sec+k+k_main), dtype=c_real_t)
 
     rs = np.random.Generator(np.random.MT19937(seed = seed))
-    cdef np.ndarray[real_t, ndim=1] values = rs.standard_normal(size = nvars, dtype = c_real_t)
+    cdef np.ndarray[real_t, ndim=1] values = rs.standard_normal(size = nvars, dtype = c_real_t) / 100
 
     cdef np.ndarray[real_t, ndim=2] Bm_plus_bias = np.empty((0,0), dtype=c_real_t)
     cdef real_t *ptr_Bm_plus_bias = NULL
@@ -1009,8 +1025,10 @@ def call_fit_collective_explicit_als(
         np.ndarray[real_t, ndim=1] lam_unique=np.empty(0, dtype=c_real_t),
         real_t l1_lam=0.,
         np.ndarray[real_t, ndim=1] l1_lam_unique=np.empty(0, dtype=c_real_t),
+        bint center_U=1, bint center_I=1,
         bint scale_lam=0, bint scale_lam_sideinfo=0,
-        bint verbose=1, int_t nthreads=1,
+        bint scale_bias_const=0,
+        bint verbose=1, int nthreads=1,
         bint use_cg = 0, int_t max_cg_steps=3,
         bint finalize_chol=0,
         bint nonneg=0, bint nonneg_C=0, bint nonneg_D=0,
@@ -1053,7 +1071,7 @@ def call_fit_collective_explicit_als(
         ptr_U_col = &U_col[0]
         ptr_U_sp = &U_sp[0]
         nnz_U = U_sp.shape[0]
-    if U.shape[0] or (U_sp.shape[0] and not NA_as_zero_U):
+    if (U.shape[0] or U_sp.shape[0]) and center_U:
         U_colmeans = np.empty(p, dtype=c_real_t)
         ptr_U_colmeans = &U_colmeans[0]
 
@@ -1071,7 +1089,7 @@ def call_fit_collective_explicit_als(
         ptr_I_col = &I_col[0]
         ptr_I_sp = &I_sp[0]
         nnz_I = I_sp.shape[0]
-    if I.shape[0] or (I_sp.shape[0] and not NA_as_zero_I):
+    if (I.shape[0] or I_sp.shape[0]) and center_I:
         I_colmeans = np.empty(q, dtype=c_real_t)
         ptr_I_colmeans = &I_colmeans[0]
 
@@ -1112,15 +1130,15 @@ def call_fit_collective_explicit_als(
         ptr_biasB = &biasB[0]
 
     rs = np.random.Generator(np.random.MT19937(seed = seed))
-    A = rs.standard_normal(size = (max(m, m_u), k_user+k+k_main), dtype = c_real_t)
-    B = rs.standard_normal(size = (max(n, n_i), k_item+k+k_main), dtype = c_real_t)
+    A = rs.standard_normal(size = (max(m, m_u), k_user+k+k_main), dtype = c_real_t) / 100
+    B = rs.standard_normal(size = (max(n, n_i), k_item+k+k_main), dtype = c_real_t) / 100
     if nonneg:
         A[:,:] = np.abs(A)
         B[:,:] = np.abs(B)
     ptr_A = &A[0,0]
     ptr_B = &B[0,0]
     if p:
-        C = rs.standard_normal(size = (p, k_user + k), dtype = c_real_t)
+        C = rs.standard_normal(size = (p, k_user + k), dtype = c_real_t) / 100
         if nonneg_C:
             C[:,:] = np.abs(C)
         if C.shape[0]:
@@ -1128,7 +1146,7 @@ def call_fit_collective_explicit_als(
         else:
             raise ValueError("Unexpected error.")
     if q:
-        D = rs.standard_normal(size = (q, k_item + k), dtype = c_real_t)
+        D = rs.standard_normal(size = (q, k_item + k), dtype = c_real_t) / 100
         if nonneg_D:
             D[:,:] = np.abs(D)
         if D.shape[0]:
@@ -1136,8 +1154,8 @@ def call_fit_collective_explicit_als(
         else:
             raise ValueError("Unexpected error.")
     if add_implicit_features:
-        Ai = rs.standard_normal(size = (max(m, m_u), k+k_main), dtype = c_real_t)
-        Bi = rs.standard_normal(size = (max(n, n_i), k+k_main), dtype = c_real_t)
+        Ai = rs.standard_normal(size = (max(m, m_u), k+k_main), dtype = c_real_t) / 100
+        Bi = rs.standard_normal(size = (max(n, n_i), k+k_main), dtype = c_real_t) / 100
         if nonneg:
             Ai[:,:] = np.abs(Ai)
             Bi[:,:] = np.abs(Bi)
@@ -1152,6 +1170,7 @@ def call_fit_collective_explicit_als(
     cdef np.ndarray[real_t, ndim=2] BiTBi = np.zeros((0,0), dtype=c_real_t)
     cdef np.ndarray[real_t, ndim=2] TransCtCinvCt = np.zeros((0,0), dtype=c_real_t)
     cdef np.ndarray[real_t, ndim=2] CtCw = np.zeros((0,0), dtype=c_real_t)
+    cdef np.ndarray[real_t, ndim=1] CtUbias = np.zeros(0, dtype=c_real_t)
     cdef real_t *ptr_B_plus_bias = NULL
     cdef real_t *ptr_BtB = NULL
     cdef real_t *ptr_TransBtBinvBt = NULL
@@ -1160,6 +1179,7 @@ def call_fit_collective_explicit_als(
     cdef real_t *ptr_BiTBi = NULL
     cdef real_t *ptr_TransCtCinvCt = NULL
     cdef real_t *ptr_CtCw = NULL
+    cdef real_t *ptr_CtUbias = NULL
 
     if precompute_for_predictions:
         if user_bias:
@@ -1194,7 +1214,13 @@ def call_fit_collective_explicit_als(
             BtXbias = np.empty(k+k_main+user_bias, dtype=c_real_t)
             ptr_BtXbias = &BtXbias[0]
 
+        if (NA_as_zero_U) and (U_colmeans.shape[0]):
+            CtUbias = np.empty(k_user+k, dtype=c_real_t)
+            ptr_CtUbias = &CtUbias[0]
+
     cdef real_t glob_mean = 0
+    cdef real_t scaling_biasA = 0
+    cdef real_t scaling_biasB = 0
 
     cdef int_t retval = 0
     with nogil, boundscheck(False), nonecheck(False), wraparound(False):
@@ -1213,7 +1239,8 @@ def call_fit_collective_explicit_als(
             user_bias, item_bias, center,
             lam, ptr_lam_unique,
             l1_lam, ptr_l1_lam_unique,
-            scale_lam, scale_lam_sideinfo,
+            scale_lam, scale_lam_sideinfo, scale_bias_const,
+            &scaling_biasA, &scaling_biasB,
             ptr_U, m_u, p,
             ptr_I, n_i, q,
             ptr_U_row, ptr_U_col, ptr_U_sp, nnz_U,
@@ -1233,7 +1260,8 @@ def call_fit_collective_explicit_als(
             ptr_BeTBeChol,
             ptr_BiTBi,
             ptr_TransCtCinvCt,
-            ptr_CtCw
+            ptr_CtCw,
+            ptr_CtUbias
         )
 
     if retval == 1:
@@ -1244,7 +1272,8 @@ def call_fit_collective_explicit_als(
     return biasA, biasB, A, B, C, D, Ai, Bi, \
            glob_mean, U_colmeans, I_colmeans, \
            B_plus_bias, BtB, TransBtBinvBt, BtXbias, \
-           BeTBeChol, BiTBi, TransCtCinvCt, CtCw
+           BeTBeChol, BiTBi, TransCtCinvCt, CtCw, \
+           CtUbias, scaling_biasA, scaling_biasB
 
 
 def call_fit_collective_implicit_als(
@@ -1268,8 +1297,9 @@ def call_fit_collective_implicit_als(
         np.ndarray[real_t, ndim=1] lam_unique=np.empty(0, dtype=c_real_t),
         real_t l1_lam=1e2,
         np.ndarray[real_t, ndim=1] l1_lam_unique=np.empty(0, dtype=c_real_t),
+        bint center_U=1, bint center_I=1,
         bint verbose=1, int_t niter=10,
-        int_t nthreads=1, bint use_cg=1,
+        int nthreads=1, bint use_cg=1,
         int_t max_cg_steps=3, bint finalize_chol=1,
         bint nonneg=0, bint nonneg_C=0, bint nonneg_D=0,
         int max_cd_steps=100,
@@ -1291,7 +1321,7 @@ def call_fit_collective_implicit_als(
         ptr_U_col = &U_col[0]
         ptr_U_sp = &U_sp[0]
         nnz_U = U_sp.shape[0]
-    if U.shape[0] or (U_sp.shape[0] and not NA_as_zero_U):
+    if (U.shape[0] or U_sp.shape[0]) and center_U:
         U_colmeans = np.empty(p, dtype=c_real_t)
         ptr_U_colmeans = &U_colmeans[0]
 
@@ -1312,7 +1342,7 @@ def call_fit_collective_implicit_als(
         ptr_I_col = &I_col[0]
         ptr_I_sp = &I_sp[0]
         nnz_I = I_sp.shape[0]
-    if I.shape[0] or (I_sp.shape[0] and not NA_as_zero_I):
+    if (I.shape[0] or I_sp.shape[0]) and center_I:
         I_colmeans = np.empty(q, dtype=c_real_t)
         ptr_I_colmeans = &I_colmeans[0]
 
@@ -1347,19 +1377,19 @@ def call_fit_collective_implicit_als(
     cdef np.ndarray[real_t, ndim=2] D = np.zeros((0,0), dtype = c_real_t)
 
     if init == "normal":
-        A = rs.standard_normal(size = (max(m, m_u), (k_user+k+k_main)), dtype = c_real_t)
-        B = rs.standard_normal(size = (max(n, n_i), (k_item+k+k_main)), dtype = c_real_t)
+        A = rs.standard_normal(size = (max(m, m_u), (k_user+k+k_main)), dtype = c_real_t) / 100
+        B = rs.standard_normal(size = (max(n, n_i), (k_item+k+k_main)), dtype = c_real_t) / 100
         if sizeC:
-            C = rs.standard_normal(size = (p, k_user + k), dtype = c_real_t)
+            C = rs.standard_normal(size = (p, k_user + k), dtype = c_real_t) / 100
         if sizeD:
-            D = rs.standard_normal(size = (q, k_item + k), dtype = c_real_t)
+            D = rs.standard_normal(size = (q, k_item + k), dtype = c_real_t) / 100
     else:
-        A = rs.random(size = (max(m, m_u), (k_user+k+k_main)), dtype = c_real_t)
-        B = rs.random(size = (max(n, n_i), (k_item+k+k_main)), dtype = c_real_t)
+        A = rs.random(size = (max(m, m_u), (k_user+k+k_main)), dtype = c_real_t) / 100
+        B = rs.random(size = (max(n, n_i), (k_item+k+k_main)), dtype = c_real_t) / 100
         if sizeC:
-            C = rs.random(size = (p, k_user + k), dtype = c_real_t)
+            C = rs.random(size = (p, k_user + k), dtype = c_real_t) / 100
         if sizeD:
-            D = rs.random(size = (q, k_item + k), dtype = c_real_t)
+            D = rs.random(size = (q, k_item + k), dtype = c_real_t) / 100
     
         if init == "gamma":
             A[:,:] = -np.log(A.clip(min=1e-6, max=20.))
@@ -1394,9 +1424,11 @@ def call_fit_collective_implicit_als(
     cdef np.ndarray[real_t, ndim=2] precomputedBtB = np.zeros((0,0), dtype=c_real_t)
     cdef np.ndarray[real_t, ndim=2] precomputedBeTBe = np.zeros((0,0), dtype=c_real_t)
     cdef np.ndarray[real_t, ndim=2] precomputedBeTBeChol = np.zeros((0,0), dtype=c_real_t)
+    cdef np.ndarray[real_t, ndim=1] precomputedCtUbias = np.zeros(0, dtype=c_real_t)
     cdef real_t *ptr_BtB = NULL
     cdef real_t *ptr_BeTBe = NULL
     cdef real_t *ptr_BeTBeChol = NULL
+    cdef real_t *ptr_CtUbias = NULL
     if precompute_for_predictions:
         precomputedBtB = np.empty((k+k_main, k+k_main), dtype=c_real_t)
         ptr_BtB = &precomputedBtB[0,0]
@@ -1406,8 +1438,9 @@ def call_fit_collective_implicit_als(
             if (not nonneg):
                 precomputedBeTBeChol = np.empty((k_user+k+k_main, k_user+k+k_main), dtype=c_real_t)
                 ptr_BeTBeChol = &precomputedBeTBeChol[0,0]
-
-
+        if (U_colmeans.shape[0]) and (NA_as_zero_U):
+            precomputedCtUbias = np.empty(k_user+k, dtype=c_real_t)
+            ptr_CtUbias = &precomputedCtUbias[0]
 
 
     cdef real_t w_main_multiplier = 1.
@@ -1435,7 +1468,8 @@ def call_fit_collective_implicit_als(
             use_cg, max_cg_steps, finalize_chol,
             nonneg, max_cd_steps, nonneg_C, nonneg_D,
             precompute_for_predictions,
-            ptr_BtB, ptr_BeTBe, ptr_BeTBeChol
+            ptr_BtB, ptr_BeTBe, ptr_BeTBeChol,
+            ptr_CtUbias
         )
 
     if retval == 1:
@@ -1445,7 +1479,8 @@ def call_fit_collective_implicit_als(
 
     return A, B, C, D, \
            U_colmeans, I_colmeans, w_main_multiplier, \
-           precomputedBtB, precomputedBeTBe, precomputedBeTBeChol
+           precomputedBtB, precomputedBeTBe, precomputedBeTBeChol, \
+           precomputedCtUbias
 
 def call_fit_offsets_explicit_als(
         np.ndarray[int_t, ndim=1] ixA,
@@ -1462,7 +1497,7 @@ def call_fit_offsets_explicit_als(
         bint user_bias=1, bint item_bias=1, bint center=1,
         bint add_intercepts=1,
         real_t lam=1e2,
-        bint verbose=1, int_t nthreads=1,
+        bint verbose=1, int nthreads=1,
         bint use_cg=0, int_t max_cg_steps=3,
         bint finalize_chol=0,
         int_t seed=1, int_t niter=5, bint handle_interrupt=1,
@@ -1513,8 +1548,8 @@ def call_fit_offsets_explicit_als(
     rs = np.random.Generator(np.random.MT19937(seed = seed))
     cdef np.ndarray[real_t, ndim=1] biasA = np.zeros(0, dtype=c_real_t)
     cdef np.ndarray[real_t, ndim=1] biasB = np.zeros(0, dtype=c_real_t)
-    cdef np.ndarray[real_t, ndim=2] A = rs.standard_normal(size=(m,k), dtype=c_real_t)
-    cdef np.ndarray[real_t, ndim=2] B = rs.standard_normal(size=(n,k), dtype=c_real_t)
+    cdef np.ndarray[real_t, ndim=2] A = rs.standard_normal(size=(m,k), dtype=c_real_t) / 100
+    cdef np.ndarray[real_t, ndim=2] B = rs.standard_normal(size=(n,k), dtype=c_real_t) / 100
     cdef np.ndarray[real_t, ndim=2] C = np.zeros((0,0), dtype=c_real_t)
     cdef np.ndarray[real_t, ndim=2] D = np.zeros((0,0), dtype=c_real_t)
     cdef np.ndarray[real_t, ndim=1] C_bias = np.zeros(0, dtype=c_real_t)
@@ -1613,7 +1648,7 @@ def call_fit_offsets_implicit_als(
         int_t m, int_t n, int_t p, int_t q,
         int_t k=50, bint add_intercepts=1,
         real_t lam=1e2, real_t alpha=40., bint apply_log_transf=0,
-        bint verbose=1, int_t nthreads=1,
+        bint verbose=1, int nthreads=1,
         bint use_cg=0, int_t max_cg_steps=3,
         bint finalize_chol=0,
         bint adjust_weight = 1,
@@ -1647,8 +1682,8 @@ def call_fit_offsets_implicit_als(
     cdef real_t *ptr_Bm = &Bm[0,0]
 
     rs = np.random.Generator(np.random.MT19937(seed = seed))
-    cdef np.ndarray[real_t, ndim=2] A = rs.standard_normal(size=(m,k), dtype=c_real_t)
-    cdef np.ndarray[real_t, ndim=2] B = rs.standard_normal(size=(n,k), dtype=c_real_t)
+    cdef np.ndarray[real_t, ndim=2] A = rs.standard_normal(size=(m,k), dtype=c_real_t) / 100
+    cdef np.ndarray[real_t, ndim=2] B = rs.standard_normal(size=(n,k), dtype=c_real_t) / 100
     cdef np.ndarray[real_t, ndim=2] C = np.zeros((0,0), dtype=c_real_t)
     cdef np.ndarray[real_t, ndim=2] D = np.zeros((0,0), dtype=c_real_t)
     cdef np.ndarray[real_t, ndim=1] C_bias = np.zeros(0, dtype=c_real_t)
@@ -1728,6 +1763,7 @@ def precompute_matrices_collective_explicit(
         np.ndarray[real_t, ndim=2] C,
         np.ndarray[real_t, ndim=2] Bi,
         np.ndarray[real_t, ndim=1] biasB,
+        np.ndarray[real_t, ndim=1] U_colmeans,
         bint user_bias, bint add_implicit_features,
         int_t n_orig,
         int_t k, int_t k_user, int_t k_item, int_t k_main,
@@ -1735,7 +1771,9 @@ def precompute_matrices_collective_explicit(
         real_t w_main, real_t w_user, real_t w_implicit,
         real_t glob_mean,
         bint scale_lam = 0, bint scale_lam_sideinfo = 0,
+        bint scale_bias_const = 0, real_t scaling_biasA = 0.,
         bint NA_as_zero_X = 0,
+        bint NA_as_zero_U = 0,
         bint nonneg = 0,
         bint include_all_X = 1
     ):
@@ -1751,12 +1789,15 @@ def precompute_matrices_collective_explicit(
     cdef real_t *ptr_C = NULL
     cdef real_t *ptr_Bi = NULL
     cdef real_t *ptr_biasB = NULL
+    cdef real_t *ptr_U_colmeans = NULL
     if p:
         ptr_C = &C[0,0]
     if Bi.shape[0]:
         ptr_Bi = &Bi[0,0]
     if biasB.shape[0]:
         ptr_biasB = &biasB[0]
+    if U_colmeans.shape[0]:
+        ptr_U_colmeans = &U_colmeans[0]
 
     cdef np.ndarray[real_t, ndim=2] B_plus_bias = np.zeros((0,0), dtype=c_real_t)
     cdef np.ndarray[real_t, ndim=2] BtB = np.zeros((0,0), dtype=c_real_t)
@@ -1766,6 +1807,7 @@ def precompute_matrices_collective_explicit(
     cdef np.ndarray[real_t, ndim=2] BiTBi = np.zeros((0,0), dtype=c_real_t)
     cdef np.ndarray[real_t, ndim=2] TransCtCinvCt = np.zeros((0,0), dtype=c_real_t)
     cdef np.ndarray[real_t, ndim=2] CtCw = np.zeros((0,0), dtype=c_real_t)
+    cdef np.ndarray[real_t, ndim=1] CtUbias = np.zeros(0, dtype=c_real_t)
     cdef real_t *ptr_B_plus_bias = NULL
     cdef real_t *ptr_BtB = NULL
     cdef real_t *ptr_TransBtBinvBt = NULL
@@ -1774,6 +1816,7 @@ def precompute_matrices_collective_explicit(
     cdef real_t *ptr_BiTBi = NULL
     cdef real_t *ptr_TransCtCinvCt = NULL
     cdef real_t *ptr_CtCw = NULL
+    cdef real_t *ptr_CtUbias = NULL
 
     BtB = np.zeros((k+k_main+user_bias, k+k_main+user_bias), dtype=c_real_t)
     ptr_BtB = &BtB[0,0]
@@ -1804,6 +1847,10 @@ def precompute_matrices_collective_explicit(
         BtXbias = np.zeros(k+k_main+user_bias, dtype=c_real_t)
         ptr_BtXbias = &BtXbias[0]
 
+    if (NA_as_zero_U) and (U_colmeans.shape[0]):
+        CtUbias = np.zeros(k_user+k, dtype=c_real_t)
+        ptr_CtUbias = &CtUbias[0]
+
     cdef real_t *ptr_lam_unique = NULL
     cdef np.ndarray[real_t, ndim=1] lam_unique = np.zeros(6, dtype=c_real_t)
     if lam_bias != lam:
@@ -1818,11 +1865,13 @@ def precompute_matrices_collective_explicit(
             ptr_C, p,
             ptr_Bi, add_implicit_features,
             ptr_biasB, glob_mean, NA_as_zero_X,
+            ptr_U_colmeans, NA_as_zero_U,
             k, k_user, k_item, k_main,
             user_bias,
             nonneg,
             lam, ptr_lam_unique,
             scale_lam, scale_lam_sideinfo,
+            scale_bias_const, scaling_biasA,
             w_main, w_user, w_implicit,
             ptr_B_plus_bias,
             ptr_BtB,
@@ -1831,26 +1880,30 @@ def precompute_matrices_collective_explicit(
             ptr_BeTBeChol,
             ptr_BiTBi,
             ptr_TransCtCinvCt,
-            ptr_CtCw
+            ptr_CtCw,
+            ptr_CtUbias
         )
     if retval == 1:
         raise MemoryError("Could not allocate sufficient memory.")
 
     return B_plus_bias, BtB, TransBtBinvBt, BtXbias, \
-           BeTBeChol, BiTBi, TransCtCinvCt, CtCw
+           BeTBeChol, BiTBi, TransCtCinvCt, CtCw, CtUbias
 
 def precompute_matrices_collective_implicit(
         np.ndarray[real_t, ndim=2] B,
         np.ndarray[real_t, ndim=2] C,
+        np.ndarray[real_t, ndim=1] U_colmeans,
         int_t k, int_t k_main, int_t k_user, int_t k_item,
         real_t lam, real_t w_main, real_t w_user,
         real_t w_main_multiplier,
-        bint nonneg = 0
+        bint nonneg = 0,
+        bint NA_as_zero_U = 0
     ):
     cdef int_t n = B.shape[0]
     cdef np.ndarray[real_t, ndim=2] BtB = np.empty((k+k_main, k+k_main), dtype=c_real_t)
     cdef np.ndarray[real_t, ndim=2] BeTBe = np.zeros((0,0), dtype=c_real_t)
     cdef np.ndarray[real_t, ndim=2] BeTBeChol = np.zeros((0,0), dtype=c_real_t)
+    cdef np.ndarray[real_t, ndim=1] CtUbias = np.zeros(0, dtype=c_real_t)
     if C.shape[0] and C.shape[1]:
         BeTBe = np.empty((k_user+k+k_main, k_user+k+k_main), dtype=c_real_t)
         if not nonneg:
@@ -1870,21 +1923,29 @@ def precompute_matrices_collective_implicit(
         p = C.shape[0]
         ptr_C = &C[0,0]
 
+    cdef real_t *ptr_U_colmeans = NULL
+    cdef real_t *ptr_CtUbias = NULL
+    if (U_colmeans.shape[0]) and (NA_as_zero_U):
+        ptr_U_colmeans = &U_colmeans[0]
+        CtUbias = np.zeros(k_user+k, dtype=c_real_t)
+        ptr_CtUbias = &CtUbias[0]
+
     cdef int_t retval = 0
     with nogil, boundscheck(False), nonecheck(False), wraparound(False):
         retval = precompute_collective_implicit(
             &B[0,0], B.shape[0],
             ptr_C, p,
+            ptr_U_colmeans, NA_as_zero_U,
             k, k_user, k_item, k_main,
             lam, w_main, w_user, w_main_multiplier,
             nonneg,
             1,
-            ptr_BtB, ptr_BeTBe, ptr_BeTBeChol
+            ptr_BtB, ptr_BeTBe, ptr_BeTBeChol, ptr_CtUbias
         )
     if retval == 1:
         raise MemoryError("Could not allocate sufficient memory.")
 
-    return BtB, BeTBe, BeTBeChol
+    return BtB, BeTBe, BeTBeChol, CtUbias
 
 def call_factors_collective_explicit_single(
         np.ndarray[real_t, ndim=1] Xa_dense,
@@ -1910,12 +1971,14 @@ def call_factors_collective_explicit_single(
         np.ndarray[real_t, ndim=2] BiTBi,
         np.ndarray[real_t, ndim=2] CtCw,
         np.ndarray[real_t, ndim=2] TransCtCinvCt,
+        np.ndarray[real_t, ndim=1] CtUbias,
         real_t glob_mean,
         int_t n_orig,
         int_t k, int_t k_user = 0, int_t k_item = 0, int_t k_main = 0,
         real_t lam = 1e2, real_t lam_bias = 1e2,
         real_t l1_lam = 0., real_t l1_lam_bias = 0.,
         bint scale_lam = 0, bint scale_lam_sideinfo = 0,
+        bint scale_bias_const = 0, real_t scaling_biasA = 0.,
         real_t w_user = 1., real_t w_main = 1., real_t w_implicit = 0.5,
         bint user_bias = 1,
         bint NA_as_zero_U = 0, bint NA_as_zero_X = 0,
@@ -1978,6 +2041,7 @@ def call_factors_collective_explicit_single(
     cdef real_t *ptr_BiTBi = NULL
     cdef real_t *ptr_CtCw = NULL
     cdef real_t *ptr_TransCtCinvCt = NULL
+    cdef real_t *ptr_CtUbias = NULL
     if TransBtBinvBt.shape[0]:
         ptr_TransBtBinvBt = &TransBtBinvBt[0,0]
     if BtB.shape[0]:
@@ -1992,6 +2056,8 @@ def call_factors_collective_explicit_single(
         ptr_CtCw = &CtCw[0,0]
     if TransCtCinvCt.shape[0]:
         ptr_TransCtCinvCt = &TransCtCinvCt[0,0]
+    if CtUbias.shape[0]:
+        ptr_CtUbias = &CtUbias[0]
     
     cdef real_t Abias = 0;
     cdef real_t *ptr_Abias = NULL
@@ -2043,6 +2109,7 @@ def call_factors_collective_explicit_single(
             lam, ptr_lam_unique,
             l1_lam, ptr_l1_lam_unique,
             scale_lam, scale_lam_sideinfo,
+            scale_bias_const, scaling_biasA,
             w_main, w_user, w_implicit,
             n_max, include_all_X,
             ptr_BtB,
@@ -2052,6 +2119,7 @@ def call_factors_collective_explicit_single(
             ptr_BiTBi,
             ptr_CtCw,
             ptr_TransCtCinvCt,
+            ptr_CtUbias,
             ptr_B_plus_bias
         )
     if retval == 1:
@@ -2071,6 +2139,7 @@ def call_factors_collective_implicit_single(
         np.ndarray[real_t, ndim=2] BeTBe,
         np.ndarray[real_t, ndim=2] BtB,
         np.ndarray[real_t, ndim=2] BeTBeChol,
+        np.ndarray[real_t, ndim=1] CtUbias,
         int_t k, int_t k_user = 0, int_t k_item = 0, int_t k_main = 0,
         real_t lam = 1e0, real_t l1_lam = 0., real_t alpha = 40.,
         real_t w_main_multiplier = 1.,
@@ -2102,12 +2171,15 @@ def call_factors_collective_implicit_single(
     cdef real_t *ptr_BeTBe = NULL
     cdef real_t *ptr_BtB = NULL
     cdef real_t *ptr_BeTBeChol = NULL
+    cdef real_t *ptr_CtUbias = NULL
     if BeTBe.shape[0]:
         ptr_BeTBe = &BeTBe[0,0]
     if BtB.shape[0]:
         ptr_BtB = &BtB[0,0]
     if BeTBeChol.shape[0]:
         ptr_BeTBeChol = &BeTBeChol[0,0]
+    if CtUbias.shape[0]:
+        ptr_CtUbias = &CtUbias[0]
 
     cdef real_t *ptr_Xa = NULL
     cdef int_t *ptr_Xa_i = NULL
@@ -2133,7 +2205,8 @@ def call_factors_collective_implicit_single(
             apply_log_transf,
             ptr_BeTBe,
             ptr_BtB,
-            ptr_BeTBeChol
+            ptr_BeTBeChol,
+            ptr_CtUbias
         )
     if retval == 1:
         raise MemoryError("Could not allocate sufficient memory.")
@@ -2420,7 +2493,7 @@ def call_predict_multiple(
         np.ndarray[int_t, ndim=1] predA,
         np.ndarray[int_t, ndim=1] predB,
         int_t k, int_t k_user = 0, int_t k_item = 0, int_t k_main = 0,
-        int_t nthreads = 1
+        int nthreads = 1
     ):
     cdef real_t *ptr_biasA = NULL
     cdef real_t *ptr_biasB = NULL
@@ -2456,7 +2529,7 @@ def call_predict_X_old_collective_explicit(
         np.ndarray[int_t, ndim=1] predA,
         np.ndarray[int_t, ndim=1] predB,
         int_t k, int_t k_user = 0, int_t k_item = 0, int_t k_main = 0,
-        int_t nthreads = 1
+        int nthreads = 1
     ):
     cdef real_t *ptr_biasA = NULL
     cdef real_t *ptr_biasB = NULL
@@ -2492,7 +2565,7 @@ def call_topN(
         int_t n_top,
         int_t k, int_t k_user = 0, int_t k_item = 0, int_t k_main = 0,
         bint output_score = 1,
-        int_t nthreads = 1
+        int nthreads = 1
     ):
 
     cdef real_t *ptr_biasB = NULL
@@ -2545,7 +2618,7 @@ def call_predict_X_old_content_based(
         np.ndarray[real_t, ndim=1] biasB,
         int_t n_new,
         real_t glob_mean,
-        int_t nthreads
+        int nthreads
     ):
 
     cdef real_t *ptr_U = NULL
@@ -2620,7 +2693,7 @@ def call_predict_X_new_content_based(
         np.ndarray[real_t, ndim=1] D_bias,
         int_t n_new,
         real_t glob_mean,
-        int_t nthreads
+        int nthreads
     ):
 
     cdef real_t *ptr_U = NULL
@@ -2715,7 +2788,7 @@ def call_topN_new_content_based(
         int_t n_new_I,
         real_t glob_mean = 0.,
         int_t n_top = 10, bint output_score = 1,
-        int_t nthreads = 1
+        int nthreads = 1
     ):
     
     cdef real_t *ptr_U = NULL
@@ -2799,9 +2872,12 @@ def call_fit_most_popular(
         bint user_bias = 0,
         bint implicit = 0, bint adjust_weight = 1,
         bint scale_lam = 0,
+        bint scale_bias_const = 0,
         bint apply_log_transf = 0,
         bint nonneg = 0,
-        int_t nthreads = 1
+        bint center = 1,
+        bint NA_as_zero = 0,
+        int nthreads = 1
     ):
     cdef real_t *ptr_Xfull = NULL
     cdef int_t *ptr_ixA = NULL
@@ -2836,20 +2912,24 @@ def call_fit_most_popular(
 
     cdef real_t w_main_multiplier = 1.
 
+    cdef real_t *ptr_glob_mean = NULL
+    if (center):
+        ptr_glob_mean = &glob_mean
+
     cdef int_t retval = 0
     with nogil, boundscheck(False), nonecheck(False), wraparound(False):
         retval = fit_most_popular(
             ptr_biasA, ptr_biasB,
-            &glob_mean,
+            ptr_glob_mean,
             lam_user, lam_item,
-            scale_lam,
+            scale_lam, scale_bias_const,
             alpha,
             m, n,
             ptr_ixA, ptr_ixB, ptr_X, nnz,
             ptr_Xfull,
             ptr_weight,
             implicit, adjust_weight, apply_log_transf,
-            nonneg,
+            nonneg, NA_as_zero,
             &w_main_multiplier,
             nthreads
         )
@@ -2884,7 +2964,7 @@ def call_fit_content_based_lbfgs(
         np.ndarray[real_t, ndim=1] lam_unique=np.empty(0, dtype=c_real_t),
         bint verbose=1, int_t print_every=10,
         int_t n_corr_pairs=5, int_t maxiter=400,
-        int_t nthreads=1, bint prefer_onepass=0,
+        int nthreads=1, bint prefer_onepass=0,
         int_t seed=1, bint handle_interrupt=1,
         bint start_with_ALS=1
     ):
@@ -2941,8 +3021,8 @@ def call_fit_content_based_lbfgs(
     cdef np.ndarray[real_t, ndim=2] Bm = np.empty((n, k), dtype=c_real_t)
 
     rs = np.random.Generator(np.random.MT19937(seed = seed))
-    cdef np.ndarray[real_t, ndim=2] C = rs.standard_normal(size=(p,k), dtype = c_real_t)
-    cdef np.ndarray[real_t, ndim=2] D = rs.standard_normal(size=(q,k), dtype = c_real_t)
+    cdef np.ndarray[real_t, ndim=2] C = rs.standard_normal(size=(p,k), dtype = c_real_t) / 100
+    cdef np.ndarray[real_t, ndim=2] D = rs.standard_normal(size=(q,k), dtype = c_real_t) / 100
     cdef np.ndarray[real_t, ndim=1] C_bias = np.zeros(0, dtype=c_real_t)
     cdef np.ndarray[real_t, ndim=1] D_bias = np.zeros(0, dtype=c_real_t)
     cdef real_t *ptr_C = &C[0,0]
@@ -3033,6 +3113,7 @@ def call_factors_collective_explicit_multiple(
         np.ndarray[real_t, ndim=2] BiTBi,
         np.ndarray[real_t, ndim=2] TransCtCinvCt,
         np.ndarray[real_t, ndim=2] CtCw,
+        np.ndarray[real_t, ndim=1] CtUbias,
         int_t m_u, int_t m_x,
         real_t glob_mean,
         int_t n_orig,
@@ -3040,13 +3121,14 @@ def call_factors_collective_explicit_multiple(
         real_t lam = 1e2, real_t lam_bias = 1e2,
         real_t l1_lam = 0., real_t l1_lam_bias = 0.,
         bint scale_lam = 0, bint scale_lam_sideinfo = 0,
+        bint scale_bias_const = 0, real_t scaling_biasA = 0,
         real_t w_user = 1., real_t w_main = 1., real_t w_implicit = 0.5,
         bint user_bias = 1,
         bint NA_as_zero_U = 0, bint NA_as_zero_X = 0,
         bint nonneg = 0,
         bint add_implicit_features = 0,
         bint include_all_X = 1,
-        int_t nthreads = 1
+        int nthreads = 1
     ):
     if add_implicit_features and not max(Bi.shape[0], Bi.shape[1], BiTBi.shape[0], BiTBi.shape[1]):
         raise ValueError("Cannot use 'add_implicit_features' with empty 'Bi'.")
@@ -3140,6 +3222,7 @@ def call_factors_collective_explicit_multiple(
     cdef real_t *ptr_BtXbias = NULL
     cdef real_t *ptr_BeTBeChol = NULL
     cdef real_t *ptr_BiTBi = NULL
+    cdef real_t *ptr_CtUbias = NULL
     if TransBtBinvBt.shape[0]:
         ptr_TransBtBinvBt = &TransBtBinvBt[0,0]
     if BtB.shape[0]:
@@ -3150,6 +3233,8 @@ def call_factors_collective_explicit_multiple(
         ptr_BeTBeChol = &BeTBeChol[0,0]
     if BiTBi.shape[0]:
         ptr_BiTBi = &BiTBi[0,0]
+    if CtUbias.shape[0]:
+        ptr_CtUbias = &CtUbias[0]
 
     cdef int_t m = max([m_x, m_u, m_ubin])
     cdef np.ndarray[real_t, ndim=2] A = np.empty((m, k_user+k+k_main), dtype=c_real_t)
@@ -3201,6 +3286,7 @@ def call_factors_collective_explicit_multiple(
             lam, ptr_lam_unique,
             l1_lam, ptr_l1_lam_unique,
             scale_lam, scale_lam_sideinfo,
+            scale_bias_const, scaling_biasA,
             w_main, w_user, w_implicit,
             B.shape[0], include_all_X,
             ptr_BtB,
@@ -3211,6 +3297,7 @@ def call_factors_collective_explicit_multiple(
             ptr_TransCtCinvCt,
             ptr_CtCw,
             ptr_B_plus_bias,
+            ptr_CtUbias,
             nthreads
         )
     if retval == 1:
@@ -3238,6 +3325,7 @@ def call_factors_collective_implicit_multiple(
         np.ndarray[real_t, ndim=2] BeTBe,
         np.ndarray[real_t, ndim=2] BtB,
         np.ndarray[real_t, ndim=2] BeTBeChol,
+        np.ndarray[real_t, ndim=1] CtUbias,
         int_t n, int_t m_u, int_t m_x,
         int_t k, int_t k_user = 0, int_t k_item = 0, int_t k_main = 0,
         real_t lam = 1e2, real_t l1_lam = 0., real_t alpha = 40.,
@@ -3246,7 +3334,7 @@ def call_factors_collective_implicit_multiple(
         bint apply_log_transf = 0,
         bint NA_as_zero_U = 0,
         bint nonneg = 0,
-        int_t nthreads = 1
+        int nthreads = 1
     ):
     cdef int_t m = max([m_u, m_x])
 
@@ -3299,12 +3387,15 @@ def call_factors_collective_implicit_multiple(
     cdef real_t *ptr_BeTBe = NULL
     cdef real_t *ptr_BtB = NULL
     cdef real_t *ptr_BeTBeChol = NULL
+    cdef real_t *ptr_CtUbias = NULL
     if BeTBe.shape[0]:
         ptr_BeTBe = &BeTBe[0,0]
     if BtB.shape[0]:
         ptr_BtB = &BtB[0,0]
     if BeTBeChol.shape[0]:
         ptr_BeTBeChol = &BeTBeChol[0,0]
+    if CtUbias.shape[0]:
+        ptr_CtUbias = &CtUbias[0]
 
     cdef np.ndarray[real_t, ndim=2] A = np.empty((m, k_user+k+k_main), dtype=c_real_t)
     if m == 0:
@@ -3331,6 +3422,7 @@ def call_factors_collective_implicit_multiple(
             ptr_BeTBe,
             ptr_BtB,
             ptr_BeTBeChol,
+            ptr_CtUbias,
             nthreads
         )
     if retval == 1:
@@ -3369,7 +3461,7 @@ def call_factors_offsets_explicit_multiple(
         real_t w_user = 1.,
         bint user_bias = 1,
         bint exact = 0, bint output_a = 1,
-        int_t nthreads = 1
+        int nthreads = 1
     ):
 
     cdef real_t *ptr_Xfull = NULL
@@ -3518,7 +3610,7 @@ def call_factors_offsets_implicit_multiple(
         real_t lam = 1e2, real_t alpha = 1.,
         bint apply_log_transf = 0,
         bint output_a = 1,
-        int_t nthreads = 1
+        int nthreads = 1
     ):
 
     cdef int_t *ptr_ixA = NULL
@@ -3630,6 +3722,7 @@ def call_impute_X_collective_explicit(
         np.ndarray[real_t, ndim=2] BiTBi,
         np.ndarray[real_t, ndim=2] TransCtCinvCt,
         np.ndarray[real_t, ndim=2] CtCw,
+        np.ndarray[real_t, ndim=1] CtUbias,
         int_t m_u,
         real_t glob_mean,
         int_t n_orig,
@@ -3637,13 +3730,14 @@ def call_impute_X_collective_explicit(
         real_t lam = 1e2, real_t lam_bias = 1e2,
         real_t l1_lam = 0., real_t l1_lam_bias = 0.,
         bint scale_lam = 0, bint scale_lam_sideinfo = 0,
+        bint scale_bias_const = 0, real_t scaling_biasA = 0,
         real_t w_user = 1., real_t w_main = 1., real_t w_implicit = 0.5,
         bint user_bias = 1,
         bint NA_as_zero_U = 0,
         bint nonneg = 0,
         bint add_implicit_features = 0,
         bint include_all_X = 1,
-        int_t nthreads = 1
+        int nthreads = 1
     ):
     
     cdef int_t n_max = B.shape[0]
@@ -3719,6 +3813,7 @@ def call_impute_X_collective_explicit(
     cdef real_t *ptr_C_bin = NULL
     cdef real_t *ptr_TransCtCinvCt = NULL
     cdef real_t *ptr_CtCw = NULL
+    cdef real_t *ptr_CtUbias = NULL
     if C.shape[0]:
         ptr_C = &C[0,0]
     if C_bin.shape[0]:
@@ -3727,6 +3822,8 @@ def call_impute_X_collective_explicit(
         ptr_TransCtCinvCt = &TransCtCinvCt[0,0]
     if CtCw.shape[0]:
         ptr_CtCw = &CtCw[0,0]
+    if CtUbias.shape[0]:
+        ptr_CtUbias = &CtUbias[0]
 
     cdef real_t *ptr_TransBtBinvBt = NULL
     cdef real_t *ptr_BtB = NULL
@@ -3765,6 +3862,7 @@ def call_impute_X_collective_explicit(
             lam, ptr_lam_unique,
             l1_lam, ptr_l1_lam_unique,
             scale_lam, scale_lam_sideinfo,
+            scale_bias_const, scaling_biasA,
             w_main, w_user, w_implicit,
             n_max, include_all_X,
             ptr_BtB,
@@ -3773,6 +3871,7 @@ def call_impute_X_collective_explicit(
             ptr_BiTBi,
             ptr_TransCtCinvCt,
             ptr_CtCw,
+            ptr_CtUbias,
             ptr_B_plus_bias,
             nthreads
         )

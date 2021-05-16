@@ -38,7 +38,7 @@ While the method was initially devised for recommender systems, can also be used
 
 ## Update 2020-03-20
 
-The package has been rewritten in C with Python wrappers. If you've used earlier versions of this package which relied on Tensorflow for the calculations (and before that, Casadi), the optimal hyperparameters will be very different now as it has changed some details of the loss function such as not dividing some terms by the number of entries.
+The package has been rewritten in C with Python wrappers. If you've used earlier versions of this package which relied on Tensorflow for the calculations, the optimal hyperparameters will be very different now as it has changed some details of the loss function such as not dividing some terms by the number of entries.
 
 The new version is faster, multi-threaded, and has some new functionality, but if for some reason you still need the old one, it can be found under the git branch "tensorflow".
 
@@ -66,6 +66,9 @@ The new version is faster, multi-threaded, and has some new functionality, but i
 
 
 ## Instalation
+
+**Note:** this package relies heavily on BLAS and LAPACK functions for calculations. It's recommended to use MKL (in Python, comes by default in Anaconda, in R for Windows, can be gotten through Microsoft's R distribution) or OpenBLAS as backend for them. See [this link](https://github.com/david-cortes/R-openblas-in-windows) for instructions on getting OpenBLAS for R in Windows.
+
 
 * Python:
 
@@ -120,8 +123,7 @@ sudo ldconfig
 
 Linkage is then done with `-lcmfrec`.
 
-
-**Note:** this package relies heavily on BLAS and LAPACK functions for calculations. It's recommended to use MKL (in Python, comes by default in Anaconda, in R for Windows, can be gotten through Microsoft's R distribution) or OpenBLAS as backend for them, but note that, as of OpenBLAS 0.3.9, some of the functions used here might be significantly faster in MKL depending on CPU architecture. See [this link](https://github.com/david-cortes/R-openblas-in-windows) for instructions on getting OpenBLAS for R in Windows.
+(Recommended to have MKL or OpenBLAS installed)
 
 
 ## Sample Usage

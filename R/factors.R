@@ -126,6 +126,17 @@ process.data.factors <- function(model, obj, X=NULL, weight=NULL,
                 processed_U$m <- max(c(processed_X$m, processed_U$m))
         }
     }
+
+    if (!NROW(processed_X$Xarr) && obj$info$NA_as_zero) {
+        if (NROW(obj$precomputed$B_plus_bias))
+            processed_X$n <- ncol(obj$precomputed$B_plus_bias)
+        else
+            processed_X$n <- ncol(obj$matrices$B)
+    }
+
+    if (!NROW(processed_U$Uarr) && NROW(obj$matrices$C) && obj$info$NA_as_zero_user) {
+        processed_U$p <- ncol(obj$matrices$C)
+    }
     
     return(list(
         processed_X = processed_X,
@@ -170,6 +181,7 @@ factors.CMF <- function(model, X=NULL, U=NULL, U_bin=NULL, weight=NULL,
                       model$info$k, model$info$k_user, model$info$k_item, model$info$k_main,
                       model$info$lambda, model$info$l1_lambda,
                       model$info$scale_lam, model$info$scale_lam_sideinfo,
+                      model$info$scale_bias_const, model$matrices$scaling_biasA,
                       model$info$w_main, model$info$w_user, model$info$w_implicit,
                       NCOL(model$matrices$B), model$info$include_all_X,
                       model$precomputed$BtB,
@@ -180,6 +192,7 @@ factors.CMF <- function(model, X=NULL, U=NULL, U_bin=NULL, weight=NULL,
                       model$precomputed$TransCtCinvCt,
                       model$precomputed$CtC,
                       model$precomputed$B_plus_bias,
+                      model$precomputed$CtUbias,
                       model$info$nthreads)
     check.ret.code(ret_code)
     A <- t(A)
@@ -221,6 +234,7 @@ factors.CMF_implicit <- function(model, X=NULL, U=NULL, ...) {
                       model$precomputed$BeTBe,
                       model$precomputed$BtB,
                       model$precomputed$BeTBeChol,
+                      model$precomputed$CtUbias,
                       model$info$nthreads)
     
     check.ret.code(ret_code)

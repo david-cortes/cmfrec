@@ -17,6 +17,8 @@ CMF.from.model.matrices(
   l1_lambda = 0,
   nonneg = FALSE,
   NA_as_zero = FALSE,
+  scaling_biasA = NULL,
+  scaling_biasB = NULL,
   apply_log_transf = FALSE,
   alpha = 1,
   nthreads = parallel::detectCores()
@@ -59,6 +61,14 @@ Same format as for `lambda`.}
 \item{NA_as_zero}{When passing sparse matrices, whether to take missing entries as
 zero (counting them towards the optimization objective), or to ignore them.}
 
+\item{scaling_biasA}{If passing it, will assume that the model uses the option
+`scale_bias_const=TRUE`, and will use this number as scaling
+for the regularization of the user biases.}
+
+\item{scaling_biasB}{If passing it, will assume that the model uses the option
+`scale_bias_const=TRUE`, and will use this number as scaling
+for the regularization of the item biases.}
+
 \item{apply_log_transf}{If passing `implicit=TRUE`, whether to apply a logarithm
 transformation on the values of `X`.}
 
@@ -88,6 +98,7 @@ user/item mappings.
 ### Example 'adopting' a model from 'recosystem'
 library(cmfrec)
 library(recosystem)
+library(recommenderlab)
 library(MatrixExtra)
 
 ### Fitting a model with 'recosystem'

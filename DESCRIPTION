@@ -1,8 +1,8 @@
 Package: cmfrec
 Type: Package
 Title: Collective Matrix Factorization for Recommender Systems
-Version: 2.4.6
-Date: 2021-05-06
+Version: 3.0.0
+Date: 2021-05-16
 Author: David Cortes [aut, cre, cph], Jorge Nocedal [cph], Naoaki Okazaki [cph]
 Maintainer: David Cortes <david.cortes.rivera@gmail.com>
 URL: https://github.com/david-cortes/cmfrec
@@ -28,6 +28,5 @@ Description: Collective matrix factorization (a.k.a. multi-view or multi-way fac
 	for cold-start recommendations and imputation of 2D data.
 License: MIT + file LICENSE
 Suggests: Matrix, MatrixExtra, recosystem, recommenderlab (>= 0.2-7), MASS
-Enhances: SparseM
 RoxygenNote: 7.1.1
 NeedsCompilation: yes

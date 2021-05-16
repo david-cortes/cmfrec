@@ -65,7 +65,7 @@ process.data.predict.new <- function(model, obj, X=NULL, weight=NULL,
                                      U=NULL, U_bin=NULL,
                                      items=NULL, rows=NULL,
                                      exact=FALSE) {
-    if (model$info$only_prediction_info)
+    if (obj$info$only_prediction_info)
         stop("Cannot use this function after dropping non-essential matrices.")
     
     exact <- check.bool(exact)
@@ -154,6 +154,7 @@ predict_new.CMF <- function(model, items, rows=NULL,
                       model$info$k, model$info$k_user, model$info$k_item, model$info$k_main,
                       model$info$lambda, model$info$l1_lambda,
                       model$info$scale_lam, model$info$scale_lam_sideinfo,
+                      model$info$scale_bias_const, model$matrices$scaling_biasA,
                       model$info$w_main, model$info$w_user, model$info$w_implicit,
                       NCOL(model$matrices$B), model$info$include_all_X,
                       model$precomputed$BtB,
@@ -163,7 +164,8 @@ predict_new.CMF <- function(model, items, rows=NULL,
                       model$precomputed$BiTBi,
                       model$precomputed$TransCtCinvCt,
                       model$precomputed$CtC,
-                      model$precomputed$B_plus_bias)
+                      model$precomputed$B_plus_bias,
+                      model$precomputed$CtUbias)
     check.ret.code(ret_code)
     return(scores)
 }
@@ -200,7 +202,8 @@ predict_new.CMF_implicit <- function(model, items, rows=NULL,
                       model$info$apply_log_transf,
                       model$precomputed$BeTBe,
                       model$precomputed$BtB,
-                      model$precomputed$BeTBeChol)
+                      model$precomputed$BeTBeChol,
+                      model$precomputed$CtUbias)
     check.ret.code(ret_code)
     return(scores)
 }

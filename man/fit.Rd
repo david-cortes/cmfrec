@@ -27,6 +27,7 @@ CMF(
   add_implicit_features = FALSE,
   scale_lam = FALSE,
   scale_lam_sideinfo = FALSE,
+  scale_bias_const = FALSE,
   k_user = 0L,
   k_item = 0L,
   k_main = 0L,
@@ -35,6 +36,8 @@ CMF(
   w_item = 1,
   w_implicit = 0.5,
   l1_lambda = 0,
+  center_U = TRUE,
+  center_I = TRUE,
   maxiter = 800L,
   niter = 10L,
   parallelize = "separate",
@@ -71,6 +74,8 @@ CMF_implicit(
   w_user = 1,
   w_item = 1,
   l1_lambda = 0,
+  center_U = TRUE,
+  center_I = TRUE,
   niter = 10L,
   max_cg_steps = 3L,
   finalize_chol = FALSE,
@@ -91,12 +96,15 @@ MostPopular(
   X,
   weight = NULL,
   implicit = FALSE,
-  apply_log_transf = FALSE,
-  nonneg = FALSE,
+  center = TRUE,
   user_bias = ifelse(implicit, FALSE, TRUE),
   lambda = 10,
   alpha = 1,
-  scale_lam = FALSE
+  NA_as_zero = FALSE,
+  apply_log_transf = FALSE,
+  nonneg = FALSE,
+  scale_lam = FALSE,
+  scale_bias_const = FALSE
 )
 
 ContentBased(
@@ -367,7 +375,10 @@ has received.}
 
 \item{center}{Whether to center the "X" data by subtracting the mean value. For recommender
 systems, it's highly recommended to pass `TRUE` here, the more so if the
-model has user and/or item biases.}
+model has user and/or item biases.
+
+For `MostPopular`, if passing `implicit=TRUE`, this option will be ignored
+(assumed `FALSE`).}
 
 \item{add_implicit_features}{Whether to automatically add so-called implicit features from the data,
 as in reference [5] and similar. If using this for recommender systems
@@ -393,8 +404,17 @@ this is not supported when passing `implicit=TRUE`, and it is not recommended
 to use for it, as it will tend to
 recommend items which have a single user interaction with
 the maximum possible value (e.g. 5-star movies from only 1 user).
+
+When generating factors based on side information alone,
+if passing `scale_lam_sideinfo`, will regularize assuming
+there was one observation present. Be aware that using this option
+\bold{without} `scale_lam_sideinfo=TRUE` can lead to bad cold-start
+recommendations as it will set a very small regularization for
+users who have no 'X' data.
+
 Warning: in smaller datasets, using this option can result in top-N
-recommendations having mostly items with very few interactions.}
+recommendations having mostly items with very few interactions (see
+parameter `scale_bias_const`).}
 
 \item{scale_lam_sideinfo}{Whether to scale (increase) the regularization
 parameter for each row of the "A" and "B"
@@ -402,6 +422,17 @@ matrices according to the number of non-missing
 entries in both `X` and the side info matrices
 `U` and `I`. If passing `TRUE` here, `scale_lam`
 will also be assumed to be `TRUE`.}
+
+\item{scale_bias_const}{When passing `scale_lam=TRUE` and `user_bias=TRUE` or `item_bias=TRUE`,
+whether to apply the same scaling to the regularization \bold{of the biases} to all
+users and items, according to the average number of non-missing entries rather
+than to the number of entries for each specific user/item.
+
+While this tends to result in worse RMSE, it tends to make the top-N
+recommendations less likely to select items with only a few interactions
+from only a few users.
+
+Ignored when passing `scale_lam=FALSE` or not using user/item biases.}
 
 \item{k_user}{Number of factors in the factorizing `A` and `C` matrices which will be used
 only for the `U` and `U_bin` matrices, while being ignored for the `X` matrix.
@@ -450,6 +481,14 @@ fit through a coordinate descent procedure, which is significantly
 slower than the Cholesky method with L2 regularization.
 Only supported with the ALS method.
 Not recommended.}
+
+\item{center_U}{Whether to center the 'U' matrix column-by-column. Be aware that this
+is a simple mean centering without regularization. One might want to
+turn this option off when using `NA_as_zero_user=TRUE`.}
+
+\item{center_I}{Whether to center the 'I' matrix column-by-column. Be aware that this
+is a simple mean centering without regularization. One might want to
+turn this option off when using `NA_as_zero_item=TRUE`.}
 
 \item{maxiter}{Maximum L-BFGS iterations to perform. The procedure will halt if it
 has not converged after this number of updates. Note that the `CMF` model is likely to
@@ -543,11 +582,19 @@ and use a higher regularization coupled with more iterations..}
 
 \item{nonneg_C}{Whether to constrain the `C` matrix to be non-negative.
 In order for this to work correctly, the `U` input data must also be
-non-negative.}
+non-negative.
+
+Note: by default, the 'U' data will be centered by columns, which
+doesn't play well with non-negativity constraints. One will likely
+want to pass `center_U=FALSE` along with this.}
 
 \item{nonneg_D}{Whether to constrain the `D` matrix to be non-negative.
 In order for this to work correctly, the `I` input data must also be
-non-negative.}
+non-negative.
+
+Note: by default, the 'I' data will be centered by columns, which
+doesn't play well with non-negativity constraints. One will likely
+want to pass `center_I=FALSE` along with this.}
 
 \item{max_cd_steps}{Maximum number of coordinate descent updates to perform per iteration.
 Pass zero for no limit.

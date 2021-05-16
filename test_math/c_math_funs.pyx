@@ -17,7 +17,7 @@ cdef extern from "cmfrec.h":
         double *buffer_double,
         double lam, double lam_last,
         double l1_lam, double l1_lam_last,
-        bint scale_lam,
+        bint scale_lam, bint scale_bias_const, double wsum,
         double *precomputedTransBtBinvBt,
         double *precomputedBtBw, int cnt_NA, int ld_BtB,
         bint BtB_has_diag, bint BtB_is_scaled, double scale_BtB, int n_BtB,
@@ -25,6 +25,7 @@ cdef extern from "cmfrec.h":
         bint use_cg, int max_cg_steps,
         bint nonneg, int max_cd_steps,
         double *bias_BtX, double *bias_X, double bias_X_glob,
+        double multiplier_bias_BtX,
         bint force_add_diag
     )
 
@@ -94,9 +95,10 @@ cdef extern from "cmfrec.h":
         double *TransCtCinvCt,
         double *CtCw,
         double *col_means,
+        double *CtUbias,
         int k, int k_user, int k_main,
         double lam, double l1_lam, double w_main, double w_user,
-        bint scale_lam,
+        bint scale_lam_sideinfo,
         bint NA_as_zero_U,
         bint nonneg
     )
@@ -117,7 +119,7 @@ cdef extern from "cmfrec.h":
         int k, int k_user, int k_item, int k_main,
         double lam, double w_main, double w_user, double w_implicit, double lam_bias,
         double l1_lam, double l1_lam_bias,
-        bint scale_lam, bint scale_lam_sideinfo,
+        bint scale_lam, bint scale_lam_sideinfo, bint scale_bias_const,
         int n_max, bint include_all_X,
         double *TransBtBinvBt,
         double *BtXbias,
@@ -125,6 +127,7 @@ cdef extern from "cmfrec.h":
         double *BeTBeChol,
         double *BiTBi,
         double *CtCw,
+        double *CtUbias,
         bint NA_as_zero_U, bint NA_as_zero_X,
         bint nonneg,
         double *B_plus_bias
@@ -157,12 +160,14 @@ cdef extern from "cmfrec.h":
         int cnt_NA[], double *weight, bint NA_as_zero,
         double lam, double lam_last,
         double l1_lam, double l1_lam_last,
-        bint scale_lam,
+        bint scale_lam, bint scale_bias_const, double *wsumA,
         bint do_B, bint is_first_iter,
         int nthreads,
         bint use_cg, int max_cg_steps,
         bint nonneg, int max_cd_steps,
+        double *bias_restore,
         double *bias_BtX, double *bias_X, double bias_X_glob,
+        double *bias_static, double multiplier_bias_BtX,
         bint keep_precomputedBtB,
         double *precomputedBtB, c_bool *filled_BtB,
         double *buffer_double
@@ -191,22 +196,26 @@ cdef extern from "cmfrec.h":
         double *Xones, int k_main_i, int ldXones,
         bint add_implicit_features,
         size_t U_csr_p[], int U_csr_i[], double* U_csr,
-        double* U, int cnt_NA_u[],
+        double* U, int cnt_NA_u[], double *U_colmeans,
         bint full_dense_u, bint near_dense_u, bint NA_as_zero_U,
         double lam, double w_user, double w_implicit, double lam_last,
         double l1_lam, double l1_lam_bias,
         bint scale_lam, bint scale_lam_sideinfo,
+        bint scale_bias_const, double *wsumA,
         bint do_B,
         int nthreads,
         bint use_cg, int max_cg_steps, bint is_first_iter,
         bint nonneg, int max_cd_steps,
+        double *bias_restore,
         double *bias_BtX, double *bias_X, double bias_X_glob,
         bint keep_precomputed,
         double *precomputedBtB,
         double *precomputedCtCw,
         double *precomputedBeTBeChol,
         double *precomputedBiTBi,
-        c_bool *filled_BtB, c_bool *filled_CtCw, c_bool *filled_BeTBeChol,
+        double *precomputedCtUbias,
+        c_bool *filled_BtB, c_bool *filled_CtCw,
+        c_bool *filled_BeTBeChol, c_bool *filled_CtUbias,
         c_bool *CtC_is_scaled,
         double* buffer_double
     )
@@ -217,7 +226,7 @@ cdef extern from "cmfrec.h":
         int k, int k_main, int k_user, int k_item,
         size_t Xcsr_p[], int Xcsr_i[], double *Xcsr,
         size_t U_csr_p[], int U_csr_i[], double *U_csr,
-        double *U, int cnt_NA_u[],
+        double *U, int cnt_NA_u[], double *U_colmeans,
         bint full_dense_u, bint near_dense_u, bint NA_as_zero_U,
         double lam, double l1_lam, double w_user,
         int nthreads,
@@ -227,9 +236,11 @@ cdef extern from "cmfrec.h":
         double *precomputedBeTBe,
         double *precomputedBeTBeChol,
         double *precomputedCtC,
+        double *precomputedCtUbias,
         bint *filled_BeTBe,
         bint *filled_BeTBeChol,
         bint *filled_CtC,
+        bint *filled_CtUbias,
         double *buffer_double
     )
 
@@ -282,11 +293,13 @@ cdef extern from "cmfrec.h":
         double *C, int p,
         double *Bi, bint add_implicit_features,
         double *biasB, double glob_mean, bint NA_as_zero_X,
+        double *U_colmeans, bint NA_as_zero_U,
         int k, int k_user, int k_item, int k_main,
         bint user_bias,
         bint nonneg,
         double lam, double *lam_unique,
         bint scale_lam, bint scale_lam_sideinfo,
+        bint scale_bias_const, double scaling_biasA,
         double w_main, double w_user, double w_implicit,
         double *B_plus_bias,
         double *BtB,
@@ -295,20 +308,25 @@ cdef extern from "cmfrec.h":
         double *BeTBeChol,
         double *BiTBi,
         double *TransCtCinvCt,
-        double *CtCw
+        double *CtCw,
+        double *CtUbias
     )
 
     int initialize_biases(
         double *glob_mean, double *biasA, double *biasB,
         bint user_bias, bint item_bias, bint center,
         double lam_user, double lam_item,
-        bint scale_lam,
+        bint scale_lam, bint scale_bias_const,
+        bint force_calc_user_scale, bint force_calc_item_scale,
+        double *scaling_biasA, double *scaling_biasB,
         int m, int n,
         int m_bias, int n_bias,
         int ixA[], int ixB[], double *X, size_t nnz,
         double *Xfull, double *Xtrans,
         size_t Xcsr_p[], int Xcsr_i[], double *Xcsr,
         size_t Xcsc_p[], int Xcsc_i[], double *Xcsc,
+        double *weight, double *Wtrans,
+        double *weightR, double *weightC,
         bint nonneg,
         int nthreads
     )
@@ -386,14 +404,16 @@ def py_factors_closed_form(
             <double*>NULL, 0,
             <double*>NULL, 0,
             <double*>NULL, 0., 0,
+            <double*>NULL, 0,
             k, 0, 0, 0,
             0, nonneg,
             lam, <double*>NULL,
-            0, 0,
+            0, 0, 0, 0.,
             1., 1., 1.,
             <double*>NULL,
             &BtBw[0,0],
             &TransBtBinvBt[0,0],
+            <double*>NULL,
             <double*>NULL,
             <double*>NULL,
             <double*>NULL,
@@ -411,7 +431,7 @@ def py_factors_closed_form(
         ptr_weight,
         &buffer_double[0],
         lam, lam,
-        0., 0., 0,
+        0., 0., 0, 0, 0.,
         ptr_TransBtBinvBt,
         ptr_BtBw, np.sum(np.isnan(Xa_dense)), k,
         1, 0, 1., 0,
@@ -419,6 +439,7 @@ def py_factors_closed_form(
         0, 0,
         nonneg, 10000,
         <double*>NULL, <double*>NULL, 0.,
+        1.,
         0
     )
     return outp
@@ -571,10 +592,11 @@ def py_collective_factors(
             ptr_C, p,
             ptr_Bi, add_implicit_features,
             <double*>NULL, 0., NA_as_zero_X,
+            <double*>NULL, 0,
             k, k_user, k_item, k_main,
             0, 0,
             lam, <double*>NULL,
-            0, 0,
+            0, 0, 0, 0.,
             1., w_user, w_implicit,
             <double*>NULL,
             ptr_BtB,
@@ -583,7 +605,8 @@ def py_collective_factors(
             ptr_BeTBeChol,
             ptr_BiTBi,
             <double*>NULL,
-            ptr_CtCw
+            ptr_CtCw,
+            <double*>NULL
         )
 
         # if U.shape[0] or U_sp.shape[0]:
@@ -624,10 +647,11 @@ def py_collective_factors(
         k, k_user, k_item, k_main,
         lam, w_main, w_user, w_implicit, lam,
         0., 0.,
-        0, 0,
+        0, 0, 0,
         B.shape[0], 0,
         ptr_TransBtBinvBt, <double*>NULL, ptr_BtB, ptr_BeTBeChol,
         ptr_BiTBi, ptr_CtCw,
+        <double*>NULL,
         NA_as_zero_U, NA_as_zero_X,
         0,
         <double*>NULL
@@ -959,10 +983,11 @@ def py_collective_cold_start(
             &C[0,0], p,
             <double*>NULL, 0,
             <double*>NULL, 0., 0,
+            <double*>NULL, 0,
             k, k_user, 0, k_main,
             0, 0,
             lam, <double*>NULL,
-            0, 0,
+            0, 0, 0, 0.,
             1., w_user, 1.,
             <double*>NULL,
             <double*>NULL,
@@ -971,7 +996,8 @@ def py_collective_cold_start(
             <double*>NULL,
             <double*>NULL,
             ptr_TransCtCinvCt,
-            ptr_CtCw
+            ptr_CtCw,
+            <double*>NULL
         )
 
         # CtCw = w_user * C.T.dot(C)
@@ -1009,6 +1035,7 @@ def py_collective_cold_start(
         ptr_Ubin, pbin,
         ptr_C, ptr_Cb,
         ptr_TransCtCinvCt, ptr_CtCw,
+        <double*>NULL,
         <double*>NULL,
         k, k_user, k_main,
         lam, 0., 1., w_user,
@@ -1074,11 +1101,14 @@ def py_optimizeA(
         ptr_Xfull, Xfull.shape[1], full_dense, as_near_dense,
         ptr_cnt_NA, ptr_weight, NA_as_zero,
         lam, lam,
-        0., 0., 0,
+        0., 0.,
+        0, 0, <double*>NULL,
         is_B, 1,
         nthreads,
         0, 0, 0, 0,
+        <double*>NULL,
         <double*>NULL, <double*>NULL, 0.,
+        <double*>NULL, 1.,
         0,
         <double*>NULL, &ignore,
         &buffer_double[0]
@@ -1164,6 +1194,7 @@ def py_optimizeA_collective(
     cdef c_bool ignore2 = 0
     cdef c_bool ignore3 = 0
     cdef c_bool ignore4 = 0
+    cdef c_bool ignore5 = 0
 
     cdef c_bool add_implicit_features = 0
     cdef double *ptr_Bi = NULL
@@ -1195,17 +1226,19 @@ def py_optimizeA_collective(
         ptr_X_ones, k_main, m if is_B else n,
         add_implicit_features,
         ptr_Ucsr_p, ptr_Ucsr_i, ptr_Ucsr,
-        ptr_U, ptr_cnt_NA_u,
+        ptr_U, ptr_cnt_NA_u, <double*>NULL,
         full_dense_u, as_near_dense_u, NA_as_zero_U,
         lam, w_user, w_implicit, lam,
-        0., 0., 0, 0,
+        0., 0., 0, 0, 0, <double*>NULL,
         is_B,
         nthreads,
         0, 0, 1,
         0, 0,
+        <double*>NULL,
         <double*>NULL, <double*>NULL, 0.,
         0, <double*>NULL, <double*>NULL, <double*>NULL, <double*>NULL,
-        &ignore1, &ignore2, &ignore3, &ignore4,
+        <double*>NULL,
+        &ignore1, &ignore2, &ignore3, &ignore4, &ignore5,
         &buffer_double[0]
     )
     return A
@@ -1293,6 +1326,7 @@ def py_optimizeA_collective_implicit(
     cdef c_bool ignore1 = 0
     cdef c_bool ignore2 = 0
     cdef c_bool ignore3 = 0
+    cdef c_bool ignore4 = 0
 
     optimizeA_collective_implicit(
         &A[0,0], &B[0,0], &C[0,0],
@@ -1300,7 +1334,7 @@ def py_optimizeA_collective_implicit(
         k, k_main, k_user, k_item,
         ptr_Xcsr_p, ptr_Xcsr_i, ptr_Xcsr,
         ptr_Ucsr_p, ptr_Ucsr_i, ptr_Ucsr,
-        ptr_U, ptr_cnt_NA_u,
+        ptr_U, ptr_cnt_NA_u, <double*>NULL,
         full_dense_u, as_near_dense_u, NA_as_zero_U,
         lam/w_main, 0., w_user/w_main,
         nthreads,
@@ -1310,9 +1344,11 @@ def py_optimizeA_collective_implicit(
         <double*>NULL,
         <double*>NULL,
         <double*>NULL,
+        <double*>NULL,
         &ignore1,
         &ignore2,
         &ignore3,
+        &ignore4,
         &buffer_double[0]
     )
 
@@ -1572,17 +1608,18 @@ def py_initialize_biases(
             ptr_Xcsc_i = &Xcsc_i[0]
             ptr_Xcsc = &Xcsc[0]
     
-    cdef double glob_mean
+    cdef double glob_mean, unused1, unused2
     initialize_biases(
         &glob_mean, ptr_biasA, ptr_biasB,
         user_bias, item_bias, 1,
-        0., 0., 0,
+        0., 0., 0, 0, 0, 0, &unused1, &unused2,
         m, n,
         m, n,
         ptr_ixA, ptr_ixB, ptr_X, nnz,
         ptr_Xfull, ptr_Xtrans,
         ptr_Xcsr_p, ptr_Xcsr_i, ptr_Xcsr,
         ptr_Xcsc_p, ptr_Xcsc_i, ptr_Xcsc,
+        <double*>NULL, <double*>NULL, <double*>NULL, <double*>NULL,
         0,
         nthreads
     )

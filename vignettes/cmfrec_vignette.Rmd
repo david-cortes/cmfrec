@@ -266,7 +266,7 @@ U <- MovieLenseUser
 U$id      <- NULL
 U$zipcode <- NULL
 U$age2    <- U$age^2
-### Note that `cmfrec` does not standardize features
+### Note that `cmfrec` does not standardize features beyond mean centering
 U$age     <- (U$age - mean(U$age)) / sd(U$age)
 U$age2    <- (U$age2 - mean(U$age2)) / sd(U$age2)
 U <- model.matrix(~.-1, data=U)

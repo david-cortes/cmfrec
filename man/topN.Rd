@@ -119,15 +119,17 @@ For example usage, see the main section \link{fit_models}.}
 \item{include}{If passing this, will only make a ranking among the item IDs
 provided here. See the documentation for `user` for how the IDs should be passed.
 This should be an integer or character vector, or alternatively, as a sparse vector
-from the `Matrix` package, from which the non-missing entries will be taken as
-those to include
+from the `Matrix` package (inheriting from class `sparseVector`),
+from which the non-missing entries will be taken as those to include.
+
 Cannot be used together with `exclude`.}
 
 \item{exclude}{If passing this, will exclude from the ranking all the item IDs
 provided here. See the documentation for `user` for how the IDs should be passed.
 This should be an integer or character vector, or alternatively, as a sparse vector
-from the `Matrix` package, from which the non-missing entries will be taken as
-those to exclude.
+from the `Matrix` package (inheriting from class `sparseVector`),
+from which the non-missing entries will be taken as those to exclude.
+
 Cannot be used together with `include`.}
 
 \item{output_score}{Whether to also output the predicted values, in addition

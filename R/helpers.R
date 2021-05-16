@@ -325,14 +325,16 @@ get.empty.precomputed <- function() {
     return(list(
         TransBtBinvBt = matrix(numeric(), nrow=0L, ncol=0L),
         BtB = matrix(numeric(), nrow=0L, ncol=0L),
-        BtXbias = matrix(numeric(), nrow=0L, ncol=0L),
+        BtXbias = numeric(),
         TransCtCinvCt = matrix(numeric(), nrow=0L, ncol=0L),
         CtC = matrix(numeric(), nrow=0L, ncol=0L),
         BeTBe = matrix(numeric(), nrow=0L, ncol=0L),
         BeTBeChol = matrix(numeric(), nrow=0L, ncol=0L),
         BiTBi = matrix(numeric(), nrow=0L, ncol=0L),
         B_plus_bias = matrix(numeric(), nrow=0L, ncol=0L),
-        Bm_plus_bias = matrix(numeric(), nrow=0L, ncol=0L)
+        Bm_plus_bias = matrix(numeric(), nrow=0L, ncol=0L),
+        CtUbias = numeric(),
+        DtIbias = numeric()
     ))
 }
 
@@ -352,9 +354,11 @@ get.empty.matrices <- function() {
         Bi = matrix(numeric(), nrow=0L, ncol=0L),
         Am = matrix(numeric(), nrow=0L, ncol=0L),
         Bm = matrix(numeric(), nrow=0L, ncol=0L),
-        glob_mean = 0.,
+        glob_mean = numeric(1L),
         U_colmeans = numeric(),
-        I_colmeans = numeric()
+        I_colmeans = numeric(),
+        scaling_biasA = numeric(1L),
+        scaling_biasB = numeric(1L)
     ))
 }
 
@@ -393,6 +397,9 @@ get.empty.info <- function() {
         center = FALSE,
         scale_lam = FALSE,
         scale_lam_sideinfo = FALSE,
+        scale_bias_const = TRUE,
+        center_U = TRUE,
+        center_I = TRUE,
         only_prediction_info = FALSE,
         nthreads = 1L
     ))
@@ -418,9 +425,9 @@ process.new.X.single <- function(X, X_col, X_val, weight, info, n_max) {
     
     n_use <- ifelse(info$include_all_X, n_max, info$n_orig)
     
-    allowed_X <- c("numeric", "integer", "matrix", "dsparseVector")
+    allowed_X <- c("numeric", "integer", "matrix", "sparseVector")
     if (!is.null(X)) {
-        if (!NROW(intersect(class(X), allowed_X)))
+        if (!inherits(X, allowed_X))
             stop("Invalid 'X' - allowed types: ", paste(allowed_X, collapse=", "))
         if ("matrix" %in% class(X)) {
             if (NROW(X) > 1L)
@@ -471,7 +478,7 @@ process.new.X.single <- function(X, X_col, X_val, weight, info, n_max) {
         if (!("numeric" %in% class(weight)))
             stop("'weight' must be a numeric vector.")
         
-        if (!is.null(X) && !("dsparseVector" %in% class(X))) {
+        if (!is.null(X) && !inherits(X, "sparseVector")) {
             if (NROW(X) != NROW(weight))
                 stop("'weight' must have the same number of entries as 'X'.")
         } else if (!is.null(X_col)) {
@@ -524,9 +531,9 @@ process.new.U.single <- function(U, U_col, U_val, name, mapping, p, colnames,
         }
     }
     
-    allowed_U <- c("numeric", "integer", "dsparseVector")
+    allowed_U <- c("numeric", "integer", "sparseVector")
     if (!is.null(U)) {
-        if (!NROW(intersect(class(U), allowed_U)))
+        if (!inherits(U, allowed_U))
             stop(sprintf("Invalid '%s' - allowed types: %s", name, paste(allowed_U, collapse=", ")))
         if (NROW(U) > p)
             stop(sprintf("'%s' has more columns than the model was fit to.", name))
@@ -607,15 +614,15 @@ process.new.X <- function(obj, X, weight=NULL,
     
     allowed_X <- c("matrix")
     if (allow_sparse)
-        allowed_X <- c(allowed_X, c("data.frame", "dsparseVector",
+        allowed_X <- c(allowed_X, c("data.frame", "sparseVector",
                                     "dgTMatrix", "matrix.coo",
                                     "dgRMatrix", "matrix.csr"))
     if (allow_null)
         allowed_X <- c(allowed_X, "NULL")
-    if (!NROW(intersect(class(X), allowed_X)))
+    if (!inherits(X, allowed_X))
         stop("Invalid 'X' - supported types: ", paste(allowed_X, collapse=", "))
     
-    if ("data.frame" %in% class(X)) {
+    if (is.data.frame(X)) {
         if (!is.null(weight))
             stop("'weight' should be the 4th column of 'X' when 'X' is a 'data.frame'.")
         if (ncol(X) < 3L)
@@ -642,37 +649,40 @@ process.new.X <- function(obj, X, weight=NULL,
             out$Wsp <- X[[4L]]
         }
         
-    } else if ("dgTMatrix" %in% class(X)) {
+    } else if (inherits(X, "dgTMatrix")) {
         out$Xrow <- X@i
         out$Xcol <- X@j
         out$Xval <- .Call("deep_copy", X@x)
         out$m    <- X@Dim[1L]
         out$n    <- X@Dim[2L]
-    } else if ("matrix.coo" %in% class(X)) {
+    } else if (inherits(X, "matrix.coo")) {
         out$Xrow <- X@ia - 1L
         out$Xcol <- X@ja - 1L
         out$Xval <- .Call("deep_copy", X@ra)
         out$m    <- X@dimension[1L]
         out$n    <- X@dimension[2L]
-    } else if ("dgRMatrix" %in% class(X)) {
+    } else if (inherits(X, "dgRMatrix")) {
         out$Xcsr_p <- .Call("as_size_t", X@p)
         out$Xcsr_i <- X@j
         out$Xcsr   <- .Call("deep_copy", X@x)
         out$m      <- X@Dim[1L]
         out$n      <- X@Dim[2L]
-    } else if ("matrix.csr" %in% class(X)) {
+    } else if (inherits(X, "matrix.csr")) {
         out$Xcsr_p <- .Call("as_size_t", X@ia - 1L)
         out$Xcsr_i <- X@ja - 1L
         out$Xcsr   <- .Call("deep_copy", X@ra)
         out$m      <- X@dimension[1L]
         out$n      <- X@dimension[2L]
-    } else if ("dsparseVector" %in% class(X)) {
+    } else if (inherits(X, "sparseVector")) {
         out$Xcsr_p <- .Call("as_size_t", c(0L, NROW(X@i)))
         out$Xcsr_i <- X@i - 1L
-        out$Xcsr   <- .Call("deep_copy", X@x)
+        if ("x" %in% names(attributes(X)))
+            out$Xcsr <- .Call("deep_copy", as.numeric(X@x))
+        else
+            out$Xcsr <- rep(1., length(out$Xcsr_i))
         out$m      <- 1L
         out$n      <- X@length
-    } else if ("matrix" %in% class(X)) {
+    } else if (is.matrix(X)) {
         out$Xarr <- as.numeric(t(X))
         out$m    <- nrow(X)
         out$n    <- ncol(X)
@@ -774,13 +784,13 @@ process.new.U <- function(U, U_cols, p, name="U",
     if (allow_sparse)
         allowed_U <- c(allowed_U, c("dgTMatrix", "matrix.coo",
                                     "dgRMatrix", "matrix.csr",
-                                    "dsparseVector"))
-    if (!NROW(intersect(class(U), allowed_U)))
+                                    "sparseVector"))
+    if (!inherits(U, allowed_U))
         stop(sprintf("Invalid '%s' - allowed types: ", name), paste(allowed_U, collapse=", "))
     
     msg_new_cols <- sprintf("'%s' cannot contain new columns.", name)
     
-    if ("matrix" %in% class(U)) {
+    if (is.matrix(U)) {
         if (ncol(U) > p)
             stop(msg_new_cols)
         if (exact_shapes && NCOL(U) != p)
@@ -789,40 +799,43 @@ process.new.U <- function(U, U_cols, p, name="U",
         out$Uarr <- as.numeric(t(U))
         out$m    <- nrow(U)
         out$p    <- ncol(U)
-    } else if ("dgTMatrix" %in% class(U)) {
+    } else if (inherits(U, "dgTMatrix")) {
         if (U@Dim[2L] > p)
             stop(msg_new_cols)
         out$Urow <- U@i
         out$Ucol <- U@j
         out$Uval <- .Call("deep_copy", U@x)
         out$m    <- U@Dim[1L]
-    } else if ("matrix.coo" %in% class(U)) {
+    } else if (inherits(U, "matrix.coo")) {
         if (U@dimension[2L] > p)
             stop(msg_new_cols)
         out$Urow <- U@ia - 1L
         out$Ucol <- U@ja - 1L
         out$Uval <- .Call("deep_copy", U@ra)
         out$m    <- U@dimension[1L]
-    } else if ("dgRMatrix" %in% class(U)) {
+    } else if (inherits(U, "dgRMatrix")) {
         if (U@Dim[2L] > p)
             stop(msg_new_cols)
         out$Ucsr_p <- .Call("as_size_t", U@p)
         out$Ucsr_i <- U@j
         out$Ucsr   <- .Call("deep_copy", U@x)
         out$m      <- U@Dim[1L]
-    } else if ("matrix.csr" %in% class(U)) {
+    } else if (inherits(U, "matrix.csr")) {
         if (U@dimension[2L] > p)
             stop(msg_new_cols)
         out$Ucsr_p <- .Call("as_size_t", U@ia - 1L)
         out$Ucsr_i <- U@ja - 1L
         out$Ucsr   <- .Call("deep_copy", U@ra)
         out$m      <- U@dimension[1L]
-    } else if ("dsparseVector" %in% class(U)) {
+    } else if (inherits(U, "sparseVector")) {
         if (U@length > p)
             stop(msg_new_cols)
         out$Ucsr_p <- .Call("as_size_t", c(0L, NROW(U@i)))
         out$Ucsr_i <- U@i - 1L
-        out$Ucsr   <- .Call("deep_copy", U@x)
+        if ("x" %in% names(attributes(U)))
+            out$Ucsr <- .Call("deep_copy", as.numeric(U@x))
+        else
+            out$Ucsr <- rep(1., length(U@i))
         out$m      <- 1L
     } else {
         stop("Unexpected error.")

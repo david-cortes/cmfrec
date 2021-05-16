@@ -21,6 +21,8 @@ cmfrec/cfuns_float.c
 cmfrec.egg-info/*
 
 build/*
+deleteme/*
+benchmark/*
 
 docs/.directory
 docs/_build/*

@@ -2,6 +2,8 @@
 ^\.Rproj\.user$
 ^\.git.*$
 ^build/.*$
+^deleteme/.*$
+^benchmark/.*$
 ^cmfrec/.*$
 ^cmfrec.egg-info/.*$
 ^deleteme/.*$

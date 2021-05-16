@@ -104,7 +104,7 @@ process.data.factors.single <- function(model, obj,
         stop("Cannot pass 'weight' without 'X' data.")
     
     if (model %in% c("CMF_implicit", "OMF_implicit")) {
-        if (!is.null(X) && !("dsparseVector" %in% class(X)))
+        if (!is.null(X) && !inherits(X, "sparseVector"))
             stop("Cannot only pass 'X' as sparse vector for implicit-feedback models.")
     }
     
@@ -130,6 +130,16 @@ process.data.factors.single <- function(model, obj,
         }
     }
     
+    if (!NROW(processed_X$X) && obj$info$NA_as_zero) {
+        if (NROW(obj$precomputed$B_plus_bias))
+            processed_X$n <- ncol(obj$precomputed$B_plus_bias)
+        else
+            processed_X$n <- ncol(obj$matrices$B)
+    }
+
+    if (!NROW(processed_U$U) && NROW(obj$matrices$C) && obj$info$NA_as_zero_user) {
+        processed_U$p <- ncol(obj$matrices$C)
+    }
     
     return(list(
         processed_X = processed_X,
@@ -175,6 +185,7 @@ factors_single.CMF <- function(model, X = NULL, X_col = NULL, X_val = NULL,
                       model$info$k, model$info$k_user, model$info$k_item, model$info$k_main,
                       model$info$lambda, model$info$l1_lambda,
                       model$info$scale_lam, model$info$scale_lam_sideinfo,
+                      model$info$scale_bias_const, model$matrices$scaling_biasA,
                       model$info$w_main, model$info$w_user, model$info$w_implicit,
                       NCOL(model$matrices$B), model$info$include_all_X,
                       model$precomputed$BtB,
@@ -184,7 +195,8 @@ factors_single.CMF <- function(model, X = NULL, X_col = NULL, X_val = NULL,
                       model$precomputed$BiTBi,
                       model$precomputed$CtC,
                       model$precomputed$TransCtCinvCt,
-                      model$precomputed$B_plus_bias)
+                      model$precomputed$B_plus_bias,
+                      model$precomputed$CtUbias)
     check.ret.code(ret_code)
     if (inputs$output_bias) (
         return(list(factors = a_vec, bias = a_bias))
@@ -218,7 +230,8 @@ factors_single.CMF_implicit <- function(model, X = NULL, X_col = NULL, X_val = N
                       model$info$apply_log_transf,
                       model$precomputed$BeTBe,
                       model$precomputed$BtB,
-                      model$precomputed$BeTBeChol)
+                      model$precomputed$BeTBeChol,
+                      model$precomputed$CtUbias)
     check.ret.code(ret_code)
     return(a_vec)
 }

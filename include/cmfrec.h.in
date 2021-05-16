@@ -32,8 +32,9 @@
             non-negative least squares problem."
             International Conference on Computer Analysis of Images
             and Patterns. Springer, Berlin, Heidelberg, 2005.
-        (e) Zhou, Yunhong, et al.
-            "Large-scale parallel collaborative filtering for the netflix prize."
+        (g) Zhou, Yunhong, et al.
+            "Large-scale parallel collaborative filtering for
+             the netflix prize."
             International conference on algorithmic applications in management.
             Springer, Berlin, Heidelberg, 2008.
 
@@ -49,7 +50,7 @@
 
     MIT License:
 
-    Copyright (c) 2020 David Cortes
+    Copyright (c) 2020-2021 David Cortes
 
     All rights reserved.
 
@@ -290,15 +291,27 @@ extern "C" {
                        be passed, in which case it will be set to zero, and this
                        zero should be passed to the predicion functions.
                        Dimension: [1]
+    @param scaling_biasA (out)(optional) When passing 'scale_lam=true' along
+                          with 'scale_bias_const=true' and using user biases,
+                          this will hold the scaling that is applied to the
+                          regularization of the user biases. Must be passed
+                          when having user biases along with the two options
+                          above.
+                          Dimension: [1]
+    @param scaling_biasB (out)(optional) When passing 'scale_lam=true' along
+                          with 'scale_bias_const=true' and using item biases,
+                          this will hold the scaling that is applied to the
+                          regularization of the item biases. Must be passed
+                          when having item biases along with the two options
+                          above.
+                          Dimension: [1]
     @param U_colmeans  (out)(optional) The column means for the "U" matrix,
-                        which are used to center it. These are not calculated
-                        with the "NA_as_zero_U" option, but must still be passed
-                        whenever there is "U" data.
+                        which are used to center it. If not passing it, will not
+                        center the "U" matrix.
                         Dimension: [m_u]
     @param I_colmeans  (out)(optional) The column means for the "I" matrix,
-                        which are used to center it. These are not calculated
-                        with the "NA_as_zero_I" option, but must still be passed
-                        whenever there is "I" data.
+                        which are used to center it. If not passing it, will not
+                        center the "I" matrix.
                         Dimension: [n_i]
     @param w_main_multiplier  (out) Number to multiply 'w_main' with, if
                                passing 'adjust_weight=true'. Must be passed
@@ -375,7 +388,19 @@ extern "C" {
                       optimal value for "lam" will be much smaller
                       (and likely below 0.1).
                       This option tends to give better results, but
-                      requires more hyperparameter tuning.
+                      requires more hyperparameter tuning. In smaller datasets,
+                      using this option can result in top-N recommendations
+                      having mostly items with very few interactions (see
+                      parameter 'scale_bias_const').
+                      When generating factors based on side information alone,
+                      if passing 'scale_lam_sideinfo', will regularize assuming
+                      there was one observation present. Be aware that using
+                      this option **without** `scale_lam_sideinfo=true` can lead
+                      to bad cold-start recommendations as it will set a very
+                      small regularization for users who have no 'X' data.
+                      Warning: in smaller datasets, using this option can result
+                      in top-N recommendations having mostly items with very few
+                      interactions (see parameter `scale_bias_const`).
                       Recommended value: false
     @param scale_lam_sideinfo  Whether to scale (increase) the regularization
                                parameter for each row of the "A" and "B"
@@ -384,6 +409,16 @@ extern "C" {
                                "U" and "I". If passing "true" here, "scale_lam"
                                will also be assumed to be "true".
                                Recommended value: false
+    @scale_bias_const When passing 'scale_lam=true' and using user or item
+                      biases, whether to apply the same scaling to the
+                      regularization of the biases to all users and items,
+                      according to the average number of non-missing entries
+                      rather than to the number of entries for each specific
+                      user/item.
+                      While this tends to result in worse RMSE, it tends to make
+                      the top-N recommendations less likely to select items with
+                      only a few interactions from only a few users.
+                      Recommended value: false
     @param w_main  Weight to assign to the errors of the factorization of "X"
                    in the final objective. Note that, in the implicit model,
                    the sum of errors from "X" is typically much larger than for
@@ -609,6 +644,13 @@ extern "C" {
                           construct the precomputed matrices with all the
                           missing items/columns, so that it would be possible to
                           take in new "X" data about them.
+                          Warning: if fitting the model with
+                          'NA_as_zero_X=false' plus 'include_all_X=false' and
+                          then calling the prediction functions for new data
+                          with 'NA_as_zero_X=true', the precomputed matrices
+                          will be invalid and should not be provided, unless
+                          they are recomputed through the provided helper
+                          function.
                           Recommended value: true
     @param B_plus_bias  (out)(optional)  Precomputed matrix consisting of the
                          "B" matrix with an extra column of all-ones. Only used
@@ -678,6 +720,11 @@ extern "C" {
     @param precomputedCtCw  (out)(optional) Precomputed matrix, containing
                                w_user*t(C)*C
                              Dimension: [k_user+k, k_user+k]
+    @param precomputedCtUbias (out)(optional) Precomputed matrix, containing
+                                 (-w_user)*t(C)*U_colmeans
+                               Only used when centering 'U' (signaled by passing
+                               'U_colmeans') and using 'NA_as_zero_U=true'.
+                               Dimension: [k_user+k]
 
     
     --- Parallelization ---
@@ -700,12 +747,15 @@ extern "C" {
 
 
 /* For ease of reading - these structs/enums are not used by the library */
-enum CmfReturnCode {Success=0, OutOfMemory=1, InvalidInput=2, ReceivedInterrupt=3};
+enum CmfReturnCode {CmfrecSuccess = 0,
+                    CmfrecOutOfMemory = 1,
+                    CmfrecInvalidInput = 2,
+                    CmfrecReceivedInterrupt = 3};
 
 struct CollectiveExplicitModel {
     /* Model parameters and their dimensions */
-    real_t *A; real_t *biasA; int_t m; int_t m_max;
-    real_t *B; real_t *biasB; int_t n; int_t n_max;
+    real_t *A; real_t *biasA; real_t scaling_biasA; int_t m; int_t m_max;
+    real_t *B; real_t *biasB; real_t scaling_biasB; int_t n; int_t n_max;
     real_t *C; int_t m_u; int_t p;
     real_t *D; int_t n_i; int_t q;
     real_t *Cb; int_t m_ubin; int_t pbin;
@@ -720,10 +770,11 @@ struct CollectiveExplicitModel {
     /* Options about the data and factors */
     bool add_implicit_features; bool nonneg;
     bool NA_as_zero_X; bool NA_as_zero_U;
-    bool scale_lam; bool scale_lam_sideinfo;
+    bool scale_lam; bool scale_lam_sideinfo; bool scale_bias_const;
 
-    /* Means used to center data */
+    /* Mean used to center data */
     real_t glob_mean;
+    /* Optional means to center side info */
     real_t *U_colmeans; real_t *I_colmeans;
 
     /* Optional (for predictions) */
@@ -735,12 +786,13 @@ struct CollectiveExplicitModel {
     real_t *precomputedBiTBi;
     real_t *precomputedTransCtCinvCt;
     real_t *precomputedCtCw;
+    real_t *precomputedCtUbias;
 };
 
 struct CollectiveImplicitModel {
     /* Model parameters and their dimensions */
-    real_t *A; real_t *biasA; int_t m;
-    real_t *B; real_t *biasB; int_t n;
+    real_t *A; real_t *biasA; real_t scaling_biasA; int_t m;
+    real_t *B; real_t *biasB; real_t scaling_biasB; int_t n;
     real_t *C; int_t m_u; int_t p;
     real_t *D; int_t n_i; int_t q;
     int_t k; int_t k_user; int_t k_item; int_t k_main;
@@ -749,7 +801,7 @@ struct CollectiveImplicitModel {
     real_t lam; real_t *lam_unique;
     real_t l1_lam; real_t *l1_lam_unique;
 
-    /* Means used to center data */
+    /* Optional means to center side info */
     real_t *U_colmeans; real_t *I_colmeans;
 
     /* Other parameters */
@@ -761,6 +813,7 @@ struct CollectiveImplicitModel {
     real_t *precomputedBtB;
     real_t *precomputedBeTBe;
     real_t *precomputedBeTBeChol;
+    real_t *precomputedCtUbias;
 };
 
 
@@ -817,7 +870,8 @@ int_t fit_collective_explicit_als
     bool user_bias, bool item_bias, bool center,
     real_t lam, real_t *lam_unique,
     real_t l1_lam, real_t *l1_lam_unique,
-    bool scale_lam, bool scale_lam_sideinfo,
+    bool scale_lam, bool scale_lam_sideinfo, bool scale_bias_const,
+    real_t *scaling_biasA, real_t *scaling_biasB,
     real_t *U, int_t m_u, int_t p,
     real_t *II, int_t n_i, int_t q,
     int_t U_row[], int_t U_col[], real_t *U_sp, size_t nnz_U,
@@ -837,7 +891,8 @@ int_t fit_collective_explicit_als
     real_t *precomputedBeTBeChol,
     real_t *precomputedBiTBi,
     real_t *precomputedTransCtCinvCt,
-    real_t *precomputedCtCw
+    real_t *precomputedCtCw,
+    real_t *precomputedCtUbias
 );
 int_t fit_collective_implicit_als
 (
@@ -864,7 +919,8 @@ int_t fit_collective_implicit_als
     bool precompute_for_predictions,
     real_t *precomputedBtB,
     real_t *precomputedBeTBe,
-    real_t *precomputedBeTBeChol
+    real_t *precomputedBeTBeChol,
+    real_t *precomputedCtUbias
 );
 
 
@@ -876,6 +932,7 @@ int_t precompute_collective_explicit
     real_t *C, int_t p,
     real_t *Bi, bool add_implicit_features,
     real_t *biasB, real_t glob_mean, bool NA_as_zero_X,
+    real_t *U_colmeans, bool NA_as_zero_U,
     int_t k, int_t k_user, int_t k_item, int_t k_main,
     bool user_bias,
     bool nonneg,
@@ -889,19 +946,22 @@ int_t precompute_collective_explicit
     real_t *BeTBeChol,
     real_t *BiTBi,
     real_t *TransCtCinvCt,
-    real_t *CtCw
+    real_t *CtCw,
+    real_t *CtUbias
 );
 int_t precompute_collective_implicit
 (
     real_t *B, int_t n,
     real_t *C, int_t p,
+    real_t *U_colmeans, bool NA_as_zero_U,
     int_t k, int_t k_user, int_t k_item, int_t k_main,
     real_t lam, real_t w_main, real_t w_user, real_t w_main_multiplier,
     bool nonneg,
     bool extra_precision,
     real_t *BtB,
     real_t *BeTBe,
-    real_t *BeTBeChol
+    real_t *BeTBeChol,
+    real_t *CtUbias
 );
 
 
@@ -976,8 +1036,8 @@ int_t precompute_collective_implicit
     @param u_vec_sp  (optional) Non-missing values of a single row of the "U"
                       matrix, if passing it as sparse.
                       Dimension: [nnz_u_vec]
-    @param u_vec_X_col  (optional) Column indices of the non-missing values of the
-                       "U" matrix, if passing it as sparse.
+    @param u_vec_X_col  (optional) Column indices of the non-missing values of
+                         the "U" matrix, if passing it as sparse.
                        Dimension: [nnz_u_vec]
     @param nnz_u_vec  (optional) Number of non-missing values in the "U" matrix,
                        if passing it as sparse. If passing "U" as dense, pass
@@ -1026,6 +1086,7 @@ int_t factors_collective_explicit_single
     real_t lam, real_t *lam_unique,
     real_t l1_lam, real_t *l1_lam_unique,
     bool scale_lam, bool scale_lam_sideinfo,
+    bool scale_bias_const, real_t scaling_biasA,
     real_t w_main, real_t w_user, real_t w_implicit,
     int_t n_max, bool include_all_X,
     real_t *BtB,
@@ -1035,6 +1096,7 @@ int_t factors_collective_explicit_single
     real_t *BiTBi,
     real_t *CtCw,
     real_t *TransCtCinvCt,
+    real_t *CtUbias,
     real_t *B_plus_bias
 );
 int_t factors_collective_implicit_single
@@ -1053,7 +1115,8 @@ int_t factors_collective_implicit_single
     bool apply_log_transf,
     real_t *BeTBe,
     real_t *BtB,
-    real_t *BeTBeChol
+    real_t *BeTBeChol,
+    real_t *CtUbias
 );
 int_t factors_collective_explicit_multiple
 (
@@ -1077,6 +1140,7 @@ int_t factors_collective_explicit_multiple
     real_t lam, real_t *lam_unique,
     real_t l1_lam, real_t *l1_lam_unique,
     bool scale_lam, bool scale_lam_sideinfo,
+    bool scale_bias_const, real_t scaling_biasA,
     real_t w_main, real_t w_user, real_t w_implicit,
     int_t n_max, bool include_all_X,
     real_t *BtB,
@@ -1086,6 +1150,7 @@ int_t factors_collective_explicit_multiple
     real_t *BiTBi,
     real_t *TransCtCinvCt,
     real_t *CtCw,
+    real_t *CtUbias,
     real_t *B_plus_bias,
     int_t nthreads
 );
@@ -1109,6 +1174,7 @@ int_t factors_collective_implicit_multiple
     real_t *BeTBe,
     real_t *BtB,
     real_t *BeTBeChol,
+    real_t *CtUbias,
     int_t nthreads
 );
 
@@ -1222,6 +1288,7 @@ int_t impute_X_collective_explicit
     real_t lam, real_t *lam_unique,
     real_t l1_lam, real_t *l1_lam_unique,
     bool scale_lam, bool scale_lam_sideinfo,
+    bool scale_bias_const, real_t scaling_biasA,
     real_t w_main, real_t w_user, real_t w_implicit,
     int_t n_max, bool include_all_X,
     real_t *BtB,
@@ -1230,6 +1297,7 @@ int_t impute_X_collective_explicit
     real_t *BiTBi,
     real_t *TransCtCinvCt,
     real_t *CtCw,
+    real_t *CtUbias,
     real_t *B_plus_bias,
     int_t nthreads
 );
@@ -1278,6 +1346,7 @@ int_t topN_new_collective_explicit
     real_t lam, real_t *lam_unique,
     real_t l1_lam, real_t *l1_lam_unique,
     bool scale_lam, bool scale_lam_sideinfo,
+    bool scale_bias_const, real_t scaling_biasA,
     real_t w_main, real_t w_user, real_t w_implicit,
     int_t n_max, bool include_all_X,
     real_t *BtB,
@@ -1287,6 +1356,7 @@ int_t topN_new_collective_explicit
     real_t *BiTBi,
     real_t *CtCw,
     real_t *TransCtCinvCt,
+    real_t *CtUbias,
     real_t *B_plus_bias,
     /* inputs for topN */
     int_t *include_ix, int_t n_include,
@@ -1312,6 +1382,7 @@ int_t topN_new_collective_implicit
     real_t *BeTBe,
     real_t *BtB,
     real_t *BeTBeChol,
+    real_t *CtUbias,
     /* inputs for topN */
     int_t *include_ix, int_t n_include,
     int_t *exclude_ix, int_t n_exclude,
@@ -1365,6 +1436,7 @@ int_t predict_X_new_collective_explicit
     real_t lam, real_t *lam_unique,
     real_t l1_lam, real_t *l1_lam_unique,
     bool scale_lam, bool scale_lam_sideinfo,
+    bool scale_bias_const, real_t scaling_biasA,
     real_t w_main, real_t w_user, real_t w_implicit,
     int_t n_max, bool include_all_X,
     real_t *BtB,
@@ -1374,6 +1446,7 @@ int_t predict_X_new_collective_explicit
     real_t *BiTBi,
     real_t *TransCtCinvCt,
     real_t *CtCw,
+    real_t *CtUbias,
     real_t *B_plus_bias
 );
 int_t predict_X_new_collective_implicit
@@ -1399,7 +1472,8 @@ int_t predict_X_new_collective_implicit
     bool apply_log_transf,
     real_t *BeTBe,
     real_t *BtB,
-    real_t *BeTBeChol
+    real_t *BeTBeChol,
+    real_t *CtUbias
 );
 
 
@@ -1414,6 +1488,9 @@ int_t predict_X_new_collective_implicit
     header. It corresponds to the collective model with only the biases.
     Note that the scaled regularization option is only applicable when using
     'implicit=false'.
+
+    If passing 'glob_mean=NULL', it will not apply any centering. Centering is
+    not supported with 'implicit=true'.
 
     The model parameters are written to the bias arrays.
 
@@ -1432,7 +1509,7 @@ int_t fit_most_popular
     real_t *biasA, real_t *biasB,
     real_t *glob_mean,
     real_t lam_user, real_t lam_item,
-    bool scale_lam,
+    bool scale_lam, bool scale_bias_const,
     real_t alpha,
     int_t m, int_t n,
     int_t X_row[], int_t X_col[], real_t *X, size_t nnz,

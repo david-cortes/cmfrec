@@ -32,8 +32,9 @@
             non-negative least squares problem."
             International Conference on Computer Analysis of Images
             and Patterns. Springer, Berlin, Heidelberg, 2005.
-        (e) Zhou, Yunhong, et al.
-            "Large-scale parallel collaborative filtering for the netflix prize."
+        (g) Zhou, Yunhong, et al.
+            "Large-scale parallel collaborative filtering for
+             the netflix prize."
             International conference on algorithmic applications in management.
             Springer, Berlin, Heidelberg, 2008.
 
@@ -49,7 +50,7 @@
 
     MIT License:
 
-    Copyright (c) 2021 David Cortes
+    Copyright (c) 2020-2021 David Cortes
 
     All rights reserved.
 
@@ -91,6 +92,7 @@ extern "C" {
     #define tgemm_ dgemm_
     #define tgemv_ dgemv_
     #define tsymv_ dsymv_
+    #define tger_ dger_
 #else
     #define tdot_ sdot_
     #define tcopy_ scopy_
@@ -102,6 +104,7 @@ extern "C" {
     #define tgemm_ sgemm_
     #define tgemv_ sgemv_
     #define tsymv_ ssymv_
+    #define tger_ sger_
 #endif
 
 #ifndef _FOR_R
@@ -115,6 +118,7 @@ real_t tnrm2_(const int_t*, const real_t*, const int_t*);
 void tgemm_(const char*, const char*, const int_t*, const int_t*, const int_t*, const real_t*, const real_t*, const int_t*, const real_t*, const int_t*, const real_t*, const real_t*, const int_t*);
 void tgemv_(const char*, const int_t*, const int_t*, const real_t*, const real_t*, const int_t*, const real_t*, const int_t*, const real_t*, const real_t*, const int_t*);
 void tsymv_(const char*, const int_t*, const real_t*, const real_t*, const int_t*, const real_t*, const int_t*, const real_t*, const real_t*, const int_t*);
+void tger_(const int*, const int*, const real_t*, const real_t*, const int*, const real_t*, const int*, const real_t*, const int*);
 #endif
 
 
@@ -289,6 +293,19 @@ void cblas_tsymv(const CBLAS_ORDER order, const CBLAS_UPLO Uplo, const int_t N, 
     tsymv_(&uplo, &N, &alpha, A, &lda, X, &incX, &beta, Y, &incY);
 }
 
+void cblas_tger(const CBLAS_ORDER order, const int_t m, const int_t n, const real_t alpha,
+                const real_t *x, const int_t incx, const real_t *y, const int_t incy, real_t *a, const int_t lda)
+{
+    if (order == CblasColMajor)
+    {
+        tger_(&m, &n, &alpha, x, &incx, y, &incy, a, &lda);
+    }
+
+    else
+    {
+        tger_(&n, &m, &alpha, y, &incy, x, &incx, a, &lda);
+    }
+}
 
 
 #endif

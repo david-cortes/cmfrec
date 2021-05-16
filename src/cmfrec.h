@@ -32,8 +32,9 @@
             non-negative least squares problem."
             International Conference on Computer Analysis of Images
             and Patterns. Springer, Berlin, Heidelberg, 2005.
-        (e) Zhou, Yunhong, et al.
-            "Large-scale parallel collaborative filtering for the netflix prize."
+        (g) Zhou, Yunhong, et al.
+            "Large-scale parallel collaborative filtering for
+             the netflix prize."
             International conference on algorithmic applications in management.
             Springer, Berlin, Heidelberg, 2008.
 
@@ -49,7 +50,7 @@
 
     MIT License:
 
-    Copyright (c) 2021 David Cortes
+    Copyright (c) 2020-2021 David Cortes
 
     All rights reserved.
 
@@ -82,6 +83,7 @@ extern "C" {
 #include <string.h>
 #include <stdbool.h>
 #include <math.h>
+#include <float.h>
 #ifndef _FOR_R
     #include <stdio.h>
 #endif
@@ -158,7 +160,10 @@ typedef void (*sig_t_)(int);
     #define exp_t exp
     #define log_t log
     #define fabs_t fabs
-    #define InfVal HUGE_VAL
+    #define fmax_t fmax
+    #define sqrt_t sqrt
+    #define EPSILON_T DBL_EPSILON
+    #define HUGE_VAL_T HUGE_VAL
     #define cblas_tdot cblas_ddot
     #define cblas_tcopy cblas_dcopy
     #define cblas_taxpy cblas_daxpy
@@ -168,6 +173,7 @@ typedef void (*sig_t_)(int);
     #define cblas_tnrm2 cblas_dnrm2
     #define cblas_tgemm cblas_dgemm
     #define cblas_tgemv cblas_dgemv
+    #define cblas_tger cblas_dger
     #define cblas_tsymv cblas_dsymv
     #define tlacpy_ dlacpy_
     #define tposv_ dposv_
@@ -180,8 +186,11 @@ typedef void (*sig_t_)(int);
     #define real_t float
     #define exp_t expf
     #define log_t logf
+    #define fmax_t fmaxf
     #define fabs_t fabsf
-    #define InfVal HUGE_VALF
+    #define sqrt_t sqrtf
+    #define EPSILON_T FLT_EPSILON
+    #define HUGE_VAL_T HUGE_VALF
     #define cblas_tdot cblas_sdot
     #define cblas_tcopy cblas_scopy
     #define cblas_taxpy cblas_saxpy
@@ -191,6 +200,7 @@ typedef void (*sig_t_)(int);
     #define cblas_tnrm2 cblas_snrm2
     #define cblas_tgemm cblas_sgemm
     #define cblas_tgemv cblas_sgemv
+    #define cblas_tger cblas_sger
     #define cblas_tsymv cblas_ssymv
     #define tlacpy_ slacpy_
     #define tposv_ sposv_
@@ -201,7 +211,7 @@ typedef void (*sig_t_)(int);
 #endif
 
 #ifndef isfinite
-    #define isfinite(x) ((x) > -InfVal && (x) < InfVal)
+    #define isfinite(x) ((x) > (-HUGE_VAL_T) && (x) < HUGE_VAL_T)
 #endif
 
 #if !defined(USE_INT64) && !defined(MKL_ILP64)
@@ -245,6 +255,8 @@ void cblas_tgemv(const CBLAS_ORDER order,  const CBLAS_TRANSPOSE trans,  const i
          const real_t alpha, const real_t  *a, const int_t lda,  const real_t  *x, const int_t incx,  const real_t beta,  real_t  *y, const int_t incy);
 void cblas_tsymv(const CBLAS_ORDER order, const CBLAS_UPLO Uplo, const int_t N, const real_t alpha, const real_t *A,
                  const int_t lda, const real_t *X, const int_t incX, const real_t beta, real_t *Y, const int_t incY);
+void cblas_tger(const CBLAS_ORDER order, const int_t m, const int_t n, const real_t alpha,
+                const real_t *x, const int_t incx, const real_t *y, const int_t incy, real_t *a, const int_t lda);
 #endif
 
 
@@ -259,13 +271,13 @@ void cblas_tsymv(const CBLAS_ORDER order, const CBLAS_UPLO Uplo, const int_t N, 
 
 
 /* helpers.c */
-void set_to_zero_(real_t *arr, const size_t n, int_t nthreads);
-void copy_arr_(real_t *restrict src, real_t *restrict dest, size_t n, int_t nthreads);
-int_t count_NAs(real_t arr[], size_t n, int_t nthreads);
+void set_to_zero_(real_t *arr, const size_t n, int nthreads);
+void copy_arr_(real_t *restrict src, real_t *restrict dest, size_t n, int nthreads);
+int_t count_NAs(real_t arr[], size_t n, int nthreads);
 void count_NAs_by_row
 (
     real_t *restrict arr, int_t m, int_t n,
-    int_t *restrict cnt_NA, int_t nthreads,
+    int_t *restrict cnt_NA, int nthreads,
     bool *restrict full_dense, bool *restrict near_dense
 );
 void count_NAs_by_col
@@ -274,43 +286,43 @@ void count_NAs_by_col
     int_t *restrict cnt_NA,
     bool *restrict full_dense, bool *restrict near_dense
 );
-void sum_by_rows(real_t *restrict A, real_t *restrict outp, int_t m, int_t n, int_t nthreads);
-void sum_by_cols(real_t *restrict A, real_t *restrict outp, int_t m, int_t n, size_t lda, int_t nthreads);
-void mat_plus_rowvec(real_t *restrict A, real_t *restrict b, int_t m, int_t n, int_t nthreads);
-void mat_plus_colvec(real_t *restrict A, real_t *restrict b, real_t alpha, int_t m, int_t n, size_t lda, int_t nthreads);
+void sum_by_rows(real_t *restrict A, real_t *restrict outp, int_t m, int_t n, int nthreads);
+void sum_by_cols(real_t *restrict A, real_t *restrict outp, int_t m, int_t n, size_t lda, int nthreads);
+void mat_plus_rowvec(real_t *restrict A, real_t *restrict b, int_t m, int_t n, int nthreads);
+void mat_plus_colvec(real_t *restrict A, real_t *restrict b, real_t alpha, int_t m, int_t n, size_t lda, int nthreads);
 void mat_minus_rowvec2
 (
     real_t *restrict Xfull,
     int_t ixA[], int_t ixB[], real_t *restrict X, size_t nnz,
-    real_t *restrict b, int_t m, int_t n, int_t nthreads
+    real_t *restrict b, int_t m, int_t n, int nthreads
 );
 void mat_minus_colvec2
 (
     real_t *restrict Xfull,
     int_t ixA[], int_t ixB[], real_t *restrict X, size_t nnz,
-    real_t *restrict b, int_t m, int_t n, int_t nthreads
+    real_t *restrict b, int_t m, int_t n, int nthreads
 );
-void nan_to_zero(real_t *restrict arr, real_t *restrict comp, size_t n, int_t nthreads);
-void mult_if_non_nan(real_t *restrict arr, real_t *restrict comp, real_t *restrict w, size_t n, int_t nthreads);
-void mult_elemwise(real_t *restrict inout, real_t *restrict other, size_t n, int_t nthreads);
-real_t sum_squares(real_t *restrict arr, size_t n, int_t nthreads);
-void taxpy_large(real_t *restrict A, real_t x, real_t *restrict Y, size_t n, int_t nthreads);
-void tscal_large(real_t *restrict arr, real_t alpha, size_t n, int_t nthreads);
-int_t rnorm(real_t *restrict arr, size_t n, int_t seed, int_t nthreads);
+void nan_to_zero(real_t *restrict arr, real_t *restrict comp, size_t n, int nthreads);
+void mult_if_non_nan(real_t *restrict arr, real_t *restrict comp, real_t *restrict w, size_t n, int nthreads);
+void mult_elemwise(real_t *restrict inout, real_t *restrict other, size_t n, int nthreads);
+real_t sum_squares(real_t *restrict arr, size_t n, int nthreads);
+void taxpy_large(real_t *restrict A, real_t x, real_t *restrict Y, size_t n, int nthreads);
+void tscal_large(real_t *restrict arr, real_t alpha, size_t n, int nthreads);
+int_t rnorm(real_t *restrict arr, size_t n, int_t seed, int nthreads);
 void rnorm_preserve_seed(real_t *restrict arr, size_t n, int_t seed_arr[4]);
 void process_seed_for_larnv(int_t seed_arr[4]);
 void reduce_mat_sum(real_t *restrict outp, size_t lda, real_t *restrict inp,
-                    int_t m, int_t n, int_t nthreads);
-void exp_neg_x(real_t *restrict arr, size_t n, int_t nthreads);
+                    int_t m, int_t n, int nthreads);
+void exp_neg_x(real_t *restrict arr, size_t n, int nthreads);
 void add_to_diag(real_t *restrict A, real_t val, size_t n);
-real_t sum_sq_div_w(real_t *restrict arr, real_t *restrict w, size_t n, bool compensated, int_t nthreads);
+real_t sum_sq_div_w(real_t *restrict arr, real_t *restrict w, size_t n, bool compensated, int nthreads);
 void tgemm_sp_dense
 (
     int_t m, int_t n, real_t alpha,
     size_t indptr[], int_t indices[], real_t values[],
     real_t DenseMat[], size_t ldb,
     real_t OutputMat[], size_t ldc,
-    int_t nthreads
+    int nthreads
 );
 void tgemv_dense_sp
 (
@@ -383,10 +395,10 @@ void coo_to_csr_and_csc
     size_t *restrict csr_p, int_t *restrict csr_i, real_t *restrict csr_v,
     size_t *restrict csc_p, int_t *restrict csc_i, real_t *restrict csc_v,
     real_t *restrict csr_w, real_t *restrict csc_w,
-    int_t nthreads
+    int nthreads
 );
 void row_means_csr(size_t indptr[], real_t *restrict values,
-                   real_t *restrict output, int_t m, int_t nthreads);
+                   real_t *restrict output, int_t m, int nthreads);
 extern bool should_stop_procedure;
 extern bool handle_is_locked;
 void set_interrup_global_variable(int_t s);
@@ -451,7 +463,7 @@ real_t fun_grad_cannonical_form
     real_t scaling,
     real_t *restrict buffer_real_t,
     real_t *restrict buffer_mt,
-    int_t nthreads
+    int nthreads
 );
 void factors_closed_form
 (
@@ -463,7 +475,7 @@ void factors_closed_form
     real_t *restrict buffer_real_t,
     real_t lam, real_t lam_last,
     real_t l1_lam, real_t l1_lam_last,
-    bool scale_lam,
+    bool scale_lam, bool scale_bias_const, real_t wsum,
     real_t *restrict precomputedTransBtBinvBt,
     real_t *restrict precomputedBtB, int_t cnt_NA, int_t ld_BtB,
     bool BtB_has_diag, bool BtB_is_scaled, real_t scale_BtB, int_t n_BtB,
@@ -471,6 +483,7 @@ void factors_closed_form
     bool use_cg, int_t max_cg_steps,/* <- 'cg' should not be used for new data*/
     bool nonneg, int_t max_cd_steps,
     real_t *restrict bias_BtX, real_t *restrict bias_X, real_t bias_X_glob,
+    real_t multiplier_bias_BtX,
     bool force_add_diag
 );
 void factors_explicit_cg
@@ -491,6 +504,7 @@ void factors_explicit_cg_NA_as_zero_weighted
     real_t *restrict weight,
     real_t *restrict precomputedBtB, int_t ld_BtB,
     real_t *restrict bias_BtX, real_t *restrict bias_X, real_t bias_X_glob,
+    real_t multiplier_bias_BtX,
     real_t *restrict buffer_real_t,
     real_t lam, real_t lam_last,
     int_t max_cg_steps
@@ -575,7 +589,7 @@ real_t fun_grad_Adense
     real_t *restrict Xfull, real_t *restrict weight,
     real_t lam, real_t w, real_t lam_last,
     bool do_B, bool reset_grad,
-    int_t nthreads,
+    int nthreads,
     real_t *restrict buffer_real_t
 );
 void add_lam_to_grad_and_fun
@@ -584,7 +598,7 @@ void add_lam_to_grad_and_fun
     real_t *restrict grad,
     real_t *restrict A,
     int_t m, int_t k, int_t lda,
-    real_t lam, int_t nthreads
+    real_t lam, int nthreads
 );
 typedef struct data_fun_grad_Adense {
     int_t lda;
@@ -592,7 +606,7 @@ typedef struct data_fun_grad_Adense {
     int_t m; int_t n; int_t k;
     real_t *Xfull; real_t *weight;
     real_t lam; real_t w; real_t lam_last;
-    int_t nthreads;
+    int nthreads;
     real_t *buffer_real_t;
 } data_fun_grad_Adense;
 typedef struct data_fun_grad_Bdense {
@@ -601,7 +615,7 @@ typedef struct data_fun_grad_Bdense {
     int_t m; int_t n; int_t k;
     real_t *Xfull; real_t *weight;
     real_t lam; real_t w; real_t lam_last;
-    int_t nthreads;
+    int nthreads;
     real_t *buffer_real_t;
 } data_fun_grad_Bdense;
 real_t wrapper_fun_grad_Adense
@@ -626,6 +640,7 @@ size_t buffer_size_optimizeA
     bool has_dense, bool has_weights, bool NA_as_zero,
     bool nonneg, bool has_l1,
     size_t k, size_t nthreads,
+    bool has_bias_static,
     bool pass_allocated_BtB, bool keep_precomputedBtB,
     bool use_cg, bool finalize_chol
 );
@@ -646,12 +661,14 @@ void optimizeA
     int_t cnt_NA[], real_t *restrict weight, bool NA_as_zero,
     real_t lam, real_t lam_last,
     real_t l1_lam, real_t l1_lam_last,
-    bool scale_lam,
+    bool scale_lam, bool scale_bias_const, real_t *restrict wsumA,
     bool do_B, bool is_first_iter,
-    int_t nthreads,
+    int nthreads,
     bool use_cg, int_t max_cg_steps,
     bool nonneg, int_t max_cd_steps,
+    real_t *restrict bias_restore,
     real_t *restrict bias_BtX, real_t *restrict bias_X, real_t bias_X_glob,
+    real_t *restrict bias_static, real_t multiplier_bias_BtX,
     bool keep_precomputedBtB,
     real_t *restrict precomputedBtB, bool *filled_BtB,
     real_t *restrict buffer_real_t
@@ -663,26 +680,67 @@ void optimizeA_implicit
     int_t m, int_t n, int_t k,
     size_t Xcsr_p[], int_t Xcsr_i[], real_t *restrict Xcsr,
     real_t lam, real_t l1_lam,
-    int_t nthreads,
+    int nthreads,
     bool use_cg, int_t max_cg_steps, bool force_set_to_zero,
     bool nonneg, int_t max_cd_steps,
     real_t *restrict precomputedBtB, /* <- will be calculated if not passed */
     real_t *restrict buffer_real_t
+);
+void calc_mean_and_center
+(
+    int_t ixA[], int_t ixB[], real_t *restrict X, size_t nnz,
+    real_t *restrict Xfull, real_t *restrict Xtrans,
+    int_t m, int_t n,
+    size_t Xcsr_p[], int_t Xcsr_i[], real_t *restrict Xcsr,
+    size_t Xcsc_p[], int_t Xcsc_i[], real_t *restrict Xcsc,
+    real_t *restrict weight,
+    bool NA_as_zero, bool nonneg, bool center, int nthreads,
+    real_t *restrict glob_mean
 );
 int_t initialize_biases
 (
     real_t *restrict glob_mean, real_t *restrict biasA, real_t *restrict biasB,
     bool user_bias, bool item_bias, bool center,
     real_t lam_user, real_t lam_item,
-    bool scale_lam,
+    bool scale_lam, bool scale_bias_const,
+    bool force_calc_user_scale, bool force_calc_item_scale,
+    real_t *restrict scaling_biasA, real_t *restrict scaling_biasB,
     int_t m, int_t n,
     int_t m_bias, int_t n_bias,
     int_t ixA[], int_t ixB[], real_t *restrict X, size_t nnz,
     real_t *restrict Xfull, real_t *restrict Xtrans,
     size_t Xcsr_p[], int_t Xcsr_i[], real_t *restrict Xcsr,
     size_t Xcsc_p[], int_t Xcsc_i[], real_t *restrict Xcsc,
+    real_t *restrict weight, real_t *restrict Wtrans,
+    real_t *restrict weightR, real_t *restrict weightC,
     bool nonneg,
-    int_t nthreads
+    int nthreads
+);
+int_t initialize_biases_onesided
+(
+    real_t *restrict Xfull, int_t m, int_t n, bool do_B, int_t *restrict cnt_NA,
+    size_t Xcsr_p[], int_t Xcsr_i[], real_t *restrict Xcsr,
+    real_t *restrict weight, real_t *restrict weightR,
+    real_t glob_mean, bool NA_as_zero, bool nonneg,
+    real_t lam, bool scale_lam,
+    real_t *restrict wsumA,
+    real_t *restrict biasA,
+    int nthreads
+);
+int_t initialize_biases_twosided
+(
+    real_t *restrict Xfull, real_t *restrict Xtrans,
+    int_t *restrict cnt_NA_byrow, int_t *restrict cnt_NA_bycol,
+    int_t m, int_t n,
+    bool NA_as_zero, bool nonneg, double glob_mean,
+    size_t *restrict Xcsr_p, int_t *restrict Xcsr_i, real_t *Xcsr,
+    size_t *restrict Xcsc_p, int_t *restrict Xcsc_i, real_t *Xcsc,
+    real_t *restrict weight, real_t *restrict Wtrans,
+    real_t *restrict weightR, real_t *restrict weightC,
+    real_t lam_user, real_t lam_item, bool scale_lam,
+    real_t *restrict wsumA, real_t *restrict wsumB,
+    real_t *restrict biasA, real_t *restrict biasB,
+    int nthreads
 );
 int_t center_by_cols
 (
@@ -691,7 +749,7 @@ int_t center_by_cols
     int_t ixA[], int_t ixB[], real_t *restrict X, size_t nnz,
     size_t Xcsr_p[], int_t Xcsr_i[], real_t *restrict Xcsr,
     size_t Xcsc_p[], int_t Xcsc_i[], real_t *restrict Xcsc,
-    int_t nthreads
+    int nthreads
 );
 bool check_sparse_indices
 (
@@ -709,7 +767,7 @@ void predict_multiple
     int_t m, int_t n,
     int_t predA[], int_t predB[], size_t nnz,
     real_t *restrict outp,
-    int_t nthreads
+    int nthreads
 );
 int_t cmp_int(const void *a, const void *b);
 extern real_t *ptr_real_t_glob;
@@ -728,30 +786,30 @@ int_t topN
     int_t *restrict include_ix, int_t n_include,
     int_t *restrict exclude_ix, int_t n_exclude,
     int_t *restrict outp_ix, real_t *restrict outp_score,
-    int_t n_top, int_t n, int_t nthreads
+    int_t n_top, int_t n, int nthreads
 );
 int_t fit_most_popular
 (
     real_t *restrict biasA, real_t *restrict biasB,
     real_t *restrict glob_mean,
     real_t lam_user, real_t lam_item,
-    bool scale_lam,
+    bool scale_lam, bool scale_bias_const,
     real_t alpha,
     int_t m, int_t n,
     int_t ixA[], int_t ixB[], real_t *restrict X, size_t nnz,
     real_t *restrict Xfull,
     real_t *restrict weight,
     bool implicit, bool adjust_weight, bool apply_log_transf,
-    bool nonneg,
+    bool nonneg, bool NA_as_zero,
     real_t *restrict w_main_multiplier,
-    int_t nthreads
+    int nthreads
 );
 int_t fit_most_popular_internal
 (
     real_t *restrict biasA, real_t *restrict biasB,
     real_t *restrict glob_mean, bool center,
     real_t lam_user, real_t lam_item,
-    bool scale_lam,
+    bool scale_lam, bool scale_bias_const,
     real_t alpha,
     int_t m, int_t n,
     int_t ixA[], int_t ixB[], real_t *restrict X, size_t nnz,
@@ -760,7 +818,7 @@ int_t fit_most_popular_internal
     bool implicit, bool adjust_weight, bool apply_log_transf,
     bool nonneg,
     real_t *restrict w_main_multiplier,
-    int_t nthreads
+    int nthreads
 );
 int_t topN_old_most_popular
 (
@@ -819,7 +877,7 @@ real_t collective_fun_grad
     real_t *restrict buffer_real_t, real_t *restrict buffer_mt,
     int_t k_main, int_t k_user, int_t k_item,
     real_t w_main, real_t w_user, real_t w_item,
-    int_t nthreads
+    int nthreads
 );
 real_t collective_fun_grad_bin
 (
@@ -829,7 +887,7 @@ real_t collective_fun_grad_bin
     int_t m, int_t pbin, int_t k,
     bool Ub_has_NA, double w_user,
     real_t *restrict buffer_real_t,
-    int_t nthreads
+    int nthreads
 );
 real_t collective_fun_grad_single
 (
@@ -899,7 +957,7 @@ void collective_closed_form_block
     real_t *restrict weight,
     real_t lam, real_t w_user, real_t w_implicit, real_t lam_last,
     real_t l1_lam, real_t l1_lam_bias,
-    bool scale_lam, bool scale_lam_sideinfo,
+    bool scale_lam, bool scale_lam_sideinfo, bool scale_bias_const, real_t wsum,
     real_t *restrict precomputedBtB, int_t cnt_NA_x,
     real_t *restrict precomputedCtCw, int_t cnt_NA_u,
     real_t *restrict precomputedBeTBeChol, int_t n_BtB,
@@ -908,6 +966,7 @@ void collective_closed_form_block
     bool use_cg, int_t max_cg_steps,/* <- 'cg' should not be used for new data*/
     bool nonneg, int_t max_cd_steps,
     real_t *restrict bias_BtX, real_t *restrict bias_X, real_t bias_X_glob,
+    real_t *restrict bias_CtU,
     real_t *restrict buffer_real_t
 );
 void collective_closed_form_block_implicit
@@ -920,6 +979,7 @@ void collective_closed_form_block_implicit
     real_t *restrict u_vec_sp, int_t u_vec_ixB[], size_t nnz_u_vec,
     bool NA_as_zero_U,
     real_t lam, real_t l1_lam, real_t w_user,
+    real_t *restrict bias_CtU,
     real_t *restrict precomputedBeTBe,
     real_t *restrict precomputedBtB, /* for cg, should NOT have lambda added */
     real_t *restrict precomputedBeTBeChol,
@@ -950,6 +1010,7 @@ void collective_block_cg
     real_t *restrict precomputedCtC, /* should NOT be multiplied by 'w_user' */
     int_t max_cg_steps,
     real_t *restrict bias_BtX, real_t *restrict bias_X, real_t bias_X_glob,
+    real_t *restrict bias_CtU,
     real_t *restrict buffer_real_t
 );
 void collective_block_cg_implicit
@@ -965,8 +1026,9 @@ void collective_block_cg_implicit
     real_t lam, real_t w_user,
     int_t cnt_NA_u,
     int_t max_cg_steps,
+    real_t *restrict bias_CtU,
     real_t *restrict precomputedBtB,
-    real_t *restrict precomputedCtC,
+    real_t *restrict precomputedCtC, /* should NOT be multiplied by weight */
     real_t *restrict buffer_real_t
 );
 void optimizeA_collective_implicit
@@ -976,19 +1038,21 @@ void optimizeA_collective_implicit
     int_t k, int_t k_main, int_t k_user, int_t k_item,
     size_t Xcsr_p[], int_t Xcsr_i[], real_t *restrict Xcsr,
     size_t U_csr_p[], int_t U_csr_i[], real_t *restrict U_csr,
-    real_t *restrict U, int_t cnt_NA_u[],
+    real_t *restrict U, int_t cnt_NA_u[], real_t *restrict U_colmeans,
     bool full_dense_u, bool near_dense_u, bool NA_as_zero_U,
     real_t lam, real_t l1_lam, real_t w_user,
-    int_t nthreads,
+    int nthreads,
     bool use_cg, int_t max_cg_steps, bool is_first_iter,
     bool nonneg, int_t max_cd_steps,
     real_t *restrict precomputedBtB, /* will not have lambda with CG */
     real_t *restrict precomputedBeTBe,
     real_t *restrict precomputedBeTBeChol,
     real_t *restrict precomputedCtC,
+    real_t *restrict precomputedCtUbias,
     bool *filled_BeTBe,
     bool *filled_BeTBeChol,
     bool *filled_CtC,
+    bool *filled_CtUbias,
     real_t *restrict buffer_real_t
 );
 int_t collective_factors_cold
@@ -1001,9 +1065,10 @@ int_t collective_factors_cold
     real_t *restrict TransCtCinvCt,
     real_t *restrict CtCw,
     real_t *restrict col_means,
+    real_t *restrict CtUbias,
     int_t k, int_t k_user, int_t k_main,
     real_t lam, real_t l1_lam, real_t w_main, real_t w_user,
-    bool scale_lam,
+    bool scale_lam_sideinfo,
     bool NA_as_zero_U,
     bool nonneg
 );
@@ -1018,6 +1083,7 @@ int_t collective_factors_cold_implicit
     real_t *restrict BtB,
     real_t *restrict BeTBeChol,
     real_t *restrict col_means,
+    real_t *restrict CtUbias,
     int_t k, int_t k_user, int_t k_item, int_t k_main,
     real_t lam, real_t l1_lam,
     real_t w_main, real_t w_user, real_t w_main_multiplier,
@@ -1041,7 +1107,7 @@ int_t collective_factors_warm
     int_t k, int_t k_user, int_t k_item, int_t k_main,
     real_t lam, real_t w_main, real_t w_user, real_t w_implicit,real_t lam_bias,
     real_t l1_lam, real_t l1_lam_bias,
-    bool scale_lam, bool scale_lam_sideinfo,
+    bool scale_lam, bool scale_lam_sideinfo, bool scale_bias_const,
     int_t n_max, bool include_all_X,
     real_t *restrict TransBtBinvBt,
     real_t *restrict BtXbias,
@@ -1049,6 +1115,7 @@ int_t collective_factors_warm
     real_t *restrict BeTBeChol,
     real_t *restrict BiTBi,
     real_t *restrict CtCw,
+    real_t *restrict CtUbias,
     bool NA_as_zero_U, bool NA_as_zero_X,
     bool nonneg,
     real_t *restrict B_plus_bias
@@ -1068,7 +1135,8 @@ int_t collective_factors_warm_implicit
     real_t w_main_multiplier,
     real_t *restrict BeTBe,
     real_t *restrict BtB,
-    real_t *restrict BeTBeChol
+    real_t *restrict BeTBeChol,
+    real_t *restrict CtUbias
 );
 real_t fun_grad_A_collective
 (
@@ -1083,7 +1151,7 @@ real_t fun_grad_A_collective
     real_t *restrict U, bool full_dense_u,
     real_t lam, real_t w_main, real_t w_user, real_t lam_last,
     bool do_B,
-    int_t nthreads,
+    int nthreads,
     real_t *restrict buffer_real_t
 );
 typedef struct data_fun_grad_Adense_col {
@@ -1097,7 +1165,7 @@ typedef struct data_fun_grad_Adense_col {
     real_t *U; bool full_dense_u;
     real_t lam; real_t w_main; real_t w_user; real_t lam_last;
     bool do_B;
-    int_t nthreads;
+    int nthreads;
     real_t *buffer_real_t;
 } data_fun_grad_Adense_col;
 real_t wrapper_fun_grad_Adense_col
@@ -1154,22 +1222,26 @@ void optimizeA_collective
     real_t *restrict Xones, int_t k_main_i, int_t ldXones,
     bool add_implicit_features,
     size_t U_csr_p[], int_t U_csr_i[], real_t *restrict U_csr,
-    real_t *restrict U, int_t cnt_NA_u[],
+    real_t *restrict U, int_t cnt_NA_u[], real_t *restrict U_colmeans,
     bool full_dense_u, bool near_dense_u, bool NA_as_zero_U,
     real_t lam, real_t w_user, real_t w_implicit, real_t lam_last,
     real_t l1_lam, real_t l1_lam_bias,
     bool scale_lam, bool scale_lam_sideinfo,
+    bool scale_bias_const, real_t *restrict wsumA,
     bool do_B,
-    int_t nthreads,
+    int nthreads,
     bool use_cg, int_t max_cg_steps, bool is_first_iter,
     bool nonneg, int_t max_cd_steps,
+    real_t *restrict bias_restore,
     real_t *restrict bias_BtX, real_t *restrict bias_X, real_t bias_X_glob,
     bool keep_precomputed,
     real_t *restrict precomputedBtB,
     real_t *restrict precomputedCtCw,
     real_t *restrict precomputedBeTBeChol,
     real_t *restrict precomputedBiTBi,
-    bool *filled_BtB, bool *filled_CtCw, bool *filled_BeTBeChol,
+    real_t *restrict precomputedCtUbias,
+    bool *filled_BtB, bool *filled_CtCw,
+    bool *filled_BeTBeChol, bool *filled_CtUbias,
     bool *CtC_is_scaled,
     real_t *restrict buffer_real_t
 );
@@ -1214,7 +1286,7 @@ int_t convert_sparse_X
     size_t **Xcsr_p, int_t **Xcsr_i, real_t *restrict *Xcsr,
     size_t **Xcsc_p, int_t **Xcsc_i, real_t *restrict *Xcsc,
     real_t *restrict weight, real_t *restrict *weightR, real_t *restrict *weightC,
-    int_t m, int_t n, int_t nthreads
+    int_t m, int_t n, int nthreads
 );
 int_t preprocess_sideinfo_matrix
 (
@@ -1225,7 +1297,7 @@ int_t preprocess_sideinfo_matrix
     size_t **U_csc_p, int_t **U_csc_i, real_t *restrict *U_csc,
     int_t *restrict *cnt_NA_u_byrow, int_t *restrict *cnt_NA_u_bycol,
     bool *full_dense_u, bool *near_dense_u_row, bool *near_dense_u_col,
-    bool NA_as_zero_U, bool nonneg, int_t nthreads
+    bool NA_as_zero_U, bool nonneg, int nthreads
 );
 real_t wrapper_collective_fun_grad
 (
@@ -1257,7 +1329,7 @@ typedef struct data_collective_fun_grad {
     real_t *buffer_real_t; real_t *buffer_mt;
     int_t k_main; int_t k_user; int_t k_item;
     real_t w_main; real_t w_user; real_t w_item;
-    int_t nthreads;
+    int nthreads;
     int_t print_every; int_t nfev; int_t niter;
 } data_collective_fun_grad;
 int_t fit_collective_explicit_lbfgs_internal
@@ -1280,7 +1352,7 @@ int_t fit_collective_explicit_lbfgs_internal
     int_t k_main, int_t k_user, int_t k_item,
     real_t w_main, real_t w_user, real_t w_item,
     int_t n_corr_pairs, size_t maxiter, int_t seed,
-    int_t nthreads, bool prefer_onepass,
+    int nthreads, bool prefer_onepass,
     bool verbose, int_t print_every, bool handle_interrupt,
     int_t *restrict niter, int_t *restrict nfev,
     real_t *restrict B_plus_bias
@@ -1309,7 +1381,7 @@ int_t fit_collective_explicit_lbfgs
     int_t k_main, int_t k_user, int_t k_item,
     real_t w_main, real_t w_user, real_t w_item,
     int_t n_corr_pairs, size_t maxiter,
-    int_t nthreads, bool prefer_onepass,
+    int nthreads, bool prefer_onepass,
     bool verbose, int_t print_every, bool handle_interrupt,
     int_t *restrict niter, int_t *restrict nfev,
     bool precompute_for_predictions,
@@ -1338,7 +1410,8 @@ int_t fit_collective_explicit_als
     bool user_bias, bool item_bias, bool center,
     real_t lam, real_t *restrict lam_unique,
     real_t l1_lam, real_t *restrict l1_lam_unique,
-    bool scale_lam, bool scale_lam_sideinfo,
+    bool scale_lam, bool scale_lam_sideinfo, bool scale_bias_const,
+    real_t *restrict scaling_biasA, real_t *restrict scaling_biasB,
     real_t *restrict U, int_t m_u, int_t p,
     real_t *restrict II, int_t n_i, int_t q,
     int_t U_row[], int_t U_col[], real_t *restrict U_sp, size_t nnz_U,
@@ -1346,7 +1419,7 @@ int_t fit_collective_explicit_als
     bool NA_as_zero_X, bool NA_as_zero_U, bool NA_as_zero_I,
     int_t k_main, int_t k_user, int_t k_item,
     real_t w_main, real_t w_user, real_t w_item, real_t w_implicit,
-    int_t niter, int_t nthreads, bool verbose, bool handle_interrupt,
+    int_t niter, int nthreads, bool verbose, bool handle_interrupt,
     bool use_cg, int_t max_cg_steps, bool finalize_chol,
     bool nonneg, int_t max_cd_steps, bool nonneg_C, bool nonneg_D,
     bool precompute_for_predictions,
@@ -1358,7 +1431,8 @@ int_t fit_collective_explicit_als
     real_t *restrict precomputedBeTBeChol,
     real_t *restrict precomputedBiTBi,
     real_t *restrict precomputedTransCtCinvCt,
-    real_t *restrict precomputedCtCw
+    real_t *restrict precomputedCtCw,
+    real_t *restrict precomputedCtUbias
 );
 int_t fit_collective_implicit_als
 (
@@ -1379,13 +1453,14 @@ int_t fit_collective_implicit_als
     real_t w_main, real_t w_user, real_t w_item,
     real_t *restrict w_main_multiplier,
     real_t alpha, bool adjust_weight, bool apply_log_transf,
-    int_t niter, int_t nthreads, bool verbose, bool handle_interrupt,
+    int_t niter, int nthreads, bool verbose, bool handle_interrupt,
     bool use_cg, int_t max_cg_steps, bool finalize_chol,
     bool nonneg, int_t max_cd_steps, bool nonneg_C, bool nonneg_D,
     bool precompute_for_predictions,
     real_t *restrict precomputedBtB,
     real_t *restrict precomputedBeTBe,
-    real_t *restrict precomputedBeTBeChol
+    real_t *restrict precomputedBeTBeChol,
+    real_t *restrict precomputedCtUbias
 );
 int_t precompute_collective_explicit
 (
@@ -1393,11 +1468,13 @@ int_t precompute_collective_explicit
     real_t *restrict C, int_t p,
     real_t *restrict Bi, bool add_implicit_features,
     real_t *restrict biasB, real_t glob_mean, bool NA_as_zero_X,
+    real_t *restrict U_colmeans, bool NA_as_zero_U,
     int_t k, int_t k_user, int_t k_item, int_t k_main,
     bool user_bias,
     bool nonneg,
     real_t lam, real_t *restrict lam_unique,
     bool scale_lam, bool scale_lam_sideinfo,
+    bool scale_bias_const, real_t scaling_biasA,
     real_t w_main, real_t w_user, real_t w_implicit,
     real_t *restrict B_plus_bias,
     real_t *restrict BtB,
@@ -1406,19 +1483,22 @@ int_t precompute_collective_explicit
     real_t *restrict BeTBeChol,
     real_t *restrict BiTBi,
     real_t *restrict TransCtCinvCt,
-    real_t *restrict CtCw
+    real_t *restrict CtCw,
+    real_t *restrict CtUbias
 );
 int_t precompute_collective_implicit
 (
     real_t *restrict B, int_t n,
     real_t *restrict C, int_t p,
+    real_t *restrict U_colmeans, bool NA_as_zero_U,
     int_t k, int_t k_user, int_t k_item, int_t k_main,
     real_t lam, real_t w_main, real_t w_user, real_t w_main_multiplier,
     bool nonneg,
     bool extra_precision,
     real_t *restrict BtB,
     real_t *restrict BeTBe,
-    real_t *restrict BeTBeChol
+    real_t *restrict BeTBeChol,
+    real_t *restrict CtUbias
 );
 int_t factors_collective_explicit_single
 (
@@ -1440,6 +1520,7 @@ int_t factors_collective_explicit_single
     real_t lam, real_t *restrict lam_unique,
     real_t l1_lam, real_t *restrict l1_lam_unique,
     bool scale_lam, bool scale_lam_sideinfo,
+    bool scale_bias_const, real_t scaling_biasA,
     real_t w_main, real_t w_user, real_t w_implicit,
     int_t n_max, bool include_all_X,
     real_t *restrict BtB,
@@ -1449,6 +1530,7 @@ int_t factors_collective_explicit_single
     real_t *restrict BiTBi,
     real_t *restrict CtCw,
     real_t *restrict TransCtCinvCt,
+    real_t *restrict CtUbias,
     real_t *restrict B_plus_bias
 );
 int_t factors_collective_implicit_single
@@ -1467,7 +1549,8 @@ int_t factors_collective_implicit_single
     bool apply_log_transf,
     real_t *restrict BeTBe,
     real_t *restrict BtB,
-    real_t *restrict BeTBeChol
+    real_t *restrict BeTBeChol,
+    real_t *restrict CtUbias
 );
 int_t factors_collective_explicit_multiple
 (
@@ -1491,6 +1574,7 @@ int_t factors_collective_explicit_multiple
     real_t lam, real_t *restrict lam_unique,
     real_t l1_lam, real_t *restrict l1_lam_unique,
     bool scale_lam, bool scale_lam_sideinfo,
+    bool scale_bias_const, real_t scaling_biasA,
     real_t w_main, real_t w_user, real_t w_implicit,
     int_t n_max, bool include_all_X,
     real_t *restrict BtB,
@@ -1500,8 +1584,9 @@ int_t factors_collective_explicit_multiple
     real_t *restrict BiTBi,
     real_t *restrict TransCtCinvCt,
     real_t *restrict CtCw,
+    real_t *restrict CtUbias,
     real_t *restrict B_plus_bias,
-    int_t nthreads
+    int nthreads
 );
 int_t factors_collective_implicit_multiple
 (
@@ -1523,7 +1608,8 @@ int_t factors_collective_implicit_multiple
     real_t *restrict BeTBe,
     real_t *restrict BtB,
     real_t *restrict BeTBeChol,
-    int_t nthreads
+    real_t *restrict CtUbias,
+    int nthreads
 );
 int_t impute_X_collective_explicit
 (
@@ -1545,6 +1631,7 @@ int_t impute_X_collective_explicit
     real_t lam, real_t *restrict lam_unique,
     real_t l1_lam, real_t *restrict l1_lam_unique,
     bool scale_lam, bool scale_lam_sideinfo,
+    bool scale_bias_const, real_t scaling_biasA,
     real_t w_main, real_t w_user, real_t w_implicit,
     int_t n_max, bool include_all_X,
     real_t *restrict BtB,
@@ -1553,8 +1640,9 @@ int_t impute_X_collective_explicit
     real_t *restrict BiTBi,
     real_t *restrict TransCtCinvCt,
     real_t *restrict CtCw,
+    real_t *restrict CtUbias,
     real_t *restrict B_plus_bias,
-    int_t nthreads
+    int nthreads
 );
 int_t topN_old_collective_explicit
 (
@@ -1567,7 +1655,7 @@ int_t topN_old_collective_explicit
     int_t *restrict include_ix, int_t n_include,
     int_t *restrict exclude_ix, int_t n_exclude,
     int_t *restrict outp_ix, real_t *restrict outp_score,
-    int_t n_top, int_t n, int_t n_max, bool include_all_X, int_t nthreads
+    int_t n_top, int_t n, int_t n_max, bool include_all_X, int nthreads
 );
 int_t topN_old_collective_implicit
 (
@@ -1578,7 +1666,7 @@ int_t topN_old_collective_implicit
     int_t *restrict include_ix, int_t n_include,
     int_t *restrict exclude_ix, int_t n_exclude,
     int_t *restrict outp_ix, real_t *restrict outp_score,
-    int_t n_top, int_t n, int_t nthreads
+    int_t n_top, int_t n, int nthreads
 );
 int_t topN_new_collective_explicit
 (
@@ -1601,6 +1689,7 @@ int_t topN_new_collective_explicit
     real_t lam, real_t *restrict lam_unique,
     real_t l1_lam, real_t *restrict l1_lam_unique,
     bool scale_lam, bool scale_lam_sideinfo,
+    bool scale_bias_const, real_t scaling_biasA,
     real_t w_main, real_t w_user, real_t w_implicit,
     int_t n_max, bool include_all_X,
     real_t *restrict BtB,
@@ -1610,12 +1699,13 @@ int_t topN_new_collective_explicit
     real_t *restrict BiTBi,
     real_t *restrict CtCw,
     real_t *restrict TransCtCinvCt,
+    real_t *restrict CtUbias,
     real_t *restrict B_plus_bias,
     /* inputs for topN */
     int_t *restrict include_ix, int_t n_include,
     int_t *restrict exclude_ix, int_t n_exclude,
     int_t *restrict outp_ix, real_t *restrict outp_score,
-    int_t n_top, int_t nthreads
+    int_t n_top, int nthreads
 );
 int_t topN_new_collective_implicit
 (
@@ -1635,11 +1725,12 @@ int_t topN_new_collective_implicit
     real_t *restrict BeTBe,
     real_t *restrict BtB,
     real_t *restrict BeTBeChol,
+    real_t *restrict CtUbias,
     /* inputs for topN */
     int_t *restrict include_ix, int_t n_include,
     int_t *restrict exclude_ix, int_t n_exclude,
     int_t *restrict outp_ix, real_t *restrict outp_score,
-    int_t n_top, int_t nthreads
+    int_t n_top, int nthreads
 );
 int_t predict_X_old_collective_explicit
 (
@@ -1649,7 +1740,7 @@ int_t predict_X_old_collective_explicit
     real_t glob_mean,
     int_t k, int_t k_user, int_t k_item, int_t k_main,
     int_t m, int_t n_max,
-    int_t nthreads
+    int nthreads
 );
 int_t predict_X_old_collective_implicit
 (
@@ -1658,14 +1749,14 @@ int_t predict_X_old_collective_implicit
     real_t *restrict B,
     int_t k, int_t k_user, int_t k_item, int_t k_main,
     int_t m, int_t n,
-    int_t nthreads
+    int nthreads
 );
 int_t predict_X_new_collective_explicit
 (
     /* inputs for predictions */
     int_t m_new,
     int_t row[], int_t col[], real_t *restrict predicted, size_t n_predict,
-    int_t nthreads,
+    int nthreads,
     /* inputs for factors */
     bool user_bias,
     real_t *restrict U, int_t m_u, int_t p,
@@ -1687,6 +1778,7 @@ int_t predict_X_new_collective_explicit
     real_t lam, real_t *restrict lam_unique,
     real_t l1_lam, real_t *restrict l1_lam_unique,
     bool scale_lam, bool scale_lam_sideinfo,
+    bool scale_bias_const, real_t scaling_biasA,
     real_t w_main, real_t w_user, real_t w_implicit,
     int_t n_max, bool include_all_X,
     real_t *restrict BtB,
@@ -1696,6 +1788,7 @@ int_t predict_X_new_collective_explicit
     real_t *restrict BiTBi,
     real_t *restrict TransCtCinvCt,
     real_t *restrict CtCw,
+    real_t *restrict CtUbias,
     real_t *restrict B_plus_bias
 );
 int_t predict_X_new_collective_implicit
@@ -1703,7 +1796,7 @@ int_t predict_X_new_collective_implicit
     /* inputs for predictions */
     int_t m_new,
     int_t row[], int_t col[], real_t *restrict predicted, size_t n_predict,
-    int_t nthreads,
+    int nthreads,
     /* inputs for factors */
     real_t *restrict U, int_t m_u, int_t p,
     bool NA_as_zero_U,
@@ -1721,7 +1814,8 @@ int_t predict_X_new_collective_implicit
     bool apply_log_transf,
     real_t *restrict BeTBe,
     real_t *restrict BtB,
-    real_t *restrict BeTBeChol
+    real_t *restrict BeTBeChol,
+    real_t *restrict CtUbias
 );
 
 /* offsets.c */
@@ -1745,7 +1839,7 @@ real_t offsets_fun_grad
     size_t I_csc_p[], int_t I_csc_i[], real_t *restrict I_csc,
     int_t k_main, int_t k_sec,
     real_t w_user, real_t w_item,
-    int_t nthreads,
+    int nthreads,
     real_t *restrict buffer_real_t,
     real_t *restrict buffer_mt
 );
@@ -1757,7 +1851,7 @@ void construct_Am
     real_t *restrict U, int_t m, int_t p,
     size_t U_csr_p[], int_t U_csr_i[], real_t *restrict U_csr,
     int_t k, int_t k_sec, int_t k_main,
-    real_t w_user, int_t nthreads
+    real_t w_user, int nthreads
 );
 void assign_gradients
 (
@@ -1766,7 +1860,7 @@ void assign_gradients
     real_t *restrict U,
     size_t U_csc_p[], int_t U_csc_i[], real_t *restrict U_csc,
     int_t m, int_t p, int_t k, int_t k_sec, int_t k_main,
-    real_t w_user, int_t nthreads
+    real_t w_user, int nthreads
 );
 int_t offsets_factors_cold
 (
@@ -1883,7 +1977,7 @@ typedef struct data_offsets_fun_grad {
     size_t *I_csc_p; int_t *I_csc_i; real_t *I_csc;
     int_t k_main; int_t k_sec;
     real_t w_user; real_t w_item;
-    int_t nthreads;
+    int nthreads;
     real_t *buffer_real_t;
     real_t *buffer_mt;
     int_t print_every; int_t nfev; int_t niter;
@@ -1914,7 +2008,7 @@ int_t fit_offsets_explicit_lbfgs_internal
     int_t k_main, int_t k_sec,
     real_t w_user, real_t w_item,
     int_t n_corr_pairs, size_t maxiter, int_t seed,
-    int_t nthreads, bool prefer_onepass,
+    int nthreads, bool prefer_onepass,
     bool verbose, int_t print_every, bool handle_interrupt,
     int_t *restrict niter, int_t *restrict nfev,
     real_t *restrict Am, real_t *restrict Bm,
@@ -1942,7 +2036,7 @@ int_t fit_offsets_explicit_lbfgs
     int_t k_main, int_t k_sec,
     real_t w_user, real_t w_item,
     int_t n_corr_pairs, size_t maxiter,
-    int_t nthreads, bool prefer_onepass,
+    int nthreads, bool prefer_onepass,
     bool verbose, int_t print_every, bool handle_interrupt,
     int_t *restrict niter, int_t *restrict nfev,
     bool precompute_for_predictions,
@@ -1970,7 +2064,7 @@ int_t fit_offsets_als
     bool implicit, bool NA_as_zero_X,
     real_t alpha, bool apply_log_transf,
     int_t niter,
-    int_t nthreads, bool use_cg,
+    int nthreads, bool use_cg,
     int_t max_cg_steps, bool finalize_chol,
     bool verbose, bool handle_interrupt,
     bool precompute_for_predictions,
@@ -1997,7 +2091,7 @@ int_t fit_offsets_explicit_als
     real_t *restrict II, int_t q,
     bool NA_as_zero_X,
     int_t niter,
-    int_t nthreads, bool use_cg,
+    int nthreads, bool use_cg,
     int_t max_cg_steps, bool finalize_chol,
     bool verbose, bool handle_interrupt,
     bool precompute_for_predictions,
@@ -2020,7 +2114,7 @@ int_t fit_offsets_implicit_als
     real_t *restrict II, int_t q,
     real_t alpha, bool apply_log_transf,
     int_t niter,
-    int_t nthreads, bool use_cg,
+    int nthreads, bool use_cg,
     int_t max_cg_steps, bool finalize_chol,
     bool verbose, bool handle_interrupt,
     bool precompute_for_predictions,
@@ -2035,7 +2129,7 @@ int_t matrix_content_based
     int_t U_row[], int_t U_col[], real_t *restrict U_sp, size_t nnz_U,
     size_t U_csr_p[], int_t U_csr_i[], real_t *restrict U_csr,
     real_t *restrict C, real_t *restrict C_bias,
-    int_t nthreads
+    int nthreads
 );
 int_t factors_offsets_explicit_single
 (
@@ -2090,7 +2184,7 @@ int_t factors_offsets_explicit_multiple
     real_t *restrict precomputedTransBtBinvBt,
     real_t *restrict precomputedBtB,
     real_t *restrict Bm_plus_bias,
-    int_t nthreads
+    int nthreads
 );
 int_t factors_offsets_implicit_multiple
 (
@@ -2107,7 +2201,7 @@ int_t factors_offsets_implicit_multiple
     real_t lam, real_t alpha,
     bool apply_log_transf,
     real_t *restrict precomputedBtB,
-    int_t nthreads
+    int nthreads
 );
 int_t topN_old_offsets_explicit
 (
@@ -2120,7 +2214,7 @@ int_t topN_old_offsets_explicit
     int_t *restrict include_ix, int_t n_include,
     int_t *restrict exclude_ix, int_t n_exclude,
     int_t *restrict outp_ix, real_t *restrict outp_score,
-    int_t n_top, int_t n, int_t nthreads
+    int_t n_top, int_t n, int nthreads
 );
 int_t topN_old_offsets_implicit
 (
@@ -2131,7 +2225,7 @@ int_t topN_old_offsets_implicit
     int_t *restrict include_ix, int_t n_include,
     int_t *restrict exclude_ix, int_t n_exclude,
     int_t *restrict outp_ix, real_t *restrict outp_score,
-    int_t n_top, int_t n, int_t nthreads
+    int_t n_top, int_t n, int nthreads
 );
 int_t topN_new_offsets_explicit
 (
@@ -2156,7 +2250,7 @@ int_t topN_new_offsets_explicit
     int_t *restrict include_ix, int_t n_include,
     int_t *restrict exclude_ix, int_t n_exclude,
     int_t *restrict outp_ix, real_t *restrict outp_score,
-    int_t n_top, int_t nthreads
+    int_t n_top, int nthreads
 );
 int_t topN_new_offsets_implicit
 (
@@ -2174,7 +2268,7 @@ int_t topN_new_offsets_implicit
     int_t *restrict include_ix, int_t n_include,
     int_t *restrict exclude_ix, int_t n_exclude,
     int_t *restrict outp_ix, real_t *restrict outp_score,
-    int_t n_top, int_t n, int_t nthreads
+    int_t n_top, int_t n, int nthreads
 );
 int_t predict_X_old_offsets_explicit
 (
@@ -2184,7 +2278,7 @@ int_t predict_X_old_offsets_explicit
     real_t glob_mean,
     int_t k, int_t k_sec, int_t k_main,
     int_t m, int_t n,
-    int_t nthreads
+    int nthreads
 );
 int_t predict_X_old_offsets_implicit
 (
@@ -2193,14 +2287,14 @@ int_t predict_X_old_offsets_implicit
     real_t *restrict Bm,
     int_t k,
     int_t m, int_t n,
-    int_t nthreads
+    int nthreads
 );
 int_t predict_X_new_offsets_explicit
 (
     /* inputs for predictions */
     int_t m_new, bool user_bias,
     int_t row[], int_t col[], real_t *restrict predicted, size_t n_predict,
-    int_t nthreads,
+    int nthreads,
     /* inputs for factors */
     real_t *restrict U, int_t p,
     int_t U_row[], int_t U_col[], real_t *restrict U_sp, size_t nnz_U,
@@ -2225,7 +2319,7 @@ int_t predict_X_new_offsets_implicit
     int_t m_new,
     int_t row[], int_t col[], real_t *restrict predicted, size_t n_predict,
     int_t n_orig,
-    int_t nthreads,
+    int nthreads,
     /* inputs for factors */
     real_t *restrict U, int_t p,
     int_t U_row[], int_t U_col[], real_t *restrict U_sp, size_t nnz_U,
@@ -2258,7 +2352,7 @@ int_t fit_content_based_lbfgs
     int_t U_row[], int_t U_col[], real_t *restrict U_sp, size_t nnz_U,
     int_t I_row[], int_t I_col[], real_t *restrict I_sp, size_t nnz_I,
     int_t n_corr_pairs, size_t maxiter,
-    int_t nthreads, bool prefer_onepass,
+    int nthreads, bool prefer_onepass,
     bool verbose, int_t print_every, bool handle_interrupt,
     int_t *restrict niter, int_t *restrict nfev,
     real_t *restrict Am, real_t *restrict Bm
@@ -2277,7 +2371,7 @@ int_t factors_content_based_mutliple
     real_t *restrict U, int_t p,
     int_t U_row[], int_t U_col[], real_t *restrict U_sp, size_t nnz_U,
     size_t U_csr_p[], int_t U_csr_i[], real_t *restrict U_csr,
-    int_t nthreads
+    int nthreads
 );
 int_t topN_old_content_based
 (
@@ -2290,7 +2384,7 @@ int_t topN_old_content_based
     int_t *restrict include_ix, int_t n_include,
     int_t *restrict exclude_ix, int_t n_exclude,
     int_t *restrict outp_ix, real_t *restrict outp_score,
-    int_t n_top, int_t n, int_t nthreads
+    int_t n_top, int_t n, int nthreads
 );
 int_t topN_new_content_based
 (
@@ -2306,7 +2400,7 @@ int_t topN_new_content_based
     real_t glob_mean,
     /* inputs for topN */
     int_t *restrict outp_ix, real_t *restrict outp_score,
-    int_t n_top, int_t nthreads
+    int_t n_top, int nthreads
 );
 int_t predict_X_old_content_based
 (
@@ -2321,7 +2415,7 @@ int_t predict_X_old_content_based
     real_t *restrict C, real_t *restrict C_bias,
     real_t *restrict Bm, real_t *restrict biasB,
     real_t glob_mean,
-    int_t nthreads
+    int nthreads
 );
 int_t predict_X_new_content_based
 (
@@ -2337,7 +2431,7 @@ int_t predict_X_new_content_based
     real_t *restrict C, real_t *restrict C_bias,
     real_t *restrict D, real_t *restrict D_bias,
     real_t glob_mean,
-    int_t nthreads
+    int nthreads
 );
 
 #ifdef __cplusplus

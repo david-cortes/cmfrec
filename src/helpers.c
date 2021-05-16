@@ -32,6 +32,11 @@
             non-negative least squares problem."
             International Conference on Computer Analysis of Images
             and Patterns. Springer, Berlin, Heidelberg, 2005.
+        (g) Zhou, Yunhong, et al.
+            "Large-scale parallel collaborative filtering for
+             the netflix prize."
+            International conference on algorithmic applications in management.
+            Springer, Berlin, Heidelberg, 2008.
 
     For information about the models offered here and how they are fit to
     the data, see the files 'collective.c' and 'offsets.c'.
@@ -45,7 +50,7 @@
 
     MIT License:
 
-    Copyright (c) 2021 David Cortes
+    Copyright (c) 2020-2021 David Cortes
 
     All rights reserved.
 
@@ -72,7 +77,7 @@
 
 /* Note: in x86_64 computers, there's hardly any speed up from having > 2
    threads zeroing out an array */
-void set_to_zero_(real_t *arr, size_t n, int_t nthreads)
+void set_to_zero_(real_t *arr, size_t n, int nthreads)
 {
     if (n == 0) return;
     #if defined(_OPENMP)
@@ -97,7 +102,7 @@ void set_to_zero_(real_t *arr, size_t n, int_t nthreads)
 
 /* Note: in x86_64 computers, there's hardly any speed up from having > 4
    threads copying arrays */
-void copy_arr_(real_t *restrict src, real_t *restrict dest, size_t n, int_t nthreads)
+void copy_arr_(real_t *restrict src, real_t *restrict dest, size_t n, int nthreads)
 {
     /* Note: don't use BLAS scopy as it's actually much slower */
     if (n == 0) return;
@@ -121,7 +126,7 @@ void copy_arr_(real_t *restrict src, real_t *restrict dest, size_t n, int_t nthr
     }
 }
 
-int_t count_NAs(real_t arr[], size_t n, int_t nthreads)
+int_t count_NAs(real_t arr[], size_t n, int nthreads)
 {
     int_t cnt_NA = 0;
     nthreads = cap_to_4(nthreads);
@@ -143,7 +148,7 @@ int_t count_NAs(real_t arr[], size_t n, int_t nthreads)
 void count_NAs_by_row
 (
     real_t *restrict arr, int_t m, int_t n,
-    int_t *restrict cnt_NA, int_t nthreads,
+    int_t *restrict cnt_NA, int nthreads,
     bool *restrict full_dense, bool *restrict near_dense
 )
 {
@@ -156,8 +161,12 @@ void count_NAs_by_row
     #pragma omp parallel for schedule(static) num_threads(nthreads) \
             shared(m, n, arr, cnt_NA)
     for (size_t_for row = 0; row < (size_t)m; row++)
+    {
+        int_t cnt = 0;
         for (size_t col = 0; col < (size_t)n; col++)
-            cnt_NA[row] += isnan(arr[col + row*n]);
+            cnt += isnan(arr[col + row*n]);
+        cnt_NA[row] = cnt;
+    }
 
     *full_dense = true;
     for (int_t ix = 0; ix < m; ix++) {
@@ -212,7 +221,7 @@ void count_NAs_by_col
     }
 }
 
-void sum_by_rows(real_t *restrict A, real_t *restrict outp, int_t m, int_t n, int_t nthreads)
+void sum_by_rows(real_t *restrict A, real_t *restrict outp, int_t m, int_t n, int nthreads)
 {
     nthreads = cap_to_4(nthreads);
     #if defined(_OPENMP) && \
@@ -224,11 +233,15 @@ void sum_by_rows(real_t *restrict A, real_t *restrict outp, int_t m, int_t n, in
     #pragma omp parallel for schedule(static) num_threads(nthreads) \
             shared(m, n, A, outp)
     for (size_t_for row = 0; row < (size_t)m; row++)
+    {
+        double rsum = 0;
         for (size_t col = 0; col < (size_t)n; col++)
-            outp[row] += A[col + row*(size_t)n];
+            rsum += A[col + row*(size_t)n];
+        outp[row] = rsum;
+    }
 }
 
-void sum_by_cols(real_t *restrict A, real_t *restrict outp, int_t m, int_t n, size_t lda, int_t nthreads)
+void sum_by_cols(real_t *restrict A, real_t *restrict outp, int_t m, int_t n, size_t lda, int nthreads)
 {
     #ifdef _OPENMP
     /* Note: GCC and CLANG do a poor optimization when the array to sum has many
@@ -244,8 +257,12 @@ void sum_by_cols(real_t *restrict A, real_t *restrict outp, int_t m, int_t n, si
         #pragma omp parallel for schedule(static) num_threads(nthreads) \
                 shared(A, outp, m, n, lda)
         for (size_t_for col = 0; col < (size_t)n; col++)
+        {
+            double csum = 0;
             for (size_t row = 0; row < (size_t)m; row++)
-                outp[col] += A[col + row*lda];
+                csum += A[col + row*lda];
+            outp[col] = csum;
+        }
     }
 
     else
@@ -257,7 +274,7 @@ void sum_by_cols(real_t *restrict A, real_t *restrict outp, int_t m, int_t n, si
     }
 }
 
-void mat_plus_rowvec(real_t *restrict A, real_t *restrict b, int_t m, int_t n, int_t nthreads)
+void mat_plus_rowvec(real_t *restrict A, real_t *restrict b, int_t m, int_t n, int nthreads)
 {
     nthreads = cap_to_4(nthreads);
     #if defined(_OPENMP) && \
@@ -272,7 +289,7 @@ void mat_plus_rowvec(real_t *restrict A, real_t *restrict b, int_t m, int_t n, i
             A[col + (size_t)row*n] += b[row];
 }
 
-void mat_plus_colvec(real_t *restrict A, real_t *restrict b, real_t alpha, int_t m, int_t n, size_t lda, int_t nthreads)
+void mat_plus_colvec(real_t *restrict A, real_t *restrict b, real_t alpha, int_t m, int_t n, size_t lda, int nthreads)
 {
     nthreads = cap_to_4(nthreads);
     #if defined(_OPENMP) && \
@@ -292,7 +309,7 @@ void mat_minus_rowvec2
 (
     real_t *restrict Xfull,
     int_t ixA[], int_t ixB[], real_t *restrict X, size_t nnz,
-    real_t *restrict b, int_t m, int_t n, int_t nthreads
+    real_t *restrict b, int_t m, int_t n, int nthreads
 )
 {
     nthreads = cap_to_4(nthreads);
@@ -325,7 +342,7 @@ void mat_minus_colvec2
 (
     real_t *restrict Xfull,
     int_t ixA[], int_t ixB[], real_t *restrict X, size_t nnz,
-    real_t *restrict b, int_t m, int_t n, int_t nthreads
+    real_t *restrict b, int_t m, int_t n, int nthreads
 )
 {
     nthreads = cap_to_4(nthreads);
@@ -352,7 +369,7 @@ void mat_minus_colvec2
     }
 }
 
-void nan_to_zero(real_t *restrict arr, real_t *restrict comp, size_t n, int_t nthreads)
+void nan_to_zero(real_t *restrict arr, real_t *restrict comp, size_t n, int nthreads)
 {
     nthreads = cap_to_4(nthreads);
     #if defined(_OPENMP) && \
@@ -366,7 +383,7 @@ void nan_to_zero(real_t *restrict arr, real_t *restrict comp, size_t n, int_t nt
         arr[ix] = (!isnan(comp[ix]))? arr[ix] : 0;
 }
 
-void mult_if_non_nan(real_t *restrict arr, real_t *restrict comp, real_t *restrict w, size_t n, int_t nthreads)
+void mult_if_non_nan(real_t *restrict arr, real_t *restrict comp, real_t *restrict w, size_t n, int nthreads)
 {
     nthreads = cap_to_4(nthreads);
     #if defined(_OPENMP) && \
@@ -380,7 +397,7 @@ void mult_if_non_nan(real_t *restrict arr, real_t *restrict comp, real_t *restri
         arr[ix] = (!isnan(arr[ix]))? (w[ix] * arr[ix]) : (0);
 }
 
-void mult_elemwise(real_t *restrict inout, real_t *restrict other, size_t n, int_t nthreads)
+void mult_elemwise(real_t *restrict inout, real_t *restrict other, size_t n, int nthreads)
 {
     #if defined(_OPENMP) && \
                 ( (_OPENMP < 200801)  /* OpenMP < 3.0 */ \
@@ -393,7 +410,7 @@ void mult_elemwise(real_t *restrict inout, real_t *restrict other, size_t n, int
         inout[ix] *= other[ix];
 }
 
-real_t sum_squares(real_t *restrict arr, size_t n, int_t nthreads)
+real_t sum_squares(real_t *restrict arr, size_t n, int nthreads)
 {
     double res = 0;
     if (n < (size_t)INT_MAX)
@@ -413,7 +430,7 @@ real_t sum_squares(real_t *restrict arr, size_t n, int_t nthreads)
     return (real_t)res;
 }
 
-void taxpy_large(real_t *restrict A, real_t x, real_t *restrict Y, size_t n, int_t nthreads)
+void taxpy_large(real_t *restrict A, real_t x, real_t *restrict Y, size_t n, int nthreads)
 {
     if (n < (size_t)INT_MAX)
         cblas_taxpy((int)n, x, A, 1, Y, 1);
@@ -436,7 +453,7 @@ void taxpy_large(real_t *restrict A, real_t x, real_t *restrict Y, size_t n, int
     }
 }
 
-void tscal_large(real_t *restrict arr, real_t alpha, size_t n, int_t nthreads)
+void tscal_large(real_t *restrict arr, real_t alpha, size_t n, int nthreads)
 {
     if (alpha == 1.)
         return;
@@ -456,7 +473,7 @@ void tscal_large(real_t *restrict arr, real_t alpha, size_t n, int_t nthreads)
     }
 }
 
-int_t rnorm(real_t *restrict arr, size_t n, int_t seed, int_t nthreads)
+int_t rnorm(real_t *restrict arr, size_t n, int_t seed, int nthreads)
 {
     #ifndef _FOR_R
     int_t three = 3;
@@ -558,7 +575,7 @@ void process_seed_for_larnv(int_t seed_arr[4])
 }
 
 void reduce_mat_sum(real_t *restrict outp, size_t lda, real_t *restrict inp,
-                    int_t m, int_t n, int_t nthreads)
+                    int_t m, int_t n, int nthreads)
 {
     #if defined(_OPENMP) && \
                 ( (_OPENMP < 200801)  /* OpenMP < 3.0 */ \
@@ -580,7 +597,7 @@ void reduce_mat_sum(real_t *restrict outp, size_t lda, real_t *restrict inp,
                 outp[row] += inp[tid*m_by_n + row];
 }
 
-void exp_neg_x(real_t *restrict arr, size_t n, int_t nthreads)
+void exp_neg_x(real_t *restrict arr, size_t n, int nthreads)
 {
     #if defined(_OPENMP) && \
                 ( (_OPENMP < 200801)  /* OpenMP < 3.0 */ \
@@ -599,7 +616,7 @@ void add_to_diag(real_t *restrict A, real_t val, size_t n)
         A[ix + ix*n] += val;
 }
 
-real_t sum_sq_div_w(real_t *restrict arr, real_t *restrict w, size_t n, bool compensated, int_t nthreads)
+real_t sum_sq_div_w(real_t *restrict arr, real_t *restrict w, size_t n, bool compensated, int nthreads)
 {
     real_t res = 0;
     #if defined(_OPENMP) && \
@@ -621,12 +638,12 @@ void tgemm_sp_dense
     size_t indptr[], int_t indices[], real_t values[],
     real_t DenseMat[], size_t ldb,
     real_t OutputMat[], size_t ldc,
-    int_t nthreads
+    int nthreads
 )
 {
     if (m <= 0 || indptr[0] == indptr[m])
         return;
-    real_t *ptr_col;
+    real_t *row_ptr;
     #if defined(_OPENMP) && \
                 ( (_OPENMP < 200801)  /* OpenMP < 3.0 */ \
                   || defined(_WIN32) || defined(_WIN64) \
@@ -637,22 +654,20 @@ void tgemm_sp_dense
     if (alpha != 1.)
         #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
                 shared(m, n, alpha, ldb, ldc, OutputMat, DenseMat, indptr, indices, values) \
-                private(ptr_col)
+                private(row_ptr)
         for (size_t_for row = 0; row < (size_t)m; row++) {
-            ptr_col = OutputMat + row*ldc;
-            for (size_t col = indptr[row]; col < indptr[row+1]; col++) {
-                cblas_taxpy(n, alpha*values[col], DenseMat + (size_t)indices[col]*ldb, 1, ptr_col, 1);
-            }
+            row_ptr = OutputMat + row*ldc;
+            for (size_t col = indptr[row]; col < indptr[row+1]; col++)
+                cblas_taxpy(n, alpha*values[col], DenseMat + (size_t)indices[col]*ldb, 1, row_ptr, 1);
         }
     else
         #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
                 shared(m, n, ldb, ldc, OutputMat, DenseMat, indptr, indices, values) \
-                private(ptr_col)
+                private(row_ptr)
         for (size_t_for row = 0; row < (size_t)m; row++) {
-            ptr_col = OutputMat + row*ldc;
-            for (size_t col = indptr[row]; col < indptr[row+1]; col++) {
-                cblas_taxpy(n, values[col], DenseMat + (size_t)indices[col]*ldb, 1, ptr_col, 1);
-            }
+            row_ptr = OutputMat + row*ldc;
+            for (size_t col = indptr[row]; col < indptr[row+1]; col++)
+                cblas_taxpy(n, values[col], DenseMat + (size_t)indices[col]*ldb, 1, row_ptr, 1);
         }
 }
 
@@ -872,7 +887,7 @@ void coo_to_csr_and_csc
     size_t *restrict csr_p, int_t *restrict csr_i, real_t *restrict csr_v,
     size_t *restrict csc_p, int_t *restrict csc_i, real_t *restrict csc_v,
     real_t *restrict csr_w, real_t *restrict csc_w,
-    int_t nthreads
+    int nthreads
 )
 {
     bool has_mem = true;
@@ -984,15 +999,19 @@ void coo_to_csr_and_csc
 }
 
 void row_means_csr(size_t indptr[], real_t *restrict values,
-                   real_t *restrict output, int_t m, int_t nthreads)
+                   real_t *restrict output, int_t m, int nthreads)
 {
     int_t row = 0;
     set_to_zero(values, m);
     #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
             shared(indptr, values, output, m)
     for (row = 0; row < m; row++)
+    {
+        double rsum = 0;
         for (size_t ix = indptr[row]; ix < indptr[row+(size_t)1]; ix++)
-            output[row] += values[ix];
+            rsum += values[ix];
+        output[row] = rsum;
+    }
     nthreads = cap_to_4(nthreads);
     #pragma omp parallel for schedule(static) num_threads(nthreads) \
             shared(indptr, output, m)

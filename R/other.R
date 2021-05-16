@@ -140,16 +140,18 @@ swap.users.and.items <- function(model, precompute = TRUE) {
                               numeric(), 0L,
                               numeric(), FALSE,
                               numeric(), numeric(1L), FALSE,
+                              numeric(), FALSE,
                               new_model$info$k_sec + new_model$info$k + new_model$info$k_main,
                               0L, 0L, 0L,
                               as.logical(NROW(new_model$matries$user_bias)),
                               FALSE,
                               new_model$info$lambda,
-                              FALSE, FALSE,
+                              FALSE, FALSE, FALSE, 0.,
                               1., 1., 1.,
                               new_model$precomputed$Bm_plus_bias,
                               new_model$precomputed$BtB,
                               new_model$precomputed$TransBtBinvBt,
+                              numeric(),
                               numeric(),
                               numeric(),
                               numeric(),
@@ -161,11 +163,13 @@ swap.users.and.items <- function(model, precompute = TRUE) {
             ret_code <- .Call("call_precompute_collective_implicit",
                               new_model$matrices$Bm, NCOL(new_model$matrices$Bm),
                               numeric(), 0L,
+                              numeric(), FALSE,
                               new_model$info$k, 0L, 0L, 0L,
                               new_model$info$lambda, 1., 1., 1.,
                               FALSE,
                               TRUE,
                               new_model$precomputed$BtB,
+                              numeric(),
                               numeric(),
                               numeric())
             check.ret.code(ret_code)
@@ -273,6 +277,12 @@ drop.nonessential.matrices <- function(model, drop_precomputed=TRUE) {
 #' @param nonneg Whether the model matrices should be constrained to be non-negative.
 #' @param NA_as_zero When passing sparse matrices, whether to take missing entries as
 #' zero (counting them towards the optimization objective), or to ignore them.
+#' @param scaling_biasA If passing it, will assume that the model uses the option
+#' `scale_bias_const=TRUE`, and will use this number as scaling
+#' for the regularization of the user biases.
+#' @param scaling_biasB If passing it, will assume that the model uses the option
+#' `scale_bias_const=TRUE`, and will use this number as scaling
+#' for the regularization of the item biases.
 #' @param apply_log_transf If passing `implicit=TRUE`, whether to apply a logarithm
 #' transformation on the values of `X`.
 #' @param alpha If passing `implicit=TRUE`, multiplier to apply to the confidence scores
@@ -286,6 +296,7 @@ drop.nonessential.matrices <- function(model, drop_precomputed=TRUE) {
 #' ### Example 'adopting' a model from 'recosystem'
 #' library(cmfrec)
 #' library(recosystem)
+#' library(recommenderlab)
 #' library(MatrixExtra)
 #' 
 #' ### Fitting a model with 'recosystem'
@@ -317,7 +328,8 @@ CMF.from.model.matrices <- function(A, B, glob_mean=0, implicit=FALSE,
                                     precompute=TRUE,
                                     user_bias=NULL, item_bias=NULL,
                                     lambda=10., scale_lam=FALSE, l1_lambda=0., nonneg=FALSE,
-                                    NA_as_zero=FALSE, apply_log_transf=FALSE, alpha=1,
+                                    NA_as_zero=FALSE, scaling_biasA=NULL, scaling_biasB=NULL,
+                                    apply_log_transf=FALSE, alpha=1,
                                     nthreads=parallel::detectCores()) {
     ### Check the input data formats
     if (!is.matrix(A))
@@ -348,6 +360,7 @@ CMF.from.model.matrices <- function(A, B, glob_mean=0, implicit=FALSE,
     lambda <- check.lambda(lambda, TRUE)
     l1_lambda <-check.lambda(l1_lambda, TRUE)
     
+    
     if (!is.null(user_bias)) {
         if (implicit)
             stop("Biases not supported for implicit-feedback models.")
@@ -367,6 +380,32 @@ CMF.from.model.matrices <- function(A, B, glob_mean=0, implicit=FALSE,
         item_bias <- as.numeric(item_bias)
     }
     
+    if (!is.null(scaling_biasA)) {
+        if (implicit)
+            stop("'scaling_biasA' not compatible with implicit-feedback model.")
+        if (is.null(user_bias))
+            stop("Cannot pass 'scaling_biasA' when not using user biases.")
+        if (!scale_lam)
+            stop("Cannot pass 'scaling_biasA' with 'scale_lam=FALSE'.")
+        scaling_biasA <- check.pos.real(alpha, "scaling_biasA")
+    }
+    if (!is.null(scaling_biasB)) {
+        if (implicit)
+            stop("'scaling_biasB' not compatible with implicit-feedback model.")
+        if (is.null(item_bias))
+            stop("Cannot pass 'scaling_biasB' when not using user biases.")
+        if (!scale_lam)
+            stop("Cannot pass 'scaling_biasB' with 'scale_lam=FALSE'.")
+        scaling_biasB <- check.pos.real(alpha, "scaling_biasB")
+    }
+    
+    if (
+        (!is.null(user_bias) && !is.null(item_bias)) &&
+        (is.null(scaling_biasA) != is.null(scaling_biasB))
+    ) {
+        stop("Must pass both 'scaling_biasA' and 'scaling_biasB'.")
+    }
+    
     if (typeof(A) != "double")
         mode(A) <- "double"
     if (typeof(B) != "double")
@@ -381,10 +420,16 @@ CMF.from.model.matrices <- function(A, B, glob_mean=0, implicit=FALSE,
     this$matrices$A <- A
     this$matrices$B <- B
     this$matrices$glob_mean <- glob_mean
-    if (!is.null(user_bias))
+    if (!is.null(user_bias)) {
         this$matrices$user_bias <- user_bias
-    if (!is.null(item_bias))
+        if (!is.null(scaling_biasA))
+            this$matrices$scaling_biasA <- scaling_biasA
+    }
+    if (!is.null(item_bias)) {
         this$matrices$item_bias <- item_bias
+        if (!is.null(scaling_biasB))
+            this$matrices$scaling_biasB <- scaling_biasB
+    }
     
     this$info$k <- k
     this$info$lambda <- lambda
