@@ -841,7 +841,7 @@ int_t fit_collective_explicit_lbfgs
     int_t k_main, int_t k_user, int_t k_item,
     real_t w_main, real_t w_user, real_t w_item,
     int_t n_corr_pairs, size_t maxiter,
-    int_t nthreads, bool prefer_onepass,
+    int nthreads, bool prefer_onepass,
     bool verbose, int_t print_every, bool handle_interrupt,
     int_t *niter, int_t *nfev,
     bool precompute_for_predictions,
@@ -879,7 +879,7 @@ int_t fit_collective_explicit_als
     bool NA_as_zero_X, bool NA_as_zero_U, bool NA_as_zero_I,
     int_t k_main, int_t k_user, int_t k_item,
     real_t w_main, real_t w_user, real_t w_item, real_t w_implicit,
-    int_t niter, int_t nthreads, bool verbose, bool handle_interrupt,
+    int_t niter, int nthreads, bool verbose, bool handle_interrupt,
     bool use_cg, int_t max_cg_steps, bool finalize_chol,
     bool nonneg, int_t max_cd_steps, bool nonneg_C, bool nonneg_D,
     bool precompute_for_predictions,
@@ -913,7 +913,7 @@ int_t fit_collective_implicit_als
     real_t w_main, real_t w_user, real_t w_item,
     real_t *w_main_multiplier,
     real_t alpha, bool adjust_weight, bool apply_log_transf,
-    int_t niter, int_t nthreads, bool verbose, bool handle_interrupt,
+    int_t niter, int nthreads, bool verbose, bool handle_interrupt,
     bool use_cg, int_t max_cg_steps, bool finalize_chol,
     bool nonneg, int_t max_cd_steps, bool nonneg_C, bool nonneg_D,
     bool precompute_for_predictions,
@@ -1152,7 +1152,7 @@ int_t factors_collective_explicit_multiple
     real_t *CtCw,
     real_t *CtUbias,
     real_t *B_plus_bias,
-    int_t nthreads
+    int nthreads
 );
 int_t factors_collective_implicit_multiple
 (
@@ -1175,7 +1175,7 @@ int_t factors_collective_implicit_multiple
     real_t *BtB,
     real_t *BeTBeChol,
     real_t *CtUbias,
-    int_t nthreads
+    int nthreads
 );
 
 
@@ -1299,7 +1299,7 @@ int_t impute_X_collective_explicit
     real_t *CtCw,
     real_t *CtUbias,
     real_t *B_plus_bias,
-    int_t nthreads
+    int nthreads
 );
 int_t topN_old_collective_explicit
 (
@@ -1312,7 +1312,7 @@ int_t topN_old_collective_explicit
     int_t *include_ix, int_t n_include,
     int_t *exclude_ix, int_t n_exclude,
     int_t *outp_ix, real_t *outp_score,
-    int_t n_top, int_t n, int_t n_max, bool include_all_X, int_t nthreads
+    int_t n_top, int_t n, int_t n_max, bool include_all_X, int nthreads
 );
 int_t topN_old_collective_implicit
 (
@@ -1323,7 +1323,7 @@ int_t topN_old_collective_implicit
     int_t *include_ix, int_t n_include,
     int_t *exclude_ix, int_t n_exclude,
     int_t *outp_ix, real_t *outp_score,
-    int_t n_top, int_t n, int_t nthreads
+    int_t n_top, int_t n, int nthreads
 );
 int_t topN_new_collective_explicit
 (
@@ -1362,7 +1362,7 @@ int_t topN_new_collective_explicit
     int_t *include_ix, int_t n_include,
     int_t *exclude_ix, int_t n_exclude,
     int_t *outp_ix, real_t *outp_score,
-    int_t n_top, int_t nthreads
+    int_t n_top, int nthreads
 );
 int_t topN_new_collective_implicit
 (
@@ -1387,7 +1387,7 @@ int_t topN_new_collective_implicit
     int_t *include_ix, int_t n_include,
     int_t *exclude_ix, int_t n_exclude,
     int_t *outp_ix, real_t *outp_score,
-    int_t n_top, int_t nthreads
+    int_t n_top, int nthreads
 );
 
 int_t predict_X_old_collective_explicit
@@ -1398,7 +1398,7 @@ int_t predict_X_old_collective_explicit
     real_t glob_mean,
     int_t k, int_t k_user, int_t k_item, int_t k_main,
     int_t m, int_t n_max,
-    int_t nthreads
+    int nthreads
 );
 int_t predict_X_old_collective_implicit
 (
@@ -1407,14 +1407,14 @@ int_t predict_X_old_collective_implicit
     real_t *B,
     int_t k, int_t k_user, int_t k_item, int_t k_main,
     int_t m, int_t n,
-    int_t nthreads
+    int nthreads
 );
 int_t predict_X_new_collective_explicit
 (
     /* inputs for predictions */
     int_t m_new,
     int_t row[], int_t col[], real_t *predicted, size_t n_predict,
-    int_t nthreads,
+    int nthreads,
     /* inputs for factors */
     bool user_bias,
     real_t *U, int_t m_u, int_t p,
@@ -1454,7 +1454,7 @@ int_t predict_X_new_collective_implicit
     /* inputs for predictions */
     int_t m_new,
     int_t row[], int_t col[], real_t *predicted, size_t n_predict,
-    int_t nthreads,
+    int nthreads,
     /* inputs for factors */
     real_t *U, int_t m_u, int_t p,
     bool NA_as_zero_U,
@@ -1518,7 +1518,7 @@ int_t fit_most_popular
     bool implicit, bool adjust_weight, bool apply_log_transf,
     bool nonneg,
     real_t *w_main_multiplier,
-    int_t nthreads
+    int nthreads
 );
 int_t topN_old_most_popular
 (
@@ -1648,7 +1648,7 @@ int_t fit_content_based_lbfgs
     int_t U_row[], int_t U_col[], real_t *U_sp, size_t nnz_U,
     int_t I_row[], int_t I_col[], real_t *I_sp, size_t nnz_I,
     int_t n_corr_pairs, size_t maxiter,
-    int_t nthreads, bool prefer_onepass,
+    int nthreads, bool prefer_onepass,
     bool verbose, int_t print_every, bool handle_interrupt,
     int_t *niter, int_t *nfev,
     real_t *Am, real_t *Bm
@@ -1668,7 +1668,7 @@ int_t factors_content_based_mutliple
     real_t *U, int_t p,
     int_t U_row[], int_t U_col[], real_t *U_sp, size_t nnz_U,
     size_t U_csr_p[], int_t U_csr_i[], real_t *U_csr,
-    int_t nthreads
+    int nthreads
 );
 
 int_t topN_old_content_based
@@ -1682,7 +1682,7 @@ int_t topN_old_content_based
     int_t *include_ix, int_t n_include,
     int_t *exclude_ix, int_t n_exclude,
     int_t *outp_ix, real_t *outp_score,
-    int_t n_top, int_t n, int_t nthreads
+    int_t n_top, int_t n, int nthreads
 );
 int_t topN_new_content_based
 (
@@ -1698,7 +1698,7 @@ int_t topN_new_content_based
     real_t glob_mean,
     /* inputs for topN */
     int_t *outp_ix, real_t *outp_score,
-    int_t n_top, int_t nthreads
+    int_t n_top, int nthreads
 );
 int_t predict_X_old_content_based
 (
@@ -1713,7 +1713,7 @@ int_t predict_X_old_content_based
     real_t *C, real_t *C_bias,
     real_t *Bm, real_t *biasB,
     real_t glob_mean,
-    int_t nthreads
+    int nthreads
 );
 int_t predict_X_new_content_based
 (
@@ -1729,7 +1729,7 @@ int_t predict_X_new_content_based
     real_t *C, real_t *C_bias,
     real_t *D, real_t *D_bias,
     real_t glob_mean,
-    int_t nthreads
+    int nthreads
 );
 
 
@@ -1898,7 +1898,7 @@ int_t fit_offsets_explicit_lbfgs
     int_t k_main, int_t k_sec,
     real_t w_user, real_t w_item,
     int_t n_corr_pairs, size_t maxiter,
-    int_t nthreads, bool prefer_onepass,
+    int nthreads, bool prefer_onepass,
     bool verbose, int_t print_every, bool handle_interrupt,
     int_t *niter, int_t *nfev,
     bool precompute_for_predictions,
@@ -1925,7 +1925,7 @@ int_t fit_offsets_explicit_als
     real_t *II, int_t q,
     bool NA_as_zero_X,
     int_t niter,
-    int_t nthreads, bool use_cg,
+    int nthreads, bool use_cg,
     int_t max_cg_steps, bool finalize_chol,
     bool verbose, bool handle_interrupt,
     bool precompute_for_predictions,
@@ -1948,7 +1948,7 @@ int_t fit_offsets_implicit_als
     real_t *II, int_t q,
     real_t alpha,
     int_t niter,
-    int_t nthreads, bool use_cg,
+    int nthreads, bool use_cg,
     int_t max_cg_steps, bool finalize_chol,
     bool verbose, bool handle_interrupt,
     bool precompute_for_predictions,
@@ -2055,7 +2055,7 @@ int_t factors_offsets_explicit_multiple
     real_t *precomputedTransBtBinvBt,
     real_t *precomputedBtB,
     real_t *Bm_plus_bias,
-    int_t nthreads
+    int nthreads
 );
 int_t factors_offsets_implicit_multiple
 (
@@ -2072,7 +2072,7 @@ int_t factors_offsets_implicit_multiple
     real_t lam, real_t alpha,
     bool apply_log_transf,
     real_t *precomputedBtB,
-    int_t nthreads
+    int nthreads
 );
 
 
@@ -2087,7 +2087,7 @@ int_t topN_old_offsets_explicit
     int_t *include_ix, int_t n_include,
     int_t *exclude_ix, int_t n_exclude,
     int_t *outp_ix, real_t *outp_score,
-    int_t n_top, int_t n, int_t nthreads
+    int_t n_top, int_t n, int nthreads
 );
 int_t topN_old_offsets_implicit
 (
@@ -2098,7 +2098,7 @@ int_t topN_old_offsets_implicit
     int_t *include_ix, int_t n_include,
     int_t *exclude_ix, int_t n_exclude,
     int_t *outp_ix, real_t *outp_score,
-    int_t n_top, int_t n, int_t nthreads
+    int_t n_top, int_t n, int nthreads
 );
 int_t topN_new_offsets_explicit
 (
@@ -2123,7 +2123,7 @@ int_t topN_new_offsets_explicit
     int_t *include_ix, int_t n_include,
     int_t *exclude_ix, int_t n_exclude,
     int_t *outp_ix, real_t *outp_score,
-    int_t n_top, int_t nthreads
+    int_t n_top, int nthreads
 );
 int_t topN_new_offsets_implicit
 (
@@ -2141,7 +2141,7 @@ int_t topN_new_offsets_implicit
     int_t *include_ix, int_t n_include,
     int_t *exclude_ix, int_t n_exclude,
     int_t *outp_ix, real_t *outp_score,
-    int_t n_top, int_t n, int_t nthreads
+    int_t n_top, int_t n, int nthreads
 );
 int_t predict_X_old_offsets_explicit
 (
@@ -2151,7 +2151,7 @@ int_t predict_X_old_offsets_explicit
     real_t glob_mean,
     int_t k, int_t k_sec, int_t k_main,
     int_t m, int_t n,
-    int_t nthreads
+    int nthreads
 );
 int_t predict_X_old_offsets_implicit
 (
@@ -2160,14 +2160,14 @@ int_t predict_X_old_offsets_implicit
     real_t *Bm,
     int_t k,
     int_t m, int_t n,
-    int_t nthreads
+    int nthreads
 );
 int_t predict_X_new_offsets_explicit
 (
     /* inputs for predictions */
     int_t m_new, bool user_bias,
     int_t row[], int_t col[], real_t *predicted, size_t n_predict,
-    int_t nthreads,
+    int nthreads,
     /* inputs for factors */
     real_t *U, int_t p,
     int_t U_row[], int_t U_col[], real_t *U_sp, size_t nnz_U,
@@ -2192,7 +2192,7 @@ int_t predict_X_new_offsets_implicit
     int_t m_new,
     int_t row[], int_t col[], real_t *predicted, size_t n_predict,
     int_t n_orig,
-    int_t nthreads,
+    int nthreads,
     /* inputs for factors */
     real_t *U, int_t p,
     int_t U_row[], int_t U_col[], real_t *U_sp, size_t nnz_U,
