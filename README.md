@@ -38,7 +38,7 @@ While the method was initially devised for recommender systems, can also be used
 
 ## Comparison against other libraries
 
-For the full benchmark, code, and details see [benchmarks](https://github.com/david-cortes/david-cortes/blob/master/benchmark).
+For the full benchmark, code, and details see [benchmarks](https://github.com/david-cortes/cmfrec/tree/master/benchmark).
 
 Comparing the classical matrix factorization model for explicit feedback **without side information** in different software libraries:
 
