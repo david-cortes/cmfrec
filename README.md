@@ -14,7 +14,30 @@ Written in C with Python and R interfaces. An additional Ruby interface can be f
 
 For an introduction see the Python notebook [MovieLens Recommender with Side Information](http://nbviewer.jupyter.org/github/david-cortes/cmfrec/blob/master/example/cmfrec_movielens_sideinfo.ipynb) and the [R vignette](http://htmlpreview.github.io/?https://github.com/david-cortes/cmfrec/blob/master/inst/doc/cmfrec_vignette.html).
 
+## Comparison against other libraries
+
+
+For the full benchmark, code, and details see [benchmarks](https://github.com/david-cortes/cmfrec/tree/master/benchmark).
+
+Comparing the classical matrix factorization model for explicit feedback **without side information** in different software libraries:
+
+| Library       | Method   | Biases | Time (s) | RMSE         | Additional |
+| :---:         | :---:    | :---:  | :---:    | :---:        | :---:
+| cmfrec        | ALS-CG   | Yes    | 15.93    | 0.788233     | 
+| cmfrec        | ALS-Chol | Yes    | 38.21    | **0.782414** | Implicit features
+| libmf         | SGD      | No     | **1.80** | 0.785478     | Single precision
+| spark         | ALS-Chol | No     | 81       | 0.791316     | Manual center
+| cornac        | SGD      | Yes    | 13.9     | 0.816548     |
+| Surprise      | SGD      | Yes    | 178      | 1.060049     |
+| LensKit       | ALS-CD   | Static | 49.5     | 0.796156     |
+| PyRecLab      | SGD      | Yes    | 90       | 0.812566     | Reads from disk
+| rsparse       | ALS-Chol | Yes    | 30.13    | 0.786935     |
+| softImpute    | ALS-Chol | Static | 88.93    | 0.810450     | Unscaled lambda
+| softImpute    | ALS-SVD  | Static | 195.73   | 0.808293     | Unscaled lambda
+| Vowpal Wabbit | SGD      | Yes    | 293      | 1.054546     | See details
+
 ## Basic Idea
+
 
 (See introductory notebook above for more details)
 
@@ -36,35 +59,15 @@ Alternatively, can produce factorizations in wich the factor matrices are determ
 
 While the method was initially devised for recommender systems, can also be used as a general technique for dimensionality reduction by taking the `A` matrix as low-dimensional factors, which can be calculated for new data too.
 
-## Comparison against other libraries
-
-For the full benchmark, code, and details see [benchmarks](https://github.com/david-cortes/cmfrec/tree/master/benchmark).
-
-Comparing the classical matrix factorization model for explicit feedback **without side information** in different software libraries:
-
-| Library       | Method   | Biases | Time (s) | RMSE         | Additional |
-| :---:         | :---:    | :---:  | :---:    | :---:        | :---:
-| cmfrec        | ALS-CG   | Yes    | 15.93    | 0.788233     | 
-| cmfrec        | ALS-Chol | Yes    | 38.21    | **0.782414** | Implicit features
-| libmf         | SGD      | No     | **1.80** | 0.785478     | Single precision
-| spark         | ALS-Chol | No     | 81       | 0.791316     | Manual center
-| cornac        | SGD      | Yes    | 13.9     | 0.816548     |
-| Surprise      | SGD      | Yes    | 178      | 1.060049     |
-| LensKit       | ALS-CD   | Static | 49.5     | 0.796156     |
-| PyRecLab      | SGD      | Yes    | 90       | 0.812566     | Reads from disk
-| rsparse       | ALS-Chol | Yes    | 30.13    | 0.786935     |
-| softImpute    | ALS-Chol | Static | 88.93    | 0.810450     | Unscaled lambda
-| softImpute    | ALS-SVD  | Static | 195.73   | 0.808293     | Unscaled lambda
-| Vowpal Wabbit | SGD      | Yes    | 293      | 1.054546     | See details
-
 ## Update 2020-03-20
+
 
 The package has been rewritten in C with Python wrappers. If you've used earlier versions of this package which relied on Tensorflow for the calculations, the optimal hyperparameters will be very different now as it has changed some details of the loss function such as not dividing some terms by the number of entries.
 
 The new version is faster, multi-threaded, and has some new functionality, but if for some reason you still need the old one, it can be found under the git branch "tensorflow".
 
-
 ## Highlights
+
 
 * Can fit factorization models with or without user and/or item side information.
 * Can fit the usual explicit-feedback model as well as the implicit-feedback model with weighted binary entries (see [3]).
