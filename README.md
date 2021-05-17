@@ -19,7 +19,7 @@ For an introduction see the Python notebook [MovieLens Recommender with Side Inf
 
 For the full benchmark, code, and details see [benchmarks](https://github.com/david-cortes/cmfrec/tree/master/benchmark).
 
-Comparing the classical matrix factorization model for explicit feedback **without side information** in different software libraries:
+Comparing the classical matrix factorization model for explicit feedback **without side information** in different software libraries (50 factors, 15 iterations, regularization of 0.05):
 
 | Library       | Method   | Biases | Time (s) | RMSE         | Additional |
 | :---:         | :---:    | :---:  | :---:    | :---:        | :---:
