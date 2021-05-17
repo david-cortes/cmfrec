@@ -4039,10 +4039,8 @@ int_t initialize_biases_twosided
         else /* <- has weights and 'NA_as_zero' */
         {
             double bmean = 0;
-            if (iter > 0) {
-                for (int_t col = 0; col < n; col++)
-                    bmean += (biasB[col] - bmean) / (double)(col+1);
-            }
+            for (int_t col = 0; col < n; col++)
+                bmean += (biasB[col] - bmean) / (double)(col+1);
 
             #pragma omp parallel for schedule(dynamic) \
                     num_threads(cap_to_4(nthreads)) \

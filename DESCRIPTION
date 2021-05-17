@@ -1,8 +1,8 @@
 Package: cmfrec
 Type: Package
 Title: Collective Matrix Factorization for Recommender Systems
-Version: 3.0.0
-Date: 2021-05-16
+Version: 3.0.1
+Date: 2021-05-17
 Author: David Cortes [aut, cre, cph], Jorge Nocedal [cph], Naoaki Okazaki [cph]
 Maintainer: David Cortes <david.cortes.rivera@gmail.com>
 URL: https://github.com/david-cortes/cmfrec

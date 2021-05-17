@@ -21,6 +21,7 @@ ctypedef int int_t
 #     from scipy.linalg.cython_blas cimport sgemm as sgemm_
 #     from scipy.linalg.cython_blas cimport sgemv as sgemv_
 #     from scipy.linalg.cython_blas cimport ssymv as ssymv_
+#     from scipy.linalg.cython_blas cimport sger as sger_
 
 #     from scipy.linalg.cython_lapack cimport slacpy as slacpy_
 #     from scipy.linalg.cython_lapack cimport sposv as sposv_
@@ -39,6 +40,7 @@ ctypedef int int_t
 #     from scipy.linalg.cython_blas cimport dgemm as dgemm_
 #     from scipy.linalg.cython_blas cimport dgemv as dgemv_
 #     from scipy.linalg.cython_blas cimport dsymv as dsymv_
+#     from scipy.linalg.cython_blas cimport dger as dger_
 
 #     from scipy.linalg.cython_lapack cimport dlacpy as dlacpy_
 #     from scipy.linalg.cython_lapack cimport dposv as dposv_
