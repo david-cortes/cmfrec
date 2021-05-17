@@ -1,0 +1,398 @@
+---
+title: "Matrix Factorization Benchmark"
+author: "David Cortes"
+output: rmarkdown::html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+This is a short benchmark comparing different libraries for matrix factorization on the
+[MovieLens10M](https://grouplens.org/datasets/movielens/10m/) dataset (movie ratings
+from different users in a 5-star scale), measuring the model fitting times in the full
+data, and evaluating test set RMSE using the suggested train-test split from the
+MovieLens authors.
+
+Depending on the specific library, the model will try to approximate the ratings matrix
+(dimension users by items) as the product of two lower-rank matrices, with the matrix
+centered beforehand:
+$$
+\mathbf{X} \approx \mathbf{A} \mathbf{B}^T + \mu
+$$
+and ideally adding user and item biases:
+$$
+\mathbf{X} \approx \mathbf{A} \mathbf{B}^T + \mu + \mathbf{b}_A + \mathbf{b}_B
+$$
+All of the libraries compared will use 50 factors and 15 iterations (if controllable),
+with an L2 regularization penalty of 0.05 which is scaled by the number of entries
+for each user/item, save for `softImpute` which does not support scaled regularization.
+
+The timings are measured on a Ryzen 7 2700 CPU (3.2Ghz, 8c/16t), using OpenBLAS 0.3.13.
+
+** *
+Loading the data:
+```{r message=FALSE}
+library(data.table)
+
+df_train <- fread("train.csv")
+df_test <- fread("test.csv")
+df_full <- fread("ratings.dat", sep=":", header=FALSE)
+df_full <- df_full[, names(df_full)[c(TRUE,FALSE)], with=FALSE]
+names(df_full) <- c("UserId", "ItemId", "Rating", "Timestamp")
+df_full <- df_full[, !"Timestamp"]
+```
+
+Re-indexing users and items and converting to sparse matrices:
+```{r}
+library(Matrix)
+
+cols_indices <- c("UserId", "ItemId")
+df_full[, (cols_indices) := lapply(.SD, factor), .SDcols=cols_indices]
+df_train[, (cols_indices) := lapply(.SD, factor), .SDcols=cols_indices]
+df_test[,
+    `:=`(
+        UserId = factor(UserId, levels(df_train$UserId)),
+        ItemId = factor(ItemId, levels(df_train$ItemId))
+    )
+]
+
+X_full <- sparseMatrix(i=as.integer(df_full$UserId),
+                       j=as.integer(df_full$ItemId),
+                       x=as.numeric(df_full$Rating),
+                       dims=c(length(levels(df_full$UserId)),
+                              length(levels(df_full$ItemId))),
+                       index1=TRUE, repr="T", check=FALSE)
+X_train <- sparseMatrix(i=as.integer(df_train$UserId),
+                        j=as.integer(df_train$ItemId),
+                        x=as.numeric(df_train$Rating),
+                        dims=c(length(levels(df_train$UserId)),
+                               length(levels(df_train$ItemId))),
+                        index1=TRUE, repr="T", check=FALSE)
+X_test <- sparseMatrix(i=as.integer(df_test$UserId),
+                       j=as.integer(df_test$ItemId),
+                       x=as.numeric(df_test$Rating),
+                       dims=c(length(levels(df_train$UserId)),
+                              length(levels(df_train$ItemId))),
+                       index1=TRUE, repr="T", check=FALSE)
+
+rm(df_train, df_test, df_full)
+invisible(gc())
+
+cat(dim(X_full), "\n")
+cat(dim(X_train), "\n")
+cat(dim(X_test), "\n")
+```
+
+## Library: cmfrec
+```{r, message=FALSE}
+library(cmfrec)
+library(microbenchmark)
+```
+
+Timings for different variations:
+```{r}
+### Variation 1: Conjugate Gradient method, with biases
+microbenchmark({
+    set.seed(1)
+    model <- CMF(X_full, k=50, niter=15, lambda=0.05, scale_lam=TRUE,
+                 use_cg=TRUE, finalize_chol=FALSE,
+                 user_bias=TRUE, item_bias=TRUE, verbose=FALSE)
+}, times=1L)
+### Variation 2: Conjugate Gradient method, no biases
+microbenchmark({
+    set.seed(1)
+    model <- CMF(X_full, k=50, niter=15, lambda=0.05, scale_lam=TRUE,
+                 use_cg=TRUE, finalize_chol=FALSE,
+                 user_bias=FALSE, item_bias=FALSE, verbose=FALSE)
+}, times=1L)
+### Variation 3: Cholesky method, with biases
+microbenchmark({
+    set.seed(1)
+    model <- CMF(X_full, k=50, niter=15, lambda=0.05, scale_lam=TRUE,
+                 use_cg=FALSE,
+                 user_bias=TRUE, item_bias=TRUE, verbose=FALSE)
+}, times=1L)
+### Variation 4: CG method, with biases, and implicit features
+microbenchmark({
+    set.seed(1)
+    model <- CMF(X_full, k=50, niter=15, lambda=0.05, scale_lam=TRUE,
+                 use_cg=TRUE, finalize_chol=FALSE, add_implicit_features=TRUE,
+                 user_bias=TRUE, item_bias=TRUE, verbose=FALSE)
+}, times=1L)
+### Variation 5: Cholesky method, with biases, and implicit features
+microbenchmark({
+    set.seed(1)
+    model <- CMF(X_full, k=50, niter=15, lambda=0.05, scale_lam=TRUE,
+                 use_cg=FALSE, add_implicit_features=TRUE,
+                 user_bias=TRUE, item_bias=TRUE, verbose=FALSE)
+}, times=1L)
+```
+
+Test-set RMSE:
+```{r}
+print_rmse <- function(X_test, X_hat) {
+    rmse <- sqrt(mean( (X_test@x - X_hat@x)^2 ))
+    cat(sprintf("RMSE: %f\n", rmse))
+}
+### Variation 1: Conjugate Gradient method, with biases
+set.seed(1)
+model <- CMF(X_train, k=50, niter=15, lambda=0.05, scale_lam=TRUE,
+             use_cg=TRUE, finalize_chol=FALSE,
+             user_bias=TRUE, item_bias=TRUE, verbose=FALSE)
+X_hat <- predict(model, X_test)
+print_rmse(X_test, X_hat)
+### Variation 2: Conjugate Gradient method, no biases
+set.seed(1)
+model <- CMF(X_train, k=50, niter=15, lambda=0.05, scale_lam=TRUE,
+             use_cg=TRUE, finalize_chol=FALSE,
+             user_bias=FALSE, item_bias=FALSE, verbose=FALSE)
+X_hat <- predict(model, X_test)
+print_rmse(X_test, X_hat)
+### Variation 3: Cholesky method, with biases
+set.seed(1)
+model <- CMF(X_train, k=50, niter=15, lambda=0.05, scale_lam=TRUE,
+             use_cg=FALSE,
+             user_bias=TRUE, item_bias=TRUE, verbose=FALSE)
+X_hat <- predict(model, X_test)
+print_rmse(X_test, X_hat)
+### Variation 4: CG method, with biases, and implicit features
+set.seed(1)
+model <- CMF(X_train, k=50, niter=15, lambda=0.05, scale_lam=TRUE,
+             use_cg=TRUE, finalize_chol=FALSE, add_implicit_features=TRUE,
+             user_bias=TRUE, item_bias=TRUE, verbose=FALSE)
+X_hat <- predict(model, X_test)
+print_rmse(X_test, X_hat)
+### Variation 5: Cholesky method, with biases, and implicit features
+set.seed(1)
+model <- CMF(X_train, k=50, niter=15, lambda=0.05, scale_lam=TRUE,
+             use_cg=FALSE, add_implicit_features=TRUE,
+             user_bias=TRUE, item_bias=TRUE, verbose=FALSE)
+X_hat <- predict(model, X_test)
+print_rmse(X_test, X_hat)
+```
+
+
+## Library: rsparse
+
+__Note: this uses rsparse version 0.5.0, which has not yet reached CRAN at the time of writing__
+
+Timings for different variations:
+```{r, message=FALSE}
+library(rsparse)
+library(lgr)
+lg = get_logger("rsparse")
+lg$set_threshold("error")
+```
+```{r}
+### Variation 1: Conjugate Gradient method, with biases
+microbenchmark({
+    set.seed(1)
+    model <- WRMF$new(feedback="explicit", rank=50, lambda=0.05,
+                      dynamic_lambda=TRUE, solver="conjugate_gradient",
+                      with_global_bias=TRUE, with_user_item_bias=TRUE)
+    ignored <- model$fit_transform(X_full, n_iter=15, convergence_tol=-1)
+}, times=1L)
+
+### Variation 2: Conjugate Gradient method, no biases
+microbenchmark({
+    set.seed(1)
+    model <- WRMF$new(feedback="explicit", rank=50, lambda=0.05,
+                      dynamic_lambda=TRUE, solver="conjugate_gradient",
+                      with_global_bias=TRUE, with_user_item_bias=FALSE)
+    ignored <- model$fit_transform(X_full, n_iter=15, convergence_tol=-1)
+}, times=1L)
+
+### Variation 3: Cholesky method, with biases
+microbenchmark({
+    set.seed(1)
+    model <- WRMF$new(feedback="explicit", rank=50, lambda=0.05,
+                      dynamic_lambda=TRUE, solver="cholesky",
+                      with_global_bias=TRUE, with_user_item_bias=TRUE)
+    ignored <- model$fit_transform(X_full, n_iter=15, convergence_tol=-1)
+}, times=1L)
+```
+
+Test-set RMSE:
+```{r}
+rsparse.to.CMF <- function(model, A) {
+    model_cmf <- CMF.from.model.matrices(
+        A=t(A), B=model$components,
+        glob_mean=model$global_bias,
+        precompute=FALSE
+    )
+    return(model_cmf)
+}
+### Variation 1: Conjugate Gradient method, with biases
+set.seed(1)
+model <- WRMF$new(feedback="explicit", rank=50, lambda=0.05,
+                  dynamic_lambda=TRUE, solver="conjugate_gradient",
+                  with_global_bias=TRUE, with_user_item_bias=TRUE)
+A <- model$fit_transform(X_train, n_iter=15, convergence_tol=-1)
+model <- rsparse.to.CMF(model, A)
+X_hat <- predict(model, X_test)
+print_rmse(X_test, X_hat)
+
+### Variation 2: Conjugate Gradient method, no biases
+set.seed(1)
+model <- WRMF$new(feedback="explicit", rank=50, lambda=0.05,
+                  dynamic_lambda=TRUE, solver="conjugate_gradient",
+                  with_global_bias=TRUE, with_user_item_bias=FALSE)
+A <- model$fit_transform(X_train, n_iter=15, convergence_tol=-1)
+model <- rsparse.to.CMF(model, A)
+X_hat <- predict(model, X_test)
+print_rmse(X_test, X_hat)
+
+### Variation 3: Cholesky method, with biases
+set.seed(1)
+model <- WRMF$new(feedback="explicit", rank=50, lambda=0.05,
+                  dynamic_lambda=TRUE, solver="cholesky",
+                  with_global_bias=TRUE, with_user_item_bias=TRUE)
+A <- model$fit_transform(X_train, n_iter=15, convergence_tol=-1)
+model <- rsparse.to.CMF(model, A)
+X_hat <- predict(model, X_test)
+print_rmse(X_test, X_hat)
+
+rm(A, model)
+invisible(gc())
+```
+
+## Library: recosystem
+
+__Note: this library was compiled with AVX instructions by manually editing the
+`Makevars.in` file, and it is using the code from
+[this PR](https://github.com/yixuan/recosystem/pull/17),
+which at the time of writing has not yet been merged.__
+
+__Note2: `recosystem` uses a different optimization routine than the others (SGD,
+while the other libraries here all use ALS), and fits a model without biases and
+with a global mean determined differently. The optimization procedure is very
+sensitive to the hyperparameters such as learning rate and regularization, and
+it's necessary to try many combinations in order to find good ones, using a
+validation set.__
+
+Timings for different variations:
+```{r, message=FALSE}
+library(recosystem)
+X_full_reco <- data_memory(X_full@i, X_full@j, X_full@x, index1=FALSE)
+
+### Only possible variation: SGD method, 15 epochs, no biases
+microbenchmark({
+    set.seed(1)
+    r <- Reco()
+    suppressWarnings({
+        r$train(X_full_reco, out_model=NULL,
+                opts=list(dim=50, costp_l2=0.05, costq_l2=0.05,
+                          niter=15, verbose=FALSE, loss="l2", lrate=0.1,
+                          nthread=parallel::detectCores())
+                )
+    })
+}, times=1L)
+rm(X_full_reco)
+invisible(gc())
+```
+
+Test-set RMSE:
+```{r}
+X_train_reco <- data_memory(X_train@i, X_train@j, X_train@x, index1=FALSE)
+X_test_reco <- data_memory(X_test@i, X_test@j, X_test@x, index1=FALSE)
+
+set.seed(1)
+r <- Reco()
+suppressWarnings({
+    r$train(X_train_reco, out_model=NULL,
+            opts=list(dim=50, costp_l2=0.05, costq_l2=0.05,
+                      niter=15, verbose=FALSE,
+                      nthread=parallel::detectCores())
+            )
+})
+X_hat@x <- r$predict(X_test_reco, out_pred=out_memory())
+print_rmse(X_test, X_hat)
+
+rm(X_train_reco, X_test_reco)
+invisible(gc())
+```
+
+## Library: softImpute
+
+__Note: this library does not scale the regularization with the number of entries
+for each user/item, thus the optimal values are much larger.__
+
+__Note2: `softImpute` is not multi-threaded beyond some BLAS or
+LAPACK function calls, thus it runs much slower.
+The `rsparse` package however has similar multi-threaded versions
+of these algorithms.__
+
+__Note3: `softImpute` will only pre-estimate the user/item biases,
+without updating them after every iteration.__
+
+Timings for different variations:
+```{r, message=FALSE}
+library(softImpute)
+
+X_full_si <- Incomplete(X_full@i+1L, X_full@j+1L, x=X_full@x)
+```
+```{r}
+### Variation 1: ALS
+microbenchmark({
+    suppressWarnings({
+        set.seed(1)
+        X_full_scaled <- biScale(X_full_si, maxit=5,
+                                 row.scale=FALSE,
+                                 col.scale=FALSE,
+                                 trace=FALSE)
+        model <- softImpute(X_full_scaled, type="als",
+                            rank.max=50, lambda=35, maxit=15)
+    })
+}, times=1L)
+
+### Variation 2: SVD
+microbenchmark({
+    suppressWarnings({
+        set.seed(1)
+        X_full_scaled <- biScale(X_full_si, maxit=5,
+                                 row.scale=FALSE,
+                                 col.scale=FALSE,
+                                 trace=FALSE)
+        model <- softImpute(X_full_scaled, type="svd",
+                            rank.max=50, lambda=35, maxit=15)
+    })
+}, times=1L)
+
+rm(X_full_si, X_full_scaled, model)
+invisible(gc())
+```
+
+Test-set RMSE:
+```{r}
+X_train_si <- Incomplete(X_train@i+1L, X_train@j+1L, x=X_train@x)
+
+set.seed(1)
+suppressWarnings({
+    X_train_scaled <- biScale(X_train_si, maxit=5,
+                              row.scale=FALSE,
+                              col.scale=FALSE,
+                              trace=FALSE)
+})
+
+### Variation 1: ALS
+set.seed(1)
+suppressWarnings({
+    model <- softImpute(X_train_scaled, type="als",
+                        rank.max=50, lambda=35, maxit=15)
+})
+X_hat@x <- impute(model, X_test@i+1L, X_test@j+1L, unscale=TRUE)
+print_rmse(X_test, X_hat)
+
+### Variation 2: SVD
+set.seed(1)
+suppressWarnings({
+    model <- softImpute(X_train_scaled, type="svd",
+                        rank.max=50, lambda=35, maxit=15)
+})
+X_hat@x <- impute(model, X_test@i+1L, X_test@j+1L, unscale=TRUE)
+print_rmse(X_test, X_hat)
+
+rm(X_train_si, X_train_scaled, model)
+invisible(gc())
+```
