@@ -4,7 +4,6 @@ output:
     rmarkdown::html_vignette:
         toc: true
 author: "David Cortes"
-date: "`r Sys.Date()`"
 vignette: >
     %\VignetteIndexEntry{Matrix Factorization with Side Info}
     %\VignetteEngine{knitr::rmarkdown}
@@ -16,6 +15,13 @@ knitr::opts_chunk$set(
     collapse = TRUE,
     comment = "#>"
 )
+options(rmarkdown.html_vignette.check_title = FALSE)
+```
+```{r, include = FALSE}
+### Don't overload CRAN servers
+### https://stackoverflow.com/questions/28961431/computationally-heavy-r-vignettes
+is_check <- ("CheckExEnv" %in% search()) || any(c("_R_CHECK_TIMINGS_",
+             "_R_CHECK_LICENSE_") %in% names(Sys.getenv()))
 ```
 
 This vignette illustrates the usage of the
@@ -144,9 +150,19 @@ $$
 \mathbf{X} \approx \mathbf{A} \mathbf{B}^T + \mu + \mathbf{b}_A + \mathbf{b}_B
 $$
 
-```{r}
+```{r, eval=FALSE}
 set.seed(1)
 model.classic <- CMF(X_train, k=25, lambda=0.1, scale_lam=TRUE, verbose=FALSE)
+```
+```{r, echo=FALSE}
+### Don't overload CRAN servers
+set.seed(1)
+if (!is_check) {
+    model.classic <- CMF(X_train, k=25, lambda=0.1, scale_lam=TRUE, verbose=FALSE)
+} else {
+    model.classic <- CMF(X_train, k=5, lambda=0.1, scale_lam=TRUE, verbose=FALSE,
+                         niter=2, nthreads=1)
+}
 ```
 
 #### How good is it?
@@ -213,11 +229,27 @@ observed or missing.
 for $\mathbf{X}$, and not used in the prediction formula, but are still estimated in
 this new multi-objective optimization objective.
 
-```{r}
+```{r, eval=FALSE}
 set.seed(1)
 model.improved <- CMF(X_train, k=25, lambda=0.1, scale_lam=TRUE,
                       add_implicit_features=TRUE, w_main=0.75, w_implicit=0.25,
                       use_cg=FALSE, niter=30, verbose=FALSE)
+pred_improved <- predict(model.improved, X_test)
+print_rmse(X_test, pred_improved, "improved classic model")
+```
+```{r, echo=FALSE}
+### Don't overload CRAN servers
+set.seed(1)
+if (!is_check) {
+    model.improved <- CMF(X_train, k=25, lambda=0.1, scale_lam=TRUE,
+                          add_implicit_features=TRUE, w_main=0.75, w_implicit=0.25,
+                          use_cg=FALSE, niter=30, verbose=FALSE)
+} else {
+   model.improved <- CMF(X_train, k=5, lambda=0.1, scale_lam=TRUE,
+                         add_implicit_features=TRUE, w_main=0.75, w_implicit=0.25,
+                         use_cg=FALSE, verbose=FALSE,
+                         niter=2, nthreads=1)
+}
 pred_improved <- predict(model.improved, X_test)
 print_rmse(X_test, pred_improved, "improved classic model")
 ```
@@ -285,13 +317,32 @@ cat(dim(I), "\n")
 ```
 
 Now fitting the model:
-```{r}
+```{r, eval=FALSE}
 set.seed(1)
 model.w.sideinfo <- CMF(X_train, U=U, I=I, NA_as_zero_item=TRUE,
                         k=25, lambda=0.1, scale_lam=TRUE,
                         niter=30, use_cg=FALSE, include_all_X=FALSE,
                         w_main=0.75, w_user=0.5, w_item=0.5, w_implicit=0.5,
                         verbose=FALSE)
+pred_side_info <- predict(model.w.sideinfo, X_test)
+print_rmse(X_test, pred_side_info, "model with side info")
+```
+```{r, echo=FALSE}
+### Don't overload CRAN servers
+set.seed(1)
+if (!is_check) {
+    model.w.sideinfo <- CMF(X_train, U=U, I=I, NA_as_zero_item=TRUE,
+                            k=25, lambda=0.1, scale_lam=TRUE,
+                            niter=30, use_cg=FALSE, include_all_X=FALSE,
+                            w_main=0.75, w_user=0.5, w_item=0.5, w_implicit=0.5,
+                            verbose=FALSE)
+} else {
+    model.w.sideinfo <- CMF(X_train, U=U, I=I, NA_as_zero_item=TRUE,
+                            k=5, lambda=0.1, scale_lam=TRUE,
+                            use_cg=FALSE, include_all_X=FALSE,
+                            w_main=0.75, w_user=0.5, w_item=0.5, w_implicit=0.5,
+                            verbose=FALSE, niter=2, nthreads=1)
+}
 pred_side_info <- predict(model.w.sideinfo, X_test)
 print_rmse(X_test, pred_side_info, "model with side info")
 ```
@@ -333,7 +384,7 @@ recommendations (see the introductory
 [Python notebook](https://nbviewer.jupyter.org/github/david-cortes/cmfrec/blob/master/example/cmfrec_movielens_sideinfo.ipynb)
 for more examples on this topic).
 * The models evaluated so far have all used dynamic/scaled regularization (as proposed
-in [Large-scale Parallel Collaborative Filtering for the Netflix Prize](https://liuxiaofei.com.cn/blog/wp-content/uploads/2014/01/netflix_aaim08submitted.pdf)),
+in [Large-scale Parallel Collaborative Filtering for the Netflix Prize](https://link.springer.com/chapter/10.1007/978-3-540-68880-8_32)),
 save for the baseline most-popular model - this means that the regularization for
 each user and item is scaled by the number of present entries for it. This setting tends
 to produce dubious recommendations in small datasets like the MovieLens100k, even if it
@@ -347,14 +398,36 @@ its current data. `cmfrec` has many prediction functions for these purposes depe
 on what specifically one wants to do, supporting both warm-start and cold-start
 recommendations.
 
-```{r}
+```{r, eval=FALSE}
 ### Re-fitting the earlier model to all the data,
 ### this time *without* scaled regularization
+set.seed(1)
 model.classic <- CMF(X, k=20, lambda=10, scale_lam=FALSE, verbose=FALSE)
+set.seed(1)
 model.w.sideinfo <- CMF(X, U=U, I=I, k=20, lambda=10, scale_lam=FALSE,
                         w_main=0.75, w_user=0.125, w_item=0.125,
                         verbose=FALSE)
 ```
+```{r, echo=FALSE}
+### Don't overload CRAN servers
+if (!is_check) {
+    set.seed(1)
+    model.classic <- CMF(X, k=20, lambda=10, scale_lam=FALSE, verbose=FALSE)
+    set.seed(1)
+    model.w.sideinfo <- CMF(X, U=U, I=I, k=20, lambda=10, scale_lam=FALSE,
+                            w_main=0.75, w_user=0.125, w_item=0.125,
+                            verbose=FALSE)
+} else {
+    set.seed(1)
+    model.classic <- CMF(X, k=5, lambda=10, scale_lam=FALSE, verbose=FALSE,
+                         niter=2, nthreads=1)
+    set.seed(1)
+    model.w.sideinfo <- CMF(X, U=U, I=I, k=5, lambda=10, scale_lam=FALSE,
+                            w_main=0.75, w_user=0.125, w_item=0.125,
+                            verbose=FALSE, niter=2, nthreads=1)
+}
+```
+
 
 ### Recommendations for existing users
 
