@@ -37,6 +37,8 @@ Comparing the classical matrix factorization model for explicit feedback **witho
 | softImpute    | ALS-SVD  | Static | 195.73   | 0.808293     | Unscaled lambda
 | Vowpal Wabbit | SGD      | Yes    | 293      | 1.054546     | See details
 
+_Benchmark for implicit feedback models to come in the future._
+
 ## Basic Idea
 
 
