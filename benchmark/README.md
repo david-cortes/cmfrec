@@ -1,6 +1,6 @@
 # Matrix Factorization benchmarks
 
-This is a speed and quality benchmark comparing the `cmfrec` library against other libraries for matrix factorization. The computations were ran on a Ryzen 2 2700 CPU (3.2GHz, 8c/16t), linking against OpenBLAS 0.3.15 (with some exceptions linking against MKL).
+This is a speed and quality benchmark comparing the `cmfrec` library against other libraries for matrix factorization. The computations were ran on a Ryzen 2 2700 CPU (3.2GHz, 8c/16t), linking against OpenBLAS 0.3.15 (with some exceptions linking against MKL when not possible to use OpenBLAS).
 
 While `cmfrec` focuses on models with side information, the benchmarks here are about collaborative filtering models based on user/item interactions alone, using medium-sized public datasets, as it makes it easier to compare to other libraries.
 
@@ -32,9 +32,9 @@ The time measurements are done by fitting the model to the full data, while the 
 | spotlight          | Py    | ADAM     | No     | 12141    | 1.054698     | See details
 | Surprise           | Py    | SGD      | Yes    | 178      | 1.060049     |
 | Surprise           | Py    | SGD      | Yes    | timeout  | timeout      | Implicit features
-| LensKit            | Py    | ALS-CD   | Static | 49.5     | 0.796156     |
-| LensKit            | Py    | ALS-Chol | Static | 222      | 0.796129     |
-| LensKit            | Py    | SVD      | Static | 7.97     | 0.838297     |
+| LensKit            | Py    | ALS-CD   | Static | 26.8     | 0.796050     | Manual thread control
+| LensKit            | Py    | ALS-Chol | Static | 37.6     | 0.796044     | Manual thread control
+| LensKit            | Py    | SVD      | Static | 8.88     | 0.838194     |
 | PyRecLab           | Py    | SGD      | Yes    | 90       | 0.812566     | Reads from disk
 | cmfrec             | R     | ALS-CG   | Yes    | 12.71    | 0.788356     |
 | cmfrec             | R     | ALS-CG   | No     | 10.95    | 0.791409     |
@@ -64,6 +64,7 @@ Clarifications:
 * `libmf` (and by extension `recosystem`) only supports single-precision mode (a.k.a. `float32`).
 * `libmf` does not link to BLAS or LAPACK, providing instead manual SIMD code. The version tested here was compiled to use AVX instructions (CPU supports AVX2 but `libmf` doesn't). It uses a different optimization procedure than the others so there's less need for such functions.
 * The libraries all use their default compilation arguments, save for `recosystem` - this means e.g. that R libraries might not make use of all available SIMD instructions for the CPU, for example.
+* `lenskit` was running into issues with nested parallelism, and thus the number of BLAS and LAPACK threads had to be manually limited from outside using `threadpoolctl` (see [this issue](https://github.com/lenskit/lkpy/issues/257)). Without this manual step, the running times are much worse.
 * `spotlight` does not perform any mean centering, so it was done manually just like for spark. It uses single-precison only, and calculations are done through PyTorch, which at the time of writing did not work with OpenBLAS and was instead using MKL as linear algebra backend.
 * Vowpal Wabbit does not work with in-memory data, but rather reads it from a file as it goes and stores the matrices it is estimating in files, thus having an additional IO time barrier. It is not multi-threaded in the computations that it makes, and does the computations in single precision (a.k.a. `float32`). It will additionally take hashes of the IDs which can mix up some users and items, thus not being exactly the same model type as the others. At the time of writing this, it offered two modes for matrix factorization (`--rank` and ``--new_mf``) - the one used here was `--rank`, with the learning rate copied from `libmf` (= 0.1), and while performing better than with the defaults, this might not be optimal. The ``--new_mf`` mode did not finish after running for half an hour.
 * The spark runtime did not manage to find the system-installed BLAS and LAPACK libraries (this was on Debian testing, with packages installed from the `main` repository, but using the `openmp` variant of `libopenblas`), so it ended up using an unoptimized version from NetLib which is slower.
