@@ -1,7 +1,7 @@
 ^.*\.Rproj$
 ^\.Rproj\.user$
 ^\.git.*$
-^build/.*$
+^build/.*(?<!rds)$
 ^deleteme/.*$
 ^benchmark/.*$
 ^cmfrec/.*$
@@ -27,4 +27,3 @@
 ^README\.md$
 ^setup\.py$
 ^setup\.cfg$
-^vignettes/.*$
