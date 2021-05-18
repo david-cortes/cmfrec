@@ -6067,6 +6067,7 @@ int_t preprocess_sideinfo_matrix
     bool NA_as_zero_U, bool nonneg, int nthreads
 )
 {
+
     int_t retval = 0;
 
     *full_dense_u = false;
@@ -6119,6 +6120,13 @@ int_t preprocess_sideinfo_matrix
 
         if (NA_as_zero_U && U_colmeans != NULL)
         {
+            #if defined(_OPENMP) && \
+                        ( (_OPENMP < 200801)  /* OpenMP < 3.0 */ \
+                          || defined(_WIN32) || defined(_WIN64) \
+                        )
+            long long col;
+            #endif
+            
             size_t *restrict U_csc_p_ = *U_csc_p;
             real_t *restrict U_csc_ = *U_csc;
             #pragma omp parallel for schedule(static) \

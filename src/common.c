@@ -2682,6 +2682,12 @@ void calc_mean_and_center
     real_t *restrict glob_mean
 )
 {
+    #if defined(_OPENMP) && \
+                ( (_OPENMP < 200801)  /* OpenMP < 3.0 */ \
+                  || defined(_WIN32) || defined(_WIN64) \
+                )
+    long long ix;
+    #endif
     if (glob_mean == NULL)
         return;
     if (!center)
@@ -2890,11 +2896,14 @@ int_t initialize_biases
                 ( (_OPENMP < 200801)  /* OpenMP < 3.0 */ \
                   || defined(_WIN32) || defined(_WIN64) \
                 )
-    long long ix, row, col;
+    long long row, col;
     #endif
 
     size_t *restrict buffer_cnt = NULL;
     double *restrict buffer_w = NULL;
+
+    size_t cnt = 0;
+    long double wsum = 0;
 
     if (user_bias || item_bias)
     {
@@ -2914,9 +2923,6 @@ int_t initialize_biases
             if (buffer_w == NULL) goto throw_oom;
         }
     }
-
-    size_t cnt = 0;
-    long double wsum = 0;
 
 
     /* First calculate the global mean */
@@ -3341,7 +3347,7 @@ int_t initialize_biases_onesided
                 ( (_OPENMP < 200801)  /* OpenMP < 3.0 */ \
                   || defined(_WIN32) || defined(_WIN64) \
                 )
-    long long ix;
+    long long row;
     #endif
 
     if (fabs_t(lam) < EPSILON_T)
@@ -3618,6 +3624,8 @@ int_t initialize_biases_twosided
     double *restrict adjB = NULL;
     real_t *restrict wsum_B = NULL;
 
+    int niter = nonneg? 15 : 5;
+
     if (NA_as_zero)
     {
         meanA = (double*)malloc((size_t)m*sizeof(double));
@@ -3708,8 +3716,6 @@ int_t initialize_biases_twosided
 
     set_to_zero(biasA, m);
     set_to_zero(biasB, n);
-
-    int niter = nonneg? 15 : 5;
 
     for (int iter = 0; iter < niter; iter++)
     {
