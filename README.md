@@ -29,6 +29,7 @@ Comparing the classical matrix factorization model for explicit feedback **witho
 | Spark         | ALS-Chol | No     | 81       | 0.791316     | Manual center
 | cornac        | SGD      | Yes    | 13.9     | 0.816548     |
 | Surprise      | SGD      | Yes    | 178      | 1.060049     |
+| spotlight     | ADAM     | No     | 12141    | 1.054698     | See details
 | LensKit       | ALS-CD   | Static | 49.5     | 0.796156     |
 | PyRecLab      | SGD      | Yes    | 90       | 0.812566     | Reads from disk
 | rsparse       | ALS-Chol | Yes    | 30.13    | 0.786935     |

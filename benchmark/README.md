@@ -29,7 +29,7 @@ The time measurements are done by fitting the model to the full data, while the 
 | cmfrec             | Py    | ALS-Chol | Yes    | 38.13    | **0.782414** | Implicit features
 | spark              | Py    | ALS-Chol | No     | 81       | 0.791316     | Manual center
 | cornac             | Py    | SGD      | Yes    | 13.9     | 0.816548     |
-| spotlight          | Py    | ADAM     | No     | timeout  | timeout      | See details
+| spotlight          | Py    | ADAM     | No     | 12141    | 1.054698     | See details
 | Surprise           | Py    | SGD      | Yes    | 178      | 1.060049     |
 | Surprise           | Py    | SGD      | Yes    | timeout  | timeout      | Implicit features
 | LensKit            | Py    | ALS-CD   | Static | 49.5     | 0.796156     |
