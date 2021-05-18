@@ -2294,6 +2294,15 @@ class CMF(_CMF):
 
     Note
     ----
+    If using OpenBLAS, it's highly recommended to set the number of threads
+    for it to one **before** importing anything from this package - e.g.:
+        
+        import os
+        os.environ["OPENBLAS_NUM_THREADS"] = "1"
+        os.environ["OMP_NUM_THREADS"] = "1"
+
+    Note
+    ----
     The default arguments are not geared towards speed.
     For faster fitting, use ``method="als"``, ``use_cg=True``,
     ``finalize_chol=False``, ``use_float=True``,

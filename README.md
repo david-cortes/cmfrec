@@ -23,8 +23,8 @@ Comparing the classical matrix factorization model for explicit feedback **witho
 
 | Library       | Method   | Biases | Time (s) | RMSE         | Additional |
 | :---:         | :---:    | :---:  | :---:    | :---:        | :---:
-| cmfrec        | ALS-CG   | Yes    | 15.93    | 0.788233     | 
-| cmfrec        | ALS-Chol | Yes    | 38.21    | **0.782414** | Implicit features
+| cmfrec        | ALS-CG   | Yes    | 13.71    | 0.788233     | 
+| cmfrec        | ALS-Chol | Yes    | 38.13    | **0.782414** | Implicit features
 | LibMF         | SGD      | No     | **1.80** | 0.785478     | Single precision
 | Spark         | ALS-Chol | No     | 81       | 0.791316     | Manual center
 | cornac        | SGD      | Yes    | 13.9     | 0.816548     |
@@ -159,6 +159,13 @@ Linkage is then done with `-lcmfrec`.
 import numpy as np, pandas as pd
 from cmfrec import CMF
 
+### Highly recommended when using OpenBLAS
+has_openblas = False
+if has_openblas:
+    import os
+    os.environ["OPENBLAS_NUM_THREADS"] = "1"
+    os.environ["OMP_NUM_THREADS"] = "1"
+
 ### Generate random data
 n_users = 4
 n_items = 5
@@ -214,6 +221,10 @@ Users and items can be reindexed internally (if passing data frames, but not whe
 
 ```r
 library(cmfrec)
+
+### Highly recommended when using OpenBLAS
+has_openblas <- FALSE
+if (has_openblas) RhpcBLASctl::blas_set_num_threads(1L)
 
 n_users <- 4
 n_items <- 5

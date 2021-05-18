@@ -22,11 +22,11 @@ The time measurements are done by fitting the model to the full data, while the 
 
 | Library            | Lang  | Method   | Biases | Time (s) | RMSE         | Additional |
 | :---:              | :---: | :---:    | :---:  | :---:    | :---:        | :---:
-| cmfrec             | Py    | ALS-CG   | Yes    | 15.93    | 0.788233     | MKL
-| cmfrec             | Py    | ALS-CG   | No     | 12.87    | 0.791481     | MKL
-| cmfrec             | Py    | ALS-Chol | Yes    | 28.62    | 0.786923     | MKL
-| cmfrec             | Py    | ALS-CG   | Yes    | 28.28    | 0.785427     | MKL, Implicit features
-| cmfrec             | Py    | ALS-Chol | Yes    | 38.21    | **0.782414** | MKL, Implicit features
+| cmfrec             | Py    | ALS-CG   | Yes    | 13.71    | 0.788233     |
+| cmfrec             | Py    | ALS-CG   | No     | 11.83    | 0.791481     |
+| cmfrec             | Py    | ALS-Chol | Yes    | 31.24    | 0.786923     |
+| cmfrec             | Py    | ALS-CG   | Yes    | 23.04    | 0.785427     | Implicit features
+| cmfrec             | Py    | ALS-Chol | Yes    | 38.13    | **0.782414** | Implicit features
 | spark              | Py    | ALS-Chol | No     | 81       | 0.791316     | Manual center
 | cornac             | Py    | SGD      | Yes    | 13.9     | 0.816548     |
 | spotlight          | Py    | ADAM     | No     | timeout  | timeout      | See details
@@ -57,7 +57,7 @@ Unsuccessful attempts:
 
 Clarifications:
 
-* The Python version of `cmfrec` here was linking against MKL, while the R version was linking against OpenBLAS. Seemingly, the LAPACK functions in the latter case did not get taken from OpenBLAS, but from a reference LAPACK. While the CG method was faster in OpenBLAS, the Cholesky method was 1 order of magnitude slower in this setup compared to MKL and Armadillo (see https://github.com/xianyi/OpenBLAS/issues/3237).
+* Getting `cmfrec` to run at optimal speeds with OpenBLAS in Python required some workarounds (see https://github.com/xianyi/OpenBLAS/issues/3237), including setting the number of openblas threads to 1 and hard-coding a replacement for one of the BLAS functions (included as of v3.0.3). The R version somehow managed to run fast without any of that. Getting it running fast with MKL did not require any additional tuning.
 * `cmfrec` offers the option of co-factorizing a binarized version of the interactions matrix, sharing the same latent components as with the regular factorization - these are marked as "Implicit features".
 * `spark` does not perform any mean centering, so this had to be done manually in a separate step beforehand. Without centering, the RMSE would be much worse.
 * Some libraries will only pre-estimate the biases instead of updating them during each iteration. These are marked as "Static".
