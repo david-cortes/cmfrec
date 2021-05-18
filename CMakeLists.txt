@@ -1,5 +1,5 @@
 cmake_minimum_required (VERSION 3.9)
-project (cmfrec VERSION 3.0.1)
+project (cmfrec VERSION 3.0.2)
 set(CMAKE_BUILD_TYPE Release)
 
 ### Note: this build script allows configuring 4 things manually:
@@ -42,6 +42,14 @@ endif()
 # should match with the integer size specified above if it was changed.
 set(BLAS_LIBRARIES "")
 set(LAPACK_LIBRARIES "")
+
+### IMPORTANT!!!
+### It's suggested to turn this option ON if using OpenBLAS - see:
+### https://github.com/xianyi/OpenBLAS/issues/3237
+set(AVOID_BLAS_SYR OFF)
+if (AVOID_BLAS_SYR)
+    add_compile_definitions(AVOID_BLAS_SYR)
+endif()
 
 ### Option (d): NAN propagation in LAPACK
 # This option will avoid passing inputs with any NAN values to the
@@ -111,6 +119,11 @@ if (LAPACK_LIBRARIES STREQUAL "")
         set(BLA_VENDOR "Intel10_64ilp")
     endif()
     find_package(LAPACK REQUIRED)
+endif()
+
+# See option (c)
+if (BLAS_LIBRARIES MATCHES "[Oo]pen[Bb][Ll][Aa][Ss]")
+    add_compile_definitions(AVOID_BLAS_SYR)
 endif()
 
 # https://stackoverflow.com/questions/59578248/how-do-i-manipulate-cmake-lists-as-sets

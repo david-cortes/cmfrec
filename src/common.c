@@ -623,6 +623,11 @@ real_t fun_grad_cannonical_form
 
 
 *******************************************************************************/
+#ifdef AVOID_BLAS_SYR
+#undef cblas_tsyr
+#define cblas_tsyr(order, Uplo, N, alpha, X, incX, A, lda) \
+        custom_syr(N, alpha, X, A, lda)
+#endif
 void factors_closed_form
 (
     real_t *restrict a_vec, int_t k,
@@ -1474,14 +1479,17 @@ void factors_implicit_chol
 
     real_t *restrict BtB = buffer_real_t;
     buffer_real_t += square(k);
-    set_to_zero(BtB, square(k));
 
+    for (size_t ix = 0; ix < nnz; ix++) {
+        cblas_taxpy(k, Xa[ix] + 1.,
+                    B + (size_t)ixB[ix]*ldb, 1, a_vec, 1);
+    }
+
+    set_to_zero(BtB, square(k));
     for (size_t ix = 0; ix < nnz; ix++) {
         cblas_tsyr(CblasRowMajor, CblasUpper, k,
                    Xa[ix], B + (size_t)ixB[ix]*ldb, 1,
                    BtB, k);
-        cblas_taxpy(k, Xa[ix] + 1.,
-                    B + (size_t)ixB[ix]*ldb, 1, a_vec, 1);
     }
 
     sum_mat(k, k,

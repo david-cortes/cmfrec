@@ -6,6 +6,7 @@ except:
     from distutils.extension import Extension
 import numpy as np
 from findblas.distutils import build_ext_with_blas
+import re
 import os, sys
 
 ## If you do not wish to use findblas:
@@ -61,6 +62,28 @@ class build_ext_subclass( build_ext_with_blas ):
                 e.extra_link_args += custom_blas_link_args
                 e.define_macros = [m for m in e.define_macros if m[0] != "USE_FINDBLAS"]
 
+        ## SYR in OpenBLAS is currently 10-15x slower than MKL, avoid it:
+        ## https://github.com/xianyi/OpenBLAS/issues/3237
+        for e in self.extensions:
+            has_openblas = False
+            if not has_openblas:
+                for arg in e.extra_compile_args:
+                    if bool(re.search("openblas", str(arg).lower())):
+                        has_openblas = True
+                        break
+            if not has_openblas:
+                for arg in e.extra_link_args:
+                    if bool(re.search("openblas", str(arg).lower())):
+                        has_openblas = True
+                        break
+            if not has_openblas:
+                for arg in e.define_macros:
+                    if bool(re.search("openblas", str(arg[0]).lower())):
+                        has_openblas = True
+                        break
+            if has_openblas:
+                e.define_macros += [("AVOID_BLAS_SYR", None)]
+
         build_ext_with_blas.build_extensions(self)
 
 
@@ -94,7 +117,7 @@ if (force_openblas):
 setup(
     name  = "cmfrec",
     packages = ["cmfrec"],
-    version = '3.0.1',
+    version = '3.0.2',
     description = 'Collective matrix factorization',
     author = 'David Cortes',
     author_email = 'david.cortes.rivera@gmail.com',

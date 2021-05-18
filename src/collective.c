@@ -1205,6 +1205,12 @@ int_t collective_factors_lbfgs
         return 0;
 }
 
+#ifdef AVOID_BLAS_SYR
+#undef cblas_tsyr
+#define cblas_tsyr(order, Uplo, N, alpha, X, incX, A, lda) \
+        custom_syr(N, alpha, X, A, lda)
+#endif
+
 /* TODO: for better numerical precision in the Cholesky method, could keep
    some temporary arrays matching to t(Be)*Be and 'a_vec', zero them out,
    sum the parts from X and U separately, then add them to the other arrays.

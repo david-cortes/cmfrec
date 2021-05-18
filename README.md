@@ -25,8 +25,8 @@ Comparing the classical matrix factorization model for explicit feedback **witho
 | :---:         | :---:    | :---:  | :---:    | :---:        | :---:
 | cmfrec        | ALS-CG   | Yes    | 15.93    | 0.788233     | 
 | cmfrec        | ALS-Chol | Yes    | 38.21    | **0.782414** | Implicit features
-| libmf         | SGD      | No     | **1.80** | 0.785478     | Single precision
-| spark         | ALS-Chol | No     | 81       | 0.791316     | Manual center
+| LibMF         | SGD      | No     | **1.80** | 0.785478     | Single precision
+| Spark         | ALS-Chol | No     | 81       | 0.791316     | Manual center
 | cornac        | SGD      | Yes    | 13.9     | 0.816548     |
 | Surprise      | SGD      | Yes    | 178      | 1.060049     |
 | LensKit       | ALS-CD   | Static | 49.5     | 0.796156     |
@@ -91,8 +91,9 @@ The new version is faster, multi-threaded, and has some new functionality, but i
 
 ## Instalation
 
-**Note:** this package relies heavily on BLAS and LAPACK functions for calculations. It's recommended to use MKL (in Python, comes by default in Anaconda, in R for Windows, can be gotten through Microsoft's R distribution) or OpenBLAS as backend for them. See [this link](https://github.com/david-cortes/R-openblas-in-windows) for instructions on getting OpenBLAS for R in Windows.
+**Note:** this package relies heavily on BLAS and LAPACK functions for calculations. It's recommended to use MKL (in Python, comes by default in Anaconda, in R for Windows, can be gotten through Microsoft's R distribution) or alternatively OpenBLAS, as backend for them. See [this link](https://github.com/david-cortes/R-openblas-in-windows) for instructions on getting OpenBLAS for R in Windows.
 
+**Important:** as of OpenBLAS 0.3.15, using this package with OpenBLAS is likely to be several times slower than with MKL, even on AMD hardware. It's strongly recommended to use MKL for linear algebra.
 
 * Python:
 

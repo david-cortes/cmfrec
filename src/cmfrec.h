@@ -444,6 +444,7 @@ void R_nan_to_C_nan(real_t arr[], size_t n);
 #endif
 long double compensated_sum(real_t *arr, size_t n);
 long double compensated_sum_product(real_t *restrict arr1, real_t *restrict arr2, size_t n);
+void custom_syr(const int_t n, const real_t alpha, const real_t *restrict x, real_t *restrict A, const int_t lda);
 
 
 /* common.c */

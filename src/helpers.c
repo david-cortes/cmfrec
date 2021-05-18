@@ -1228,3 +1228,18 @@ long double compensated_sum_product(real_t *restrict arr1, real_t *restrict arr2
 
     return res;
 }
+
+#ifdef AVOID_BLAS_SYR
+/* https://github.com/xianyi/OpenBLAS/issues/3237 */
+void custom_syr(const int_t n, const real_t alpha, const real_t *restrict x, real_t *restrict A, const int_t lda)
+{
+    real_t temp;
+    real_t *restrict Arow;
+    for (int i = 0; i < n; i++) {
+        temp = alpha*x[i];
+        Arow = A + (size_t)i*lda;
+        for (int j = i; j < n; j++)
+            Arow[j] += temp*x[j];
+    }
+}
+#endif
