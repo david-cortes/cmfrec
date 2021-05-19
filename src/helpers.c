@@ -1282,6 +1282,7 @@ void set_blas_threads(int nthreads_set, int *nthreads_curr)
         *nthreads_curr = openblas_get_num_threads();
         *nthreads_curr = min2(*nthreads_curr, 1);
     }
+    openblas_set_num_threads(nthreads_set);
     
 
     #elif defined(_OPENMP)
