@@ -924,14 +924,9 @@ void factors_closed_form
         /* Sparse X - obtain t(B)*B through SR1 updates, avoiding a full
            matrix-matrix multiplication. This is the expected scenario for
            most use-cases. */
-        set_to_zero(bufferBtB, square(k));
-        for (size_t ix = 0; ix < nnz; ix++)
-            cblas_tsyr(CblasRowMajor, CblasUpper, k,
-                       (weight == NULL)? (1.) : (weight[ix]),
-                       B + (size_t)ixB[ix]*(size_t)ldb, 1,
-                       bufferBtB, k);
+        
 
-        /* Now obtain t(B)*t(X) from a dense_matrix-sparse_vector product,
+        /* First obtain t(B)*t(X) from a dense_matrix-sparse_vector product,
            avoid again a full matrix-vector multiply. Note that this is
            stored in 'a_vec', despite the name */
         set_to_zero(a_vec, k);
@@ -950,6 +945,15 @@ void factors_closed_form
                                     ixB, Xa, nnz,
                                     a_vec);
         }
+
+
+        /* Now t(B)*B */
+        set_to_zero(bufferBtB, square(k));
+        for (size_t ix = 0; ix < nnz; ix++)
+            cblas_tsyr(CblasRowMajor, CblasUpper, k,
+                       (weight == NULL)? (1.) : (weight[ix]),
+                       B + (size_t)ixB[ix]*(size_t)ldb, 1,
+                       bufferBtB, k);
     }
 
     else
@@ -1477,15 +1481,15 @@ void factors_implicit_chol
         return;
     }
 
-    real_t *restrict BtB = buffer_real_t;
-    buffer_real_t += square(k);
-
     for (size_t ix = 0; ix < nnz; ix++) {
         cblas_taxpy(k, Xa[ix] + 1.,
                     B + (size_t)ixB[ix]*ldb, 1, a_vec, 1);
     }
 
+    real_t *restrict BtB = buffer_real_t;
+    buffer_real_t += square(k);
     set_to_zero(BtB, square(k));
+    
     for (size_t ix = 0; ix < nnz; ix++) {
         cblas_tsyr(CblasRowMajor, CblasUpper, k,
                    Xa[ix], B + (size_t)ixB[ix]*ldb, 1,

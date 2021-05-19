@@ -1,5 +1,6 @@
 cython
-numpy
+numpy>=1.18.1
 scipy
 pandas>=0.25.0
 findblas
+threadpoolctl

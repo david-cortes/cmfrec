@@ -104,6 +104,11 @@ NULL
 #' package).
 #' }
 #' 
+#' \bold{Note}: It is recommended to have the \href{https://cran.r-project.org/package=RhpcBLASctl}{RhpcBLASctl}
+#' package installed for better performance - if available, will be used to control the number
+#' of internal BLAS threads before entering a multi-threaded region, in order to avoid oversubscription of
+#' threads. This can become an issue when using OpenBLAS if it is the 'pthreads' variant.
+#' 
 #' @param X The main matrix with interactions data to factorize (e.g. movie ratings by users,
 #' bag-of-words representations of texts, etc.). The package is built with
 #' recommender systems in mind, and will assume that `X` is a matrix in which users

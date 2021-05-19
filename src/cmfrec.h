@@ -453,15 +453,13 @@ long double compensated_sum(real_t *arr, size_t n);
 long double compensated_sum_product(real_t *restrict arr1, real_t *restrict arr2, size_t n);
 void custom_syr(const int_t n, const real_t alpha, const real_t *restrict x, real_t *restrict A, const int_t lda);
 void set_blas_threads(int nthreads_set, int *nthreads_curr);
-#if !defined(MKL_H) && !defined(HAS_MKL)
-    #ifdef _FOR_R
-        extern bool has_RhpcBLASctl;
-        extern SEXP *ptr_glob_lst;
-        extern int* ptr_nthreads;
-    #elif defined(_FOR_PYTHON)
-        extern void py_set_threads(int);
-        extern int py_get_threads(void);
-    #endif
+#ifdef _FOR_R
+    extern bool has_RhpcBLASctl;
+    extern SEXP *ptr_glob_lst;
+    extern int* ptr_nthreads;
+#elif defined(_FOR_PYTHON)
+    extern void py_set_threads(int);
+    extern int py_get_threads(void);
 #endif
 
 /* common.c */

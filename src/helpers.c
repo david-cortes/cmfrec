@@ -1246,12 +1246,9 @@ void custom_syr(const int_t n, const real_t alpha, const real_t *restrict x, rea
 
 void set_blas_threads(int nthreads_set, int *nthreads_curr)
 {
-    #if !defined(MKL_H) && !defined(HAS_MKL)
-
-
     #ifdef _FOR_R
     /* https://gist.github.com/KRD1/2503984 */
-    if (!has_RhpcBLASctl)
+    if (!has_RhpcBLASctl || ptr_glob_lst == NULL || ptr_nthreads == NULL)
         return;
     int errinfo = 0;
     if (nthreads_curr != NULL) {
@@ -1260,8 +1257,8 @@ void set_blas_threads(int nthreads_set, int *nthreads_curr)
                                                &errinfo);
         if (!errinfo) {
             *nthreads_curr = Rf_asInteger(nthreads_curr_R);
-            *nthreads_curr = min2(*nthreads_curr, 1);
         }
+        *nthreads_curr = min2(*nthreads_curr, 1);
     }
     *ptr_nthreads = nthreads_set;
     errinfo = 0;
@@ -1270,7 +1267,7 @@ void set_blas_threads(int nthreads_set, int *nthreads_curr)
                     &errinfo);
     
 
-    #elif defined(_FOR_PYTHON) && defined(__unix__) && !defined(IS_PY_TEST)
+    #elif defined(_FOR_PYTHON) && !defined(IS_PY_TEST)
     if (nthreads_curr != NULL) {
         *nthreads_curr = py_get_threads();
     }
@@ -1285,14 +1282,11 @@ void set_blas_threads(int nthreads_set, int *nthreads_curr)
     openblas_set_num_threads(nthreads_set);
     
 
-    #elif defined(_OPENMP)
+    #elif defined(_OPENMP) && !defined(MKL_H) && !defined(HAS_MKL)
     if (nthreads_curr != NULL) {
         *nthreads_curr = omp_get_num_threads();
         *nthreads_curr = min2(*nthreads_curr, 1);
     }
     omp_set_num_threads(nthreads_set);
-    #endif
-    
-
     #endif
 }

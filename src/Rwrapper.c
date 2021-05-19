@@ -83,12 +83,50 @@ int *ptr_nthreads = NULL;
 /* https://gist.github.com/KRD1/2503984 */
 SEXP prepare_RhpcBLASctl_Call()
 {
+    /* requireNamespace("RhpcBLASctl", quietly=TRUE) */
     int threw_err = 0;
+    const char *arg_names[] = {"package", "quietly", ""};
+    int n_protected = 0;
+    SEXP R_str_RhpcBLASctl = PROTECT(Rf_ScalarString(Rf_mkChar("RhpcBLASctl")));
+    SEXP R_expr_requireNamespace = PROTECT(Rf_install("requireNamespace"));
+    SEXP R_exptr_do_call = PROTECT(Rf_install("do.call"));
+    SEXP call_args = PROTECT(Rf_mkNamed(VECSXP, arg_names));
+    SET_VECTOR_ELT(call_args, 0, R_str_RhpcBLASctl);
+    SET_VECTOR_ELT(call_args, 1, Rf_ScalarLogical(1));
+    SEXP R_expr_call = PROTECT(Rf_lang3(R_exptr_do_call, R_expr_requireNamespace, call_args));
+    n_protected = 5;
+    SEXP R_has_RhpcBLASctl = R_tryEvalSilent(R_expr_call, R_GlobalEnv, &threw_err);
+    if (threw_err) {
+        UNPROTECT(n_protected);
+        return R_str_RhpcBLASctl;
+    }
+
+    PROTECT(R_has_RhpcBLASctl); n_protected++;
+    has_RhpcBLASctl = !threw_err && Rf_asLogical(R_has_RhpcBLASctl);
+
+    if (!has_RhpcBLASctl) {
+        ptr_glob_lst = NULL;
+        ptr_nthreads = NULL;
+        UNPROTECT(n_protected);
+        return R_str_RhpcBLASctl;
+    }
+
+    /* list(
+            getNamespace("RhpcBLASctl"),
+            RhpcBLASctl::blas_set_num_threads,
+            RhpcBLASctl::blas_get_num_procs,
+            nthreads,
+            `RhpcBLASctl::blas_set_num_threads()`,
+            `RhpcBLASctl::blas_get_num_procs(nthreads)`
+        ) */
     SEXP lst = PROTECT(allocVector(VECSXP, 6));
+    SEXP R_str_getNamespace = PROTECT(Rf_install("getNamespace"));
+    SEXP R_exptr_gnmsp = PROTECT(Rf_lang2(R_str_getNamespace, R_str_RhpcBLASctl));
+    n_protected += 3;
+
     SET_VECTOR_ELT(lst, 0,
                    R_tryEvalSilent(
-                        Rf_lang2(Rf_install("getNamespace"),
-                                 Rf_ScalarString(Rf_mkChar("RhpcBLASctl"))),
+                        R_exptr_gnmsp,
                         R_GlobalEnv,
                         &threw_err
                     )
@@ -97,6 +135,7 @@ SEXP prepare_RhpcBLASctl_Call()
     if (threw_err) {
         has_RhpcBLASctl = false;
         ptr_glob_lst = NULL;
+        ptr_nthreads = NULL;
     }
 
     else {
@@ -105,13 +144,12 @@ SEXP prepare_RhpcBLASctl_Call()
         SET_VECTOR_ELT(lst, 3, Rf_allocVector(INTSXP, 1));
         SET_VECTOR_ELT(lst, 4, Rf_lang2(VECTOR_ELT(lst, 1),
                                         VECTOR_ELT(lst, 3)));
-        SET_VECTOR_ELT(lst, 5, Rf_lang2(VECTOR_ELT(lst, 2),
-                                        VECTOR_ELT(lst, 3)));
+        SET_VECTOR_ELT(lst, 5, Rf_lang1(VECTOR_ELT(lst, 2)));
         ptr_nthreads = INTEGER(VECTOR_ELT(lst, 3));
         has_RhpcBLASctl = true;
     }
 
-    UNPROTECT(1);
+    UNPROTECT(n_protected);
     return lst;
 }
 

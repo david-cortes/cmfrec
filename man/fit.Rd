@@ -797,6 +797,11 @@ one would have to use `k=100`, `lambda=0.01`, `niter=15`, `use_cg=TRUE`, `finali
 and use single-precision floating point numbers (not supported in the R version of this
 package).
 }
+
+\bold{Note}: It is recommended to have the \href{https://cran.r-project.org/package=RhpcBLASctl}{RhpcBLASctl}
+package installed for better performance - if available, will be used to control the number
+of internal BLAS threads before entering a multi-threaded region, in order to avoid oversubscription of
+threads. This can become an issue when using OpenBLAS if it is the 'pthreads' variant.
 }
 \details{
 In more details, the models predict the values of `X` as follows:\itemize{
