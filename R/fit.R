@@ -104,13 +104,6 @@ NULL
 #' package).
 #' }
 #' 
-#' 
-#' If using OpenBLAS, it is highly recommended to set the number of threads to 1,
-#' which can be achieved for example through the package `RhpcBLASctl`
-#' (`RhpcBLASctl::blas_set_num_threads(1L)`), or through environment variables
-#' `OPENBLAS_NUM_THREADS` and `OMP_NUM_THREADS` (which should be set to 1 before
-#' starting R).
-#' 
 #' @param X The main matrix with interactions data to factorize (e.g. movie ratings by users,
 #' bag-of-words representations of texts, etc.). The package is built with
 #' recommender systems in mind, and will assume that `X` is a matrix in which users
@@ -1821,7 +1814,7 @@ ContentBased <- function(X, U, I, weight=NULL,
     nupd <- integer(1L)
     nfev <- integer(1L)
     
-    
+
     ret_code <- .Call("call_fit_content_based_lbfgs",
                       this$matrices$user_bias, this$matrices$item_bias,
                       this$matrices$C, this$matrices$C_bias,

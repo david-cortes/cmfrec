@@ -2408,6 +2408,8 @@ int_t factors_offsets_explicit_multiple
     #endif
     int_t retval = 0;
 
+    int nthreads_restore = 1;
+
     bool free_Bm_plus_bias = false;
     bool free_U_csr = false;
     bool free_X_csr = false;
@@ -2484,6 +2486,8 @@ int_t factors_offsets_explicit_multiple
         );
     }
 
+    set_blas_threads(1, &nthreads_restore);
+
     #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
             shared(A, Am, Bm, C, C_bias, biasA, biasB, lda, ld_A_orig, \
                    U, U_csr, U_csr_i, U_csr_p, p, \
@@ -2529,6 +2533,8 @@ int_t factors_offsets_explicit_multiple
             precomputedBtB,
             Bm_plus_bias
         );
+
+    set_blas_threads(nthreads_restore, (int*)NULL);
 
 
     for (size_t ix = 0; ix < (size_t)m; ix++)
@@ -2587,6 +2593,8 @@ int_t factors_offsets_implicit_multiple
     long long ix;
     #endif
     int_t retval = 0;
+
+    int nthreads_restore = 1;
     
     bool free_U_csr = false;
     bool free_X_csr = false;
@@ -2644,6 +2652,8 @@ int_t factors_offsets_implicit_multiple
                     0., precomputedBtB, k);
     }
 
+    set_blas_threads(1, &nthreads_restore);
+
     #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
             shared(Am, Bm, C, C_bias, A, \
                    Xcsr, Xcsr_i, Xcsr_p, \
@@ -2672,6 +2682,8 @@ int_t factors_offsets_implicit_multiple
             precomputedBtB,
             (A == NULL)? ((real_t*)NULL) : (A + ix*(size_t)k)
         );
+
+    set_blas_threads(nthreads_restore, (int*)NULL);
     
     for (size_t ix = 0; ix < (size_t)m; ix++)
         retval = max2(retval, ret[ix]);

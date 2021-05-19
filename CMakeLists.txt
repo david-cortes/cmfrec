@@ -1,5 +1,5 @@
 cmake_minimum_required (VERSION 3.9)
-project (cmfrec VERSION 3.0.3)
+project (cmfrec VERSION 3.1.0)
 set(CMAKE_BUILD_TYPE Release)
 
 ### Note: this build script allows configuring 4 things manually:
@@ -42,14 +42,6 @@ endif()
 # should match with the integer size specified above if it was changed.
 set(BLAS_LIBRARIES "")
 set(LAPACK_LIBRARIES "")
-
-### IMPORTANT!!!
-### It's suggested to turn this option ON if using OpenBLAS - see:
-### https://github.com/xianyi/OpenBLAS/issues/3237
-set(AVOID_BLAS_SYR OFF)
-if (AVOID_BLAS_SYR)
-    add_compile_definitions(AVOID_BLAS_SYR)
-endif()
 
 ### Option (d): NAN propagation in LAPACK
 # This option will avoid passing inputs with any NAN values to the
@@ -104,7 +96,7 @@ endif()
 if (MSVC)
     add_compile_options(/O2)
 else()
-    add_compile_options(-O2 -march=native)
+    add_compile_options(-O3 -march=native)
 endif()
 
 # Linkage to BLAS and LAPACK
@@ -121,15 +113,44 @@ if (LAPACK_LIBRARIES STREQUAL "")
     find_package(LAPACK REQUIRED)
 endif()
 
-# See option (c)
-if (BLAS_LIBRARIES MATCHES "[Oo]pen[Bb][Ll][Aa][Ss]")
-    add_compile_definitions(AVOID_BLAS_SYR)
-endif()
-
 # https://stackoverflow.com/questions/59578248/how-do-i-manipulate-cmake-lists-as-sets
-
 list(APPEND union_list ${LAPACK_LIBRARIES} ${BLAS_LIBRARIES})
 list(REMOVE_DUPLICATES union_list)
+
+# See https://github.com/xianyi/OpenBLAS/issues/3237
+set(CMAKE_REQUIRED_LINK_OPTIONS  ${union_list})
+set(CMAKE_REQUIRED_LIBRARIES  ${union_list})
+check_c_source_compiles(
+    "
+    int openblas_get_num_threads(void);
+    int main(int argc, char **argv)
+    {
+        int nt = openblas_get_num_threads;
+        return 0;
+    }
+    "
+    HAS_OPENBLAS
+)
+if (HAS_OPENBLAS)
+    message(STATUS "Using OpenBLAS - will replace its SYR function.")
+    add_compile_definitions(AVOID_BLAS_SYR)
+    add_compile_definitions(HAS_OPENBLAS)
+else()
+    check_c_source_compiles(
+        "
+        int mkl_get_max_threads(void);
+        int main(int argc, char **argv)
+        {
+            int nt = mkl_get_max_threads();
+            return 0;
+        }
+        "
+        HAS_MKL
+    )
+    add_compile_definitions(HAS_MKL)
+endif()
+
+
 target_link_libraries(cmfrec PUBLIC ${union_list})
 
 # Public header with the data types substituted according to what was built

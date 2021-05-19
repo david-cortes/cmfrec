@@ -17,6 +17,8 @@ MANIFEST
 
 cmfrec/cfuns_double.c
 cmfrec/cfuns_float.c
+cmfrec/cfuns_double.h
+cmfrec/cfuns_float.h
 
 cmfrec.egg-info/*
 

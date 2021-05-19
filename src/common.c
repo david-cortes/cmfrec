@@ -2249,6 +2249,9 @@ void optimizeA
             else if (l1_lam || l1_lam_last)
                 size_buffer += (size_t)3*(size_t)k;
 
+            int nthreads_restore = 1;
+            set_blas_threads(1, &nthreads_restore);
+
             #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
                     shared(A, lda, B, ldb, ldX, m, n, k, \
                            scale_lam, scale_bias_const, \
@@ -2302,6 +2305,8 @@ void optimizeA
                         false
                     );
                 }
+
+            set_blas_threads(nthreads_restore, (int*)NULL);
         }
     }
 
@@ -2348,6 +2353,9 @@ void optimizeA
             add_to_diag(bufferBtB, lam, k);
             if (lam_last != lam) bufferBtB[square(k)-1] += (lam_last - lam);
         }
+
+        int nthreads_restore = 1;
+        set_blas_threads(1, &nthreads_restore);
 
         size_t size_buffer = (size_t)square(k) + (size_t)(use_cg? (3*k) : 0);
 
@@ -2402,6 +2410,8 @@ void optimizeA
                 false
             );
         }
+
+        set_blas_threads(nthreads_restore, (int*)NULL);
     }
 
     /* Case 3: X is sparse, with missing-as-zero, and no weights.
@@ -2551,6 +2561,9 @@ void optimizeA
         else if (l1_lam || l1_lam_last)
             size_buffer += (size_t)3*(size_t)k;
 
+        int nthreads_restore = 1;
+        set_blas_threads(1, &nthreads_restore);
+
         #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
                 shared(A, lda, B, ldb, m, n, k, \
                        scale_lam, scale_bias_const, wsumA, \
@@ -2587,6 +2600,8 @@ void optimizeA
                 );
             }
         }
+
+        set_blas_threads(nthreads_restore, (int*)NULL);
     }
 }
 
@@ -2626,6 +2641,8 @@ void optimizeA_implicit
     else if (l1_lam)
         size_buffer += (size_t)3*(size_t)k;
 
+    int nthreads_restore = 1;
+    set_blas_threads(1, &nthreads_restore);
 
     int_t ix = 0;
 
@@ -2668,6 +2685,8 @@ void optimizeA_implicit
                     buffer_real_t + ((size_t)omp_get_thread_num() * size_buffer)
                 );
     }
+
+    set_blas_threads(nthreads_restore, (int*)NULL);
 }
 
 void calc_mean_and_center

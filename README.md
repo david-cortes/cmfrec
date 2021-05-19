@@ -162,13 +162,6 @@ Linkage is then done with `-lcmfrec`.
 import numpy as np, pandas as pd
 from cmfrec import CMF
 
-### Highly recommended when using OpenBLAS
-has_openblas = False
-if has_openblas:
-    import os
-    os.environ["OPENBLAS_NUM_THREADS"] = "1"
-    os.environ["OMP_NUM_THREADS"] = "1"
-
 ### Generate random data
 n_users = 4
 n_items = 5
@@ -224,10 +217,6 @@ Users and items can be reindexed internally (if passing data frames, but not whe
 
 ```r
 library(cmfrec)
-
-### Highly recommended when using OpenBLAS
-has_openblas <- FALSE
-if (has_openblas) RhpcBLASctl::blas_set_num_threads(1L)
 
 n_users <- 4
 n_items <- 5

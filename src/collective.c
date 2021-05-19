@@ -5118,6 +5118,9 @@ void optimizeA_collective
             else if (l1_lam || l1_lam_bias)
                 size_buffer += (size_t)3*(size_t)k_totA;
 
+            int nthreads_restore = 1;
+            set_blas_threads(1, &nthreads_restore);
+
             #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
                     shared(A, k_totA, B, C, k, k_user, k_item, k_main, \
                            m, m_x, m_u, n, p, lda, ldb, \
@@ -5213,6 +5216,8 @@ void optimizeA_collective
                     );
                 }
             }
+
+            set_blas_threads(nthreads_restore, (int*)NULL);
         }
     }
 
@@ -5513,6 +5518,9 @@ void optimizeA_collective
             *CtC_is_scaled = false;
         }
 
+        int nthreads_restore = 1;
+        set_blas_threads(1, &nthreads_restore);
+
         #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
                 shared(A, k_totA, B, C, Bi, k, k_user, k_item, k_main,k_main_i,\
                        m, m_x, m_u, n, p, \
@@ -5608,6 +5616,7 @@ void optimizeA_collective
             );
         }
 
+        set_blas_threads(nthreads_restore, (int*)NULL);
     }
 }
 
@@ -5840,6 +5849,9 @@ void optimizeA_collective_implicit
     else if (l1_lam != 0.)
         size_buffer += (size_t)3*(size_t)k_totA;
 
+    int nthreads_restore = 1;
+    set_blas_threads(1, &nthreads_restore);
+
     #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
             shared(A, B, C, m, n, p, k, k_user, k_item, k_main, lam, l1_lam, \
                    Xcsr, Xcsr_p, Xcsr_i, U, U_csr, U_csr_i, U_csr_p, \
@@ -5872,6 +5884,7 @@ void optimizeA_collective_implicit
             buffer_real_t + ((size_t)omp_get_thread_num() * size_buffer)
         );
 
+    set_blas_threads(nthreads_restore, (int*)NULL);
 }
 
 void build_BeTBe
@@ -10314,6 +10327,8 @@ int_t factors_collective_explicit_multiple
     bool user_bias = (biasA != NULL);
     bool free_B_plus_bias = false;
 
+    int nthreads_restore = 1;
+
     real_t *restrict weightR = NULL;
     real_t *restrict buffer_CtUbias = NULL;
     bool free_U_csr = false;
@@ -10460,6 +10475,8 @@ int_t factors_collective_explicit_multiple
         }
     }
 
+    set_blas_threads(1, &nthreads_restore);
+
     #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
             shared(A, B, C, Cb, biasA, biasB, glob_mean, U_colmeans, \
                    Bi, add_implicit_features, \
@@ -10526,6 +10543,8 @@ int_t factors_collective_explicit_multiple
             CtUbias,
             B_plus_bias
         );
+
+    set_blas_threads(nthreads_restore, (int*)NULL);
 
     for (size_t ix = 0; ix < m_max; ix++)
         retval = max2(retval, ret[ix]);
@@ -10602,6 +10621,8 @@ int_t factors_collective_implicit_multiple
     if (NA_as_zero_U && U == NULL) m_u = m;
     if (U == NULL && (!nnz_U && U_csr_p == NULL) && !NA_as_zero_U) m_u = 0;
 
+    int nthreads_restore = 1;
+
     
     bool free_U_csr = false;
     bool free_X_csr = false;
@@ -10668,6 +10689,8 @@ int_t factors_collective_implicit_multiple
     }
 
 
+    set_blas_threads(1, &nthreads_restore);
+
     #pragma omp parallel for schedule(static) num_threads(nthreads) \
             shared(A, B, C, m, m_u, U_colmeans, n, \
                    U, U_csr, U_csr_i, U_csr_p, NA_as_zero_U, nonneg, \
@@ -10703,6 +10726,8 @@ int_t factors_collective_implicit_multiple
             BeTBeChol,
             CtUbias
         );
+
+    set_blas_threads(nthreads_restore, (int*)NULL);
 
 
     for (size_t ix = 0; ix < (size_t)m; ix++)

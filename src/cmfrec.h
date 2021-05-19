@@ -100,6 +100,11 @@ typedef void (*sig_t_)(int);
     #ifdef USE_FINDBLAS
         #include "findblas.h" /* https://www.github.com/david-cortes/findblas */
     #endif
+    #ifdef HAS_OPENBLAS
+        #ifndef AVOID_BLAS_SYR
+            #define AVOID_BLAS_SYR
+        #endif
+    #endif
 #elif defined(_FOR_R)
     #include <R.h>
     #include <Rinternals.h>
@@ -257,6 +262,8 @@ void cblas_tsymv(const CBLAS_ORDER order, const CBLAS_UPLO Uplo, const int_t N, 
                  const int_t lda, const real_t *X, const int_t incX, const real_t beta, real_t *Y, const int_t incY);
 void cblas_tger(const CBLAS_ORDER order, const int_t m, const int_t n, const real_t alpha,
                 const real_t *x, const int_t incx, const real_t *y, const int_t incy, real_t *a, const int_t lda);
+void openblas_set_num_threads(int);
+int openblas_get_num_threads(void);
 #endif
 
 
@@ -445,7 +452,17 @@ void R_nan_to_C_nan(real_t arr[], size_t n);
 long double compensated_sum(real_t *arr, size_t n);
 long double compensated_sum_product(real_t *restrict arr1, real_t *restrict arr2, size_t n);
 void custom_syr(const int_t n, const real_t alpha, const real_t *restrict x, real_t *restrict A, const int_t lda);
-
+void set_blas_threads(int nthreads_set, int *nthreads_curr);
+#if !defined(MKL_H) && !defined(HAS_MKL)
+    #ifdef _FOR_R
+        extern bool has_RhpcBLASctl;
+        extern SEXP *ptr_glob_lst;
+        extern int* ptr_nthreads;
+    #elif defined(_FOR_PYTHON)
+        extern void py_set_threads(int);
+        extern int py_get_threads(void);
+    #endif
+#endif
 
 /* common.c */
 real_t fun_grad_cannonical_form

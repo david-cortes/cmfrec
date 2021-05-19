@@ -1243,3 +1243,55 @@ void custom_syr(const int_t n, const real_t alpha, const real_t *restrict x, rea
     }
 }
 #endif
+
+void set_blas_threads(int nthreads_set, int *nthreads_curr)
+{
+    #if !defined(MKL_H) && !defined(HAS_MKL)
+
+
+    #ifdef _FOR_R
+    /* https://gist.github.com/KRD1/2503984 */
+    if (!has_RhpcBLASctl)
+        return;
+    int errinfo = 0;
+    if (nthreads_curr != NULL) {
+        SEXP nthreads_curr_R = R_tryEvalSilent(VECTOR_ELT(*ptr_glob_lst, 5),
+                                               VECTOR_ELT(*ptr_glob_lst, 0),
+                                               &errinfo);
+        if (!errinfo) {
+            *nthreads_curr = Rf_asInteger(nthreads_curr_R);
+            *nthreads_curr = min2(*nthreads_curr, 1);
+        }
+    }
+    *ptr_nthreads = nthreads_set;
+    errinfo = 0;
+    R_tryEvalSilent(VECTOR_ELT(*ptr_glob_lst, 4),
+                    VECTOR_ELT(*ptr_glob_lst, 0),
+                    &errinfo);
+    
+
+    #elif defined(_FOR_PYTHON) && defined(__unix__) && !defined(IS_PY_TEST)
+    if (nthreads_curr != NULL) {
+        *nthreads_curr = py_get_threads();
+    }
+    py_set_threads(nthreads_set);
+    
+
+    #elif defined(HAS_OPENBLAS)
+    if (nthreads_curr != NULL) {
+        *nthreads_curr = openblas_get_num_threads();
+        *nthreads_curr = min2(*nthreads_curr, 1);
+    }
+    
+
+    #elif defined(_OPENMP)
+    if (nthreads_curr != NULL) {
+        *nthreads_curr = omp_get_num_threads();
+        *nthreads_curr = min2(*nthreads_curr, 1);
+    }
+    omp_set_num_threads(nthreads_set);
+    #endif
+    
+
+    #endif
+}

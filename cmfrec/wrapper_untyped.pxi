@@ -592,6 +592,9 @@ cdef extern from "cmfrec.h":
         int nthreads
     ) nogil
 
+    # void py_set_threads(int) nogil
+    # int py_get_threads() nogil
+
 
 def call_fit_collective_explicit_lbfgs(
         np.ndarray[int_t, ndim=1] ixA,
@@ -3881,3 +3884,23 @@ def call_impute_X_collective_explicit(
         raise MemoryError("Could not allocate sufficient memory.")
 
     return Xfull
+
+cdef public void py_set_threads(int nthreads) nogil:
+    with gil:
+        try:
+            import threadpoolctl
+            threadpoolctl.threadpool_limits(limits=nthreads, user_api="blas")
+        except:
+            pass
+
+cdef public int py_get_threads() nogil:
+    with gil:
+        try:
+            import threadpoolctl
+            res = threadpoolctl.threadpool_info()
+            for el in res:
+                if el["user_api"] == "blas":
+                    return el["num_threads"]
+            return 1
+        except:
+            return 1

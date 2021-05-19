@@ -797,13 +797,6 @@ one would have to use `k=100`, `lambda=0.01`, `niter=15`, `use_cg=TRUE`, `finali
 and use single-precision floating point numbers (not supported in the R version of this
 package).
 }
-
-
-If using OpenBLAS, it is highly recommended to set the number of threads to 1,
-which can be achieved for example through the package `RhpcBLASctl`
-(`RhpcBLASctl::blas_set_num_threads(1L)`), or through environment variables
-`OPENBLAS_NUM_THREADS` and `OMP_NUM_THREADS` (which should be set to 1 before
-starting R).
 }
 \details{
 In more details, the models predict the values of `X` as follows:\itemize{
