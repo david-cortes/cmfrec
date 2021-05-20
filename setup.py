@@ -65,23 +65,29 @@ class build_ext_subclass( build_ext_with_blas ):
         ## SYR in OpenBLAS is currently 10-15x slower than MKL, avoid it:
         ## https://github.com/xianyi/OpenBLAS/issues/3237
         for e in self.extensions:
-            has_openblas = False
-            if not has_openblas:
+            has_openblas_or_atlas = False
+            if not has_openblas_or_atlas:
                 for arg in e.extra_compile_args:
-                    if bool(re.search("openblas", str(arg).lower())):
-                        has_openblas = True
+                    if (bool(re.search("openblas", str(arg).lower()))
+                        or bool(re.search("atlas", str(arg).lower()))
+                    ):
+                        has_openblas_or_atlas = True
                         break
-            if not has_openblas:
+            if not has_openblas_or_atlas:
                 for arg in e.extra_link_args:
-                    if bool(re.search("openblas", str(arg).lower())):
-                        has_openblas = True
+                    if (bool(re.search("openblas", str(arg).lower()))
+                        or bool(re.search("atlas", str(arg).lower()))
+                    ):
+                        has_openblas_or_atlas = True
                         break
-            if not has_openblas:
+            if not has_openblas_or_atlas:
                 for arg in e.define_macros:
-                    if bool(re.search("openblas", str(arg[0]).lower())):
-                        has_openblas = True
+                    if (bool(re.search("openblas", str(arg[0]).lower()))
+                        or bool(re.search("atlas", str(arg[0]).lower()))
+                    ):
+                        has_openblas_or_atlas = True
                         break
-            if has_openblas:
+            if has_openblas_or_atlas:
                 e.define_macros += [("AVOID_BLAS_SYR", None)]
 
         build_ext_with_blas.build_extensions(self)

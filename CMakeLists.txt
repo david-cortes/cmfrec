@@ -147,7 +147,31 @@ else()
         "
         HAS_MKL
     )
-    add_compile_definitions(HAS_MKL)
+    if (HAS_MKL)
+        add_compile_definitions(HAS_MKL)
+    else()
+        check_c_source_compiles(
+            "
+            void catlas_saxpby(const int N, const float alpha, const float *X,
+                  const int incX, const float beta, float *Y, const int incY);
+            int main(int argc, char **argv)
+            {
+                float dont_optimize_out[] = {1., 2., 3., 4.};
+                int nt = catlas_saxpby(4, 1., NULL, 1, 0., dont_optimize_out, 1);
+                double s = dont_optimize_out[1] + dont_optimize_out[3];
+                printf(\"res:%f\n\", s);
+                return 0;
+            }
+            "
+            HAS_ATLAS
+        )
+        if (HAS_ATLAS)
+            message(STATUS "Using ATLAS - will replace its SYR function.")
+            message(WARNING "Note: ATLAS multi-threading might make this library very slow.")
+            add_compile_definitions(HAS_ATLAS)
+            add_compile_definitions(AVOID_BLAS_SYR)
+        endif()
+    endif()
 endif()
 
 
