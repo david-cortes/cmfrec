@@ -100,7 +100,7 @@ typedef void (*sig_t_)(int);
     #ifdef USE_FINDBLAS
         #include "findblas.h" /* https://www.github.com/david-cortes/findblas */
     #endif
-    #ifdef HAS_OPENBLAS
+    #if defined(HAS_OPENBLAS) || defined(HAS_ATLAS)
         #ifndef AVOID_BLAS_SYR
             #define AVOID_BLAS_SYR
         #endif
