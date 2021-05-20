@@ -2,6 +2,7 @@ import numpy as np
 cimport numpy as np
 from cython cimport boundscheck, nonecheck, wraparound
 import ctypes
+import threadpoolctl
 
 ctypedef int int_t
 
@@ -3888,7 +3889,6 @@ def call_impute_X_collective_explicit(
 cdef public void py_set_threads(int nthreads) nogil:
     with gil:
         try:
-            import threadpoolctl
             threadpoolctl.threadpool_limits(limits=nthreads, user_api="blas")
         except:
             pass
@@ -3896,7 +3896,6 @@ cdef public void py_set_threads(int nthreads) nogil:
 cdef public int py_get_threads() nogil:
     with gil:
         try:
-            import threadpoolctl
             res = threadpoolctl.threadpool_info()
             for el in res:
                 if el["user_api"] == "blas":
