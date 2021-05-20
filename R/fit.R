@@ -104,11 +104,44 @@ NULL
 #' package).
 #' }
 #' 
-#' \bold{Note}: It is recommended to have the \href{https://cran.r-project.org/package=RhpcBLASctl}{RhpcBLASctl}
+#' @section Performance tips:
+#' It is recommended to have the \href{https://cran.r-project.org/package=RhpcBLASctl}{RhpcBLASctl}
 #' package installed for better performance - if available, will be used to control the number
 #' of internal BLAS threads before entering a multi-threaded region, in order to avoid oversubscription of
 #' threads. This can become an issue when using OpenBLAS if it is the 'pthreads' variant.
 #' 
+#' This package relies heavily on BLAS and LAPACK functions. For better performance, it is
+#' recommended to use an optimized backed for them, such as MKL or OpenBLAS.
+#' 
+#' In Windows, the easiest way of getting MKL is to use Microsoft's
+#' \href{https://mran.microsoft.com}{MRAN distribution of R}, while OpenBLAS can be obtained by
+#' following \href{https://github.com/david-cortes/R-openblas-in-windows}{this tutorial}
+#' (no new R installation required).
+#' 
+#' In Linux, these can be installed through the system's package manager. In Debian and
+#' Debian-based distributions such as Ubuntu, the default BLAS and LAPACK can be configured
+#' through the alternatives system (see the
+#' \href{https://wiki.debian.org/DebianScience/LinearAlgebraLibraries}{Debian docs} or
+#' \href{https://stackoverflow.com/a/49842944/5941695}{this post for MKL}).
+#' 
+#' By default, in a regular x86-64 CPU, R will compile all packages with generic options
+#' `-msse2` and `-O2`, which misses lots of performance optimizations, and in particular,
+#' `cmfrec` will not be able to achieve its maximum performance with them.
+#' 
+#' It is recommended to use compilation options `-O3`, `-march=native` and `-std=c99`.
+#' These can be activated in multiple ways: \itemize{
+#' \item Installing `cmfrec` from source, but modifying the `Makevars` file (it has lines
+#' that can be uncommented in order to enable these optimizations).
+#' \item Modifying the global `Makeconf` variable. This is a file which defines the default
+#' compilation options for \bold{all} R packages, so be careful about it. In Debian,
+#' this file will typically be under `/etc/R/`, but this can vary in other operating systems.
+#' In this file, replace all occurences of `-O2` with `-O3`, and all occurrences of
+#' `-msse2` with `-march=native` (e.g. open them in some text editor or in RStudio and
+#' use the 'Replace All' functionality).
+#' \item Creating a default user `Makevars` file, which will be under `~/.R/Makevars`.
+#' In this file, do all the same text replacements as in the point above for `Makeconf`.
+#' If the file is empty, simply add this line: `PKG_CFLAGS += -std=c99 -O3 -march=native`.
+#' }
 #' @param X The main matrix with interactions data to factorize (e.g. movie ratings by users,
 #' bag-of-words representations of texts, etc.). The package is built with
 #' recommender systems in mind, and will assume that `X` is a matrix in which users
@@ -697,11 +730,6 @@ NULL
 #' for new data will offer an option `exact` for determining whether to apply the
 #' regularization to the \eqn{\mathbf{A}, \mathbf{B}}{A, B} matrices instead.
 #' 
-#' Be aware that the optimization procedures rely heavily on BLAS and LAPACK function
-#' calls, and as such benefit from using optimized libraries for them such as
-#' MKL or OpenBLAS. See \href{https://github.com/david-cortes/R-openblas-in-windows}{this link}
-#' for instructions on getting OpenBLAS for R in Windows.
-#' 
 #' For reproducibility, the initializations of the model matrices (always initialized
 #' as `~ Normal(0, 1)`) can be controlled
 #' through `set.seed`, but if using parallelizations, there are potential sources
@@ -717,6 +745,7 @@ NULL
 #' de-duplication of entries of sparse matrices.
 #' @examples
 #' ### See the package vignette for an extended version of this example
+#' 
 #' library(cmfrec)
 #' if (require("recommenderlab") && require("MatrixExtra")) {
 #'     ### Load the ML100K dataset (movie ratings)

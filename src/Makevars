@@ -1,3 +1,13 @@
 PKG_CPPFLAGS = -D_FOR_R -DAVOID_BLAS_SYR
 PKG_CFLAGS = $(SHLIB_OPENMP_CFLAGS)
 PKG_LIBS = $(SHLIB_OPENMP_CFLAGS) $(LAPACK_LIBS) $(BLAS_LIBS) $(FLIBS)
+
+### For better performance, uncomment these:
+# PKG_CFLAGS += -std=c99 -march=native
+
+### Plus these (equivalent to -O3)
+### https://gcc.gnu.org/onlinedocs/gcc/Optimize-Options.html
+# PKG_CFLAGS += -fgcse-after-reload -fipa-cp-clone -floop-interchange -floop-unroll-and-jam \
+-fpeel-loops -fpredictive-commoning -fsplit-loops -fsplit-paths -ftree-loop-distribution \
+-ftree-loop-vectorize -ftree-partial-pre -ftree-slp-vectorize -funswitch-loops \
+-fvect-cost-model -fvect-cost-model=dynamic -fversion-loops-for-strides

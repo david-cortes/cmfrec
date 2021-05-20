@@ -1237,7 +1237,7 @@ void custom_syr(const int_t n, const real_t alpha, const real_t *restrict x, rea
     real_t *restrict Arow;
     for (int i = 0; i < n; i++) {
         temp = alpha*x[i];
-        Arow = A + (size_t)i*lda;
+        Arow = A + (size_t)i*(size_t)lda;
         for (int j = i; j < n; j++)
             Arow[j] += temp*x[j];
     }
