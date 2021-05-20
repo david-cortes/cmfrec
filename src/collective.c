@@ -1551,6 +1551,9 @@ void collective_closed_form_block
     if (precomputedCtCw == NULL)
         prefer_CtC = false;
 
+    /* TODO: for a more cache-friendly version, should move pt1 and pt2
+       after pt3 and pt4. */
+
 
     /* =================== Part 1 =====================
        Constructing t(Be)*Be, upper-left square (from C) */
@@ -2086,13 +2089,16 @@ void collective_closed_form_block_implicit
             AND
        Be*t(Xe), upper part (from X) */
     for (size_t ix = 0; ix < nnz; ix++) {
+        cblas_taxpy(k + k_main, Xa[ix] + 1.,
+                    B + (size_t)k_item + (size_t)ixB[ix]*k_totB, 1,
+                    a_vec + k_user, 1);
+    }
+
+    for (size_t ix = 0; ix < nnz; ix++) {
         cblas_tsyr(CblasRowMajor, CblasUpper, k+k_main,
                    Xa[ix],
                    B + (size_t)k_item + (size_t)ixB[ix]*k_totB, 1,
                    BtB + offset_square, k_totA);
-        cblas_taxpy(k + k_main, Xa[ix] + 1.,
-                    B + (size_t)k_item + (size_t)ixB[ix]*k_totB, 1,
-                    a_vec + k_user, 1);
     }
 
     if (!nonneg && !l1_lam)
