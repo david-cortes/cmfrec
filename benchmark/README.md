@@ -22,11 +22,11 @@ The time measurements are done by fitting the model to the full data, while the 
 
 | Library            | Lang  | Method   | Biases | Time (s) | RMSE         | Additional |
 | :---:              | :---: | :---:    | :---:  | :---:    | :---:        | :---:
-| cmfrec             | Py    | ALS-CG   | Yes    | 13.71    | 0.788233     |
-| cmfrec             | Py    | ALS-CG   | No     | 11.83    | 0.791481     |
-| cmfrec             | Py    | ALS-Chol | Yes    | 31.24    | 0.786923     |
-| cmfrec             | Py    | ALS-CG   | Yes    | 23.04    | 0.785427     | Implicit features
-| cmfrec             | Py    | ALS-Chol | Yes    | 38.13    | **0.782414** | Implicit features
+| cmfrec             | Py    | ALS-CG   | Yes    | 13.64    | 0.788233     |
+| cmfrec             | Py    | ALS-CG   | No     | 12.57    | 0.791481     |
+| cmfrec             | Py    | ALS-Chol | Yes    | 30.91    | 0.786923     |
+| cmfrec             | Py    | ALS-CG   | Yes    | 22.09    | 0.785427     | Implicit features
+| cmfrec             | Py    | ALS-Chol | Yes    | 35.35    | **0.782414** | Implicit features
 | spark              | Py    | ALS-Chol | No     | 81       | 0.791316     | Manual center
 | cornac             | Py    | SGD      | Yes    | 13.9     | 0.816548     |
 | spotlight          | Py    | ADAM     | No     | 12141    | 1.054698     | See details
@@ -36,17 +36,17 @@ The time measurements are done by fitting the model to the full data, while the 
 | LensKit            | Py    | ALS-Chol | Static | 37.6     | 0.796044     | Manual thread control
 | LensKit            | Py    | SVD      | Static | 8.88     | 0.838194     |
 | PyRecLab           | Py    | SGD      | Yes    | 90       | 0.812566     | Reads from disk
-| cmfrec             | R     | ALS-CG   | Yes    | 12.71    | 0.788356     |
-| cmfrec             | R     | ALS-CG   | No     | 10.95    | 0.791409     |
-| cmfrec             | R     | ALS-Chol | Yes    | 53.93    | 0.786971     |
-| cmfrec             | R     | ALS-CG   | Yes    | 21.17    | 0.785484     | Implicit features
-| cmfrec             | R     | ALS-Chol | Yes    | 58.57    | 0.782465     | Implicit features
-| rsparse            | R     | ALS-CG   | Yes    | 31.10    | 0.788547     |
-| rsparse            | R     | ALS-CG   | No     | 21.62    | 0.791412     |
-| rsparse            | R     | ALS-Chol | Yes    | 30.13    | 0.786935     |
-| recosystem (libmf) | R     | SGD      | No     | **1.80** | 0.785478     | Single precision
-| softImpute         | R     | ALS-Chol | Static | 88.93    | 0.810450     | Unscaled lambda
-| softImpute         | R     | ALS-SVD  | Static | 195.73   | 0.808293     | Unscaled lambda
+| cmfrec             | R     | ALS-CG   | Yes    | 12.85    | 0.788356     |
+| cmfrec             | R     | ALS-CG   | No     | 11.61    | 0.791409     |
+| cmfrec             | R     | ALS-Chol | Yes    | 29.78    | 0.786971     |
+| cmfrec             | R     | ALS-CG   | Yes    | 21.23    | 0.785484     | Implicit features
+| cmfrec             | R     | ALS-Chol | Yes    | 34.67    | 0.782465     | Implicit features
+| rsparse            | R     | ALS-CG   | Yes    | 30.26    | 0.788547     |
+| rsparse            | R     | ALS-CG   | No     | 21.54    | 0.791412     |
+| rsparse            | R     | ALS-Chol | Yes    | 30.02    | 0.786935     |
+| recosystem (libmf) | R     | SGD      | No     | **1.79** | 0.785585     | Single precision
+| softImpute         | R     | ALS-Chol | Static | 88.96    | 0.810450     | Unscaled lambda
+| softImpute         | R     | ALS-SVD  | Static | 195.34   | 0.808293     | Unscaled lambda
 | Vowpal Wabbit      | CLI   | SGD      | Yes    | 293      | 1.054546     | See details
 
 
@@ -57,13 +57,13 @@ Unsuccessful attempts:
 
 Clarifications:
 
-* Getting `cmfrec` to run at optimal speeds with OpenBLAS in Python required some workarounds (see https://github.com/xianyi/OpenBLAS/issues/3237), including setting the number of openblas threads to 1 and hard-coding a replacement for one of the BLAS functions (included as of v3.0.3). The R version somehow managed to run fast without any of that. Getting it running fast with MKL did not require any additional tuning.
+* Getting `cmfrec` to run at optimal speeds with OpenBLAS in Python required some workarounds (see https://github.com/xianyi/OpenBLAS/issues/3237), ~including setting the number of openblas threads to 1 and~ (now done automatically) hard-coding a replacement for one of the BLAS functions (included as of v3.0.3). The R version somehow managed to run fast without any of that. Getting it running fast with MKL did not require any additional tuning.
 * `cmfrec` offers the option of co-factorizing a binarized version of the interactions matrix, sharing the same latent components as with the regular factorization - these are marked as "Implicit features".
 * `spark` does not perform any mean centering, so this had to be done manually in a separate step beforehand. Without centering, the RMSE would be much worse.
 * Some libraries will only pre-estimate the biases instead of updating them during each iteration. These are marked as "Static".
 * `libmf` (and by extension `recosystem`) only supports single-precision mode (a.k.a. `float32`).
 * `libmf` does not link to BLAS or LAPACK, providing instead manual SIMD code. The version tested here was compiled to use AVX instructions (CPU supports AVX2 but `libmf` doesn't). It uses a different optimization procedure than the others so there's less need for such functions.
-* The libraries all use their default compilation arguments, save for `recosystem` - this means e.g. that R libraries might not make use of all available SIMD instructions for the CPU, for example.
+* The R libraries all had an overwritten `Makeconf` file, overwriting the default compilation arguments to use `-O3` and `-march=native` in the packages tested here (default is `-O2` and `-msse2`). `cmfrec` would otherwise run a bit slower in R. These compilation arguments did not make any difference for the other libraries.
 * `lenskit` was running into issues with nested parallelism, and thus the number of BLAS and LAPACK threads had to be manually limited from outside using `threadpoolctl` (see [this issue](https://github.com/lenskit/lkpy/issues/257)). Without this manual step, the running times are much worse.
 * `spotlight` does not perform any mean centering, so it was done manually just like for spark. It uses single-precison only, and calculations are done through PyTorch, which at the time of writing did not work with OpenBLAS and was instead using MKL as linear algebra backend.
 * Vowpal Wabbit does not work with in-memory data, but rather reads it from a file as it goes and stores the matrices it is estimating in files, thus having an additional IO time barrier. It is not multi-threaded in the computations that it makes, and does the computations in single precision (a.k.a. `float32`). It will additionally take hashes of the IDs which can mix up some users and items, thus not being exactly the same model type as the others. At the time of writing this, it offered two modes for matrix factorization (`--rank` and ``--new_mf``) - the one used here was `--rank`, with the learning rate copied from `libmf` (= 0.1), and while performing better than with the defaults, this might not be optimal. The ``--new_mf`` mode did not finish after running for half an hour.

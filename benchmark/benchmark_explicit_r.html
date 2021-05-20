@@ -269,7 +269,7 @@ microbenchmark({
 ##                                                                                                                                                                                                                                                expr
 ##  {     set.seed(1)     model &lt;- CMF(X_full, k = 50, niter = 15, lambda = 0.05, scale_lam = TRUE,          use_cg = TRUE, finalize_chol = FALSE, user_bias = TRUE,          item_bias = TRUE, verbose = FALSE, precompute_for_predictions = FALSE) }
 ##       min       lq     mean   median       uq      max neval
-##  12.71468 12.71468 12.71468 12.71468 12.71468 12.71468     1</code></pre>
+##  12.85351 12.85351 12.85351 12.85351 12.85351 12.85351     1</code></pre>
 <pre class="r"><code>### Variation 2: Conjugate Gradient method, no biases
 microbenchmark({
     set.seed(1)
@@ -282,7 +282,7 @@ microbenchmark({
 ##                                                                                                                                                                                                                                                  expr
 ##  {     set.seed(1)     model &lt;- CMF(X_full, k = 50, niter = 15, lambda = 0.05, scale_lam = TRUE,          use_cg = TRUE, finalize_chol = FALSE, user_bias = FALSE,          item_bias = FALSE, verbose = FALSE, precompute_for_predictions = FALSE) }
 ##       min       lq     mean   median       uq      max neval
-##  10.94565 10.94565 10.94565 10.94565 10.94565 10.94565     1</code></pre>
+##  11.61333 11.61333 11.61333 11.61333 11.61333 11.61333     1</code></pre>
 <pre class="r"><code>### Variation 3: Cholesky method, with biases
 microbenchmark({
     set.seed(1)
@@ -295,7 +295,7 @@ microbenchmark({
 ##                                                                                                                                                                                                                          expr
 ##  {     set.seed(1)     model &lt;- CMF(X_full, k = 50, niter = 15, lambda = 0.05, scale_lam = TRUE,          use_cg = FALSE, user_bias = TRUE, item_bias = TRUE, verbose = FALSE,          precompute_for_predictions = FALSE) }
 ##       min       lq     mean   median       uq      max neval
-##  53.92736 53.92736 53.92736 53.92736 53.92736 53.92736     1</code></pre>
+##  29.77645 29.77645 29.77645 29.77645 29.77645 29.77645     1</code></pre>
 <pre class="r"><code>### Variation 4: CG method, with biases, and implicit features
 microbenchmark({
     set.seed(1)
@@ -307,8 +307,8 @@ microbenchmark({
 <pre><code>## Unit: seconds
 ##                                                                                                                                                                                                                                                                                       expr
 ##  {     set.seed(1)     model &lt;- CMF(X_full, k = 50, niter = 15, lambda = 0.05, scale_lam = TRUE,          use_cg = TRUE, finalize_chol = FALSE, add_implicit_features = TRUE,          user_bias = TRUE, item_bias = TRUE, verbose = FALSE,          precompute_for_predictions = FALSE) }
-##       min       lq     mean   median       uq      max neval
-##  21.16819 21.16819 21.16819 21.16819 21.16819 21.16819     1</code></pre>
+##      min      lq    mean  median      uq     max neval
+##  21.2308 21.2308 21.2308 21.2308 21.2308 21.2308     1</code></pre>
 <pre class="r"><code>### Variation 5: Cholesky method, with biases, and implicit features
 microbenchmark({
     set.seed(1)
@@ -321,7 +321,7 @@ microbenchmark({
 ##                                                                                                                                                                                                                                                        expr
 ##  {     set.seed(1)     model &lt;- CMF(X_full, k = 50, niter = 15, lambda = 0.05, scale_lam = TRUE,          use_cg = FALSE, add_implicit_features = TRUE, user_bias = TRUE,          item_bias = TRUE, verbose = FALSE, precompute_for_predictions = FALSE) }
 ##       min       lq     mean   median       uq      max neval
-##  58.57173 58.57173 58.57173 58.57173 58.57173 58.57173     1</code></pre>
+##  34.68675 34.68675 34.68675 34.68675 34.68675 34.68675     1</code></pre>
 <p>Test-set RMSE:</p>
 <pre class="r"><code>print_rmse &lt;- function(X_test, X_hat) {
     rmse &lt;- sqrt(mean( (X_test@x - X_hat@x)^2 ))
@@ -380,7 +380,8 @@ print_rmse(X_test, X_hat)</code></pre>
 <pre class="r"><code>library(rsparse)
 library(lgr)
 lg = get_logger(&quot;rsparse&quot;)
-lg$set_threshold(&quot;error&quot;)</code></pre>
+lg$set_threshold(&quot;error&quot;)
+options(&quot;rsparse_omp_threads&quot; = parallel::detectCores())</code></pre>
 <pre class="r"><code>### Variation 1: Conjugate Gradient method, with biases
 microbenchmark({
     set.seed(1)
@@ -393,7 +394,7 @@ microbenchmark({
 ##                                                                                                                                                                                                                                                                                                   expr
 ##  {     set.seed(1)     model &lt;- WRMF$new(feedback = &quot;explicit&quot;, rank = 50, lambda = 0.05,          dynamic_lambda = TRUE, solver = &quot;conjugate_gradient&quot;,          with_global_bias = TRUE, with_user_item_bias = TRUE)     ignored &lt;- model$fit_transform(X_full, n_iter = 15, convergence_tol = -1) }
 ##       min       lq     mean   median       uq      max neval
-##  31.09701 31.09701 31.09701 31.09701 31.09701 31.09701     1</code></pre>
+##  30.26276 30.26276 30.26276 30.26276 30.26276 30.26276     1</code></pre>
 <pre class="r"><code>### Variation 2: Conjugate Gradient method, no biases
 microbenchmark({
     set.seed(1)
@@ -406,7 +407,7 @@ microbenchmark({
 ##                                                                                                                                                                                                                                                                                                    expr
 ##  {     set.seed(1)     model &lt;- WRMF$new(feedback = &quot;explicit&quot;, rank = 50, lambda = 0.05,          dynamic_lambda = TRUE, solver = &quot;conjugate_gradient&quot;,          with_global_bias = TRUE, with_user_item_bias = FALSE)     ignored &lt;- model$fit_transform(X_full, n_iter = 15, convergence_tol = -1) }
 ##       min       lq     mean   median       uq      max neval
-##  21.61645 21.61645 21.61645 21.61645 21.61645 21.61645     1</code></pre>
+##  21.54167 21.54167 21.54167 21.54167 21.54167 21.54167     1</code></pre>
 <pre class="r"><code>### Variation 3: Cholesky method, with biases
 microbenchmark({
     set.seed(1)
@@ -419,7 +420,7 @@ microbenchmark({
 ##                                                                                                                                                                                                                                                                                         expr
 ##  {     set.seed(1)     model &lt;- WRMF$new(feedback = &quot;explicit&quot;, rank = 50, lambda = 0.05,          dynamic_lambda = TRUE, solver = &quot;cholesky&quot;, with_global_bias = TRUE,          with_user_item_bias = TRUE)     ignored &lt;- model$fit_transform(X_full, n_iter = 15, convergence_tol = -1) }
 ##       min       lq     mean   median       uq      max neval
-##  30.12696 30.12696 30.12696 30.12696 30.12696 30.12696     1</code></pre>
+##  30.02304 30.02304 30.02304 30.02304 30.02304 30.02304     1</code></pre>
 <p>Test-set RMSE:</p>
 <pre class="r"><code>rsparse.to.CMF &lt;- function(model, A) {
     model_cmf &lt;- CMF.from.model.matrices(
@@ -486,7 +487,7 @@ microbenchmark({
 ##                                                                                                                                                                                                                                                                                           expr
 ##  {     set.seed(1)     r &lt;- Reco()     suppressWarnings({         r$train(X_full_reco, out_model = NULL, opts = list(dim = 50,              costp_l2 = 0.05, costq_l2 = 0.05, niter = 15, verbose = FALSE,              loss = &quot;l2&quot;, lrate = 0.1, nthread = parallel::detectCores()))     }) }
 ##       min       lq     mean   median       uq      max neval
-##  1.801083 1.801083 1.801083 1.801083 1.801083 1.801083     1</code></pre>
+##  1.792914 1.792914 1.792914 1.792914 1.792914 1.792914     1</code></pre>
 <pre class="r"><code>rm(X_full_reco)
 invisible(gc())</code></pre>
 <p>Test-set RMSE:</p>
@@ -504,7 +505,7 @@ suppressWarnings({
 })
 X_hat@x &lt;- r$predict(X_test_reco, out_pred=out_memory())
 print_rmse(X_test, X_hat)</code></pre>
-<pre><code>## RMSE: 0.785478</code></pre>
+<pre><code>## RMSE: 0.785585</code></pre>
 <pre class="r"><code>rm(X_train_reco, X_test_reco)
 invisible(gc())</code></pre>
 </div>
@@ -514,7 +515,8 @@ invisible(gc())</code></pre>
 <p><strong>Note2: <code>softImpute</code> is not multi-threaded beyond some BLAS or LAPACK function calls, thus it runs much slower. The <code>rsparse</code> package however has similar multi-threaded versions of these algorithms.</strong></p>
 <p><strong>Note3: <code>softImpute</code> will only pre-estimate the user/item biases, without updating them after every iteration.</strong></p>
 <p>Timings for different variations:</p>
-<pre class="r"><code>library(softImpute)
+<pre class="r"><code>RhpcBLASctl::blas_set_num_threads(parallel::detectCores())
+library(softImpute)
 
 X_full_si &lt;- Incomplete(X_full@i+1L, X_full@j+1L, x=X_full@x)</code></pre>
 <pre class="r"><code>### Variation 1: ALS
@@ -532,8 +534,8 @@ microbenchmark({
 <pre><code>## Unit: seconds
 ##                                                                                                                                                                                                                                                                                                             expr
 ##  {     suppressWarnings({         set.seed(1)         X_full_scaled &lt;- biScale(X_full_si, maxit = 5, row.scale = FALSE,              col.scale = FALSE, trace = FALSE)         model &lt;- softImpute(X_full_scaled, type = &quot;als&quot;, final.svd = FALSE,              rank.max = 50, lambda = 35, maxit = 15)     }) }
-##      min      lq    mean  median      uq     max neval
-##  88.9254 88.9254 88.9254 88.9254 88.9254 88.9254     1</code></pre>
+##       min       lq     mean   median       uq      max neval
+##  88.96281 88.96281 88.96281 88.96281 88.96281 88.96281     1</code></pre>
 <pre class="r"><code>### Variation 2: SVD
 microbenchmark({
     suppressWarnings({
@@ -550,7 +552,7 @@ microbenchmark({
 ##                                                                                                                                                                                                                                                                                          expr
 ##  {     suppressWarnings({         set.seed(1)         X_full_scaled &lt;- biScale(X_full_si, maxit = 5, row.scale = FALSE,              col.scale = FALSE, trace = FALSE)         model &lt;- softImpute(X_full_scaled, type = &quot;svd&quot;, rank.max = 50,              lambda = 35, maxit = 15)     }) }
 ##       min       lq     mean   median       uq      max neval
-##  195.7278 195.7278 195.7278 195.7278 195.7278 195.7278     1</code></pre>
+##  195.3448 195.3448 195.3448 195.3448 195.3448 195.3448     1</code></pre>
 <pre class="r"><code>rm(X_full_si, X_full_scaled, model)
 invisible(gc())</code></pre>
 <p>Test-set RMSE:</p>

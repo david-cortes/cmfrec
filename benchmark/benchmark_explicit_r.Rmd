@@ -28,7 +28,7 @@ All of the libraries compared will use 50 factors and 15 iterations (if controll
 with an L2 regularization penalty of 0.05 which is scaled by the number of entries
 for each user/item, save for `softImpute` which does not support scaled regularization.
 
-The timings are measured on a Ryzen 7 2700 CPU (3.2Ghz, 8c/16t), using OpenBLAS 0.3.13.
+The timings are measured on a Ryzen 7 2700 CPU (3.2Ghz, 8c/16t), using OpenBLAS 0.3.15.
 
 ** *
 Loading the data:
@@ -97,35 +97,40 @@ microbenchmark({
     set.seed(1)
     model <- CMF(X_full, k=50, niter=15, lambda=0.05, scale_lam=TRUE,
                  use_cg=TRUE, finalize_chol=FALSE,
-                 user_bias=TRUE, item_bias=TRUE, verbose=FALSE)
+                 user_bias=TRUE, item_bias=TRUE,
+                 verbose=FALSE, precompute_for_predictions=FALSE)
 }, times=1L)
 ### Variation 2: Conjugate Gradient method, no biases
 microbenchmark({
     set.seed(1)
     model <- CMF(X_full, k=50, niter=15, lambda=0.05, scale_lam=TRUE,
                  use_cg=TRUE, finalize_chol=FALSE,
-                 user_bias=FALSE, item_bias=FALSE, verbose=FALSE)
+                 user_bias=FALSE, item_bias=FALSE,
+                 verbose=FALSE, precompute_for_predictions=FALSE)
 }, times=1L)
 ### Variation 3: Cholesky method, with biases
 microbenchmark({
     set.seed(1)
     model <- CMF(X_full, k=50, niter=15, lambda=0.05, scale_lam=TRUE,
                  use_cg=FALSE,
-                 user_bias=TRUE, item_bias=TRUE, verbose=FALSE)
+                 user_bias=TRUE, item_bias=TRUE,
+                 verbose=FALSE, precompute_for_predictions=FALSE)
 }, times=1L)
 ### Variation 4: CG method, with biases, and implicit features
 microbenchmark({
     set.seed(1)
     model <- CMF(X_full, k=50, niter=15, lambda=0.05, scale_lam=TRUE,
                  use_cg=TRUE, finalize_chol=FALSE, add_implicit_features=TRUE,
-                 user_bias=TRUE, item_bias=TRUE, verbose=FALSE)
+                 user_bias=TRUE, item_bias=TRUE,
+                 verbose=FALSE, precompute_for_predictions=FALSE)
 }, times=1L)
 ### Variation 5: Cholesky method, with biases, and implicit features
 microbenchmark({
     set.seed(1)
     model <- CMF(X_full, k=50, niter=15, lambda=0.05, scale_lam=TRUE,
                  use_cg=FALSE, add_implicit_features=TRUE,
-                 user_bias=TRUE, item_bias=TRUE, verbose=FALSE)
+                 user_bias=TRUE, item_bias=TRUE,
+                 verbose=FALSE, precompute_for_predictions=FALSE)
 }, times=1L)
 ```
 
@@ -139,35 +144,40 @@ print_rmse <- function(X_test, X_hat) {
 set.seed(1)
 model <- CMF(X_train, k=50, niter=15, lambda=0.05, scale_lam=TRUE,
              use_cg=TRUE, finalize_chol=FALSE,
-             user_bias=TRUE, item_bias=TRUE, verbose=FALSE)
+             user_bias=TRUE, item_bias=TRUE,
+             verbose=FALSE, precompute_for_predictions=FALSE)
 X_hat <- predict(model, X_test)
 print_rmse(X_test, X_hat)
 ### Variation 2: Conjugate Gradient method, no biases
 set.seed(1)
 model <- CMF(X_train, k=50, niter=15, lambda=0.05, scale_lam=TRUE,
              use_cg=TRUE, finalize_chol=FALSE,
-             user_bias=FALSE, item_bias=FALSE, verbose=FALSE)
+             user_bias=FALSE, item_bias=FALSE,
+             verbose=FALSE, precompute_for_predictions=FALSE)
 X_hat <- predict(model, X_test)
 print_rmse(X_test, X_hat)
 ### Variation 3: Cholesky method, with biases
 set.seed(1)
 model <- CMF(X_train, k=50, niter=15, lambda=0.05, scale_lam=TRUE,
              use_cg=FALSE,
-             user_bias=TRUE, item_bias=TRUE, verbose=FALSE)
+             user_bias=TRUE, item_bias=TRUE,
+             verbose=FALSE, precompute_for_predictions=FALSE)
 X_hat <- predict(model, X_test)
 print_rmse(X_test, X_hat)
 ### Variation 4: CG method, with biases, and implicit features
 set.seed(1)
 model <- CMF(X_train, k=50, niter=15, lambda=0.05, scale_lam=TRUE,
              use_cg=TRUE, finalize_chol=FALSE, add_implicit_features=TRUE,
-             user_bias=TRUE, item_bias=TRUE, verbose=FALSE)
+             user_bias=TRUE, item_bias=TRUE,
+             verbose=FALSE, precompute_for_predictions=FALSE)
 X_hat <- predict(model, X_test)
 print_rmse(X_test, X_hat)
 ### Variation 5: Cholesky method, with biases, and implicit features
 set.seed(1)
 model <- CMF(X_train, k=50, niter=15, lambda=0.05, scale_lam=TRUE,
              use_cg=FALSE, add_implicit_features=TRUE,
-             user_bias=TRUE, item_bias=TRUE, verbose=FALSE)
+             user_bias=TRUE, item_bias=TRUE,
+             verbose=FALSE, precompute_for_predictions=FALSE)
 X_hat <- predict(model, X_test)
 print_rmse(X_test, X_hat)
 ```
@@ -183,6 +193,7 @@ library(rsparse)
 library(lgr)
 lg = get_logger("rsparse")
 lg$set_threshold("error")
+options("rsparse_omp_threads" = parallel::detectCores())
 ```
 ```{r}
 ### Variation 1: Conjugate Gradient method, with biases
@@ -328,6 +339,7 @@ without updating them after every iteration.__
 
 Timings for different variations:
 ```{r, message=FALSE}
+RhpcBLASctl::blas_set_num_threads(parallel::detectCores())
 library(softImpute)
 
 X_full_si <- Incomplete(X_full@i+1L, X_full@j+1L, x=X_full@x)
@@ -341,7 +353,7 @@ microbenchmark({
                                  row.scale=FALSE,
                                  col.scale=FALSE,
                                  trace=FALSE)
-        model <- softImpute(X_full_scaled, type="als",
+        model <- softImpute(X_full_scaled, type="als", final.svd=FALSE,
                             rank.max=50, lambda=35, maxit=15)
     })
 }, times=1L)
@@ -378,7 +390,7 @@ suppressWarnings({
 ### Variation 1: ALS
 set.seed(1)
 suppressWarnings({
-    model <- softImpute(X_train_scaled, type="als",
+    model <- softImpute(X_train_scaled, type="als", final.svd=FALSE,
                         rank.max=50, lambda=35, maxit=15)
 })
 X_hat@x <- impute(model, X_test@i+1L, X_test@j+1L, unscale=TRUE)

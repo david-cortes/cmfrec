@@ -61,7 +61,7 @@ endif()
 
 
 
-### ------ Rest if the script is not meant to be user-configurable ----- ###
+### ------ Rest of the script is not meant to be user-configurable ----- ###
 
 
 

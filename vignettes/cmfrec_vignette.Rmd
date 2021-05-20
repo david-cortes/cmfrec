@@ -338,7 +338,7 @@ if (!is_check) {
                             verbose=FALSE)
 } else {
     model.w.sideinfo <- CMF(X_train, U=U, I=I, NA_as_zero_item=TRUE,
-                            k=5, lambda=0.1, scale_lam=TRUE,
+                            k=5, lambda=0.1, scale_lam=TRUE, scale_lam_sideinfo=TRUE,
                             use_cg=FALSE, include_all_X=FALSE,
                             w_main=0.75, w_user=0.5, w_item=0.5, w_implicit=0.5,
                             verbose=FALSE, niter=2, nthreads=1)

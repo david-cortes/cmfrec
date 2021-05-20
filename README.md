@@ -12,7 +12,11 @@ For a similar package with Poisson distributions see [ctpfrec](https://github.co
 
 Written in C with Python and R interfaces. An additional Ruby interface can be found [here](https://github.com/ankane/cmfrec).
 
-For an introduction see the Python notebook [MovieLens Recommender with Side Information](http://nbviewer.jupyter.org/github/david-cortes/cmfrec/blob/master/example/cmfrec_movielens_sideinfo.ipynb) and the [R vignette](http://htmlpreview.github.io/?https://github.com/david-cortes/cmfrec/blob/master/inst/doc/cmfrec_vignette.html).
+
+For an introduction to the library and methods, see:
+* [MovieLens Recommender with Side Information](http://nbviewer.jupyter.org/github/david-cortes/cmfrec/blob/master/example/cmfrec_movielens_sideinfo.ipynb) (Python).
+* [R vignette](http://htmlpreview.github.io/?https://github.com/david-cortes/cmfrec/blob/master/inst/doc/cmfrec_vignette.html) R.
+
 
 ## Comparison against other libraries
 
@@ -23,9 +27,9 @@ Comparing the classical matrix factorization model for explicit feedback **witho
 
 | Library       | Method   | Biases | Time (s) | RMSE         | Additional |
 | :---:         | :---:    | :---:  | :---:    | :---:        | :---:
-| cmfrec        | ALS-CG   | Yes    | 13.71    | 0.788233     | 
-| cmfrec        | ALS-Chol | Yes    | 38.13    | **0.782414** | Implicit features
-| LibMF         | SGD      | No     | **1.80** | 0.785478     | Single precision
+| cmfrec        | ALS-CG   | Yes    | 13.64    | 0.788233     | 
+| cmfrec        | ALS-Chol | Yes    | 35.35    | **0.782414** | Implicit features
+| LibMF         | SGD      | No     | **1.79** | 0.785585     | Single precision
 | Spark         | ALS-Chol | No     | 81       | 0.791316     | Manual center
 | cornac        | SGD      | Yes    | 13.9     | 0.816548     |
 | Surprise      | SGD      | Yes    | 178      | 1.060049     |
