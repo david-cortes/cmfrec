@@ -12,10 +12,10 @@ For a similar package with Poisson distributions see [ctpfrec](https://github.co
 
 Written in C with Python and R interfaces. An additional Ruby interface can be found [here](https://github.com/ankane/cmfrec).
 
-
+*********************
 For an introduction to the library and methods, see:
 * [MovieLens Recommender with Side Information](http://nbviewer.jupyter.org/github/david-cortes/cmfrec/blob/master/example/cmfrec_movielens_sideinfo.ipynb) (Python).
-* [R vignette](http://htmlpreview.github.io/?https://github.com/david-cortes/cmfrec/blob/master/inst/doc/cmfrec_vignette.html) R.
+* [R vignette](http://htmlpreview.github.io/?https://github.com/david-cortes/cmfrec/blob/master/inst/doc/cmfrec_vignette.html) (R).
 
 
 ## Comparison against other libraries
@@ -114,8 +114,6 @@ pip install --no-use-pep517 cmfrec
 
 (Note: NumPy must already be installed in the Python environment before attempting to install `cmfrec`)
 
-As it contains C code, it requires a C compiler. On Windows, this usually means it requires a Visual Studio Build Tools installation (with MSVC140 component for conda, or MinGW + GCC), and if using Anaconda, might also require configuring it to use said Visual Studio instead of MinGW.
-
 **Note for macOS users:** on macOS, this package will compile without multi-threading capabilities. This is due to default apple's redistribution of clang not providing OpenMP modules, and aliasing it to gcc which causes confusions in build scripts. If you have a non-apple version of clang with the OpenMP modules, or if you have gcc installed, you can compile this package with multi-threading enabled by setting up an environment variable `ENABLE_OMP=1`:
 
 ```
@@ -155,7 +153,7 @@ sudo ldconfig
 
 Linkage is then done with `-lcmfrec`.
 
-(Recommended to have MKL or OpenBLAS installed)
+(Recommended to have MKL installed)
 
 
 ## Sample Usage
