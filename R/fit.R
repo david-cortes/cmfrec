@@ -141,6 +141,7 @@ NULL
 #' \item Creating a default user `Makevars` file, which will be under `~/.R/Makevars`.
 #' In this file, do all the same text replacements as in the point above for `Makeconf`.
 #' If the file is empty, simply add this line: `PKG_CFLAGS += -std=c99 -O3 -march=native`.
+#' If using GCC, preferrably change `-std=c99` to `-std=gnu99`.
 #' }
 #' @param X The main matrix with interactions data to factorize (e.g. movie ratings by users,
 #' bag-of-words representations of texts, etc.). The package is built with

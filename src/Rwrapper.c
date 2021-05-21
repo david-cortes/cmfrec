@@ -87,14 +87,15 @@ SEXP prepare_RhpcBLASctl_Call()
     int threw_err = 0;
     const char *arg_names[] = {"package", "quietly", ""};
     int n_protected = 0;
-    SEXP R_str_RhpcBLASctl = PROTECT(Rf_ScalarString(Rf_mkChar("RhpcBLASctl")));
+    SEXP R_ch_RhpcBLASctl = PROTECT(Rf_mkChar("RhpcBLASctl"));
+    SEXP R_str_RhpcBLASctl = PROTECT(Rf_ScalarString(R_ch_RhpcBLASctl));
     SEXP R_expr_requireNamespace = PROTECT(Rf_install("requireNamespace"));
     SEXP R_exptr_do_call = PROTECT(Rf_install("do.call"));
     SEXP call_args = PROTECT(Rf_mkNamed(VECSXP, arg_names));
     SET_VECTOR_ELT(call_args, 0, R_str_RhpcBLASctl);
     SET_VECTOR_ELT(call_args, 1, Rf_ScalarLogical(1));
     SEXP R_expr_call = PROTECT(Rf_lang3(R_exptr_do_call, R_expr_requireNamespace, call_args));
-    n_protected = 5;
+    n_protected = 6;
     SEXP R_has_RhpcBLASctl = R_tryEvalSilent(R_expr_call, R_GlobalEnv, &threw_err);
     if (threw_err) {
         UNPROTECT(n_protected);

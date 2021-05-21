@@ -962,6 +962,7 @@ use the 'Replace All' functionality).
 \item Creating a default user `Makevars` file, which will be under `~/.R/Makevars`.
 In this file, do all the same text replacements as in the point above for `Makeconf`.
 If the file is empty, simply add this line: `PKG_CFLAGS += -std=c99 -O3 -march=native`.
+If using GCC, preferrably change `-std=c99` to `-std=gnu99`.
 }
 }
 
