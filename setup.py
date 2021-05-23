@@ -158,7 +158,7 @@ setup(
                              ("USE_FINDBLAS", None)]
             ),
         ]
-    )
+)
 
 if not use_omp:
     import warnings

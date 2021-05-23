@@ -23,13 +23,13 @@ For an introduction to the library and methods, see:
 
 For the full benchmark, code, and details see [benchmarks](https://github.com/david-cortes/cmfrec/tree/master/benchmark).
 
-Comparing the classical matrix factorization model for explicit feedback **without side information** in different software libraries (50 factors, 15 iterations, regularization of 0.05):
+Comparing the classical matrix factorization model for explicit feedback **without side information** in different software libraries (50 factors, 15 iterations, regularization of 0.05, `float64` when supported):
 
 | Library       | Method   | Biases | Time (s) | RMSE         | Additional |
 | :---:         | :---:    | :---:  | :---:    | :---:        | :---:
 | cmfrec        | ALS-CG   | Yes    | 13.64    | 0.788233     | 
 | cmfrec        | ALS-Chol | Yes    | 35.35    | **0.782414** | Implicit features
-| LibMF         | SGD      | No     | **1.79** | 0.785585     | Single precision
+| LibMF         | SGD      | No     | **1.79** | 0.785585     | float32
 | Spark         | ALS-Chol | No     | 81       | 0.791316     | Manual center
 | cornac        | SGD      | Yes    | 13.9     | 0.816548     |
 | Surprise      | SGD      | Yes    | 178      | 1.060049     |
@@ -80,13 +80,14 @@ The new version is faster, multi-threaded, and has some new functionality, but i
 * Can fit the usual explicit-feedback model as well as the implicit-feedback model with weighted binary entries (see [3]).
 * For the explicit-feedback model, can automatically add implicit features (created from the same "X" data).
 * Can be used for cold-start recommendations (when using side information).
-* Supports user and item biases in the explicit-feedback models (these are not just pre-estimated beforehand as in other software).
+* Can be compiled for single and double precision (`float32` and `float64`) - the Python package comes with both versions.
+* Supports user and item biases (these are not just pre-estimated beforehand as in other software).
 * Can fit models with non-negativity constraints on the factors and/or with L1 regularization.
 * Provides an API for top-N recommended lists and for calculating latent factors from new data.
 * Can work with both sparse and dense matrices for each input (e.g. can also be used as a general missing-value imputer for 2-d data), and can work efficiently with a mix of dense and sparse inputs.
 * Can produce factorizations for variations of the problem such as sparse inputs with missing-as-zero instead of missing-as-unknown (e.g. when used for dimensionality reduction).
 * Can use either an alternating least-squares procedure (ALS) or a gradient-based procedure using an L-BFGS optimizer for the explicit-feedback models (the package bundles a modified version of [Okazaki's C implementation](https://github.com/chokkan/liblbfgs)).
-* For the ALS option, can use either the exact Cholesky method or the faster conjugate gradient method (see [4]).
+* For the ALS option, can use either the exact Cholesky method or the faster conjugate gradient method (see [4]). Can also use coordinate descent methods (when having non-negativity constraints or L1 regularization).
 * Can produce models with constant regularization or with dynamically-adjusted regularization as in [7].
 * Provides a content-based model and other models aimed at better cold-start recommendations.
 * Provides an intercepts-only "most-popular" model for non-personalized recommendations, which can be used as a benchmark as it uses the same hyperparameters as the other models.
@@ -98,9 +99,8 @@ The new version is faster, multi-threaded, and has some new functionality, but i
 
 ## Instalation
 
-**Note:** this package relies heavily on BLAS and LAPACK functions for calculations. It's recommended to use MKL (in Python, comes by default in Anaconda, in R for Windows, can be gotten through Microsoft's R distribution) or alternatively OpenBLAS, as backend for them. See [this link](https://github.com/david-cortes/R-openblas-in-windows) for instructions on getting OpenBLAS for R in Windows.
+**Note:** this package relies heavily on BLAS and LAPACK functions for calculations. It's recommended to use MKL (in Python, comes by default in Anaconda, in R for Windows, can be gotten through Microsoft's R distribution) or alternatively OpenBLAS, as backend for them. See [this link](https://github.com/david-cortes/R-openblas-in-windows) for instructions on getting OpenBLAS for R in Windows. Different backends for BLAS can make a large difference in speed - for example, on an AMD Ryzen 2700, MKL2021 makes models take 4x longer to fit than MKL2020, and using OpenBLAS-pthreads takes around 1.3x longer to fit models compared to OpenBLAS-openmp.
 
-**Important:** as of OpenBLAS 0.3.15, using this package with OpenBLAS is likely to be several times slower than with MKL, even on AMD hardware. It's strongly recommended to use MKL for linear algebra.
 
 * Python:
 
