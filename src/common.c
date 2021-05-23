@@ -1527,6 +1527,9 @@ void factors_implicit_chol
         );
 }
 
+/* TODO: this could benefit from a non-zero starting point, could copy this:
+   https://github.com/rexyai/rsparse/blob/
+   08609e6f3638e7bccd08bf54a3d0f6109951226b/inst/include/nnls.hpp#L38 */
 void solve_nonneg
 (
     real_t *restrict BtB,

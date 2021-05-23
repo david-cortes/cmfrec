@@ -130,6 +130,9 @@ NULL
 #' 
 #' It is recommended to use compilation options `-O3`, `-march=native` and `-std=c99`.
 #' These can be activated in multiple ways: \itemize{
+#' \item (On Linux) Creating an empty text file `~/.R/Makevars` and adding this line there:
+#' `CFLAGS += -O3 -march=native` (plus an empty line at the end), then installing the usual
+#' way with `install.packages("cmfrec")`.
 #' \item Installing `cmfrec` from source, but modifying the `Makevars` file (it has lines
 #' that can be uncommented in order to enable these optimizations).
 #' \item Modifying the global `Makeconf` variable. This is a file which defines the default
@@ -138,10 +141,6 @@ NULL
 #' In this file, replace all occurences of `-O2` with `-O3`, and all occurrences of
 #' `-msse2` with `-march=native` (e.g. open them in some text editor or in RStudio and
 #' use the 'Replace All' functionality).
-#' \item Creating a default user `Makevars` file, which will be under `~/.R/Makevars`.
-#' In this file, do all the same text replacements as in the point above for `Makeconf`.
-#' If the file is empty, simply add this line: `PKG_CFLAGS += -std=c99 -O3 -march=native`.
-#' If using GCC, preferrably change `-std=c99` to `-std=gnu99`.
 #' }
 #' @param X The main matrix with interactions data to factorize (e.g. movie ratings by users,
 #' bag-of-words representations of texts, etc.). The package is built with
