@@ -16,7 +16,7 @@ The comparisons here use the [MovieLens10M](https://grouplens.org/datasets/movie
 
 Models are fit using the same hyperparameters for all libraries: 50 latent factors, regularization of 0.05, 15 ALS iterations, computing in double precision (a.k.a. `float64`) when possible; with some exceptions when necessary (not all libraries allow scaled regularization or biases, and some libraries compared against might not use ALS).
 
-The time measurements are done by fitting the model to the full data, while the RMSE comparisons use the suggested train-test split that is provided within the MovieLens10M dataset.
+The time measurements are done by fitting the model to the full data, while the RMSE comparisons use a random train-test split with all the users and items in the test set being also in the train set.
 
 #### Results
 
