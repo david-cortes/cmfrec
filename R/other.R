@@ -451,3 +451,8 @@ CMF.from.model.matrices <- function(A, B, glob_mean=0, implicit=FALSE,
         this <- precompute.for.predictions(this)
     return(this)
 }
+
+.onAttach <- function(libname, pkgname) {
+    if (!requireNamespace("RhpcBLASctl", quietly=TRUE))
+        packageStartupMessage("cmfrec: 'RhpcBLASctl' is not installed, model fitting might be slower.")
+}
