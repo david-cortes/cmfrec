@@ -5,7 +5,7 @@ except:
     from distutils.core import setup
     from distutils.extension import Extension
 import numpy as np
-from findblas.distutils import build_ext_with_blas
+# from findblas.distutils import build_ext_with_blas
 import re
 import os, sys
 
@@ -15,7 +15,7 @@ import os, sys
 ##   in this setup file)
 ## -comment out the line that imports 'build_ext_with_blas'
 ## -uncomment the next line
-# from Cython.Distutils import build_ext as build_ext_with_blas
+from Cython.Distutils import build_ext as build_ext_with_blas
 
 ## Or alternatively, pass your own BLAS/LAPACK linkage parameters here:
 custom_blas_link_args = []
@@ -144,7 +144,7 @@ setup(
                      "src/offsets.c", "src/helpers.c", "src/lbfgs.c",
                      "src/cblas_wrappers.c"],
             include_dirs=[np.get_include(), "src"],
-            define_macros = [("_FOR_PYTHON", None),
+            define_macros = [("_FOR_PYTHON", None), ("AVOID_BLAS_SYR", None),
                              ("USE_DOUBLE", None),
                              ("USE_FINDBLAS", None)]
             ),
@@ -153,7 +153,7 @@ setup(
                      "src/offsets.c", "src/helpers.c", "src/lbfgs.c",
                      "src/cblas_wrappers.c"],
             include_dirs=[np.get_include(), "src"],
-            define_macros = [("_FOR_PYTHON", None),
+            define_macros = [("_FOR_PYTHON", None), ("AVOID_BLAS_SYR", None),
                              ("USE_FLOAT", None),
                              ("USE_FINDBLAS", None)]
             ),

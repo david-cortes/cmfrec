@@ -3,8 +3,8 @@ try:
 except:
     from distutils.core import setup
     from distutils.extension import Extension
-from findblas.distutils import build_ext_with_blas
-# from Cython.Distutils import build_ext; build_ext_with_blas=build_ext
+# from findblas.distutils import build_ext_with_blas
+from Cython.Distutils import build_ext
 import numpy as np
 
 class build_ext_subclass( build_ext_with_blas ):
@@ -25,7 +25,7 @@ class build_ext_subclass( build_ext_with_blas ):
                 
                 # e.extra_compile_args += ["-fsanitize=address", "-static-libsan"]
                 # e.extra_link_args += ["-fsanitize=address", "-static-libasan"]
-        build_ext_with_blas.build_extensions(self)
+        build_ext.build_extensions(self)
 
 
 setup(
@@ -44,4 +44,4 @@ setup(
                           ]
           ),
         ]
-    )
+)

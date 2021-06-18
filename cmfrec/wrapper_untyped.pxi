@@ -50,6 +50,153 @@ ctypedef int int_t
 #     from scipy.linalg.cython_lapack cimport dpotrs as dpotrs_
 #     from scipy.linalg.cython_lapack cimport dgels as dgels_
 
+from scipy.linalg.cython_blas cimport sdot
+from scipy.linalg.cython_blas cimport scopy
+from scipy.linalg.cython_blas cimport saxpy
+from scipy.linalg.cython_blas cimport sscal
+from scipy.linalg.cython_blas cimport ssyr
+from scipy.linalg.cython_blas cimport ssyrk
+from scipy.linalg.cython_blas cimport snrm2
+from scipy.linalg.cython_blas cimport sgemm
+from scipy.linalg.cython_blas cimport sgemv
+from scipy.linalg.cython_blas cimport ssymv
+from scipy.linalg.cython_blas cimport sger
+
+from scipy.linalg.cython_lapack cimport slacpy
+from scipy.linalg.cython_lapack cimport sposv
+from scipy.linalg.cython_lapack cimport slarnv
+from scipy.linalg.cython_lapack cimport spotrf
+from scipy.linalg.cython_lapack cimport spotrs
+from scipy.linalg.cython_lapack cimport sgelsd
+
+from scipy.linalg.cython_blas cimport ddot
+from scipy.linalg.cython_blas cimport dcopy
+from scipy.linalg.cython_blas cimport daxpy
+from scipy.linalg.cython_blas cimport dscal
+from scipy.linalg.cython_blas cimport dsyr
+from scipy.linalg.cython_blas cimport dsyrk
+from scipy.linalg.cython_blas cimport dnrm2
+from scipy.linalg.cython_blas cimport dgemm
+from scipy.linalg.cython_blas cimport dgemv
+from scipy.linalg.cython_blas cimport dsymv
+from scipy.linalg.cython_blas cimport dger
+
+from scipy.linalg.cython_lapack cimport dlacpy
+from scipy.linalg.cython_lapack cimport dposv
+from scipy.linalg.cython_lapack cimport dlarnv
+from scipy.linalg.cython_lapack cimport dpotrf
+from scipy.linalg.cython_lapack cimport dpotrs
+from scipy.linalg.cython_lapack cimport dgelsd
+
+cdef public float sdot_(const int_t *n, const float *x, const int_t *incx, const float *y, const int_t *incy):
+    return sdot(n, x, incx, y, incy)
+
+cdef public double ddot_(const int_t *n, const double *x, const int_t *incx, const double *y, const int_t *incy):
+    return ddot(n, x, incx, y, incy)
+
+cdef public void scopy_(const int_t* n, const float* x, const int_t* incx, const float* y, const int_t* incy):
+    scopy(n, x, incx, y, incy)
+
+cdef public void dcopy_(const int_t* n, const double* x, const int_t* incx, const double* y, const int_t* incy):
+    dcopy(n, x, incx, y, incy)
+
+cdef public void saxpy_(const int_t* n, const float* alpha, const float* x, const int_t* incx, const float* y, const int_t* incy):
+    saxpy(n, alpha, x, incx, y, incy)
+
+cdef public void daxpy_(const int_t* n, const double* alpha, const double* x, const int_t* incx, const double* y, const int_t* incy):
+    daxpy(n, alpha, x, incx, y, incy)
+
+cdef public void sscal_(const int_t* n, const float* alpha, const float* x, const int_t* incx):
+    sscal(n, alpha, x, incx)
+
+cdef public void dscal_(const int_t* n, const double* alpha, const double* x, const int_t* incx):
+    dscal(n, alpha, x, incx)
+
+cdef public void ssyr_(const char* uplo, const int_t* trans, const float* alpha, const float* x, const int_t* ldx, const float* y, const int_t* incy):
+    ssyr(uplo, trans, alpha, x, ldx, y, incy)
+
+cdef public void dsyr_(const char* uplo, const int_t* trans, const double* alpha, const double* x, const int_t* ldx, const double* y, const int_t* incy):
+    dsyr(uplo, trans, alpha, x, ldx, y, incy)
+
+cdef public void ssyrk_(const char* uplo, const char* trans, const int_t* m, const int_t* n, const float* alpha, const float* x, const int_t* incx, const float* beta, const float* y, const int_t* incy):
+    ssyrk(uplo, trans, m, n, alpha, x, incx, beta, y, incy)
+
+cdef public void dsyrk_(const char* uplo, const char* trans, const int_t* m, const int_t* n, const double* alpha, const double* x, const int_t* incx, const double* beta, const double* y, const int_t* incy):
+    dsyrk(uplo, trans, m, n, alpha, x, incx, beta, y, incy)
+
+cdef public float snrm2_(const int_t* n, const float* x, const int_t* incx):
+    return snrm2(n, x, incx)
+
+cdef public double dnrm2_(const int_t* n, const double* x, const int_t* incx):
+    return dnrm2(n, x, incx)
+
+cdef public void sgemm_(const char* transA, const char* transB, const int_t* m, const int_t* n, const int_t* k, const float* alpha, const float* x, const int_t* ldx, const float* y, const int_t* ldy, const float* beta, const float* c, const int_t* ldc):
+    sgemm(transA, transB, m, n, k, alpha, x, ldx, y, ldy, beta, c, ldc)
+
+cdef public void dgemm_(const char* transA, const char* transB, const int_t* m, const int_t* n, const int_t* k, const double* alpha, const double* x, const int_t* ldx, const double* y, const int_t* ldy, const double* beta, const double* c, const int_t* ldc):
+    dgemm(transA, transB, m, n, k, alpha, x, ldx, y, ldy, beta, c, ldc)
+
+cdef public void sgemv_(const char* trans, const int_t* m, const int_t* n, const float* alpha, const float* x, const int_t* ldx, const float* y, const int_t* incy, const float* beta, const float* c, const int_t* incc):
+    sgemv(trans, m, n, alpha, x, ldx, y, incy, beta, c, incc)
+
+cdef public void dgemv_(const char* trans, const int_t* m, const int_t* n, const double* alpha, const double* x, const int_t* ldx, const double* y, const int_t* incy, const double* beta, const double* c, const int_t* incc):
+    dgemv(trans, m, n, alpha, x, ldx, y, incy, beta, c, incc)
+
+cdef public void ssymv_(const char* uplo, const int_t* k, const float* alpha, const float* x, const int_t* ldx, const float* y, const int_t* ldy, const float* beta, const float* c, const int_t* ldc):
+    ssymv(uplo, k, alpha, x, ldx, y, ldy, beta, c, ldc)
+
+cdef public void dsymv_(const char* uplo, const int_t* k, const double* alpha, const double* x, const int_t* ldx, const double* y, const int_t* ldy, const double* beta, const double* c, const int_t* ldc):
+    dsymv(uplo, k, alpha, x, ldx, y, ldy, beta, c, ldc)
+
+cdef public void sger_(const int* m, const int* n, const float* alpha, const float* x, const int* incx, const float* y, const int* incy, const float* c, const int* ldc):
+    sger(m, n, alpha, x, incx, y, incy, c, ldc)
+
+cdef public void dger_(const int* m, const int* n, const double* alpha, const double* x, const int* incx, const double* y, const int* incy, const double* c, const int* ldc):
+    dger(m, n, alpha, x, incx, y, incy, c, ldc)
+
+cdef public void sposv_(const char* uplo, const int_t* m, const int_t* n, const float* x, const int_t* ldx, const float* y, const int_t* ldy, const int_t* info):
+    sposv(uplo, m, n, x, ldx, y, ldy, info)
+
+cdef public void dposv_(const char* uplo, const int_t* m, const int_t* n, const double* x, const int_t* ldx, const double* y, const int_t* ldy, const int_t* info):
+    dposv(uplo, m, n, x, ldx, y, ldy, info)
+
+cdef public void slacpy_(const char* uplo, const int_t* m, const int_t* n, const float* x, const int_t* ldx, const float* y, const int_t* ldy):
+    slacpy(uplo, m, n, x, ldx, y, ldy)
+
+cdef public void dlacpy_(const char* uplo, const int_t* m, const int_t* n, const double* x, const int_t* ldx, const double* y, const int_t* ldy):
+    dlacpy(uplo, m, n, x, ldx, y, ldy)
+
+cdef public void slarnv_(const int_t* a1, const int_t* a2, const int_t* a3, const float* a4):
+    slarnv(a1, a2, a3, a4)
+
+cdef public void dlarnv_(const int_t* a1, const int_t* a2, const int_t* a3, const double* a4):
+    dlarnv(a1, a2, a3, a4)
+
+cdef public void spotrf_(const char* a1, const int_t* a2, const float* a3, const int_t* a4, const int_t* a5):
+    spotrf(a1, a2, a3, a4, a5)
+
+cdef public void dpotrf_(const char* a1, const int_t* a2, const double* a3, const int_t* a4, const int_t* a5):
+    dpotrf(a1, a2, a3, a4, a5)
+
+cdef public void spotrs_(const char* a1, const int_t* a2, const int_t* a3, const float* a4, const int_t* a5, const float* a6, const int_t* a7, const int_t* a8):
+    spotrs(a1, a2, a3, a4, a5, a6, a7, a8)
+
+cdef public void dpotrs_(const char* a1, const int_t* a2, const int_t* a3, const double* a4, const int_t* a5, const double* a6, const int_t* a7, const int_t* a8):
+    dpotrs(a1, a2, a3, a4, a5, a6, a7, a8)
+
+cdef public void sgelsd_(const int_t* a1, const int_t* a2, const int_t* a3,
+             const float* a4, const int_t* a5,
+             const float* a6, const int_t* a7,
+             const float* a8, const float* a9, const int_t* a10, const float* a11,
+             const int_t* a12, const int_t* a13, const int_t* a14):
+    sgelsd(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14)
+
+cdef public void dgelsd_(const int_t* a1, const int_t* a2, const int_t* a3,
+             const double* a4, const int_t* a5,
+             const double* a6, const int_t* a7,
+             const double* a8, const double* a9, const int_t* a10, const double* a11,
+             const int_t* a12, const int_t* a13, const int_t* a14):
+    dgelsd(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14)
 
 
 ### TODO: this module should move from doing operations in Python to
