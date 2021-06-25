@@ -1558,6 +1558,8 @@ SEXP call_predict_X_old_collective_explicit
     SEXP nthreads
 )
 {
+    SEXP global_lst = PROTECT(prepare_RhpcBLASctl_Call()); ptr_glob_lst = &global_lst;
+
     int retval = predict_X_old_collective_explicit(
         INTEGER(row), INTEGER(col), REAL(predicted), (size_t) Rf_xlength(predicted),
         REAL(A), get_ptr(biasA),
@@ -1567,6 +1569,8 @@ SEXP call_predict_X_old_collective_explicit
         Rf_asInteger(m), Rf_asInteger(n_max),
         Rf_asInteger(nthreads)
     );
+
+    cleanup_RhpcBLASctl_Call();
 
     return Rf_ScalarInteger(retval);
 }
@@ -1581,6 +1585,8 @@ SEXP call_predict_X_old_collective_implicit
     SEXP nthreads
 )
 {
+    SEXP global_lst = PROTECT(prepare_RhpcBLASctl_Call()); ptr_glob_lst = &global_lst;
+
     int retval = predict_X_old_collective_implicit(
         INTEGER(row), INTEGER(col), REAL(predicted), (size_t) Rf_xlength(predicted),
         REAL(A),
@@ -1589,6 +1595,8 @@ SEXP call_predict_X_old_collective_implicit
         Rf_asInteger(m), Rf_asInteger(n),
         Rf_asInteger(nthreads)
     );
+
+    cleanup_RhpcBLASctl_Call();
 
     return Rf_ScalarInteger(retval);
 }
@@ -1601,12 +1609,16 @@ SEXP call_predict_X_old_most_popular
     SEXP m, SEXP n
 )
 {
+    SEXP global_lst = PROTECT(prepare_RhpcBLASctl_Call()); ptr_glob_lst = &global_lst;
+
     int retval = predict_X_old_most_popular(
         INTEGER(row), INTEGER(col), REAL(predicted), (size_t) Rf_xlength(predicted),
         get_ptr(biasA), REAL(biasB),
         Rf_asReal(glob_mean),
         Rf_asInteger(m), Rf_asInteger(n)
     );
+
+    cleanup_RhpcBLASctl_Call();
 
     return Rf_ScalarInteger(retval);
 }
@@ -1627,6 +1639,8 @@ SEXP call_predict_X_old_content_based
     SEXP nthreads
 )
 {
+    SEXP global_lst = PROTECT(prepare_RhpcBLASctl_Call()); ptr_glob_lst = &global_lst;
+
     int retval = predict_X_old_content_based(
         REAL(predicted), (size_t) Rf_xlength(predicted),
         Rf_asInteger(m_new), Rf_asInteger(k),
@@ -1642,6 +1656,8 @@ SEXP call_predict_X_old_content_based
         Rf_asInteger(nthreads)
     );
 
+    cleanup_RhpcBLASctl_Call();
+
     return Rf_ScalarInteger(retval);
 }
 
@@ -1656,6 +1672,8 @@ SEXP call_predict_X_old_offsets_explicit
     SEXP nthreads
 )
 {
+    SEXP global_lst = PROTECT(prepare_RhpcBLASctl_Call()); ptr_glob_lst = &global_lst;
+
     int retval = predict_X_old_offsets_explicit(
         INTEGER(row), INTEGER(col), REAL(predicted), (size_t) Rf_xlength(predicted),
         REAL(Am), get_ptr(biasA),
@@ -1665,6 +1683,8 @@ SEXP call_predict_X_old_offsets_explicit
         Rf_asInteger(m), Rf_asInteger(n),
         Rf_asInteger(nthreads)
     );
+
+    cleanup_RhpcBLASctl_Call();
 
     return Rf_ScalarInteger(retval);
 }
@@ -1679,6 +1699,8 @@ SEXP call_predict_X_old_offsets_implicit
     SEXP nthreads
 )
 {
+    SEXP global_lst = PROTECT(prepare_RhpcBLASctl_Call()); ptr_glob_lst = &global_lst;
+
     int retval = predict_X_old_offsets_implicit(
         INTEGER(row), INTEGER(col), REAL(predicted), (size_t) Rf_xlength(predicted),
         REAL(Am),
@@ -1687,6 +1709,8 @@ SEXP call_predict_X_old_offsets_implicit
         Rf_asInteger(m), Rf_asInteger(n),
         Rf_asInteger(nthreads)
     );
+
+    cleanup_RhpcBLASctl_Call();
 
     return Rf_ScalarInteger(retval);
 }
@@ -2026,6 +2050,8 @@ SEXP call_topN_old_collective_explicit
     SEXP n, SEXP n_max, SEXP include_all_X, SEXP nthreads
 )
 {
+    SEXP global_lst = PROTECT(prepare_RhpcBLASctl_Call()); ptr_glob_lst = &global_lst;
+
     int retval = topN_old_collective_explicit(
         REAL(a_vec), Rf_asReal(a_bias),
         (double*)NULL, (double*)NULL, 0,
@@ -2038,6 +2064,8 @@ SEXP call_topN_old_collective_explicit
         get_ptr_int(outp_ix), get_ptr(outp_score),
         (int) Rf_xlength(outp_ix), Rf_asInteger(n), Rf_asInteger(n_max), (bool) Rf_asLogical(include_all_X), Rf_asInteger(nthreads)
     );
+
+    cleanup_RhpcBLASctl_Call();
 
     return Rf_ScalarInteger(retval);
 }
@@ -2053,6 +2081,8 @@ SEXP call_topN_old_collective_implicit
     SEXP n, SEXP nthreads
 )
 {
+    SEXP global_lst = PROTECT(prepare_RhpcBLASctl_Call()); ptr_glob_lst = &global_lst;
+    
     int retval = topN_old_collective_implicit(
         REAL(a_vec),
         (double*)NULL, 0,
@@ -2063,6 +2093,8 @@ SEXP call_topN_old_collective_implicit
         get_ptr_int(outp_ix), get_ptr(outp_score),
         (int) Rf_xlength(outp_ix), Rf_asInteger(n), Rf_asInteger(nthreads)
     );
+
+    cleanup_RhpcBLASctl_Call();
 
     return Rf_ScalarInteger(retval);
 }
@@ -2079,6 +2111,8 @@ SEXP call_topN_old_most_popular
     SEXP n
 )
 {
+    SEXP global_lst = PROTECT(prepare_RhpcBLASctl_Call()); ptr_glob_lst = &global_lst;
+    
     int retval = topN_old_most_popular(
         (bool) Rf_asLogical(user_bias),
         Rf_asReal(a_bias),
@@ -2090,6 +2124,8 @@ SEXP call_topN_old_most_popular
         get_ptr_int(outp_ix), get_ptr(outp_score),
         (int) Rf_xlength(outp_ix), Rf_asInteger(n)
     );
+
+    cleanup_RhpcBLASctl_Call();
 
     return Rf_ScalarInteger(retval);
 }
@@ -2107,6 +2143,8 @@ SEXP call_topN_old_content_based
     SEXP n, SEXP nthreads
 )
 {
+    SEXP global_lst = PROTECT(prepare_RhpcBLASctl_Call()); ptr_glob_lst = &global_lst;
+    
     int retval = topN_old_content_based(
         REAL(a_vec), Rf_asReal(a_bias),
         (double*)NULL, (double*)NULL, 0,
@@ -2119,6 +2157,8 @@ SEXP call_topN_old_content_based
         get_ptr_int(outp_ix), get_ptr(outp_score),
         (int) Rf_xlength(outp_ix), Rf_asInteger(n), Rf_asInteger(nthreads)
     );
+
+    cleanup_RhpcBLASctl_Call();
 
     return Rf_ScalarInteger(retval);
 }
@@ -2136,6 +2176,8 @@ SEXP call_topN_old_offsets_explicit
     SEXP n, SEXP nthreads
 )
 {
+    SEXP global_lst = PROTECT(prepare_RhpcBLASctl_Call()); ptr_glob_lst = &global_lst;
+    
     int retval = topN_old_offsets_explicit(
         REAL(a_vec), Rf_asReal(a_bias),
         (double*)NULL, (double*)NULL, 0,
@@ -2148,6 +2190,8 @@ SEXP call_topN_old_offsets_explicit
         get_ptr_int(outp_ix), get_ptr(outp_score),
         (int) Rf_xlength(outp_ix), Rf_asInteger(n), Rf_asInteger(nthreads)
     );
+
+    cleanup_RhpcBLASctl_Call();
 
     return Rf_ScalarInteger(retval);
 }
@@ -2163,6 +2207,8 @@ SEXP call_topN_old_offsets_implicit
     SEXP n, SEXP nthreads
 )
 {
+    SEXP global_lst = PROTECT(prepare_RhpcBLASctl_Call()); ptr_glob_lst = &global_lst;
+    
     int retval = topN_old_offsets_implicit(
         REAL(a_vec),
         (double*)NULL, 0,
@@ -2173,6 +2219,8 @@ SEXP call_topN_old_offsets_implicit
         get_ptr_int(outp_ix), get_ptr(outp_score),
         (int) Rf_xlength(outp_ix), Rf_asInteger(n), Rf_asInteger(nthreads)
     );
+
+    cleanup_RhpcBLASctl_Call();
 
     return Rf_ScalarInteger(retval);
 }
