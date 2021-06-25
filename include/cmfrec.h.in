@@ -473,6 +473,8 @@ extern "C" {
                   Dimension: [nnz]
     @param X  Non-missing values of the "X" matrix, when passing it as sparse
               COO, with row and column indices given by 'X_row' and 'X_col'.
+              As the values can get overwritten, it should not point to the
+              same address as another input data array.
               Dimension: [nnz]
     @param nnz  Number of non-missing entries in "X", when passing it as sparse.
     @param Xfull  "X" as a full 2D array, if passing it as dense.
@@ -486,6 +488,8 @@ extern "C" {
     
     --- "U" and "I" data ---
     @param U  (optional) The "U" data, in dense format.
+               As the values can get overwritten, it should not point to the
+               same address as another input data array.
                Dimension: [m_u, p]
     @param m_u  (optional) Number of rows in the "U" matrix. Pass zero if there
                  is no "U" matrix. Should be passed regardless of whether "U"
@@ -494,6 +498,8 @@ extern "C" {
                  is no "U" matrix. Should be passed regardless of whether "U"
                  is passed as dense or sparse.
     @param II  (optional) The "I" data, in dense format.
+                As the values can get overwritten, it should not point to the
+                same address as another input data array.
                 Note: variable with name "I" alone is already taken by the
                 C preprocesor in most compilers, hence the name "II".
                 Dimension: [n_i, q]
@@ -511,6 +517,8 @@ extern "C" {
                    Dimension: [nnz_U]
     @param U_sp  (optional) The "U" data, in sparse COO format.
                   This array indicates the non-missing values.
+                  As the values can get overwritten, it should not point to the
+                  same address as another input data array.
                   Dimension: [nnz_U]
     @param nnz_U  (optional) Number of non-zero entries in the "U" matrix, if
                    passing it as sparse COO. Pass zero if there is no "U" matrix
@@ -523,6 +531,8 @@ extern "C" {
                    Dimension: [nnz_I]
     @param I_sp  (optional) The "I" data, in sparse COO format.
                   This array indicates the non-missing values.
+                  As the values can get overwritten, it should not point to the
+                  same address as another input data array.
                   Dimension: [nnz_I]
     @param nnz_I  (optional) Number of non-zero entries in the "I" matrix, if
                    passing it as sparse COO. Pass zero if there is no "I" matrix
@@ -534,6 +544,8 @@ extern "C" {
                 values, for which a sigmoid transformation will be applied on
                 the predicted values. If passed, should always be dense.
                 Only supported with the L-BFGS method.
+                As the values can get overwritten, it should not point to the
+                same address as another input data array.
                 Dimension: [m_ubin, pbin]
     @param m_ubin (optional) Number of rows in the "Ub" matrix. Pass zero here
                    if there is no "Ub" matrix.
@@ -543,6 +555,8 @@ extern "C" {
                 values, for which a sigmoid transformation will be applied on
                 the predicted values. If passed, should always be dense.
                 Only supported with the L-BFGS method.
+                As the values can get overwritten, it should not point to the
+                same address as another input data array.
                 Dimension: [n_ibin, qbin]
     @param n_ibin (optional) Number of rows in the "Ib" matrix. Pass zero here
                    if there is no "Ib" matrix.

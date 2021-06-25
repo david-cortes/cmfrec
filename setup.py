@@ -5,7 +5,7 @@ except:
     from distutils.core import setup
     from distutils.extension import Extension
 import numpy as np
-from findblas.distutils import build_ext_with_blas
+from Cython.Distutils import build_ext
 import re
 import os, sys
 
@@ -23,8 +23,19 @@ custom_blas_compile_args = []
 # example:
 # custom_blas_link_args = ["-lopenblas"]
 if len(custom_blas_link_args) or len(custom_blas_compile_args):
-    from Cython.Distutils import build_ext
     build_ext_with_blas = build_ext
+
+if not (len(custom_blas_link_args) or len(custom_blas_compile_args)):
+    use_findblas = (("findblas" in sys.argv)
+                     or ("-findblas" in sys.argv)
+                     or ("--findblas" in sys.argv))
+    if os.environ.get('USE_FINDBLAS') is not None:
+        use_findblas = True
+    if use_findblas:
+        sys.argv = [a for a in sys.argv if a not in ("findblas", "-findblas", "--findblas")]
+        from findblas.distutils import build_ext_with_blas
+    else:
+        build_ext_with_blas = build_ext
 
 class build_ext_subclass( build_ext_with_blas ):
     def build_extensions(self):
@@ -39,6 +50,7 @@ class build_ext_subclass( build_ext_with_blas ):
                 
                 # e.extra_compile_args += ['-O2', '-fopenmp', '-march=native', '-std=c99', '-ggdb']
                 # e.extra_link_args += ['-fopenmp']
+                # e.extra_link_args += ['-fopenmp=libiomp5']
 
                 # e.extra_compile_args += ['-O2', '-march=native', '-std=c99', '-ggdb']
                 
@@ -88,7 +100,9 @@ class build_ext_subclass( build_ext_with_blas ):
                         has_openblas_or_atlas = True
                         break
             if has_openblas_or_atlas:
-                e.define_macros += [("AVOID_BLAS_SYR", None)]
+                if "AVOID_BLAS_SYR" not in [m[0] for m in e.define_macros]:
+                    e.define_macros += [("AVOID_BLAS_SYR", None)]
+                e.define_macro = [macro for macro in e.define_macro if m[0] != "USE_BLAS_SYR"]
 
         build_ext_with_blas.build_extensions(self)
 
@@ -123,7 +137,7 @@ if (force_openblas):
 setup(
     name  = "cmfrec",
     packages = ["cmfrec"],
-    version = '3.1.0',
+    version = '3.1.1',
     description = 'Collective matrix factorization',
     author = 'David Cortes',
     author_email = 'david.cortes.rivera@gmail.com',
@@ -140,22 +154,26 @@ setup(
     cmdclass = {'build_ext': build_ext_subclass},
     ext_modules = [
         Extension("cmfrec.wrapper_double",
-            sources=["cmfrec/cfuns_double.pyx", "src/collective.c", "src/common.c",
+            sources=["cmfrec/cfuns_double.pyx" if use_findblas else "cmfrec/cfuns_double_plusblas.pyx",
+                     "src/collective.c", "src/common.c",
                      "src/offsets.c", "src/helpers.c", "src/lbfgs.c",
                      "src/cblas_wrappers.c"],
             include_dirs=[np.get_include(), "src"],
             define_macros = [("_FOR_PYTHON", None),
                              ("USE_DOUBLE", None),
-                             ("USE_FINDBLAS", None)]
+                             ("USE_FINDBLAS" if use_findblas else "NO_FINDBLAS", None),
+                             ("USE_BLAS_SYR" if use_findblas else "AVOID_BLAS_SYR", None)]
             ),
         Extension("cmfrec.wrapper_float",
-            sources=["cmfrec/cfuns_float.pyx", "src/collective.c", "src/common.c",
+            sources=["cmfrec/cfuns_float.pyx" if use_findblas else "cmfrec/cfuns_float_plusblas.pyx",
+                     "src/collective.c", "src/common.c",
                      "src/offsets.c", "src/helpers.c", "src/lbfgs.c",
                      "src/cblas_wrappers.c"],
             include_dirs=[np.get_include(), "src"],
             define_macros = [("_FOR_PYTHON", None),
                              ("USE_FLOAT", None),
-                             ("USE_FINDBLAS", None)]
+                             ("USE_FINDBLAS" if use_findblas else "NO_FINDBLAS", None),
+                             ("USE_BLAS_SYR" if use_findblas else "AVOID_BLAS_SYR", None)]
             ),
         ]
 )

@@ -256,6 +256,7 @@ typedef enum CBLAS_TRANSPOSE {CblasNoTrans=111, CblasTrans=112, CblasConjTrans=1
 typedef enum CBLAS_UPLO      {CblasUpper=121, CblasLower=122} CBLAS_UPLO;
 typedef CBLAS_ORDER CBLAS_LAYOUT;
 
+#if !(defined(_FOR_PYTHON) && !defined(USE_FINDBLAS))
 real_t  cblas_tdot(const int_t n, const real_t  *x, const int_t incx, const real_t  *y, const int_t incy);
 void cblas_tcopy(const int_t n, const real_t *x, const int_t incx, real_t *y, const int_t incy);
 void cblas_taxpy(const int_t n, const real_t alpha, const real_t *x, const int_t incx, real_t *y, const int_t incy);
@@ -272,6 +273,24 @@ void cblas_tsymv(const CBLAS_ORDER order, const CBLAS_UPLO Uplo, const int_t N, 
                  const int_t lda, const real_t *X, const int_t incX, const real_t beta, real_t *Y, const int_t incY);
 void cblas_tger(const CBLAS_ORDER order, const int_t m, const int_t n, const real_t alpha,
                 const real_t *x, const int_t incx, const real_t *y, const int_t incy, real_t *a, const int_t lda);
+#else
+real_t  cblas_tdot(const int_t n, const real_t  *x, const int_t incx, const real_t  *y, const int_t incy);
+void cblas_tcopy(const int_t n, const real_t *x, const int_t incx, real_t *y, const int_t incy);
+void cblas_taxpy(const int_t n, const real_t alpha, const real_t *x, const int_t incx, real_t *y, const int_t incy);
+void cblas_tscal(const int_t N, const real_t alpha, real_t *X, const int_t incX);
+void cblas_tsyr(const int order, const int Uplo, const int_t N, const real_t alpha, const real_t *X, const int_t incX, real_t *A, const int_t lda);
+void cblas_tsyrk(const int Order, const int Uplo, const int Trans,
+         const int_t N, const int_t K, const real_t alpha, const real_t *A, const int_t lda, const real_t beta, real_t *C, const int_t ldc);
+real_t  cblas_tnrm2 (const int_t N, const real_t  *X, const int_t incX);
+void cblas_tgemm(const int Order, const int TransA, const int TransB, const int_t M, const int_t N, const int_t K,
+         const real_t alpha, const real_t *A, const int_t lda, const real_t *B, const int_t ldb, const real_t beta, real_t *C, const int_t ldc);
+void cblas_tgemv(const int order,  const int trans,  const int_t m, const int_t n,
+         const real_t alpha, const real_t  *a, const int_t lda,  const real_t  *x, const int_t incx,  const real_t beta,  real_t  *y, const int_t incy);
+void cblas_tsymv(const int order, const int Uplo, const int_t N, const real_t alpha, const real_t *A,
+                 const int_t lda, const real_t *X, const int_t incX, const real_t beta, real_t *Y, const int_t incY);
+void cblas_tger(const int order, const int_t m, const int_t n, const real_t alpha,
+                const real_t *x, const int_t incx, const real_t *y, const int_t incy, real_t *a, const int_t lda);
+#endif
 void openblas_set_num_threads(int);
 int openblas_get_num_threads(void);
 #endif

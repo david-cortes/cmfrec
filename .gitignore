@@ -19,6 +19,19 @@ cmfrec/cfuns_double.c
 cmfrec/cfuns_float.c
 cmfrec/cfuns_double.h
 cmfrec/cfuns_float.h
+cmfrec/cfuns_double.cpp
+cmfrec/cfuns_float.cpp
+cmfrec/cfuns_double.hpp
+cmfrec/cfuns_float.hpp
+
+cmfrec/cfuns_double_plusblas.c
+cmfrec/cfuns_float_plusblas.c
+cmfrec/cfuns_double_plusblas.h
+cmfrec/cfuns_float_plusblas.h
+cmfrec/cfuns_double_plusblas.cpp
+cmfrec/cfuns_float_plusblas.cpp
+cmfrec/cfuns_double_plusblas.hpp
+cmfrec/cfuns_float_plusblas.hpp
 
 cmfrec.egg-info/*
 

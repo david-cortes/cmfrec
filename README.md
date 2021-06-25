@@ -111,6 +111,11 @@ or if that fails:
 ```
 pip install --no-use-pep517 cmfrec
 ```
+_Note: earlier versions of `cmfrec` used the package `findblas` to link to BLAS's CBLAS interface, while newer versions take the BLAS from SciPy and build CBLAS wrapper around it, which can make it run slightly lower. To use `findblas`, define an environment variable `USE_FINBLAS=1` before installing:_
+```
+export USE_FINBLAS=1
+pip install cmfrec
+```
 
 (Note: NumPy must already be installed in the Python environment before attempting to install `cmfrec`)
 

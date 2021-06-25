@@ -79,7 +79,7 @@
 extern "C" {
 #endif
 
-#ifndef CBLAS_H
+#if !defined(CBLAS_H) && !(defined(_FOR_PYTHON) && !defined(USE_FINDBLAS))
 
 #if !defined(USE_FLOAT)
     #define tdot_ ddot_
