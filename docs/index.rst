@@ -6,10 +6,13 @@
 Collective Matrix Factorization
 ===============================
 
-This is the documentation page for the python package *cmfrec*. For 
-more details, see the project's GitHub page:
+This is the documentation page for the Python package *cmfrec*. For more details, see the project's GitHub page:
 
 `<https://www.github.com/david-cortes/cmfrec/>`_
+
+For the R version, see the CRAN page:
+
+`<https://cran.r-project.org/web/packages/cmfrec/index.html>`_
 
 Installation
 =================================
@@ -18,6 +21,14 @@ Package is available on PyPI, can be installed with
 
     pip install cmfrec
     
+
+Sample Usage
+============
+
+For an introduction to the package and methods, see the example IPython notebook building recommendation models on the MovieLens10M dataset with and without side information:
+
+`<http://nbviewer.jupyter.org/github/david-cortes/cmfrec/blob/master/example/cmfrec_movielens_sideinfo.ipynb>`_
+
 Naming conventions
 ==================
 
