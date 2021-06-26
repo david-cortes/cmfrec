@@ -238,16 +238,16 @@ typedef void (*sig_t_)(int);
 #endif
 
 #if !defined(LAPACK_H) && !defined(_FOR_R)
-void tposv_(const char*, const int_t*, const int_t*, const real_t*, const int_t*, const real_t*, const int_t*, const int_t*);
-void tlacpy_(const char*, const int_t*, const int_t*, const real_t*, const int_t*, const real_t*, const int_t*);
-void tlarnv_(const int_t*, const int_t*, const int_t*, const real_t*);
-void tpotrf_(const char*, const int_t*, const real_t*, const int_t*, const int_t*);
-void tpotrs_(const char*, const int_t*, const int_t*, const real_t*, const int_t*, const real_t*, const int_t*, const int_t*);
+void tposv_(const char*, const int_t*, const int_t*, real_t*, const int_t*, real_t*, const int_t*, int_t*);
+void tlacpy_(const char*, const int_t*, const int_t*, const real_t*, const int_t*, real_t*, const int_t*);
+void tlarnv_(const int_t*, int_t*, const int_t*, real_t*);
+void tpotrf_(const char*, const int_t*, real_t*, const int_t*, int_t*);
+void tpotrs_(const char*, const int_t*, const int_t*, const real_t*, const int_t*, real_t*, const int_t*, int_t*);
 void tgelsd_(const int_t*, const int_t*, const int_t*,
-             const real_t*, const int_t*,
-             const real_t*, const int_t*,
-             const real_t*, const real_t*, const int_t*, const real_t*,
-             const int_t*, const int_t*, const int_t*);
+             real_t*, const int_t*,
+             real_t*, const int_t*,
+             real_t*, const real_t*, int_t*, real_t*,
+             const int_t*, int_t*, int_t*);
 #endif
 
 #ifndef CBLAS_H

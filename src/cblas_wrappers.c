@@ -109,16 +109,16 @@ extern "C" {
 
 #ifndef _FOR_R
 real_t tdot_(const int_t*, const real_t*, const int_t*, const real_t*, const int_t*);
-void tcopy_(const int_t*, const real_t*, const int_t*, const real_t*, const int_t*);
-void taxpy_(const int_t*, const real_t*, const real_t*, const int_t*, const real_t*, const int_t*);
-void tscal_(const int_t*, const real_t*, const real_t*, const int_t*);
-void tsyr_(const char*, const int_t*, const real_t*, const real_t*, const int_t*, const real_t*, const int_t*);
-void tsyrk_(const char*, const char*, const int_t*, const int_t*, const real_t*, const real_t*, const int_t*, const real_t*, const real_t*, const int_t*);
+void tcopy_(const int_t*, const real_t*, const int_t*, real_t*, const int_t*);
+void taxpy_(const int_t*, const real_t*, const real_t*, const int_t*, real_t*, const int_t*);
+void tscal_(const int_t*, const real_t*, real_t*, const int_t*);
+void tsyr_(const char*, const int_t*, const real_t*, const real_t*, const int_t*, real_t*, const int_t*);
+void tsyrk_(const char*, const char*, const int_t*, const int_t*, const real_t*, const real_t*, const int_t*, const real_t*, real_t*, const int_t*);
 real_t tnrm2_(const int_t*, const real_t*, const int_t*);
-void tgemm_(const char*, const char*, const int_t*, const int_t*, const int_t*, const real_t*, const real_t*, const int_t*, const real_t*, const int_t*, const real_t*, const real_t*, const int_t*);
-void tgemv_(const char*, const int_t*, const int_t*, const real_t*, const real_t*, const int_t*, const real_t*, const int_t*, const real_t*, const real_t*, const int_t*);
-void tsymv_(const char*, const int_t*, const real_t*, const real_t*, const int_t*, const real_t*, const int_t*, const real_t*, const real_t*, const int_t*);
-void tger_(const int*, const int*, const real_t*, const real_t*, const int*, const real_t*, const int*, const real_t*, const int*);
+void tgemm_(const char*, const char*, const int_t*, const int_t*, const int_t*, const real_t*, const real_t*, const int_t*, const real_t*, const int_t*, const real_t*, real_t*, const int_t*);
+void tgemv_(const char*, const int_t*, const int_t*, const real_t*, const real_t*, const int_t*, const real_t*, const int_t*, const real_t*, real_t*, const int_t*);
+void tsymv_(const char*, const int_t*, const real_t*, const real_t*, const int_t*, const real_t*, const int_t*, const real_t*, real_t*, const int_t*);
+void tger_(const int*, const int*, const real_t*, const real_t*, const int*, const real_t*, const int*, real_t*, const int*);
 #endif
 
 
