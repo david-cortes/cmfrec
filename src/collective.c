@@ -4791,6 +4791,9 @@ void optimizeA_collective
         *filled_CtUbias = true;
     }
 
+    if (U_colmeans == NULL)
+        precomputedCtUbias = NULL;
+
 
     /* Case 1: both matrices are either (a) dense with few missing values and
        no weights, or (b) sparse with missing-as-zero.
@@ -7027,7 +7030,8 @@ int_t fit_collective_explicit_als
         if (precomputedBiTBi == NULL) goto throw_oom;
     }
 
-    if (U == NULL && NA_as_zero_U && precomputedCtUbias == NULL)
+    if (U == NULL && NA_as_zero_U && U_colmeans != NULL &&
+        precomputedCtUbias == NULL)
     {
         buffer_CtUbias = (real_t*)malloc((size_t)(k_user+k)*sizeof(real_t));
         if (buffer_CtUbias == NULL) goto throw_oom;

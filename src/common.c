@@ -3565,7 +3565,18 @@ int_t initialize_biases_onesided
                                     (double)wsumA[row]
                                         :
                                     (scale_lam? (double)n : 1.)));
-            biasA[row] = bmean;
+            biasA[row] = (Xcsr_p[row+1] > Xcsr_p[row])?
+                            bmean
+                              :
+                            (-glob_mean
+                                /
+                             ((double)n
+                                /
+                              ((double)n + lam * ((wsumA != NULL)?
+                                                    (double)wsumA[row]
+                                                        :
+                                                    (scale_lam?
+                                                        (double)n : 1.)))));
         }
     }
 
@@ -3602,7 +3613,18 @@ int_t initialize_biases_onesided
                                           + wsum)
                                             :
                                         1.)));
-            biasA[row] = bmean;
+            biasA[row] = (Xcsr_p[row+1] > Xcsr_p[row])?
+                            bmean
+                              :
+                            (-glob_mean
+                                /
+                             ((double)n
+                                /
+                              ((double)n + lam * ((wsumA != NULL)?
+                                                    (double)wsumA[row]
+                                                        :
+                                                    (scale_lam?
+                                                        (double)n : 1.)))));
         }
     }
 
@@ -3924,7 +3946,7 @@ int_t initialize_biases_twosided
         {
             double bmean = 0;
             if (iter > 0) {
-                for (int_t row = 0; row < n; row++)
+                for (int_t row = 0; row < m; row++)
                     bmean += (biasA[row] - bmean) / (double)(row+1);
             }
 
@@ -4270,7 +4292,8 @@ void predict_multiple
 )
 {
     int nthreads_restore = 1;
-    set_blas_threads(1, &nthreads_restore);
+    if (nnz > 1 && nthreads > 1)
+        set_blas_threads(1, &nthreads_restore);
 
     size_t lda = (size_t)k_user + (size_t)k + (size_t)k_main;
     size_t ldb = (size_t)k_item + (size_t)k + (size_t)k_main;
@@ -4297,7 +4320,8 @@ void predict_multiple
                      + ((biasB != NULL)? biasB[predB[ix]] : 0.)
                      + glob_mean);
 
-    set_blas_threads(nthreads_restore, (int*)NULL);
+    if (nnz > 1 && nthreads > 1)
+        set_blas_threads(nthreads_restore, (int*)NULL);
 }
 
 int_t cmp_int(const void *a, const void *b)
@@ -4432,7 +4456,8 @@ int_t topN
        an argsort with doubly-masked indices. */
     if (include_ix != NULL)
     {
-        set_blas_threads(1, &nthreads_restore);
+        if (nthreads > 1)
+            set_blas_threads(1, &nthreads_restore);
 
         buffer_scores = (real_t*)malloc((size_t)n_include*sizeof(real_t));
         buffer_mask = (int_t*)malloc((size_t)n_include*sizeof(int_t));
@@ -4449,7 +4474,8 @@ int_t topN
         for (int_t ix = 0; ix < n_include; ix++)
             buffer_mask[ix] = ix;
 
-        set_blas_threads(nthreads_restore, (int*)NULL);
+        if (nthreads > 1)
+            set_blas_threads(nthreads_restore, (int*)NULL);
     }
 
     /* Case 2: there is a large number of items to exclude.
@@ -4457,7 +4483,8 @@ int_t topN
        and then make a full or partial argsort. */
     else if (exclude_ix != NULL && (double)n_exclude > (double)n/20)
     {
-        set_blas_threads(1, &nthreads_restore);
+        if (nthreads > 1)
+            set_blas_threads(1, &nthreads_restore);
         
         buffer_scores = (real_t*)malloc(n_take*sizeof(real_t));
         buffer_mask = (int_t*)malloc(n_take*sizeof(int_t));
@@ -4473,7 +4500,8 @@ int_t topN
         for (int_t ix = 0; ix < (int_t)n_take; ix++)
             buffer_mask[ix] = ix;
 
-        set_blas_threads(nthreads_restore, (int*)NULL);
+        if (nthreads > 1)
+            set_blas_threads(nthreads_restore, (int*)NULL);
     }
 
     /* General case: make predictions for all the entries, then
