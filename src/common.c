@@ -3039,6 +3039,9 @@ int_t initialize_biases
        implementations). Thus, both the ALS procedure and this function
        make updates over items first and users later. */
 
+    if (user_bias) set_to_zero(biasA, m_bias);
+    if (item_bias) set_to_zero(biasA, n_bias);
+
     /* Calculate item biases, but don't apply them to X */
     if (item_bias)
     {
