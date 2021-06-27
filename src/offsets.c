@@ -1952,7 +1952,7 @@ int_t fit_offsets_als
             goto throw_oom;
 
         tgelsd_(&n, &q_plus_bias, &k,
-                I_plus_bias, &m, MatTrans, &ldb,
+                I_plus_bias, &n, MatTrans, &ldb,
                 sv, &threshold_svd, &rank,
                 &temp, &minus_one, &sz_iwork, &ignore);
         temp_intA = (int_t)temp;
