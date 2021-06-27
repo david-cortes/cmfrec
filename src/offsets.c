@@ -3273,6 +3273,9 @@ int_t fit_content_based_lbfgs
                                    +(size_t)q
                                    +(size_t)(2*add_intercepts))
                                  * (size_t)k
+                                 * sizeof(real_t)
+                                 + (  (user_bias? m : 0)
+                                    + (item_bias? n : 0))
                                  * sizeof(real_t));
         if (values == NULL) goto throw_oom;
 
