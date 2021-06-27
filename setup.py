@@ -102,7 +102,7 @@ class build_ext_subclass( build_ext_with_blas ):
             if has_openblas_or_atlas:
                 if "AVOID_BLAS_SYR" not in [m[0] for m in e.define_macros]:
                     e.define_macros += [("AVOID_BLAS_SYR", None)]
-                e.define_macro = [macro for macro in e.define_macro if m[0] != "USE_BLAS_SYR"]
+                e.define_macros = [macro for macro in e.define_macros if macro[0] != "USE_BLAS_SYR"]
 
         build_ext_with_blas.build_extensions(self)
 
