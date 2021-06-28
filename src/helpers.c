@@ -1304,7 +1304,6 @@ SEXP wrapper_GELSD(void *data)
             data_->S, data_->rcond, data_->rank,
             data_->work, data_->lwork, data_->iwork,
             data_->info);
-    GELSD_free_inputs = false;
     return R_NilValue;
 }
 
@@ -1315,7 +1314,7 @@ void clean_after_GELSD(void *cdata, Rboolean jump)
         PointersToFree *cdata_ = (PointersToFree*)cdata;
         for (size_t ix = 0; ix < cdata_->n_pointers; ix++)
             free(cdata_->pointers[ix]);
+        GELSD_free_inputs = false;
     }
-    GELSD_free_inputs = false;
 }
 #endif
