@@ -687,6 +687,9 @@ SEXP call_fit_offsets_explicit_lbfgs
     SEXP TransBtBinvBt
 )
 {
+    #if defined(WRAPPED_GELSD) && !defined(USE_FLOAT)
+    GELSD_free_inputs = false;
+    #endif
     SEXP global_lst = PROTECT(prepare_RhpcBLASctl_Call()); ptr_glob_lst = &global_lst;
 
     double lambda_ = REAL(lam)[0];
@@ -767,6 +770,9 @@ SEXP call_fit_offsets_explicit_als
     SEXP TransBtBinvBt
 )
 {
+    #if defined(WRAPPED_GELSD) && !defined(USE_FLOAT)
+    GELSD_free_inputs = false;
+    #endif
     SEXP global_lst = PROTECT(prepare_RhpcBLASctl_Call()); ptr_glob_lst = &global_lst;
 
     double *weight = NULL;
@@ -832,6 +838,9 @@ SEXP call_fit_offsets_implicit_als
     SEXP BtB
 )
 {
+    #if defined(WRAPPED_GELSD) && !defined(USE_FLOAT)
+    GELSD_free_inputs = false;
+    #endif
     SEXP global_lst = PROTECT(prepare_RhpcBLASctl_Call()); ptr_glob_lst = &global_lst;
 
     int retval = fit_offsets_implicit_als(

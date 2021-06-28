@@ -295,6 +295,20 @@ void openblas_set_num_threads(int);
 int openblas_get_num_threads(void);
 #endif
 
+#if defined(_FOR_R) && defined(WRAPPED_GELSD) && !defined(USE_FLOAT)
+typedef struct Args_to_GELSD {
+    int *m; int *n; int *nrhs;
+    real_t *A; int *lda; real_t *B; int *ldb;
+    real_t *S; real_t *rcond; int *rank;
+    real_t *work; int *lwork; int *iwork;
+    int *info;
+} Args_to_GELSD;
+typedef struct PointersToFree {
+    void **pointers;
+    size_t n_pointers;
+} PointersToFree;
+extern bool GELSD_free_inputs;
+#endif
 
 #include "lbfgs.h"
 
@@ -489,6 +503,10 @@ void set_blas_threads(int nthreads_set, int *nthreads_curr);
 #elif defined(_FOR_PYTHON)
     extern void py_set_threads(int);
     extern int py_get_threads(void);
+#endif
+#if defined(_FOR_R) && defined(WRAPPED_GELSD) && !defined(USE_FLOAT)
+SEXP wrapper_GELSD(void *data);
+void clean_after_GELSD(void *cdata, Rboolean jump);
 #endif
 
 /* common.c */

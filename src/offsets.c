@@ -221,6 +221,9 @@
 *******************************************************************************/
 
 #include "cmfrec.h"
+#if defined(_FOR_R) && defined(WRAPPED_GELSD) && !defined(USE_FLOAT)
+bool GELSD_free_inputs = false;
+#endif
 
 /*******************************************************************************
     Function and Gradient Calculation
@@ -1879,10 +1882,42 @@ int_t fit_offsets_als
         if (MatTrans == NULL || U_plus_bias == NULL || sv == NULL)
             goto throw_oom;
 
+        /* Note: for some reason, GELSD from R Lapack is not a direct call to
+           the underlying Lapack library, but is rather wrapped into some R
+           code that will convert an unsuccessfull call (info != 0) into an
+           R error, which generates a long jump and can end up leaking memory
+           that way.
+
+           This code wraps it into an unwind protector which will make it free
+           the necessary arrays that have been allocated so far in case it
+           fails (which shouldn't happen, but is here just in case).
+
+           The rest of the Lapack functions do not seem to suffer from this
+           problem and will not turn an unsuccessfull call into an R error,
+           so they are safe to call as-is and in parallel code blocks. */
+        #if !defined(_FOR_R) || !defined(WRAPPED_GELSD) || defined(USE_FLOAT)
         tgelsd_(&m, &p_plus_bias, &k,
                 U_plus_bias, &m, MatTrans, &ldb,
                 sv, &threshold_svd, &rank,
                 &temp, &minus_one, &sz_iwork, &ignore);
+        #else
+        void *lst_pointers[] = {MatTrans, U_plus_bias, sv,
+                                buffer_real_t, buffer_iwork,
+                                (U_plus_bias != U)? U_plus_bias : NULL,
+                                (I_plus_bias != II)? I_plus_bias : NULL,
+                                GELSD_free_inputs? A : NULL,
+                                GELSD_free_inputs? B : NULL,
+                                GELSD_free_inputs? X : NULL,
+                                GELSD_free_inputs? Xfull : NULL};
+        PointersToFree ptrs_free = {lst_pointers, (size_t)11};
+        Args_to_GELSD args_GELSD = {&m, &p_plus_bias, &k,
+                                    U_plus_bias, &m, MatTrans, &ldb,
+                                    sv, &threshold_svd, &rank,
+                                    &temp, &minus_one, &sz_iwork, &ignore};
+        R_UnwindProtect(wrapper_GELSD, (void*)&args_GELSD,
+                        clean_after_GELSD, (void*)&ptrs_free,
+                        NULL);
+        #endif
         temp_intA = (int_t)temp;
 
         buffer_real_t = (real_t*)malloc((size_t)temp_intA*sizeof(real_t));
@@ -1906,10 +1941,22 @@ int_t fit_offsets_als
             for (size_t ix = 0; ix < (size_t)m; ix++)
                 U_plus_bias[(size_t)m*(size_t)p + ix] = 1.;
 
+        #if !defined(_FOR_R) || !defined(WRAPPED_GELSD) || defined(USE_FLOAT)
         tgelsd_(&m, &p_plus_bias, &k,
                 U_plus_bias, &m, MatTrans, &ldb,
                 sv, &threshold_svd, &rank,
                 buffer_real_t, &temp_intA, buffer_iwork, &ignore);
+        #else
+        lst_pointers[3] = buffer_real_t;
+        lst_pointers[4] = buffer_iwork;
+        ptrs_free.pointers = lst_pointers;
+        args_GELSD.work = buffer_real_t;
+        args_GELSD.lwork = &temp_intA;
+        args_GELSD.iwork = buffer_iwork;
+        R_UnwindProtect(wrapper_GELSD, (void*)&args_GELSD,
+                        clean_after_GELSD, (void*)&ptrs_free,
+                        NULL);
+        #endif
 
         if (add_intercepts)
             append_ones_last_col(
@@ -1951,10 +1998,29 @@ int_t fit_offsets_als
         if (MatTrans == NULL || I_plus_bias == NULL || sv == NULL)
             goto throw_oom;
 
+        #if !defined(_FOR_R) || !defined(WRAPPED_GELSD) || defined(USE_FLOAT)
         tgelsd_(&n, &q_plus_bias, &k,
                 I_plus_bias, &n, MatTrans, &ldb,
                 sv, &threshold_svd, &rank,
                 &temp, &minus_one, &sz_iwork, &ignore);
+        #else
+        void *lst_pointers[] = {MatTrans, U_plus_bias, sv,
+                                buffer_real_t, buffer_iwork,
+                                (U_plus_bias != U)? U_plus_bias : NULL,
+                                (I_plus_bias != II)? I_plus_bias : NULL,
+                                GELSD_free_inputs? A : NULL,
+                                GELSD_free_inputs? B : NULL,
+                                GELSD_free_inputs? X : NULL,
+                                GELSD_free_inputs? Xfull : NULL};
+        PointersToFree ptrs_free = {lst_pointers, (size_t)11};
+        Args_to_GELSD args_GELSD = {&n, &q_plus_bias, &k,
+                                    I_plus_bias, &n, MatTrans, &ldb,
+                                    sv, &threshold_svd, &rank,
+                                    &temp, &minus_one, &sz_iwork, &ignore};
+        R_UnwindProtect(wrapper_GELSD, (void*)&args_GELSD,
+                        clean_after_GELSD, (void*)&ptrs_free,
+                        NULL);
+        #endif
         temp_intA = (int_t)temp;
 
         buffer_real_t = (real_t*)malloc((size_t)temp_intA*sizeof(real_t));
@@ -1977,10 +2043,22 @@ int_t fit_offsets_als
             for (size_t ix = 0; ix < (size_t)n; ix++)
                 I_plus_bias[(size_t)n*(size_t)q + ix] = 1.;
 
+        #if !defined(_FOR_R) || !defined(WRAPPED_GELSD) || defined(USE_FLOAT)
         tgelsd_(&n, &q_plus_bias, &k,
                 I_plus_bias, &n, MatTrans, &ldb,
                 sv, &threshold_svd, &rank,
                 buffer_real_t, &temp_intA, buffer_iwork, &ignore);
+        #else
+        lst_pointers[3] = buffer_real_t;
+        lst_pointers[4] = buffer_iwork;
+        ptrs_free.pointers = lst_pointers;
+        args_GELSD.work = buffer_real_t;
+        args_GELSD.lwork = &temp_intA;
+        args_GELSD.iwork = buffer_iwork;
+        R_UnwindProtect(wrapper_GELSD, (void*)&args_GELSD,
+                        clean_after_GELSD, (void*)&ptrs_free,
+                        NULL);
+        #endif
 
         if (add_intercepts)
             append_ones_last_col(
@@ -2111,6 +2189,9 @@ int_t fit_offsets_implicit_als
     real_t *restrict precomputedBtB
 )
 {
+    #if defined(_FOR_R) && defined(WRAPPED_GELSD) && !defined(USE_FLOAT)
+    GELSD_free_inputs = false;
+    #endif
     return fit_offsets_als(
         (real_t*)NULL, (real_t*)NULL,
         A, B,
@@ -3233,6 +3314,9 @@ int_t fit_content_based_lbfgs
                 goto cleanup;
         }
 
+        #if defined(_FOR_R) && defined(WRAPPED_GELSD) && !defined(USE_FLOAT)
+        GELSD_free_inputs = true;
+        #endif
         retval = fit_offsets_explicit_als(
             biasA, biasB,
             tempA, tempB,
@@ -3259,6 +3343,9 @@ int_t fit_content_based_lbfgs
             (real_t*)NULL,
             (real_t*)NULL
         );
+        #if defined(_FOR_R) && defined(WRAPPED_GELSD) && !defined(USE_FLOAT)
+        GELSD_free_inputs = false;
+        #endif
         if ((retval != 0 && retval != 3) || (retval == 3 && !handle_interrupt))
             goto cleanup;
 
