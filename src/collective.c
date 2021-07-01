@@ -10894,7 +10894,7 @@ int_t impute_X_collective_explicit
 
     if (dont_produce_full_X)
     {
-        #ifndef _MSC_VER
+        #if !defined(_MSC_VER) || (_MSC_VER >= 1921)
         #pragma omp parallel for collapse(2) \
                 schedule(dynamic) num_threads(nthreads) \
                 shared(m, n, Xfull, k, k_user, k_item, k_main, lda, ldb, \
@@ -10928,7 +10928,7 @@ int_t impute_X_collective_explicit
                     m, n, k+k_main,
                     1., A + k_user, lda, B + k_item, ldb,
                     0., Xpred, n);
-        #ifndef _MSC_VER
+        #if !defined(_MSC_VER) || (_MSC_VER >= 1921)
         #pragma omp parallel for collapse(2) \
                 schedule(dynamic) num_threads(nthreads) \
                 shared(m, n, Xfull, Xpred, glob_mean, user_bias, biasA, biasB)
