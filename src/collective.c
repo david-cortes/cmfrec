@@ -10894,10 +10894,12 @@ int_t impute_X_collective_explicit
 
     if (dont_produce_full_X)
     {
+        #ifndef _MSC_VER
         #pragma omp parallel for collapse(2) \
                 schedule(dynamic) num_threads(nthreads) \
                 shared(m, n, Xfull, k, k_user, k_item, k_main, lda, ldb, \
                        glob_mean, user_bias, biasA, biasB, A, B)
+        #endif
         for (size_t_for row = 0; row < (size_t)m; row++)
             for (size_t col = 0; col < (size_t)n; col++)
                 Xfull[col + row*(size_t)n]
@@ -10926,9 +10928,11 @@ int_t impute_X_collective_explicit
                     m, n, k+k_main,
                     1., A + k_user, lda, B + k_item, ldb,
                     0., Xpred, n);
+        #ifndef _MSC_VER
         #pragma omp parallel for collapse(2) \
                 schedule(dynamic) num_threads(nthreads) \
                 shared(m, n, Xfull, Xpred, glob_mean, user_bias, biasA, biasB)
+        #endif
         for (size_t_for row = 0; row < (size_t)m; row++)
             for (size_t col = 0; col < (size_t)n; col++)
                 Xfull[col + row*(size_t)n]

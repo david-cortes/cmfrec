@@ -8,50 +8,6 @@ ctypedef int int_t
 
 # ctypedef double real_t
 
-###Uncomment code below to take BLAS and LAPACK from SciPy instead
-
-
-# IF UNAME_SYSNAME != "Windows": ### for windows, will use package 'findblas'
-#     from scipy.linalg.cython_blas cimport sdot as sdot_
-#     from scipy.linalg.cython_blas cimport scopy as scopy_
-#     from scipy.linalg.cython_blas cimport saxpy as saxpy_
-#     from scipy.linalg.cython_blas cimport sscal as sscal_
-#     from scipy.linalg.cython_blas cimport ssyr as ssyr_
-#     from scipy.linalg.cython_blas cimport ssyrk as ssyrk_
-#     from scipy.linalg.cython_blas cimport snrm2 as snrm2_
-#     from scipy.linalg.cython_blas cimport sgemm as sgemm_
-#     from scipy.linalg.cython_blas cimport sgemv as sgemv_
-#     from scipy.linalg.cython_blas cimport ssymv as ssymv_
-#     from scipy.linalg.cython_blas cimport sger as sger_
-
-#     from scipy.linalg.cython_lapack cimport slacpy as slacpy_
-#     from scipy.linalg.cython_lapack cimport sposv as sposv_
-#     from scipy.linalg.cython_lapack cimport slarnv as slarnv_
-#     from scipy.linalg.cython_lapack cimport spotrf as spotrf_
-#     from scipy.linalg.cython_lapack cimport spotrs as spotrs_
-#     from scipy.linalg.cython_lapack cimport sgels as sgels_
-
-#     from scipy.linalg.cython_blas cimport ddot as ddot_
-#     from scipy.linalg.cython_blas cimport dcopy as dcopy_
-#     from scipy.linalg.cython_blas cimport daxpy as daxpy_
-#     from scipy.linalg.cython_blas cimport dscal as dscal_
-#     from scipy.linalg.cython_blas cimport dsyr as dsyr_
-#     from scipy.linalg.cython_blas cimport dsyrk as dsyrk_
-#     from scipy.linalg.cython_blas cimport dnrm2 as dnrm2_
-#     from scipy.linalg.cython_blas cimport dgemm as dgemm_
-#     from scipy.linalg.cython_blas cimport dgemv as dgemv_
-#     from scipy.linalg.cython_blas cimport dsymv as dsymv_
-#     from scipy.linalg.cython_blas cimport dger as dger_
-
-#     from scipy.linalg.cython_lapack cimport dlacpy as dlacpy_
-#     from scipy.linalg.cython_lapack cimport dposv as dposv_
-#     from scipy.linalg.cython_lapack cimport dlarnv as dlarnv_
-#     from scipy.linalg.cython_lapack cimport dpotrf as dpotrf_
-#     from scipy.linalg.cython_lapack cimport dpotrs as dpotrs_
-#     from scipy.linalg.cython_lapack cimport dgels as dgels_
-
-
-
 ### TODO: this module should move from doing operations in Python to
 ### using the new designated C functions for each type of prediction.
 

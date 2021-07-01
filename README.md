@@ -155,14 +155,14 @@ cd cmfrec
 mkdir build
 cd build
 cmake ..
-make
+cmake --build .
 
 ## For a system-wide install
 sudo make install
 sudo ldconfig
 ```
 
-Linkage is then done with `-lcmfrec`.
+Linkage is then done with `-lcmfrec`. By default, it compiles for types `double` and `int`, but this can be changed in the CMake script to `float` and/or `int64_t`.
 
 (Recommended to have MKL installed)
 
