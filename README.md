@@ -99,7 +99,9 @@ The new version is faster, multi-threaded, and has some new functionality, but i
 
 ## Instalation
 
-**Note:** this package relies heavily on BLAS and LAPACK functions for calculations. It's recommended to use MKL (in Python, comes by default in Anaconda, in R for Windows, can be gotten through Microsoft's R distribution) or alternatively OpenBLAS, as backend for them. See [this link](https://github.com/david-cortes/R-openblas-in-windows) for instructions on getting OpenBLAS for R in Windows. Different backends for BLAS can make a large difference in speed - for example, on an AMD Ryzen 2700, MKL2021 makes models take 4x longer to fit than MKL2020, and using OpenBLAS-pthreads takes around 1.3x longer to fit models compared to OpenBLAS-openmp.
+**Note:** this package relies heavily on BLAS and LAPACK functions for calculations. It's recommended to use MKL (in Python, comes by default in Anaconda, in R for Windows, can be gotten through Microsoft's R distribution) or alternatively OpenBLAS, as backend for them. See [this link](https://github.com/david-cortes/R-openblas-in-windows) for instructions on getting OpenBLAS for R in Windows.
+
+Different backends for BLAS can make a large difference in speed - for example, on an AMD Ryzen 2700, MKL2021 makes models take 4x longer to fit than MKL2020, and using OpenBLAS-pthreads takes around 1.3x longer to fit models compared to OpenBLAS-openmp.
 
 
 * Python:
@@ -111,13 +113,6 @@ or if that fails:
 ```
 pip install --no-use-pep517 cmfrec
 ```
-_Note: earlier versions of `cmfrec` used the package `findblas` to link to BLAS's CBLAS interface, while newer versions take the BLAS from SciPy and build CBLAS wrapper around it, which can make it run slightly lower. To use `findblas`, define an environment variable `USE_FINDBLAS=1` before installing:_
-```
-export USE_FINDBLAS=1
-pip install cmfrec
-```
-
-(Note: NumPy must already be installed in the Python environment before attempting to install `cmfrec`)
 
 **Note for macOS users:** on macOS, this package will compile without multi-threading capabilities. This is due to default apple's redistribution of clang not providing OpenMP modules, and aliasing it to gcc which causes confusions in build scripts. If you have a non-apple version of clang with the OpenMP modules, or if you have gcc installed, you can compile this package with multi-threading enabled by setting up an environment variable `ENABLE_OMP=1`:
 
@@ -127,8 +122,12 @@ pip install cmfrec
 ```
 (Alternatively, can also pass argument enable-omp to the setup.py file: python `setup.py install enable-omp`)
 
-
-Will also by default use MKL if it finds it - for OpenBLAS can set an environment variable `USE_OPENBLAS=1` or pass argument `openblas` to `setup.py`.
+_Note2: earlier versions of `cmfrec` used the package `findblas` to link to BLAS's CBLAS interface, while newer versions take the BLAS from SciPy and build CBLAS wrapper around it, which can make it run slightly lower. To use `findblas`, define an environment variable `USE_FINDBLAS=1` before installing:_
+```
+export USE_FINDBLAS=1
+pip install cmfrec
+```
+_(Can also define `USE_OPENBLAS=1` to forcibly use `-lopenblas`)_
 
 * R:
 
@@ -164,7 +163,7 @@ sudo ldconfig
 
 Linkage is then done with `-lcmfrec`. By default, it compiles for types `double` and `int`, but this can be changed in the CMake script to `float` and/or `int64_t`.
 
-(Recommended to have MKL installed)
+(Recommended to have MKL or OpenBLAS installed)
 
 
 ## Sample Usage
