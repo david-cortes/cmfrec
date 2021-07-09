@@ -23,7 +23,7 @@ For an introduction to the library and methods, see:
 
 For the full benchmark, code, and details see [benchmarks](https://github.com/david-cortes/cmfrec/tree/master/benchmark).
 
-Comparing the classical matrix factorization model for explicit feedback **without side information** in different software libraries (50 factors, 15 iterations, regularization of 0.05, `float64` when supported):
+Comparing the classical matrix factorization model for explicit feedback **without side information** in different software libraries (50 factors, 15 iterations, regularization of 0.05, `float64` when supported) on the MovieLens10M dataset:
 
 | Library       | Method   | Biases | Time (s) | RMSE         | Additional |
 | :---:         | :---:    | :---:  | :---:    | :---:        | :---:
