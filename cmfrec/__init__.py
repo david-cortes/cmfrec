@@ -2060,7 +2060,6 @@ class _CMF:
                 k_user=self.k_item, k_item=self.k_user, k_main=self.k_main,
                 w_main=self.w_main, w_user=self.w_item, w_item=self.w_user,
                 l1_lambda=new_l1_lambda,
-                scale_lam=self.scale_lam, scale_lam_sideinfo=self.scale_lam_sideinfo,
                 niter=self.niter, NA_as_zero_user=self.NA_as_zero_item, NA_as_zero_item=self.NA_as_zero_user,
                 nonneg=self.nonneg,
                 apply_log_transf=self.apply_log_transf,
@@ -4520,7 +4519,7 @@ class CMF_implicit(_CMF):
         else:
             lambda_ = self.lambda_
         c_funs = wrapper_float if self.use_float else wrapper_double
-        self._BtB, self._BeTBe, self._BeTBeChol = \
+        self._BtB, self._BeTBe, self._BeTBeChol, self._CtUbias = \
             c_funs.precompute_matrices_collective_implicit(
                 self.B_, self.C_, self._U_colmeans,
                 self.k, self.k_main, self.k_user, self.k_item,
@@ -4528,7 +4527,7 @@ class CMF_implicit(_CMF):
                 self.w_main, self.w_user,
                 self._w_main_multiplier,
                 self.nonneg,
-                self.NA_as_zero_U
+                self.NA_as_zero_user
             )
         return self
 
