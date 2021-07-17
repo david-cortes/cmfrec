@@ -473,47 +473,137 @@ void tscal_large(real_t *restrict arr, real_t alpha, size_t n, int nthreads)
     }
 }
 
+/* Xoshiro256++ and Xoshiro128++
+   https://prng.di.unimi.it */
+static inline uint64_t rotl64(const uint64_t x, const int k) {
+    return (x << k) | (x >> (64 - k));
+}
+
+static inline uint32_t rotl32(const uint32_t x, const int k) {
+    return (x << k) | (x >> (32 - k));
+}
+
+static inline uint64_t splitmix64(const uint64_t seed)
+{
+    uint64_t z = (seed + 0x9e3779b97f4a7c15);
+    z = (z ^ (z >> 30)) * 0xbf58476d1ce4e5b9;
+    z = (z ^ (z >> 27)) * 0x94d049bb133111eb;
+    return z ^ (z >> 31);
+}
+
+static inline uint64_t xoshiro256pp(uint64_t state[4])
+{
+    const uint64_t result = rotl64(state[0] + state[3], 23) + state[0];
+    const uint64_t t = state[1] << 17;
+    state[2] ^= state[0];
+    state[3] ^= state[1];
+    state[1] ^= state[2];
+    state[0] ^= state[3];
+    state[2] ^= t;
+    state[3] = rotl64(state[3], 45);
+    return result;
+}
+
+static inline uint64_t xoshiro128pp(uint32_t state[4])
+{
+    const uint32_t result = rotl32(state[0] + state[3], 7) + state[0];
+    const uint32_t t = state[1] << 9;
+    state[2] ^= state[0];
+    state[3] ^= state[1];
+    state[1] ^= state[2];
+    state[0] ^= state[3];
+    state[2] ^= t;
+    state[3] = rotl32(state[3], 11);
+    return result;
+}
+
+/* Note: this uses the Box-Muller transform with raw form,
+   which is less efficient than the polar form. Nevertheless,
+   from some experiments, this seems to give slightly better
+   end results, even though it is slower and loses more numeric
+   precision by boxing to [0, 1] instead of [-1, 1]. */
+void rnorm_xoshiro(real_t *seq, const size_t n, rng_state_t state[4])
+{
+    uint64_t rnd1, rnd2;
+    #if (SIZE_MAX <= UINT32_MAX)
+    uint32_t *rnd11 = (uint32_t*)&rnd1;
+    uint32_t *rnd12 = rnd11 + 1;
+    uint32_t *rnd21 = (uint32_t*)&rnd2;
+    uint32_t *rnd22 = rnd21 + 1;
+    #endif
+    double u, v, mult;
+    size_t n_ = n / (size_t)2;
+    for (size_t ix = 0; ix < n_; ix++)
+    {
+        do
+        {
+            #if (SIZE_MAX <= UINT32_MAX)
+            *rnd11 = xoshiro128pp(state);
+            *rnd12 = xoshiro128pp(state);
+            *rnd21 = xoshiro128pp(state);
+            *rnd22 = xoshiro128pp(state);
+            #else
+            rnd1 = xoshiro256pp(state);
+            rnd2 = xoshiro256pp(state);
+            #endif
+        }
+        while (rnd1 == 0 || rnd1 == UINT64_MAX ||
+               rnd2 == 0 || rnd2 == UINT64_MAX);
+
+        u = (double)rnd1 / (double)UINT64_MAX;
+        v = (double)rnd2 / (double)UINT64_MAX;
+
+        mult = sqrt(-2. * log(u));
+        seq[(size_t)2*ix] = (real_t)(cos(2. * M_PI * v) * mult);
+        seq[(size_t)2*ix + (size_t)1] = (real_t)(sin(2. * M_PI * v) * mult);
+    }
+
+    if ((n % (size_t)2) != 0)
+    {
+        do
+        {
+            #if (SIZE_MAX <= UINT32_MAX)
+            *rnd11 = xoshiro128pp(state);
+            *rnd12 = xoshiro128pp(state);
+            *rnd21 = xoshiro128pp(state);
+            *rnd22 = xoshiro128pp(state);
+            #else
+            rnd1 = xoshiro256pp(state);
+            rnd2 = xoshiro256pp(state);
+            #endif
+        }
+        while (rnd1 == 0 || rnd1 == UINT64_MAX ||
+               rnd2 == 0 || rnd2 == UINT64_MAX);
+
+        u = (double)rnd1 / (double)UINT64_MAX;
+        v = (double)rnd2 / (double)UINT64_MAX;
+
+        mult = sqrt(-2. * log(u));
+        seq[n - (size_t)1] = (real_t)(cos(2. * M_PI * v) * mult);
+    }
+}
+
+void seed_state(int_t seed, rng_state_t state[4])
+{
+    #if (SIZE_MAX <= UINT32_MAX)
+    uint64_t s1 = splitmix64(seed);
+    uint64_t s2 = splitmix64(s1);
+    memcpy(state, s1, sizeof(uint64_t));
+    memcpy(&state[2], s2, sizeof(uint64_t));
+    #else
+    state[0] = splitmix64(seed);
+    state[1] = splitmix64(state[0]);
+    state[2] = splitmix64(state[1]);
+    state[3] = splitmix64(state[2]);
+    #endif
+}
+
 int_t rnorm(real_t *restrict arr, size_t n, int_t seed, int nthreads)
 {
     #ifndef _FOR_R
-    int_t three = 3;
-    int_t seed_arr[4] = {seed, seed, seed, seed};
-    process_seed_for_larnv(seed_arr);
-    if (n < (size_t)INT_MAX)
-    {
-        int_t n_int_t = (int)n;
-        tlarnv_(&three, seed_arr, &n_int_t, arr);
-    }
-
-    else
-    {
-        #if defined(_OPENMP) && \
-                    ( (_OPENMP < 200801)  /* OpenMP < 3.0 */ \
-                      || defined(_WIN32) || defined(_WIN64) \
-                    )
-        long long chunk;
-        #endif
-        int_t chunk_size = (int)INT_MAX;
-        size_t chunks = n / (size_t)INT_MAX;
-        int_t remainder = n - (size_t)INT_MAX * chunks;
-        int_t *restrict mt_seed_arr = (int_t*)malloc(4*nthreads*sizeof(int_t));
-        int_t *restrict thread_seed;
-        if (mt_seed_arr == NULL) return 1;
-
-        #pragma omp parallel for schedule(static, 1) num_threads(nthreads) \
-                shared(arr, three, chunk_size, chunks, seed) \
-                private(thread_seed)
-        for (size_t_for chunk = 0; chunk < chunks; chunk++) {
-            thread_seed = mt_seed_arr + 4*omp_get_thread_num();
-            thread_seed[0] = seed; thread_seed[1] = seed;
-            thread_seed[2] = seed; thread_seed[3] = seed;
-            tlarnv_(&three, thread_seed, &chunk_size,
-                    arr + chunk*(size_t)chunk_size);
-        }
-        if (remainder)
-            tlarnv_(&three, seed_arr, &remainder, arr + (size_t)INT_MAX * chunks);
-        free(mt_seed_arr);
-    }
+    rng_state_t state[4];
+    seed_state(seed, state);
+    rnorm_xoshiro(arr, n, state);
     #else
     GetRNGstate();
     for (size_t ix = 0; ix < n; ix++)
@@ -523,55 +613,16 @@ int_t rnorm(real_t *restrict arr, size_t n, int_t seed, int nthreads)
     return 0;
 }
 
-void rnorm_preserve_seed(real_t *restrict arr, size_t n, int_t seed_arr[4])
+void rnorm_preserve_seed(real_t *restrict arr, size_t n, rng_state_t seed_arr[4])
 {
     #ifndef _FOR_R
-    process_seed_for_larnv(seed_arr);
-    int_t three = 3;
-
-    if (n < (size_t)INT_MAX){
-        int_t n_int_t = (int)n;
-        tlarnv_(&three, seed_arr, &n_int_t, arr);
-    }
-
-    else {
-        size_t remainder = n;
-        int_t size_chunk = 0;
-        while (remainder)
-        {
-            if (remainder >= (size_t)INT_MAX)
-                size_chunk = INT_MAX;
-            else
-                size_chunk = remainder;
-            remainder -= (size_t)size_chunk;
-            tlarnv_(&three, seed_arr, &size_chunk, arr);
-            arr += size_chunk;
-        }
-    }
+    rnorm_xoshiro(arr, n, seed_arr);
     #else
     GetRNGstate();
     for (size_t ix = 0; ix < n; ix++)
         arr[ix] = norm_rand();
     PutRNGstate();
     #endif
-}
-
-void process_seed_for_larnv(int_t seed_arr[4])
-{
-    for (int_t ix = 0; ix < 4; ix++)
-    {
-        seed_arr[ix] = min2(seed_arr[ix], 4095);
-        seed_arr[ix] = max2(seed_arr[ix], 0);
-        if (ix == 3 && (seed_arr[ix] % 2) == 0)
-        {
-            if ((seed_arr[ix] + 1) <= 4095 && (seed_arr[ix] + 1) >= 0)
-                seed_arr[ix]++;
-            else if ((seed_arr[ix] - 1) <= 4095 && (seed_arr[ix] - 1) >= 0)
-                seed_arr[ix]--;
-            else
-                seed_arr[ix] = 1;
-        }
-    }
 }
 
 void reduce_mat_sum(real_t *restrict outp, size_t lda, real_t *restrict inp,

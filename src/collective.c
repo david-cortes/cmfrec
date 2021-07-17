@@ -6957,7 +6957,7 @@ int_t fit_collective_explicit_als
     bool free_arr_use = false;
     real_t *arr_use = NULL;
 
-    int_t *restrict seed_arr = NULL;
+    rng_state_t *restrict seed_arr = NULL;
     real_t *restrict lam_unique_copy = NULL;
     real_t *restrict l1_lam_unique_copy = NULL;
 
@@ -7691,9 +7691,9 @@ int_t fit_collective_explicit_als
        side info? could the items matrix be set to zero instead? */
     if (reset_values)
     {
-        seed_arr = (int_t*)malloc(4*sizeof(int_t));
+        seed_arr = (rng_state_t*)malloc(4*sizeof(rng_state_t));
         if (seed_arr == NULL) goto throw_oom;
-        for (int_t ix = 0; ix < 4; ix++) seed_arr[ix] = seed;
+        seed_state(seed, seed_arr);
         rnorm_preserve_seed(A, (size_t)m_max*(size_t)k_totA, seed_arr);
         /* TODO: evaluate if this improves results */
         // if (!user_bias && item_bias && use_cg_A)
@@ -8973,7 +8973,7 @@ int_t fit_collective_implicit_als
     bool ignore = false;
     real_t *restrict precomputedCtC = NULL;
 
-    int_t *restrict seed_arr = NULL;
+    rng_state_t *restrict seed_arr = NULL;
     real_t *restrict lam_unique_copy = NULL;
     real_t *restrict l1_lam_unique_copy = NULL;
 
@@ -9159,9 +9159,9 @@ int_t fit_collective_implicit_als
 
     if (reset_values)
     {
-        seed_arr = (int_t*)malloc(4*sizeof(int_t));
+        seed_arr = (rng_state_t*)malloc(4*sizeof(rng_state_t));
         if (seed_arr == NULL) goto throw_oom;
-        for (int_t ix = 0; ix < 4; ix++) seed_arr[ix] = seed;
+        seed_state(seed, seed_arr);
         rnorm_preserve_seed(A, (size_t)k_totA*(size_t)m_max, seed_arr);
         rnorm_preserve_seed(B, (size_t)k_totB*(size_t)n_max, seed_arr);
         if (U != NULL || U_csr_p != NULL)

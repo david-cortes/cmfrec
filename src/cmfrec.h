@@ -84,6 +84,8 @@ extern "C" {
 #include <stdbool.h>
 #include <math.h>
 #include <float.h>
+#include <stdint.h>
+#include <inttypes.h>
 #ifndef _FOR_R
     #include <stdio.h>
 #endif
@@ -159,6 +161,10 @@ typedef void (*sig_t_)(int);
     #define NAN_ NAN
 #endif
 
+#ifndef M_PI
+    #define M_PI 3.14159265358979323846
+#endif
+
 #if defined(_FOR_R) || defined(_FOR_PYTHON) || !defined(_WIN32)
     #define CMFREC_EXPORTABLE 
 #else
@@ -192,7 +198,6 @@ typedef void (*sig_t_)(int);
     #define cblas_tsymv cblas_dsymv
     #define tlacpy_ dlacpy_
     #define tposv_ dposv_
-    #define tlarnv_ dlarnv_
     #define tpotrf_ dpotrf_
     #define tpotrs_ dpotrs_
     #define tgelsd_ dgelsd_
@@ -219,7 +224,6 @@ typedef void (*sig_t_)(int);
     #define cblas_tsymv cblas_ssymv
     #define tlacpy_ slacpy_
     #define tposv_ sposv_
-    #define tlarnv_ slarnv_
     #define tpotrf_ spotrf_
     #define tpotrs_ spotrs_
     #define tgelsd_ sgelsd_
@@ -233,14 +237,18 @@ typedef void (*sig_t_)(int);
     #define int_t int
 #else
     #define ILP64 
-    #include <inttypes.h>
     #define int_t int64_t
+#endif
+
+#if (SIZE_MAX <= UINT32_MAX)
+    #define rng_state_t uint32_t
+#else
+    #define rng_state_t uint64_t
 #endif
 
 #if !defined(LAPACK_H) && !defined(_FOR_R)
 void tposv_(const char*, const int_t*, const int_t*, real_t*, const int_t*, real_t*, const int_t*, int_t*);
 void tlacpy_(const char*, const int_t*, const int_t*, const real_t*, const int_t*, real_t*, const int_t*);
-void tlarnv_(const int_t*, int_t*, const int_t*, real_t*);
 void tpotrf_(const char*, const int_t*, real_t*, const int_t*, int_t*);
 void tpotrs_(const char*, const int_t*, const int_t*, const real_t*, const int_t*, real_t*, const int_t*, int_t*);
 void tgelsd_(const int_t*, const int_t*, const int_t*,
@@ -358,9 +366,10 @@ void mult_elemwise(real_t *restrict inout, real_t *restrict other, size_t n, int
 real_t sum_squares(real_t *restrict arr, size_t n, int nthreads);
 void taxpy_large(real_t *restrict A, real_t x, real_t *restrict Y, size_t n, int nthreads);
 void tscal_large(real_t *restrict arr, real_t alpha, size_t n, int nthreads);
+void rnorm_xoshiro(real_t *seq, const size_t n, rng_state_t state[4]);
+void seed_state(int_t seed, rng_state_t state[4]);
 int_t rnorm(real_t *restrict arr, size_t n, int_t seed, int nthreads);
-void rnorm_preserve_seed(real_t *restrict arr, size_t n, int_t seed_arr[4]);
-void process_seed_for_larnv(int_t seed_arr[4]);
+void rnorm_preserve_seed(real_t *restrict arr, size_t n, rng_state_t seed_arr[4]);
 void reduce_mat_sum(real_t *restrict outp, size_t lda, real_t *restrict inp,
                     int_t m, int_t n, int nthreads);
 void exp_neg_x(real_t *restrict arr, size_t n, int nthreads);

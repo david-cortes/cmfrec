@@ -3,8 +3,8 @@ from scipy.linalg.cython_blas cimport (
     sdot, scopy, saxpy, sscal, ssyr, ssyrk, snrm2, sgemm, sgemv, ssymv, sger
 )
 from scipy.linalg.cython_lapack cimport (
-    dlacpy, dposv, dlarnv, dpotrf, dpotrs, dgelsd,
-    slacpy, sposv, slarnv, spotrf, spotrs, sgelsd
+    dlacpy, dposv, dpotrf, dpotrs, dgelsd,
+    slacpy, sposv, spotrf, spotrs, sgelsd
 )
 
 ctypedef double (*ddot_)(const int*, const double*, const int*, const double*, const int*) nogil
@@ -21,7 +21,6 @@ ctypedef double (*dger_)(const int*, const int*, const double*, const double*, c
 
 ctypedef void (*dposv__)(const char*, const int*, const int*, double*, const int*, double*, const int*, int*) nogil
 ctypedef void (*dlacpy__)(const char*, const int*, const int*, const double*, const int*, double*, const int*) nogil
-ctypedef void (*dlarnv__)(const int*, int*, const int*, double*) nogil
 ctypedef void (*dpotrf__)(const char*, const int*, double*, const int*, int*) nogil
 ctypedef void (*dpotrs__)(const char*, const int*, const int*, const double*, const int*, double*, const int*, int*) nogil
 ctypedef void (*dgelsd__)(const int*, const int*, const int*,
@@ -45,7 +44,6 @@ ctypedef float (*sger_)(const int*, const int*, const float*, const float*, cons
 
 ctypedef void (*sposv__)(const char*, const int*, const int*, float*, const int*, float*, const int*, int*) nogil
 ctypedef void (*slacpy__)(const char*, const int*, const int*, const float*, const int*, float*, const int*) nogil
-ctypedef void (*slarnv__)(const int*, int*, const int*, float*) nogil
 ctypedef void (*spotrf__)(const char*, const int*, float*, const int*, int*) nogil
 ctypedef void (*spotrs__)(const char*, const int*, const int*, const float*, const int*, float*, const int*, int*) nogil
 ctypedef void (*sgelsd__)(const int*, const int*, const int*,
@@ -232,9 +230,6 @@ cdef public void dposv_(const char* uplo, const int* m, const int* n, double* x,
 cdef public void dlacpy_(const char* uplo, const int* m, const int* n, const double* x, const int* ldx, double* y, const int* ldy) nogil:
     (<dlacpy__>dlacpy)(uplo, m, n, x, ldx, y, ldy)
 
-cdef public void dlarnv_(const int* a1, int* a2, const int* a3, double* a4) nogil:
-    (<dlarnv__>dlarnv)(a1, a2, a3, a4)
-
 cdef public void dpotrf_(const char* a1, const int* a2, double* a3, const int* a4, int* a5) nogil:
     (<dpotrf__>dpotrf)(a1, a2, a3, a4, a5)
 
@@ -403,9 +398,6 @@ cdef public void sposv_(const char* uplo, const int* m, const int* n, float* x, 
 
 cdef public void slacpy_(const char* uplo, const int* m, const int* n, const float* x, const int* ldx, float* y, const int* ldy) nogil:
     (<slacpy__>slacpy)(uplo, m, n, x, ldx, y, ldy)
-
-cdef public void slarnv_(const int* a1, int* a2, const int* a3, float* a4) nogil:
-    (<slarnv__>slarnv)(a1, a2, a3, a4)
 
 cdef public void spotrf_(const char* a1, const int* a2, float* a3, const int* a4, int* a5) nogil:
     (<spotrf__>spotrf)(a1, a2, a3, a4, a5)
