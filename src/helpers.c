@@ -521,9 +521,17 @@ static inline uint64_t xoshiro128pp(uint32_t state[4])
    which is less efficient than the polar form. Nevertheless,
    from some experiments, this seems to give slightly better
    end results, even though it is slower and loses more numeric
-   precision by boxing to [0, 1] instead of [-1, 1]. */
+   precision by boxing to [0, 1] instead of [-1, 1].
+
+   Note: if generating a uniform random number ~ (0,1), dividing
+   a random draw by the maximum will not result in a uniform
+   distribution, as the upper possible numbers are not evenly-spaced.
+   In these cases, it's necessary to take something up to 2^53 as
+   this is the interval that's evenly-representable. */
 void rnorm_xoshiro(real_t *seq, const size_t n, rng_state_t state[4])
 {
+    const uint64_t two53_i = (UINT64_C(1) << 53) - UINT64_C(1);
+    const double two53_d = (double)(UINT64_C(1) << 53);
     uint64_t rnd1, rnd2;
     #if (SIZE_MAX <= UINT32_MAX)
     uint32_t *rnd11 = (uint32_t*)&rnd1;
@@ -546,12 +554,11 @@ void rnorm_xoshiro(real_t *seq, const size_t n, rng_state_t state[4])
             rnd1 = xoshiro256pp(state);
             rnd2 = xoshiro256pp(state);
             #endif
-        }
-        while (rnd1 == 0 || rnd1 == UINT64_MAX ||
-               rnd2 == 0 || rnd2 == UINT64_MAX);
 
-        u = (double)rnd1 / (double)UINT64_MAX;
-        v = (double)rnd2 / (double)UINT64_MAX;
+            u = (double)(rnd1 & two53_i) / two53_d;
+            v = (double)(rnd2 & two53_i) / two53_d;
+        }
+        while (u == 0 || u == 1 || v == 0 || v == 1);
 
         mult = sqrt(-2. * log(u));
         seq[(size_t)2*ix] = (real_t)(cos(2. * M_PI * v) * mult);
@@ -571,12 +578,11 @@ void rnorm_xoshiro(real_t *seq, const size_t n, rng_state_t state[4])
             rnd1 = xoshiro256pp(state);
             rnd2 = xoshiro256pp(state);
             #endif
-        }
-        while (rnd1 == 0 || rnd1 == UINT64_MAX ||
-               rnd2 == 0 || rnd2 == UINT64_MAX);
 
-        u = (double)rnd1 / (double)UINT64_MAX;
-        v = (double)rnd2 / (double)UINT64_MAX;
+            u = (double)(rnd1 & two53_i) / two53_d;
+            v = (double)(rnd2 & two53_i) / two53_d;
+        }
+        while (u == 0 || u == 1 || v == 0 || v == 1);
 
         mult = sqrt(-2. * log(u));
         seq[n - (size_t)1] = (real_t)(cos(2. * M_PI * v) * mult);
