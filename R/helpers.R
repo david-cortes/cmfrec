@@ -401,6 +401,7 @@ get.empty.info <- function() {
         center_U = TRUE,
         center_I = TRUE,
         only_prediction_info = FALSE,
+        seed = 0L,
         nthreads = 1L
     ))
 }

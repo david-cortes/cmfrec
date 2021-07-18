@@ -528,16 +528,18 @@ static inline uint64_t xoshiro128pp(uint32_t state[4])
    distribution, as the upper possible numbers are not evenly-spaced.
    In these cases, it's necessary to take something up to 2^53 as
    this is the interval that's evenly-representable. */
-void rnorm_xoshiro(real_t *seq, const size_t n, rng_state_t state[4])
+#if defined(USE_DOUBLE) || !defined(USE_FLOAT)
+int_t rnorm_xoshiro(double *seq, const size_t n, rng_state_t state[4])
 {
     const uint64_t two53_i = (UINT64_C(1) << 53) - UINT64_C(1);
     const double two53_d = (double)(UINT64_C(1) << 53);
+    const double twoPI = 2. * M_PI;
     uint64_t rnd1, rnd2;
-    #if (SIZE_MAX <= UINT32_MAX)
-    uint32_t *rnd11 = (uint32_t*)&rnd1;
-    uint32_t *rnd12 = rnd11 + 1;
-    uint32_t *rnd21 = (uint32_t*)&rnd2;
-    uint32_t *rnd22 = rnd21 + 1;
+    #ifdef USE_XOSHIRO128
+    uint32_t *restrict rnd11 = (uint32_t*)&rnd1;
+    uint32_t *restrict rnd12 = rnd11 + 1;
+    uint32_t *restrict rnd21 = (uint32_t*)&rnd2;
+    uint32_t *restrict rnd22 = rnd21 + 1;
     #endif
     double u, v, mult;
     size_t n_ = n / (size_t)2;
@@ -545,7 +547,7 @@ void rnorm_xoshiro(real_t *seq, const size_t n, rng_state_t state[4])
     {
         do
         {
-            #if (SIZE_MAX <= UINT32_MAX)
+            #ifdef USE_XOSHIRO128
             *rnd11 = xoshiro128pp(state);
             *rnd12 = xoshiro128pp(state);
             *rnd21 = xoshiro128pp(state);
@@ -555,21 +557,26 @@ void rnorm_xoshiro(real_t *seq, const size_t n, rng_state_t state[4])
             rnd2 = xoshiro256pp(state);
             #endif
 
+            #if defined(DBL_MANT_DIG) && (DBL_MANT_DIG == 53)
             u = (double)(rnd1 & two53_i) / two53_d;
             v = (double)(rnd2 & two53_i) / two53_d;
+            #else
+            u = (double)rnd1 / (double)UINT64_MAX;
+            v = (double)rnd2 / (double)UINT64_MAX;
+            #endif
         }
-        while (u == 0 || u == 1 || v == 0 || v == 1);
+        while (u == 0 || v == 0);
 
         mult = sqrt(-2. * log(u));
-        seq[(size_t)2*ix] = (real_t)(cos(2. * M_PI * v) * mult);
-        seq[(size_t)2*ix + (size_t)1] = (real_t)(sin(2. * M_PI * v) * mult);
+        seq[(size_t)2*ix] = (real_t)(cos(twoPI * v) * mult);
+        seq[(size_t)2*ix + (size_t)1] = (real_t)(sin(twoPI * v) * mult);
     }
 
     if ((n % (size_t)2) != 0)
     {
         do
         {
-            #if (SIZE_MAX <= UINT32_MAX)
+            #ifdef USE_XOSHIRO128
             *rnd11 = xoshiro128pp(state);
             *rnd12 = xoshiro128pp(state);
             *rnd21 = xoshiro128pp(state);
@@ -579,23 +586,112 @@ void rnorm_xoshiro(real_t *seq, const size_t n, rng_state_t state[4])
             rnd2 = xoshiro256pp(state);
             #endif
 
+            #if defined(DBL_MANT_DIG) && (DBL_MANT_DIG == 53)
             u = (double)(rnd1 & two53_i) / two53_d;
             v = (double)(rnd2 & two53_i) / two53_d;
+            #else
+            u = (double)rnd1 / (double)UINT64_MAX;
+            v = (double)rnd2 / (double)UINT64_MAX;
+            #endif
         }
-        while (u == 0 || u == 1 || v == 0 || v == 1);
+        while (u == 0 || v == 0);
 
         mult = sqrt(-2. * log(u));
-        seq[n - (size_t)1] = (real_t)(cos(2. * M_PI * v) * mult);
+        seq[n - (size_t)1] = (real_t)(cos(twoPI * v) * mult);
     }
+
+    return 0;
 }
+#else
+int_t rnorm_xoshiro(float *seq, const size_t n, rng_state_t state[4])
+{
+    const uint32_t two24_i = (UINT32_C(1) << 24) - UINT32_C(1);
+    const float two24_f = (float)(UINT32_C(1) << 24);
+    const double twoPI = 2.0f * M_PI;
+    #ifdef USE_XOSHIRO128
+    uint32_t rnd1, rnd2;
+    #else
+    uint64_t rnd0;
+    uint32_t *restrict rnd1 = (uint32_t*)&rnd0;
+    uint32_t *restrict rnd2 = rnd1 + 1;
+    #endif
+    float u, v, mult;
+    size_t n_ = n / (size_t)2;
+    for (size_t ix = 0; ix < n_; ix++)
+    {
+        do
+        {
+            #ifdef USE_XOSHIRO128
+            rnd1 = xoshiro128pp(state);
+            rnd2 = xoshiro128pp(state);
+            #if defined(FLT_MANT_DIG) && (FLT_MANT_DIG == 24)
+            u = (float)(rnd1 & two24_i) / two24_f;
+            v = (float)(rnd2 & two24_i) / two24_f;
+            #else
+            u = (float)rnd1 / (float)UINT32_MAX;
+            v = (float)rnd2 / (float)UINT32_MAX;
+            #endif
+            #else
+            rnd0 = xoshiro256pp(state);
+            #if defined(FLT_MANT_DIG) && (FLT_MANT_DIG == 24)
+            u = (float)(*rnd1 & two24_i) / two24_f;
+            v = (float)(*rnd2 & two24_i) / two24_f;
+            #else
+            u = (float)(*rnd1) / (float)UINT32_MAX;
+            v = (float)(*rnd2) / (float)UINT32_MAX;
+            #endif
+            #endif
+        }
+        while (u == 0 || v == 0);
+
+
+        mult = sqrtf(-2.0f * logf(u));
+        seq[(size_t)2*ix] = (real_t)(cosf(twoPI * v) * mult);
+        seq[(size_t)2*ix + (size_t)1] = (real_t)(sinf(twoPI * v) * mult);
+    }
+
+    if ((n % (size_t)2) != 0)
+    {
+        do
+        {
+            #ifdef USE_XOSHIRO128
+            rnd1 = xoshiro128pp(state);
+            rnd2 = xoshiro128pp(state);
+            #if defined(FLT_MANT_DIG) && (FLT_MANT_DIG == 24)
+            u = (float)(rnd1 & two24_i) / two24_f;
+            v = (float)(rnd2 & two24_i) / two24_f;
+            #else
+            u = (float)rnd1 / (float)UINT32_MAX;
+            v = (float)rnd2 / (float)UINT32_MAX;
+            #endif
+            #else
+            rnd0 = xoshiro256pp(state);
+            #if defined(FLT_MANT_DIG) && (FLT_MANT_DIG == 24)
+            u = (float)(*rnd1 & two24_i) / two24_f;
+            v = (float)(*rnd2 & two24_i) / two24_f;
+            #else
+            u = (float)(*rnd1) / (float)UINT32_MAX;
+            v = (float)(*rnd2) / (float)UINT32_MAX;
+            #endif
+            #endif
+        }
+        while (u == 0 || v == 0);
+
+        mult = sqrtf(-2.0f * logf(u));
+        seq[n - (size_t)1] = (real_t)(cosf(twoPI * v) * mult);
+    }
+
+    return 0;
+}
+#endif
 
 void seed_state(int_t seed, rng_state_t state[4])
 {
-    #if (SIZE_MAX <= UINT32_MAX)
+    #ifdef USE_XOSHIRO128
     uint64_t s1 = splitmix64(seed);
     uint64_t s2 = splitmix64(s1);
-    memcpy(state, s1, sizeof(uint64_t));
-    memcpy(&state[2], s2, sizeof(uint64_t));
+    memcpy(state, &s1, sizeof(uint64_t));
+    memcpy(&state[2], &s2, sizeof(uint64_t));
     #else
     state[0] = splitmix64(seed);
     state[1] = splitmix64(state[0]);
@@ -606,29 +702,14 @@ void seed_state(int_t seed, rng_state_t state[4])
 
 int_t rnorm(real_t *restrict arr, size_t n, int_t seed, int nthreads)
 {
-    #ifndef _FOR_R
     rng_state_t state[4];
     seed_state(seed, state);
-    rnorm_xoshiro(arr, n, state);
-    #else
-    GetRNGstate();
-    for (size_t ix = 0; ix < n; ix++)
-        arr[ix] = norm_rand();
-    PutRNGstate();
-    #endif
-    return 0;
+    return rnorm_xoshiro(arr, n, state);
 }
 
-void rnorm_preserve_seed(real_t *restrict arr, size_t n, rng_state_t seed_arr[4])
+int_t rnorm_preserve_seed(real_t *restrict arr, size_t n, rng_state_t seed_arr[4])
 {
-    #ifndef _FOR_R
-    rnorm_xoshiro(arr, n, seed_arr);
-    #else
-    GetRNGstate();
-    for (size_t ix = 0; ix < n; ix++)
-        arr[ix] = norm_rand();
-    PutRNGstate();
-    #endif
+    return rnorm_xoshiro(arr, n, seed_arr);
 }
 
 void reduce_mat_sum(real_t *restrict outp, size_t lda, real_t *restrict inp,

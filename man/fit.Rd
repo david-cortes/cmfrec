@@ -56,6 +56,7 @@ CMF(
   verbose = TRUE,
   print_every = 10L,
   handle_interrupt = TRUE,
+  seed = 1L,
   nthreads = parallel::detectCores()
 )
 
@@ -89,6 +90,7 @@ CMF_implicit(
   precompute_for_predictions = TRUE,
   verbose = TRUE,
   handle_interrupt = TRUE,
+  seed = 1L,
   nthreads = parallel::detectCores()
 )
 
@@ -124,6 +126,7 @@ ContentBased(
   print_every = 100L,
   handle_interrupt = TRUE,
   start_with_ALS = TRUE,
+  seed = 1L,
   nthreads = parallel::detectCores()
 )
 
@@ -154,6 +157,7 @@ OMF_explicit(
   verbose = TRUE,
   print_every = 100L,
   handle_interrupt = TRUE,
+  seed = 1L,
   nthreads = parallel::detectCores()
 )
 
@@ -172,6 +176,7 @@ OMF_implicit(
   finalize_chol = FALSE,
   verbose = FALSE,
   handle_interrupt = TRUE,
+  seed = 1L,
   nthreads = parallel::detectCores()
 )
 }
@@ -635,6 +640,8 @@ early and leave a usable object with the parameters obtained up
 to the point when it was interrupted (when passing `TRUE`), or
 raise an interrupt exception without producing a fitted model object
 (when passing `FALSE`).}
+
+\item{seed}{Seed to use for random number generation.}
 
 \item{nthreads}{Number of parallel threads to use. Note that, the more threads that
 are used, the higher the memory consumption.}

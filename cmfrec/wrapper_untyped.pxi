@@ -668,8 +668,7 @@ def call_fit_collective_explicit_lbfgs(
         nvars += <size_t>pbin * <size_t>(k_user + k)
     if Ib.shape[0]:
         nvars += <size_t>qbin * <size_t>(k_item + k)
-    rs = np.random.Generator(np.random.MT19937(seed = seed))
-    cdef np.ndarray[real_t, ndim=1] values = rs.standard_normal(size = nvars, dtype = c_real_t) / 100
+    cdef np.ndarray[real_t, ndim=1] values = np.empty(nvars, dtype = c_real_t)
 
     cdef np.ndarray[real_t, ndim=2] B_plus_bias = np.empty((0,0), dtype=c_real_t)
     cdef real_t *ptr_B_plus_bias = NULL
@@ -682,7 +681,7 @@ def call_fit_collective_explicit_lbfgs(
     cdef int_t retval = 0
     with nogil, boundscheck(False), nonecheck(False), wraparound(False):
         retval = fit_collective_explicit_lbfgs_internal(
-            &values[0], 0,
+            &values[0], 1,
             &glob_mean,
             ptr_U_colmeans, ptr_I_colmeans,
             m, n, k,
@@ -699,7 +698,7 @@ def call_fit_collective_explicit_lbfgs(
             ptr_I_row, ptr_I_col, ptr_I_sp, nnz_I,
             k_main, k_user, k_item,
             w_main, w_user, w_item,
-            n_corr_pairs, maxiter, 1,
+            n_corr_pairs, maxiter, seed,
             nthreads, prefer_onepass,
             verbose, print_every, handle_interrupt,
             &niter, &nfev,
@@ -861,8 +860,7 @@ def call_fit_offsets_explicit_lbfgs_internal(
     cdef np.ndarray[real_t, ndim=2] Am = np.empty((m, k_sec+k+k_main), dtype=c_real_t)
     cdef np.ndarray[real_t, ndim=2] Bm = np.empty((n, k_sec+k+k_main), dtype=c_real_t)
 
-    rs = np.random.Generator(np.random.MT19937(seed = seed))
-    cdef np.ndarray[real_t, ndim=1] values = rs.standard_normal(size = nvars, dtype = c_real_t) / 100
+    cdef np.ndarray[real_t, ndim=1] values = np.empty(nvars, dtype = c_real_t)
 
     cdef np.ndarray[real_t, ndim=2] Bm_plus_bias = np.empty((0,0), dtype=c_real_t)
     cdef real_t *ptr_Bm_plus_bias = NULL
@@ -875,7 +873,7 @@ def call_fit_offsets_explicit_lbfgs_internal(
     cdef int_t retval = 0
     with nogil, boundscheck(False), nonecheck(False), wraparound(False):
         retval = fit_offsets_explicit_lbfgs_internal(
-            &values[0], 0,
+            &values[0], 1,
             &glob_mean,
             m, n, k,
             ptr_ixA, ptr_ixB, ptr_X, nnz,
@@ -890,7 +888,7 @@ def call_fit_offsets_explicit_lbfgs_internal(
             ptr_I_row, ptr_I_col, ptr_I_sp, nnz_I,
             k_main, k_sec,
             w_user, w_item,
-            n_corr_pairs, maxiter, 1,
+            n_corr_pairs, maxiter, seed,
             nthreads, prefer_onepass,
             verbose, print_every, handle_interrupt,
             &niter, &nfev,
@@ -1091,36 +1089,25 @@ def call_fit_collective_explicit_als(
         biasB = np.zeros(max(n, n_i), dtype=c_real_t)
         ptr_biasB = &biasB[0]
 
-    rs = np.random.Generator(np.random.MT19937(seed = seed))
-    A = rs.standard_normal(size = (max(m, m_u), k_user+k+k_main), dtype = c_real_t) / 100
-    B = rs.standard_normal(size = (max(n, n_i), k_item+k+k_main), dtype = c_real_t) / 100
-    if nonneg:
-        A[:,:] = np.abs(A)
-        B[:,:] = np.abs(B)
+    A = np.empty((max(m, m_u), k_user+k+k_main), dtype = c_real_t)
+    B = np.empty((max(n, n_i), k_item+k+k_main), dtype = c_real_t)
     ptr_A = &A[0,0]
     ptr_B = &B[0,0]
     if p:
-        C = rs.standard_normal(size = (p, k_user + k), dtype = c_real_t) / 100
-        if nonneg_C:
-            C[:,:] = np.abs(C)
+        C = np.empty((p, k_user + k), dtype = c_real_t)
         if C.shape[0]:
             ptr_C = &C[0,0]
         else:
             raise ValueError("Unexpected error.")
     if q:
-        D = rs.standard_normal(size = (q, k_item + k), dtype = c_real_t) / 100
-        if nonneg_D:
-            D[:,:] = np.abs(D)
+        D = np.empty((q, k_item + k), dtype = c_real_t)
         if D.shape[0]:
             ptr_D = &D[0,0]
         else:
             raise ValueError("Unexpected error.")
     if add_implicit_features:
-        Ai = rs.standard_normal(size = (max(m, m_u), k+k_main), dtype = c_real_t) / 100
-        Bi = rs.standard_normal(size = (max(n, n_i), k+k_main), dtype = c_real_t) / 100
-        if nonneg:
-            Ai[:,:] = np.abs(Ai)
-            Bi[:,:] = np.abs(Bi)
+        Ai = np.empty((max(m, m_u), k+k_main), dtype = c_real_t)
+        Bi = np.empty((max(n, n_i), k+k_main), dtype = c_real_t)
         ptr_Ai = &Ai[0,0]
         ptr_Bi = &Bi[0,0]
 
@@ -1191,7 +1178,7 @@ def call_fit_collective_explicit_als(
             ptr_A, ptr_B, ptr_C, ptr_D,
             ptr_Ai, ptr_Bi,
             add_implicit_features,
-            0, 0,
+            1, seed,
             &glob_mean,
             ptr_U_colmeans, ptr_I_colmeans,
             m, n, k,
@@ -1265,7 +1252,7 @@ def call_fit_collective_implicit_als(
         int_t max_cg_steps=3, bint finalize_chol=1,
         bint nonneg=0, bint nonneg_C=0, bint nonneg_D=0,
         int max_cd_steps=100,
-        int_t seed=1, init="normal", bint handle_interrupt=1,
+        int_t seed=1, bint handle_interrupt=1,
         bint precompute_for_predictions = 1
     ):
     
@@ -1327,54 +1314,19 @@ def call_fit_collective_implicit_als(
     if I.shape[0] or I_sp.shape[0]:
         sizeD = <size_t>q * <size_t>(k_item + k)
     
-    rs = np.random.Generator(np.random.MT19937(seed = seed))
-
     cdef real_t *ptr_A = NULL
     cdef real_t *ptr_B = NULL
     cdef real_t *ptr_C = NULL
     cdef real_t *ptr_D = NULL
-    cdef np.ndarray[real_t, ndim=2] A = np.zeros((0,0), dtype = c_real_t)
-    cdef np.ndarray[real_t, ndim=2] B = np.zeros((0,0), dtype = c_real_t)
-    cdef np.ndarray[real_t, ndim=2] C = np.zeros((0,0), dtype = c_real_t)
-    cdef np.ndarray[real_t, ndim=2] D = np.zeros((0,0), dtype = c_real_t)
+    cdef np.ndarray[real_t, ndim=2] A = np.empty((max(m, m_u), (k_user+k+k_main)), dtype = c_real_t)
+    cdef np.ndarray[real_t, ndim=2] B = np.empty((max(n, n_i), (k_item+k+k_main)), dtype = c_real_t)
+    cdef np.ndarray[real_t, ndim=2] C = np.empty((0,0), dtype = c_real_t)
+    cdef np.ndarray[real_t, ndim=2] D = np.empty((0,0), dtype = c_real_t)
 
-    if init == "normal":
-        A = rs.standard_normal(size = (max(m, m_u), (k_user+k+k_main)), dtype = c_real_t) / 100
-        B = rs.standard_normal(size = (max(n, n_i), (k_item+k+k_main)), dtype = c_real_t) / 100
-        if sizeC:
-            C = rs.standard_normal(size = (p, k_user + k), dtype = c_real_t) / 100
-        if sizeD:
-            D = rs.standard_normal(size = (q, k_item + k), dtype = c_real_t) / 100
-    else:
-        A = rs.random(size = (max(m, m_u), (k_user+k+k_main)), dtype = c_real_t) / 100
-        B = rs.random(size = (max(n, n_i), (k_item+k+k_main)), dtype = c_real_t) / 100
-        if sizeC:
-            C = rs.random(size = (p, k_user + k), dtype = c_real_t) / 100
-        if sizeD:
-            D = rs.random(size = (q, k_item + k), dtype = c_real_t) / 100
-    
-        if init == "gamma":
-            A[:,:] = -np.log(A.clip(min=1e-6, max=20.))
-            B[:,:] = -np.log(B.clip(min=1e-6, max=20.))
-            if sizeC:
-                C[:,:] = -np.log(C.clip(min=1e-6, max=20.))
-            if sizeD:
-                D[:,:] = -np.log(D.clip(min=1e-6, max=20.))
-        elif init != "uniform":
-            A[:,:] -= 0.5
-            B[:,:] -= 0.5
-            if sizeC:
-                C[:,:] -= 0.5
-            if sizeD:
-                D[:,:] -= 0.5
-
-    if nonneg:
-        A[:,:] = np.abs(A)
-        B[:,:] = np.abs(B)
-        if C.shape[0]:
-            C[:,:] = np.abs(C)
-        if D.shape[0]:
-            D[:,:] = np.abs(D)
+    if sizeC:
+        C = np.empty((p, k_user + k), dtype = c_real_t)
+    if sizeD:
+        D = np.empty((q, k_item + k), dtype = c_real_t)
 
     ptr_A = &A[0,0]
     ptr_B = &B[0,0]
@@ -1411,7 +1363,7 @@ def call_fit_collective_implicit_als(
     with nogil, boundscheck(False), nonecheck(False), wraparound(False):
         reval = fit_collective_implicit_als(
             ptr_A, ptr_B, ptr_C, ptr_D,
-            0, 0,
+            1, seed,
             ptr_U_colmeans, ptr_I_colmeans,
             m, n, k,
             &ixA[0], &ixB[0], &X[0], X.shape[0],
@@ -1507,11 +1459,10 @@ def call_fit_offsets_explicit_als(
         Bm_plus_bias = np.empty((n, k+1), dtype=c_real_t)
         ptr_Bm_plus_bias = &Bm_plus_bias[0,0]
 
-    rs = np.random.Generator(np.random.MT19937(seed = seed))
     cdef np.ndarray[real_t, ndim=1] biasA = np.zeros(0, dtype=c_real_t)
     cdef np.ndarray[real_t, ndim=1] biasB = np.zeros(0, dtype=c_real_t)
-    cdef np.ndarray[real_t, ndim=2] A = rs.standard_normal(size=(m,k), dtype=c_real_t) / 100
-    cdef np.ndarray[real_t, ndim=2] B = rs.standard_normal(size=(n,k), dtype=c_real_t) / 100
+    cdef np.ndarray[real_t, ndim=2] A = np.empty((m,k), dtype=c_real_t)
+    cdef np.ndarray[real_t, ndim=2] B = np.empty((n,k), dtype=c_real_t)
     cdef np.ndarray[real_t, ndim=2] C = np.zeros((0,0), dtype=c_real_t)
     cdef np.ndarray[real_t, ndim=2] D = np.zeros((0,0), dtype=c_real_t)
     cdef np.ndarray[real_t, ndim=1] C_bias = np.zeros(0, dtype=c_real_t)
@@ -1568,7 +1519,7 @@ def call_fit_offsets_explicit_als(
             ptr_A, ptr_B,
             ptr_C, ptr_C_bias,
             ptr_D, ptr_D_bias,
-            0, 0,
+            1, seed,
             &glob_mean,
             m, n, k,
             ptr_ixA, ptr_ixB, ptr_X, nnz,
@@ -1643,9 +1594,8 @@ def call_fit_offsets_implicit_als(
     cdef real_t *ptr_Am = &Am[0,0]
     cdef real_t *ptr_Bm = &Bm[0,0]
 
-    rs = np.random.Generator(np.random.MT19937(seed = seed))
-    cdef np.ndarray[real_t, ndim=2] A = rs.standard_normal(size=(m,k), dtype=c_real_t) / 100
-    cdef np.ndarray[real_t, ndim=2] B = rs.standard_normal(size=(n,k), dtype=c_real_t) / 100
+    cdef np.ndarray[real_t, ndim=2] A = np.empty((m,k), dtype=c_real_t)
+    cdef np.ndarray[real_t, ndim=2] B = np.empty((n,k), dtype=c_real_t)
     cdef np.ndarray[real_t, ndim=2] C = np.zeros((0,0), dtype=c_real_t)
     cdef np.ndarray[real_t, ndim=2] D = np.zeros((0,0), dtype=c_real_t)
     cdef np.ndarray[real_t, ndim=1] C_bias = np.zeros(0, dtype=c_real_t)
@@ -1687,7 +1637,7 @@ def call_fit_offsets_implicit_als(
         retval = fit_offsets_als(
             <real_t*>NULL, <real_t*>NULL,
             ptr_A, ptr_B, ptr_C, ptr_C_bias, ptr_D, ptr_D_bias,
-            0, 0,
+            1, seed,
             &placeholder,
             m, n, k,
             ptr_ixA, ptr_ixB, ptr_X, nnz,
@@ -2982,9 +2932,8 @@ def call_fit_content_based_lbfgs(
     cdef np.ndarray[real_t, ndim=2] Am = np.empty((m, k), dtype=c_real_t)
     cdef np.ndarray[real_t, ndim=2] Bm = np.empty((n, k), dtype=c_real_t)
 
-    rs = np.random.Generator(np.random.MT19937(seed = seed))
-    cdef np.ndarray[real_t, ndim=2] C = rs.standard_normal(size=(p,k), dtype = c_real_t) / 100
-    cdef np.ndarray[real_t, ndim=2] D = rs.standard_normal(size=(q,k), dtype = c_real_t) / 100
+    cdef np.ndarray[real_t, ndim=2] C = np.empty((p,k), dtype = c_real_t)
+    cdef np.ndarray[real_t, ndim=2] D = np.empty((q,k), dtype = c_real_t)
     cdef np.ndarray[real_t, ndim=1] C_bias = np.zeros(0, dtype=c_real_t)
     cdef np.ndarray[real_t, ndim=1] D_bias = np.zeros(0, dtype=c_real_t)
     cdef real_t *ptr_C = &C[0,0]
@@ -3017,7 +2966,7 @@ def call_fit_content_based_lbfgs(
             ptr_biasA, ptr_biasB,
             ptr_C, ptr_C_bias,
             ptr_D, ptr_D_bias,
-            start_with_ALS, 0, 0,
+            start_with_ALS, 1, seed,
             &glob_mean,
             m, n, k,
             ptr_ixA, ptr_ixB, ptr_X, nnz,

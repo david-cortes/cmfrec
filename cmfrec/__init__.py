@@ -40,12 +40,11 @@ class _CMF:
                      maxiter=400, niter=10, parallelize="separate", corr_pairs=4,
                      NA_as_zero=False, NA_as_zero_user=False, NA_as_zero_item=False,
                      precompute_for_predictions=True, use_float=False,
-                     random_state=1, init="normal", verbose=True,
+                     random_state=1, verbose=True,
                      print_every=10, handle_interrupt=True,
                      produce_dicts=False, copy_data=True, nthreads=-1):
         assert method in ["als", "lbfgs"]
         assert parallelize in ["separate", "single"]
-        assert init in ["normal", "gamma"]
 
         k = int(k) if isinstance(k, float) else k
         k_user = int(k_user) if isinstance(k_user, float) else k_user
@@ -190,7 +189,6 @@ class _CMF:
         self.precompute_for_predictions = bool(precompute_for_predictions)
         self.include_all_X = True
         self.use_float = bool(use_float)
-        self.init = init
         self.verbose = bool(verbose)
         self.print_every = print_every
         self.corr_pairs = corr_pairs
@@ -2065,7 +2063,7 @@ class _CMF:
                 apply_log_transf=self.apply_log_transf,
                 precompute_for_predictions=self.precompute_for_predictions, use_float=self.use_float,
                 max_cg_steps=self.max_cg_steps, finalize_chol=self.finalize_chol,
-                random_state=self.random_state, init=self.init, verbose=self.verbose,
+                random_state=self.random_state, verbose=self.verbose,
                 produce_dicts=self.produce_dicts, handle_interrupt=self.handle_interrupt,
                 copy_data=self.copy_data, nthreads=self.nthreads)
         elif isinstance(self, MostPopular):
@@ -2734,7 +2732,7 @@ class CMF(_CMF):
                           NA_as_zero_item=NA_as_zero_item,
                           precompute_for_predictions=precompute_for_predictions,
                           use_float=use_float,
-                          random_state=random_state, init="normal",
+                          random_state=random_state,
                           verbose=verbose, print_every=print_every,
                           handle_interrupt=handle_interrupt,
                           produce_dicts=produce_dicts, copy_data=copy_data,
@@ -4250,10 +4248,6 @@ class CMF_implicit(_CMF):
     random_state : int, RandomState, or Generator
         Seed used to initialize parameters at random. If passing a NumPy
         RandomState or Generator, will use it to draw a random integer.
-    init : str, "normal" or "gamma"
-        Distribution used to initialize the model parameters. Both
-        distributions are likely to reach similar end results, but the
-        distribution of the factors themselves will be different.
     verbose : bool
         Whether to print informational messages about the optimization
         routine used to fit the model. Note that, if running this from a
@@ -4341,7 +4335,7 @@ class CMF_implicit(_CMF):
                  apply_log_transf=False,
                  precompute_for_predictions=True, use_float=False,
                  max_cg_steps=3, finalize_chol=False,
-                 random_state=1, init="normal", verbose=False,
+                 random_state=1, verbose=False,
                  produce_dicts=False, handle_interrupt=True,
                  copy_data=True, nthreads=-1):
         self._take_params(implicit=True, alpha=alpha, downweight=False,
@@ -4361,7 +4355,7 @@ class CMF_implicit(_CMF):
                           NA_as_zero_item=NA_as_zero_item,
                           precompute_for_predictions=precompute_for_predictions,
                           use_float=use_float,
-                          random_state=random_state, init=init,
+                          random_state=random_state,
                           verbose=verbose, print_every=0,
                           handle_interrupt=handle_interrupt,
                           produce_dicts=produce_dicts, copy_data=copy_data,
@@ -4383,7 +4377,7 @@ class CMF_implicit(_CMF):
             "niter" : self.niter, "NA_as_zero_user" : self.NA_as_zero_user,
             "NA_as_zero_item" : self.NA_as_zero_item,
             "use_float" : self.use_float, "use_cg" : self.use_cg,
-            "random_state" : self.random_state, "init" : self.init,
+            "random_state" : self.random_state,
             "nthreads" : self.nthreads
         }
 
@@ -4487,7 +4481,7 @@ class CMF_implicit(_CMF):
                 self.nthreads, self.use_cg,
                 self.max_cg_steps, self.finalize_chol,
                 self.nonneg, self.nonneg_C, self.nonneg_D, self.max_cd_steps,
-                self.random_state, init=self.init,
+                self.random_state,
                 handle_interrupt=self.handle_interrupt,
                 precompute_for_predictions=self.precompute_for_predictions
             )
@@ -5887,7 +5881,7 @@ class OMF_explicit(_OMF):
                           NA_as_zero_user=False, NA_as_zero_item=False,
                           precompute_for_predictions=True,
                           use_float=use_float,
-                          random_state=random_state, init="normal",
+                          random_state=random_state,
                           verbose=verbose, print_every=print_every,
                           handle_interrupt=handle_interrupt,
                           produce_dicts=produce_dicts, copy_data=copy_data,
@@ -6751,7 +6745,7 @@ class OMF_implicit(_OMF):
                           NA_as_zero_user=False, NA_as_zero_item=False,
                           precompute_for_predictions=True,
                           use_float=use_float,
-                          random_state=random_state, init="normal",
+                          random_state=random_state,
                           verbose=verbose, print_every=0,
                           handle_interrupt=handle_interrupt,
                           produce_dicts=produce_dicts, copy_data=copy_data,
@@ -7259,7 +7253,7 @@ class ContentBased(_OMF_Base):
                           NA_as_zero_user=False, NA_as_zero_item=False,
                           precompute_for_predictions=True, use_float=use_float,
                           random_state=random_state,
-                          init="normal", verbose=verbose, print_every=print_every,
+                          verbose=verbose, print_every=print_every,
                           handle_interrupt=handle_interrupt,
                           produce_dicts=produce_dicts, copy_data=copy_data,
                           nthreads=nthreads)
@@ -7769,7 +7763,7 @@ class MostPopular(_CMF):
                           NA_as_zero_item=False,
                           precompute_for_predictions=False,
                           use_float=use_float,
-                          random_state=1, init="normal",
+                          random_state=1,
                           verbose=0, print_every=0,
                           handle_interrupt=False,
                           produce_dicts=produce_dicts, copy_data=copy_data,

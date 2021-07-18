@@ -590,6 +590,7 @@ NULL
 #' to the point when it was interrupted (when passing `TRUE`), or
 #' raise an interrupt exception without producing a fitted model object
 #' (when passing `FALSE`).
+#' @param seed Seed to use for random number generation.
 #' @param nthreads Number of parallel threads to use. Note that, the more threads that
 #' are used, the higher the memory consumption.
 #' @return Returns a model object (class named just like the function that produced it,
@@ -858,6 +859,7 @@ validate.inputs <- function(model, implicit=FALSE,
                             precompute_for_predictions=TRUE, include_all_X=TRUE,
                             verbose=TRUE, print_every=10L,
                             handle_interrupt=TRUE,
+                            seed=1L,
                             nthreads=parallel::detectCores()) {
     
     k        <-  check.pos.int(k, "k", model != "OMF_explicit")
@@ -867,6 +869,7 @@ validate.inputs <- function(model, implicit=FALSE,
     k_sec    <-  check.pos.int(k_sec, "k_sec", FALSE)
     maxiter  <-  check.pos.int(maxiter, "maxiter", FALSE)
     niter    <-  check.pos.int(niter, "niter", TRUE)
+    seed     <-  check.pos.int(seed, "seed", FALSE)
     corr_pairs    <-  check.pos.int(corr_pairs, "corr_pairs", TRUE)
     max_cg_steps  <-  check.pos.int(max_cg_steps, "max_cg_steps", TRUE)
     max_cd_steps  <-  check.pos.int(max_cd_steps, "max_cd_steps", FALSE)
@@ -1200,6 +1203,7 @@ validate.inputs <- function(model, implicit=FALSE,
         include_all_X = include_all_X, center = center,
         verbose = verbose, print_every = print_every,
         handle_interrupt = handle_interrupt,
+        seed = seed,
         nthreads = nthreads
     ))
 }
@@ -1219,7 +1223,7 @@ CMF <- function(X, U=NULL, I=NULL, U_bin=NULL, I_bin=NULL, weight=NULL,
                 nonneg=FALSE, nonneg_C=FALSE, nonneg_D=FALSE, max_cd_steps=100L,
                 precompute_for_predictions=TRUE, include_all_X=TRUE,
                 verbose=TRUE, print_every=10L,
-                handle_interrupt=TRUE,
+                handle_interrupt=TRUE, seed=1L,
                 nthreads=parallel::detectCores()) {
     
     inputs <- validate.inputs(model = "CMF",
@@ -1244,7 +1248,7 @@ CMF <- function(X, U=NULL, I=NULL, U_bin=NULL, I_bin=NULL, weight=NULL,
                               precompute_for_predictions = precompute_for_predictions,
                               include_all_X = include_all_X,
                               verbose = verbose, print_every = print_every,
-                              handle_interrupt = handle_interrupt,
+                              handle_interrupt = handle_interrupt, seed = seed,
                               nthreads = nthreads)
     return(.CMF(inputs$processed_X, inputs$processed_U, inputs$processed_I,
                 inputs$processed_U_bin, inputs$processed_I_bin,
@@ -1271,7 +1275,7 @@ CMF <- function(X, U=NULL, I=NULL, U_bin=NULL, I_bin=NULL, weight=NULL,
                 precompute_for_predictions = inputs$precompute_for_predictions,
                 include_all_X = inputs$include_all_X,
                 verbose = inputs$verbose, print_every = inputs$print_every,
-                handle_interrupt = inputs$handle_interrupt,
+                handle_interrupt = inputs$handle_interrupt, seed = inputs$seed,
                 nthreads = inputs$nthreads))
     
 }
@@ -1290,7 +1294,7 @@ CMF_implicit <- function(X, U=NULL, I=NULL,
                          apply_log_transf=FALSE,
                          precompute_for_predictions=TRUE,
                          verbose=TRUE,
-                         handle_interrupt=TRUE,
+                         handle_interrupt=TRUE, seed=1L,
                          nthreads=parallel::detectCores()) {
     
     inputs <- validate.inputs(model = "CMF_implicit",
@@ -1309,7 +1313,7 @@ CMF_implicit <- function(X, U=NULL, I=NULL,
                               apply_log_transf = apply_log_transf,
                               precompute_for_predictions = precompute_for_predictions,
                               verbose = verbose,
-                              handle_interrupt = handle_interrupt,
+                              handle_interrupt = handle_interrupt, seed = seed,
                               nthreads = nthreads)
     return(.CMF_implicit(inputs$processed_X, inputs$processed_U, inputs$processed_I,
                          inputs$user_mapping, inputs$item_mapping,
@@ -1328,7 +1332,7 @@ CMF_implicit <- function(X, U=NULL, I=NULL,
                          apply_log_transf = inputs$apply_log_transf,
                          precompute_for_predictions = inputs$precompute_for_predictions,
                          verbose = inputs$verbose,
-                         handle_interrupt = inputs$handle_interrupt,
+                         handle_interrupt = inputs$handle_interrupt, seed = inputs$seed,
                          nthreads = inputs$nthreads))
     
 }
@@ -1352,7 +1356,7 @@ CMF_implicit <- function(X, U=NULL, I=NULL,
                  nonneg=FALSE, nonneg_C=FALSE, nonneg_D=FALSE, max_cd_steps=100L,
                  precompute_for_predictions=TRUE, include_all_X=TRUE,
                  verbose=TRUE, print_every=10L,
-                 handle_interrupt=TRUE,
+                 handle_interrupt=TRUE, seed=1L,
                  nthreads=parallel::detectCores()) {
     
     
@@ -1388,6 +1392,7 @@ CMF_implicit <- function(X, U=NULL, I=NULL,
     this$info$center           <-  center
     this$info$center_U         <-  center_U
     this$info$center_I         <-  center_I
+    this$info$seed             <-  seed
     this$info$nthreads         <-  nthreads
     this$info$add_implicit_features  <-  add_implicit_features
     this$info$scale_lam              <-  scale_lam
@@ -1476,6 +1481,7 @@ CMF_implicit <- function(X, U=NULL, I=NULL,
                           this$matrices$A, this$matrices$B,
                           this$matrices$C, this$matrices$D,
                           this$matrices$Ai, this$matrices$Bi,
+                          this$info$seed,
                           glob_mean,
                           this$matrices$U_colmeans, this$matrices$I_colmeans,
                           processed_X$m, processed_X$n, k,
@@ -1509,14 +1515,16 @@ CMF_implicit <- function(X, U=NULL, I=NULL,
                           this$precomputed$CtC,
                           this$precomputed$CtUbias)
     } else {
+        m_n_k <- as.integer(c(processed_X$m, processed_X$n, k))
         ret_code <- .Call("call_fit_collective_explicit_lbfgs",
                           this$matrices$user_bias, this$matrices$item_bias,
                           this$matrices$A, this$matrices$B,
                           this$matrices$C, this$matrices$Cb,
                           this$matrices$D, this$matrices$Db,
+                          this$info$seed,
                           glob_mean,
                           this$matrices$U_colmeans, this$matrices$I_colmeans,
-                          processed_X$m, processed_X$n, k,
+                          m_n_k,
                           processed_X$Xrow, processed_X$Xcol, processed_X$Xval,
                           processed_X$Xarr,
                           processed_X$Warr, processed_X$Wsp,
@@ -1571,7 +1579,7 @@ CMF_implicit <- function(X, U=NULL, I=NULL,
                           apply_log_transf=FALSE,
                           precompute_for_predictions=TRUE,
                           verbose=TRUE,
-                          handle_interrupt=TRUE,
+                          handle_interrupt=TRUE, seed=1L,
                           nthreads=parallel::detectCores()) {
     
     
@@ -1604,6 +1612,7 @@ CMF_implicit <- function(X, U=NULL, I=NULL,
     this$info$nonneg           <-  nonneg
     this$info$implicit         <-  TRUE
     this$info$apply_log_transf <-  apply_log_transf
+    this$info$seed             <-  seed
     this$info$nthreads         <-  nthreads
     
     ### Allocate matrices
@@ -1644,6 +1653,7 @@ CMF_implicit <- function(X, U=NULL, I=NULL,
     ret_code <- .Call("call_fit_collective_implicit_als",
                       this$matrices$A, this$matrices$B,
                       this$matrices$C, this$matrices$D,
+                      this$info$seed,
                       w_main_multiplier,
                       this$matrices$U_colmeans, this$matrices$I_colmeans,
                       processed_X$m, processed_X$n, k,
@@ -1774,7 +1784,7 @@ ContentBased <- function(X, U, I, weight=NULL,
                          k=20L, lambda=100., user_bias=FALSE, item_bias=FALSE,
                          add_intercepts=TRUE, maxiter=15000L, corr_pairs=3L,
                          parallelize="separate", verbose=TRUE, print_every=100L,
-                         handle_interrupt=TRUE, start_with_ALS=TRUE,
+                         handle_interrupt=TRUE, start_with_ALS=TRUE, seed=1L,
                          nthreads=parallel::detectCores()) {
     inputs <- validate.inputs(model = "ContentBased",
                               X = X, U = U, I = I, weight = weight,
@@ -1783,7 +1793,7 @@ ContentBased <- function(X, U, I, weight=NULL,
                               maxiter = maxiter, corr_pairs = corr_pairs,
                               parallelize = parallelize, verbose = verbose, print_every = print_every,
                               handle_interrupt = handle_interrupt, start_with_ALS = start_with_ALS,
-                              nthreads = nthreads)
+                              seed = seed, nthreads = nthreads)
     return(.ContentBased(inputs$processed_X, inputs$processed_U, inputs$processed_I,
                          inputs$user_mapping, inputs$item_mapping,
                          inputs$U_cols, inputs$I_cols,
@@ -1794,7 +1804,7 @@ ContentBased <- function(X, U, I, weight=NULL,
                          parallelize = inputs$parallelize,
                          verbose = inputs$verbose, print_every = inputs$print_every,
                          handle_interrupt = inputs$handle_interrupt,
-                         start_with_ALS = inputs$start_with_ALS,
+                         start_with_ALS = inputs$start_with_ALS, seed = inputs$seed,
                          nthreads = inputs$start_with_ALS))
 }
 
@@ -1804,7 +1814,7 @@ ContentBased <- function(X, U, I, weight=NULL,
                           k=20L, lambda=100., user_bias=FALSE, item_bias=FALSE,
                           add_intercepts=TRUE, maxiter=15000L, corr_pairs=3L,
                           parallelize="separate", verbose=TRUE, print_every=100L,
-                          handle_interrupt=TRUE, start_with_ALS=TRUE,
+                          handle_interrupt=TRUE, start_with_ALS=TRUE, seed=1L,
                           nthreads=parallel::detectCores()) {
     
     this <- list(
@@ -1821,6 +1831,7 @@ ContentBased <- function(X, U, I, weight=NULL,
     this$info$item_mapping  <-  item_mapping
     this$info$U_cols    <-  U_cols
     this$info$I_cols    <-  I_cols
+    this$info$seed      <-  seed
     this$info$nthreads  <-  nthreads
     
     ### Allocate matrices
@@ -1854,6 +1865,7 @@ ContentBased <- function(X, U, I, weight=NULL,
                       this$matrices$C, this$matrices$C_bias,
                       this$matrices$D, this$matrices$D_bias,
                       start_with_ALS,
+                      this$info$seed,
                       glob_mean,
                       m_max, n_max, k,
                       processed_X$Xrow, processed_X$Xcol, processed_X$Xval,
@@ -1894,7 +1906,7 @@ OMF_explicit <- function(X, U=NULL, I=NULL, weight=NULL,
                          max_cg_steps=3L, finalize_chol=TRUE,
                          NA_as_zero=FALSE,
                          verbose=TRUE, print_every=100L,
-                         handle_interrupt=TRUE,
+                         handle_interrupt=TRUE, seed=1L,
                          nthreads=parallel::detectCores()) {
     
     inputs <- validate.inputs(model = "OMF_explicit",
@@ -1908,7 +1920,7 @@ OMF_explicit <- function(X, U=NULL, I=NULL, weight=NULL,
                               max_cg_steps = max_cg_steps, finalize_chol = finalize_chol,
                               NA_as_zero = NA_as_zero,
                               verbose = verbose, print_every = print_every,
-                              handle_interrupt = handle_interrupt,
+                              handle_interrupt = handle_interrupt, seed = seed,
                               nthreads = nthreads)
     return(.OMF_explicit(inputs$processed_X, inputs$processed_U, inputs$processed_I,
                          inputs$user_mapping, inputs$item_mapping,
@@ -1925,7 +1937,7 @@ OMF_explicit <- function(X, U=NULL, I=NULL, weight=NULL,
                          max_cg_steps = inputs$max_cg_steps, finalize_chol = inputs$finalize_chol,
                          NA_as_zero = inputs$NA_as_zero,
                          verbose = inputs$verbose, print_every = inputs$print_every,
-                         handle_interrupt = inputs$handle_interrupt,
+                         handle_interrupt = inputs$handle_interrupt, seed = inputs$seed,
                          nthreads = nthreads))
 }
 
@@ -1940,7 +1952,7 @@ OMF_explicit <- function(X, U=NULL, I=NULL, weight=NULL,
                           max_cg_steps=3L, finalize_chol=TRUE,
                           NA_as_zero=FALSE,
                           verbose=TRUE, print_every=100L,
-                          handle_interrupt=TRUE,
+                          handle_interrupt=TRUE, seed=1L,
                           nthreads=parallel::detectCores()) {
     
     this <- list(
@@ -1959,6 +1971,7 @@ OMF_explicit <- function(X, U=NULL, I=NULL, weight=NULL,
     this$info$item_mapping  <-  item_mapping
     this$info$U_cols    <-  U_cols
     this$info$I_cols    <-  I_cols
+    this$info$seed      <-  seed
     this$info$nthreads  <-  nthreads
     
     ### Allocate matrices
@@ -2003,6 +2016,7 @@ OMF_explicit <- function(X, U=NULL, I=NULL, weight=NULL,
                           this$matrices$A, this$matrices$B,
                           this$matrices$C, this$matrices$C_bias,
                           this$matrices$D, this$matrices$D_bias,
+                          this$info$seed,
                           glob_mean,
                           m_max, n_max, k,
                           processed_X$Xrow, processed_X$Xcol, processed_X$Xval,
@@ -2031,6 +2045,7 @@ OMF_explicit <- function(X, U=NULL, I=NULL, weight=NULL,
                           this$matrices$A, this$matrices$B,
                           this$matrices$C, this$matrices$C_bias,
                           this$matrices$D, this$matrices$D_bias,
+                          this$info$seed,
                           glob_mean,
                           m_max, n_max, k,
                           processed_X$Xrow, processed_X$Xcol, processed_X$Xval,
@@ -2072,7 +2087,7 @@ OMF_implicit <- function(X, U=NULL, I=NULL,
                          apply_log_transf=FALSE,
                          max_cg_steps=3L, finalize_chol=FALSE,
                          verbose=FALSE,
-                         handle_interrupt=TRUE,
+                         handle_interrupt=TRUE, seed=1L,
                          nthreads=parallel::detectCores()) {
     
     inputs <- validate.inputs(model = "OMF_implicit",
@@ -2082,7 +2097,7 @@ OMF_implicit <- function(X, U=NULL, I=NULL,
                               max_cg_steps = max_cg_steps, finalize_chol = finalize_chol,
                               apply_log_transf = apply_log_transf,
                               verbose = verbose,
-                              handle_interrupt = handle_interrupt,
+                              handle_interrupt = handle_interrupt, seed = seed,
                               nthreads = nthreads)
     return(.OMF_implicit(inputs$processed_X, inputs$processed_U, inputs$processed_I,
                          inputs$user_mapping, inputs$item_mapping,
@@ -2094,7 +2109,7 @@ OMF_implicit <- function(X, U=NULL, I=NULL,
                          apply_log_transf = inputs$apply_log_transf,
                          max_cg_steps = inputs$max_cg_steps, finalize_chol = inputs$finalize_chol,
                          verbose = inputs$verbose,
-                         handle_interrupt = inputs$handle_interrupt,
+                         handle_interrupt = inputs$handle_interrupt, seed = inputs$seed,
                          nthreads = nthreads))
     
 }
@@ -2107,7 +2122,7 @@ OMF_implicit <- function(X, U=NULL, I=NULL,
                           apply_log_transf=FALSE,
                           max_cg_steps=3L, finalize_chol=TRUE,
                           verbose=FALSE,
-                          handle_interrupt=TRUE,
+                          handle_interrupt=TRUE, seed=1L,
                           nthreads=parallel::detectCores()) {
     
     this <- list(
@@ -2126,6 +2141,7 @@ OMF_implicit <- function(X, U=NULL, I=NULL,
     this$info$apply_log_transf  <-  apply_log_transf
     this$info$U_cols    <-  U_cols
     this$info$I_cols    <-  I_cols
+    this$info$seed      <-  seed
     this$info$nthreads  <-  nthreads
     
     ### Allocate matrices
@@ -2152,6 +2168,7 @@ OMF_implicit <- function(X, U=NULL, I=NULL,
                       this$matrices$A, this$matrices$B,
                       this$matrices$C, this$matrices$C_bias,
                       this$matrices$D, this$matrices$D_bias,
+                      this$info$seed,
                       processed_X$m, processed_X$n, this$info$k,
                       processed_X$Xrow, processed_X$Xcol, processed_X$Xval,
                       add_intercepts,

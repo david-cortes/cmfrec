@@ -136,7 +136,7 @@ cdef public void cblas_dsyrk(const int Order, const int Uplo, const int Trans,
     (<dsyrk_>dsyrk)(&uplo, &trans, &N, &K, &alpha, A, &lda, &beta, C, &ldc)
 
 cdef public double cblas_dnrm2 (const int N, const double  *X, const int incX) nogil:
-    (<dnrm2_>dnrm2)(&N, X, &incX)
+    return (<dnrm2_>dnrm2)(&N, X, &incX)
 
 cdef public void cblas_dgemm(const int Order, const int TransA, const int TransB, const int M, const int N, const int K,
          const double alpha, const double *A, const int lda, const double *B, const int ldb, const double beta, double *C, const int ldc) nogil:
@@ -305,7 +305,7 @@ cdef public void cblas_ssyrk(const int Order, const int Uplo, const int Trans,
     (<ssyrk_>ssyrk)(&uplo, &trans, &N, &K, &alpha, A, &lda, &beta, C, &ldc)
 
 cdef public float cblas_snrm2 (const int N, const float  *X, const int incX) nogil:
-    (<snrm2_>snrm2)(&N, X, &incX)
+    return (<snrm2_>snrm2)(&N, X, &incX)
 
 cdef public void cblas_sgemm(const int Order, const int TransA, const int TransB, const int M, const int N, const int K,
          const float alpha, const float *A, const int lda, const float *B, const int ldb, const float beta, float *C, const int ldc) nogil:

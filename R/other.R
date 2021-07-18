@@ -96,6 +96,7 @@ swap.users.and.items <- function(model, precompute = TRUE) {
             scale_lam = model$info$scale_lam,
             scale_lam_sideinfo = model$info$scale_lam_sideinfo,
             only_prediction_info = model$info$only_prediction_info,
+            seed = model$info$seed,
             nthreads = model$info$nthreads
         ),
         matrices = list(
@@ -440,6 +441,7 @@ CMF.from.model.matrices <- function(A, B, glob_mean=0, implicit=FALSE,
     this$info$NA_as_zero <- NA_as_zero
     this$info$nonneg <- nonneg
     this$info$center <- glob_mean != 0
+    this$info$seed   <- 0L
     this$info$nthreads <- nthreads
     
     if (!implicit)
