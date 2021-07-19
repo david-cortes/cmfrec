@@ -282,11 +282,9 @@ extern "C" {
     
     
     @param reset_values  Whether to reset the values in the model matrices to
-                         random normal numbers. If the matrices are already
-                         initialized, should pass 'false' here. Note that it
-                         uses LAPACK's "larnv" subroutine, which might not
-                         be as good quality as random numbers generated through
-                         e.g. the Mersenne-Twister method.
+                         random normal numbers and the biases to a most-popular
+                         model. If the matrices and biases are already
+                         initialized, should pass 'false' here.
     @param seed  Random seed used to initialize the matrices, if passing
                  'reset_values'=true.
     

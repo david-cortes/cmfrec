@@ -7623,7 +7623,7 @@ int_t fit_collective_explicit_als
     }
 
     /* Initialize biases */
-    if (has_bias)
+    if (has_bias && reset_values)
     {
         if (user_bias != item_bias)
         {
@@ -7694,9 +7694,12 @@ int_t fit_collective_explicit_als
         }
     }
 
-
-    /* TODO: is it necessary to initialize both matrices if there is no
-       side info? could the items matrix be set to zero instead? */
+    /* Initialize values as necessary. Note that it is not necessary to
+       initialize all the matrices, because (a) if using cholesky or CD,
+       the current values of the matrix to optimize in a given iteration
+       do not matter; (b) if using CG, will reset them to zero at the
+       firt iteration (save for the bias), thus their values don't matter
+       either. Same goes for setting matrices as non-negative. */
     if (reset_values)
     {
         ArraysToFill arrays =
@@ -7719,25 +7722,6 @@ int_t fit_collective_explicit_als
                 A[ix] = fabs_t(A[ix]);
             for (size_t ix = 0; ix < (size_t)n_max*(size_t)k_totB; ix++)
                 B[ix] = fabs_t(B[ix]);
-            if (add_implicit_features)
-            {
-                for (size_t ix = 0; ix < (size_t)m*(size_t)(k+k_main); ix++)
-                    Ai[ix] = fabs_t(Ai[ix]);
-                for (size_t ix = 0; ix < (size_t)n*(size_t)(k+k_main); ix++)
-                    Bi[ix] = fabs_t(Bi[ix]);
-            }
-        }
-
-        if (nonneg_C && (U != NULL || U_csr_p != NULL))
-        {
-            for (size_t ix = 0; ix < (size_t)p*(size_t)(k_user+k); ix++)
-                C[ix] = fabs_t(C[ix]);
-        }
-
-        if (nonneg_D && (II != NULL || I_csr_p != NULL))
-        {
-            for (size_t ix = 0; ix < (size_t)q*(size_t)(k_item+k); ix++)
-                D[ix] = fabs_t(D[ix]);
         }
     }
 
@@ -7845,7 +7829,7 @@ int_t fit_collective_explicit_als
                     (l1_lam/w_user) : (l1_lam_unique[4]/w_user),
                 scale_lam, false, (real_t*)NULL,
                 Utrans == NULL,
-                iter == 0,
+                iter == 0 && reset_values,
                 nthreads,
                 use_cg && !nonneg_C, max_cg_steps,
                 nonneg_C, max_cd_steps,
@@ -7902,7 +7886,7 @@ int_t fit_collective_explicit_als
                     (l1_lam/w_item) : (l1_lam_unique[5]/w_item),
                 scale_lam, false, (real_t*)NULL,
                 Itrans == NULL,
-                iter == 0,
+                iter == 0 && reset_values,
                 nthreads,
                 use_cg && !nonneg_D, max_cg_steps,
                 nonneg_D, max_cd_steps,
@@ -7958,7 +7942,7 @@ int_t fit_collective_explicit_als
                 (l1_lam_unique == NULL)?
                     (l1_lam/w_implicit) : (l1_lam_unique[3]/w_implicit),
                 scale_lam, false, (real_t*)NULL,
-                Xfull != NULL, niter == 0,
+                Xfull != NULL, iter == 0 && reset_values,
                 nthreads,
                 false, 0,
                 nonneg, max_cd_steps,
@@ -8003,7 +7987,7 @@ int_t fit_collective_explicit_als
                 (l1_lam_unique == NULL)?
                     (l1_lam/w_implicit) : (l1_lam_unique[2]/w_implicit),
                 scale_lam, false, (real_t*)NULL,
-                false, niter == 0,
+                false, iter == 0 && reset_values,
                 nthreads,
                 false, 0,
                 nonneg, max_cd_steps,
@@ -8147,7 +8131,7 @@ int_t fit_collective_explicit_als
                 scale_bias_const, wsumB,
                 Xfull != NULL && Xtrans == NULL,
                 nthreads,
-                use_cg_B && !nonneg, max_cg_steps, iter == 0,
+                use_cg_B && !nonneg, max_cg_steps, iter == 0 && reset_values,
                 nonneg, max_cd_steps,
                 biasB,
                 (buffer_BtX != NULL && (center || user_bias))?
@@ -8185,7 +8169,7 @@ int_t fit_collective_explicit_als
                 (l1_lam_unique == NULL)?
                     (l1_lam) : (l1_lam_unique[item_bias? 1 : 3]),
                 scale_lam, scale_bias_const, wsumB,
-                Xfull != NULL && Xtrans == NULL, iter == 0,
+                Xfull != NULL && Xtrans == NULL, iter == 0 && reset_values,
                 nthreads,
                 use_cg && !nonneg, max_cg_steps,
                 nonneg, max_cd_steps,
@@ -8318,7 +8302,7 @@ int_t fit_collective_explicit_als
                 scale_bias_const, wsumA,
                 false,
                 nthreads,
-                use_cg_B && !nonneg, max_cg_steps, iter == 0,
+                use_cg_B && !nonneg, max_cg_steps, iter == 0 && reset_values,
                 nonneg, max_cd_steps,
                 biasA,
                 (buffer_BtX != NULL && (center || item_bias))?
@@ -8351,7 +8335,7 @@ int_t fit_collective_explicit_als
                 (l1_lam_unique == NULL)?
                     (l1_lam) : (l1_lam_unique[user_bias? 0 : 2]),
                 scale_lam, scale_bias_const, wsumA,
-                false, iter == 0,
+                false, iter == 0 && reset_values,
                 nthreads,
                 use_cg && !nonneg, max_cg_steps,
                 nonneg, max_cd_steps,
@@ -9177,18 +9161,6 @@ int_t fit_collective_implicit_als
             for (size_t ix = 0; ix < (size_t)n_max*(size_t)k_totB; ix++)
                 B[ix] = fabs_t(B[ix]);
         }
-
-        if (nonneg_C)
-        {
-            for (size_t ix = 0; ix < (size_t)p*(size_t)(k_user+k); ix++)
-                C[ix] = fabs_t(C[ix]);
-        }
-
-        if (nonneg_D)
-        {
-            for (size_t ix = 0; ix < (size_t)q*(size_t)(k_item+k); ix++)
-                D[ix] = fabs_t(D[ix]);
-        }
     }
 
     *w_main_multiplier = 1.;
@@ -9281,7 +9253,7 @@ int_t fit_collective_implicit_als
                     (l1_lam/w_user) : (l1_lam_unique[4]/w_user),
                 false, false, (real_t*)NULL,
                 (Utrans != NULL)? (false) : (true),
-                iter == 0,
+                iter == 0 && reset_values,
                 nthreads,
                 use_cg && !nonneg_C, max_cg_steps,
                 nonneg_C, max_cd_steps,
@@ -9329,7 +9301,7 @@ int_t fit_collective_implicit_als
                     (l1_lam/w_item) : (l1_lam_unique[5]/w_item),
                 false, false, (real_t*)NULL,
                 (Itrans != NULL)? (false) : (true),
-                iter == 0,
+                iter == 0 && reset_values,
                 nthreads,
                 use_cg && !nonneg_D, max_cg_steps,
                 nonneg_D, max_cd_steps,
@@ -9375,7 +9347,8 @@ int_t fit_collective_implicit_als
                 (lam_unique == NULL)? (lam) : (lam_unique[3]),
                 (l1_lam_unique == NULL)? (l1_lam) : (l1_lam_unique[3]),
                 w_item,
-                nthreads, use_cg && !nonneg, max_cg_steps, iter == 0,
+                nthreads, use_cg && !nonneg, max_cg_steps,
+                iter == 0 && reset_values,
                 nonneg, max_cd_steps,
                 precomputedBtB,
                 (k_item <= k_user)? (precomputedBeTBe) : ((real_t*)NULL),
@@ -9393,7 +9366,8 @@ int_t fit_collective_implicit_als
                 Xcsc_p, Xcsc_i, Xcsc,
                 (lam_unique == NULL)? (lam) : (lam_unique[3]),
                 (l1_lam_unique == NULL)? (l1_lam) : (l1_lam_unique[3]),
-                nthreads, use_cg && !nonneg, max_cg_steps, iter == 0,
+                nthreads, use_cg && !nonneg, max_cg_steps,
+                iter == 0 && reset_values,
                 nonneg, max_cd_steps,
                 precomputedBtB,
                 buffer_real_t
@@ -9425,7 +9399,8 @@ int_t fit_collective_implicit_als
                 (lam_unique == NULL)? (lam) : (lam_unique[2]),
                 (l1_lam_unique == NULL)? (l1_lam) : (l1_lam_unique[2]),
                 w_user,
-                nthreads, use_cg && !nonneg, max_cg_steps, iter == 0,
+                nthreads, use_cg && !nonneg, max_cg_steps,
+                iter == 0 && reset_values,
                 nonneg, max_cd_steps,
                 precomputedBtB,
                 precomputedBeTBe,
@@ -9446,7 +9421,8 @@ int_t fit_collective_implicit_als
                 (lam_unique == NULL)? (lam) : (lam_unique[2]),
                 (l1_lam_unique == NULL)? (l1_lam) : (l1_lam_unique[2]),
                 nthreads,
-                use_cg && !nonneg, max_cg_steps, iter == 0,
+                use_cg && !nonneg, max_cg_steps,
+                iter == 0 && reset_values,
                 nonneg, max_cd_steps,
                 precomputedBtB,
                 buffer_real_t
