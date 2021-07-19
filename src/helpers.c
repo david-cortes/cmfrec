@@ -840,7 +840,7 @@ int_t rnorm_parallel(ArraysToFill arrays, int_t seed, int nthreads)
     );
 
     #pragma omp parallel for schedule(static) num_threads(nthreads) \
-            shared(ptr_bucket_, sz_bucket_, states)
+            shared(states)
     for (size_t_for ix = 0; ix < tot_buckets; ix++)
     {
         rng_state_t state[] = {states[(size_t)4*ix],
