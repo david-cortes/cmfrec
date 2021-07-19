@@ -1340,11 +1340,20 @@ int_t fit_offsets_explicit_lbfgs_internal
     if (retval != 0) goto cleanup;
 
     if (reset_values)
-        retval = rnorm(values + (user_bias? m : 0) + (item_bias? n : 0),
-                       nvars - (size_t)(user_bias? m : 0)
-                             - (size_t)(item_bias? n : 0),
-                       seed, nthreads);
-    if (retval != 0) goto cleanup;
+    {
+        ArraysToFill arrays =
+                               #ifndef __cplusplus
+                               (ArraysToFill) 
+                               #endif
+                                              {
+            values + (user_bias? m : 0) + (item_bias? n : 0),
+            nvars - (size_t)(user_bias? m : 0)
+                  - (size_t)(item_bias? n : 0),
+            NULL, 0
+        };
+        retval = rnorm_parallel(arrays, seed, nthreads);
+        if (retval != 0) goto cleanup;
+    }
 
     lbfgs_params = 
                     #ifndef __cplusplus

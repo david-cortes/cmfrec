@@ -119,7 +119,7 @@ ContentBased(
   user_bias = FALSE,
   item_bias = FALSE,
   add_intercepts = TRUE,
-  maxiter = 15000L,
+  maxiter = 3000L,
   corr_pairs = 3L,
   parallelize = "separate",
   verbose = TRUE,
@@ -998,7 +998,6 @@ if (require("recommenderlab") && require("MatrixExtra")) {
     ### Fit a factorization model
     ### (it's recommended to change the hyperparameters
     ###  and use multiple threads)
-    set.seed(1)
     model <- CMF(X=X, U=U, I=I, k=10L, niter=5L,
                  NA_as_zero_item=TRUE,
                  verbose=FALSE, nthreads=1L)

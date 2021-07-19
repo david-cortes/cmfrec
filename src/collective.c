@@ -6427,11 +6427,20 @@ int_t fit_collective_explicit_lbfgs_internal
 
 
     if (reset_values)
-        retval = rnorm(values + (user_bias? m_max : 0) + (item_bias? n_max : 0),
-                       nvars - (size_t)(user_bias? m_max : 0)
-                             - (size_t)(item_bias? n_max : 0),
-                       seed, nthreads);
-    if (retval != 0) goto cleanup;
+    {
+        ArraysToFill arrays =
+                               #ifndef __cplusplus
+                               (ArraysToFill) 
+                               #endif
+                                              {
+            values + (user_bias? m_max : 0) + (item_bias? n_max : 0),
+            nvars - (size_t)(user_bias? m_max : 0)
+                  - (size_t)(item_bias? n_max : 0),
+            NULL, 0
+        };
+        retval = rnorm_parallel(arrays, seed, nthreads);
+        if (retval != 0) goto cleanup;
+    }
 
     if (U != NULL)
         U_has_NA = (bool)count_NAs(U, (size_t)m_u*(size_t)p, nthreads);
@@ -6957,7 +6966,6 @@ int_t fit_collective_explicit_als
     bool free_arr_use = false;
     real_t *arr_use = NULL;
 
-    rng_state_t *restrict seed_arr = NULL;
     real_t *restrict lam_unique_copy = NULL;
     real_t *restrict l1_lam_unique_copy = NULL;
 
@@ -7691,28 +7699,19 @@ int_t fit_collective_explicit_als
        side info? could the items matrix be set to zero instead? */
     if (reset_values)
     {
-        seed_arr = (rng_state_t*)malloc(4*sizeof(rng_state_t));
-        if (seed_arr == NULL) goto throw_oom;
-        seed_state(seed, seed_arr);
-        rnorm_preserve_seed(A, (size_t)m_max*(size_t)k_totA, seed_arr);
-        /* TODO: evaluate if this improves results */
-        // if (!user_bias && item_bias && use_cg_A)
-            for (size_t ix = 0; ix < (size_t)m_max*(size_t)k_totA; ix++)
-                A[ix] /= 100;
-        rnorm_preserve_seed(B, (size_t)n_max*(size_t)k_totB, seed_arr);
-        // if (has_bias)
-            for (size_t ix = 0; ix < (size_t)n_max*(size_t)k_totB; ix++)
-                B[ix] /= 100;
-        if (U != NULL || U_csr_p != NULL)
-            rnorm_preserve_seed(C, (size_t)p*(size_t)(k_user+k), seed_arr);
-        if (II != NULL || I_csr_p != NULL)
-            rnorm_preserve_seed(D, (size_t)q*(size_t)(k_item+k), seed_arr);
-        if (add_implicit_features) {
-            rnorm_preserve_seed(Ai, (size_t)m*(size_t)(k+k_main), seed_arr);
-            rnorm_preserve_seed(Bi, (size_t)n*(size_t)(k+k_main), seed_arr);
-        }
-
-        free(seed_arr); seed_arr = NULL;
+        ArraysToFill arrays =
+                               #ifndef __cplusplus
+                               (ArraysToFill) 
+                               #endif
+                                              {
+            A, (size_t)m_max*(size_t)k_totA,
+            (use_cg_B || II != NULL || I_csr_p != NULL ||add_implicit_features)?
+                B : NULL,
+            (use_cg_B || II != NULL || I_csr_p != NULL ||add_implicit_features)?
+                ((size_t)n_max*(size_t)k_totB) : 0
+        };
+        retval = rnorm_parallel(arrays, seed, nthreads);
+        if (retval != 0) goto throw_oom;
 
         if (nonneg)
         {
@@ -7729,13 +7728,13 @@ int_t fit_collective_explicit_als
             }
         }
 
-        if (nonneg_C)
+        if (nonneg_C && (U != NULL || U_csr_p != NULL))
         {
             for (size_t ix = 0; ix < (size_t)p*(size_t)(k_user+k); ix++)
                 C[ix] = fabs_t(C[ix]);
         }
 
-        if (nonneg_D)
+        if (nonneg_D && (II != NULL || I_csr_p != NULL))
         {
             for (size_t ix = 0; ix < (size_t)q*(size_t)(k_item+k); ix++)
                 D[ix] = fabs_t(D[ix]);
@@ -8806,7 +8805,6 @@ int_t fit_collective_explicit_als
         if (free_BtX) {
             free(buffer_BtX); buffer_BtX = NULL;
         }
-        free(seed_arr); seed_arr = NULL;
         free(buffer_CtUbias); buffer_CtUbias = NULL;
         free(DtIbias); DtIbias = NULL;
         if (back_to_precompute) goto precompute;
@@ -8973,7 +8971,6 @@ int_t fit_collective_implicit_als
     bool ignore = false;
     real_t *restrict precomputedCtC = NULL;
 
-    rng_state_t *restrict seed_arr = NULL;
     real_t *restrict lam_unique_copy = NULL;
     real_t *restrict l1_lam_unique_copy = NULL;
 
@@ -9159,16 +9156,19 @@ int_t fit_collective_implicit_als
 
     if (reset_values)
     {
-        seed_arr = (rng_state_t*)malloc(4*sizeof(rng_state_t));
-        if (seed_arr == NULL) goto throw_oom;
-        seed_state(seed, seed_arr);
-        rnorm_preserve_seed(A, (size_t)k_totA*(size_t)m_max, seed_arr);
-        rnorm_preserve_seed(B, (size_t)k_totB*(size_t)n_max, seed_arr);
-        if (U != NULL || U_csr_p != NULL)
-            rnorm_preserve_seed(C, (size_t)(k_user+k)*(size_t)p, seed_arr);
-        if (II != NULL || I_csr_p != NULL)
-            rnorm_preserve_seed(D, (size_t)(k_item+k)*(size_t)q, seed_arr);
-        free(seed_arr); seed_arr = NULL;
+        ArraysToFill arrays =
+                               #ifndef __cplusplus
+                               (ArraysToFill) 
+                               #endif
+                                              {
+            A, (size_t)m_max*(size_t)k_totA,
+            ((use_cg && !nonneg) || U != NULL || U_csr_p != NULL)?
+                B : NULL,
+            ((use_cg && !nonneg) || U != NULL || U_csr_p != NULL)?
+                ((size_t)n_max*(size_t)k_totB) : 0
+        };
+        retval = rnorm_parallel(arrays, seed, nthreads);
+        if (retval != 0) goto throw_oom;
 
         if (nonneg)
         {
@@ -9601,7 +9601,6 @@ int_t fit_collective_implicit_als
         if (!precompute_for_predictions)
             free(precomputedBtB);
         free(precomputedCtC);
-        free(seed_arr);
         free(lam_unique_copy);
         free(l1_lam_unique_copy);
         #pragma omp critical

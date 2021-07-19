@@ -770,7 +770,6 @@ NULL
 #'     ### Fit a factorization model
 #'     ### (it's recommended to change the hyperparameters
 #'     ###  and use multiple threads)
-#'     set.seed(1)
 #'     model <- CMF(X=X, U=U, I=I, k=10L, niter=5L,
 #'                  NA_as_zero_item=TRUE,
 #'                  verbose=FALSE, nthreads=1L)
@@ -1782,7 +1781,7 @@ MostPopular <- function(X, weight=NULL, implicit=FALSE,
 #' @rdname fit
 ContentBased <- function(X, U, I, weight=NULL,
                          k=20L, lambda=100., user_bias=FALSE, item_bias=FALSE,
-                         add_intercepts=TRUE, maxiter=15000L, corr_pairs=3L,
+                         add_intercepts=TRUE, maxiter=3000L, corr_pairs=3L,
                          parallelize="separate", verbose=TRUE, print_every=100L,
                          handle_interrupt=TRUE, start_with_ALS=TRUE, seed=1L,
                          nthreads=parallel::detectCores()) {

@@ -63,7 +63,7 @@ class _CMF:
 
         lambda_ = float(lambda_) if isinstance(lambda_, int) else lambda_
         lambda_ = np.array(lambda_) if lambda_.__class__.__name__ in ["list", "Series", "tuple"] else lambda_
-        if lambda_.__class__.__name__ == "ndarray":
+        if isinstance(lambda_, np.ndarray):
             lambda_ = lambda_.reshape(-1)
             assert lambda_.shape[0] == 6
             assert np.all(lambda_ >= 0.)
@@ -72,7 +72,7 @@ class _CMF:
 
         l1_lambda = float(l1_lambda) if isinstance(l1_lambda, int) else l1_lambda
         l1_lambda = np.array(l1_lambda) if l1_lambda.__class__.__name__ in ["list", "Series", "tuple"] else l1_lambda
-        if l1_lambda.__class__.__name__ == "ndarray":
+        if isinstance(l1_lambda, np.ndarray):
             l1_lambda = l1_lambda.reshape(-1)
             assert l1_lambda.shape[0] == 6
             assert np.all(l1_lambda >= 0.)
@@ -204,6 +204,13 @@ class _CMF:
         self._k_pred = k
         self._k_main_col = self.k_main
 
+        if isinstance(self.lambda_, np.ndarray):
+            if self.lambda_.dtype != self.dtype_:
+                self.lambda_ = self.lambda_.astype(self.dtype_)
+        if isinstance(self.l1_lambda, np.ndarray):
+            if self.l1_lambda.dtype != self.dtype_:
+                self.l1_lambda = self.l1_lambda.astype(self.dtype_)
+
         self._reset()
 
     def _reset(self):
@@ -288,6 +295,10 @@ class _CMF:
 
     def _append_NAs(self, U, m_u, p, append_U):
         U_new = np.repeat(np.nan, m_u*p).reshape((m_u, p))
+        if U_new.dtype != U.dtype:
+            U_new = U_new.astype(U.dtype)
+        if not U_new.flags["C_CONTIGUOUS"]:
+            U_new = np.ascontiguousarray(U_new)
         U_new[np.setdiff1d(np.arange(m_u), append_U), :] = U
         return U_new
 
@@ -312,7 +323,11 @@ class _CMF:
             if U.__class__.__name__ == "DataFrame":
                 Ucols = U.columns.to_numpy()
                 U = U.to_numpy()
-            Uarr = np.ascontiguousarray(U).astype(self.dtype_)
+            if not U.flags["C_CONTIGUOUS"]:
+                U = np.ascontiguousarray(U)
+            if not U.dtype != self.dtype_:
+                U = U.astype(self.dtype_)
+            Uarr = U
             m, p = Uarr.shape
         return Urow, Ucol, Uval, Uarr, Ucols, m, p
 
@@ -566,7 +581,9 @@ class _CMF:
             if Cols.shape[0]:
                 U = U[Cols]
             Uarr = U.to_numpy()
-            Uarr = np.ascontiguousarray(Uarr).astype(self.dtype_)
+            Uarr = np.ascontiguousarray(Uarr)
+            if Uarr.dtype != self.dtype_:
+                Uarr = Uarr.astype(self.dtype_)
 
         elif U.__class__.__name__ == "coo_matrix":
             Urow = U.row.astype(ctypes.c_int)
@@ -578,8 +595,12 @@ class _CMF:
             Ucsr_p = U.indptr.astype(ctypes.c_size_t)
             Ucsr_i = U.indices.astype(ctypes.c_int)
             Ucsr = U.data.astype(self.dtype_)
-        elif U.__class__.__name__ == "ndarray":
-            Uarr = np.ascontiguousarray(U).astype(self.dtype_)
+        elif isinstance(U, np.ndarray):
+            if not U.flags["C_CONTIGUOUS"]:
+                U = np.ascontiguousarray(U)
+            if U.dtype != self.dtype_:
+                U = U.astype(self.dtype_)
+            Uarr = U
         elif U is None:
             pass
         else:
@@ -618,9 +639,14 @@ class _CMF:
             if Cols.shape[0]:
                 U_bin = U_bin[Cols]
             Ub_arr = U_bin.to_numpy()
-            Ub_arr = np.ascontiguousarray(Ub_arr).astype(self.dtype_)
-        elif Ub_arr.__class__.__name__ == "ndarray":
-            Ub_arr = np.ascontiguousarray(Ub_arr).astype(self.dtype_)
+            Ub_arr = np.ascontiguousarray(Ub_arr)
+            if Ub_arr.dtype != self.dtype_:
+                Ub_arr = Ub_arr.astype(self.dtype_)
+        elif isinstance(Ub_arr, np.ndarray):
+            if not Ub_arr.flags["C_CONTIGUOUS"]:
+                Ub_arr = np.ascontiguousarray(Ub_arr)
+            if Ub_arr.dtype != self.dtype_:
+                Ub_arr = Ub_arr.astype(self.dtype_)
         elif Ub_arr is None:
             pass
         else:
@@ -668,12 +694,20 @@ class _CMF:
                     msg =  "'W' must have the same number of non-zero entries "
                     msg += "as 'X'."
                     raise ValueError(msg)
-        elif X.__class__.__name__ == "ndarray":
-            Xarr = np.ascontiguousarray(X).astype(self.dtype_)
+        elif isinstance(X, np.ndarray):
+            if not X.flags["C_CONTIGUOUS"]:
+                X = np.ascontiguousarray(X)
+            if X.dtype != self.dtype_:
+                X = X.astype(self.dtype_)
+            Xarr = X
             if W is not None:
                 assert W.shape[0] == X.shape[0]
                 assert W.shape[1] == X.shape[1]
-                W_dense = np.ascontiguousarray(W).astype(self.dtype_)
+                if not W.flags["C_CONTIGUOUS"]:
+                    W = np.ascontiguousarray(W)
+                if W.dtype != self.dtype_:
+                    W = W.astype(self.dtype_)
+                W_dense = W
         else:
             raise ValueError("'X' must be a SciPy CSR or COO matrix, or NumPy array.")
 
@@ -921,7 +955,7 @@ class _CMF:
                 self.user_dict_ = {self.user_mapping_[i]:i for i in range(self.user_mapping_.shape[0])}
                 self.item_dict_ = {self.item_mapping_[i]:i for i in range(self.item_mapping_.shape[0])}
 
-        elif X.__class__.__name__ in ["coo_matrix", "ndarray"]:
+        elif (X.__class__.__name__ in ["coo_matrix"]) or isinstance(X, np.ndarray):
             allowed_sideinfo = ["DataFrame", "ndarray", "coo_matrix"]
             allowed_bin = ["DataFrame", "ndarray"]
             msg = " must be a Pandas DataFrame, NumPy array, or SciPy sparse COO matrix."
@@ -939,12 +973,12 @@ class _CMF:
                     W = np.array(W)
                 if (len(W.shape) > 1) and (X.__class__.__name__ == "coo_matrix"):
                     W = W.reshape(-1)
-                if W.__class__.__name__ != "ndarray" or \
+                if (not isinstance(W, np.ndarray)) or \
                    (X.__class__.__name__ == "coo_matrix" and W.shape[0] != X.nnz) or\
-                   (X.__class__.__name__ == "ndarray" and W.shape[0] != X.shape[0]):
+                   (isinstance(X, np.ndarray) and W.shape[0] != X.shape[0]):
                     raise ValueError("'W' must be a 1-d array with the same number of entries as 'X'.")
 
-            if (self._implicit) and (X.__class__.__name__ == "ndarray") and (self.k_sec == 0):
+            if (self._implicit) and (isinstance(X, np.ndarray)) and (self.k_sec == 0):
                 raise ValueError("Dense arrays for 'X' not supported with implicit-feedback.")
 
             Xrow, Xcol, Xval, Xarr, _1, _2, _3 = self._process_U_arr(X)
@@ -1500,7 +1534,7 @@ class _CMF:
         if (not replace_existing):
             if (X is None):
                 raise ValueError("Must pass 'X' if not passing 'replace_existing'.")
-            if X.__class__.__name__ == "ndarray":
+            if isinstance(X, np.ndarray):
                 mask_take = ~pd.isnull(X)
             elif X.__class__.__name__ == "coo_matrix":
                 mask_take = np.repeat(False, X.shape[0]*X.shape[1]).reshape((X.shape[0], X.shape[1]))
@@ -1579,7 +1613,7 @@ class _CMF:
             outp += self.item_bias_.reshape((1,-1))
 
         if mask_take is not None:
-            if Xorig.__class__.__name__ == "ndarray":
+            if isinstance(Xorig, np.ndarray):
                 outp[mask_take] = Xorig[mask_take]
             elif Xorig.__class__.__name__ == "coo_matrix":
                 outp[mask_take] = Xorig.data
@@ -2707,7 +2741,7 @@ class CMF(_CMF):
                  NA_as_zero=False, NA_as_zero_user=False, NA_as_zero_item=False,
                  nonneg=False, nonneg_C=False, nonneg_D=False, max_cd_steps=100,
                  precompute_for_predictions=True, include_all_X=True,
-                 use_float=False,
+                 use_float=True,
                  random_state=1, verbose=True, print_every=10,
                  handle_interrupt=True, produce_dicts=False,
                  copy_data=True, nthreads=-1):
@@ -3750,7 +3784,7 @@ class CMF(_CMF):
         """
         if self._only_prediction_info:
             raise ValueError("Cannot use this function after dropping non-essential matrices.")
-        if (X is not None) and (X.__class__.__name__ != "ndarray"):
+        if (X is not None) and (not isinstance(X, np.ndarray)):
             raise ValueError("'X' must be a NumPy array.")
 
         Xrow, Xcol, Xval, W_sp, Xarr, \
@@ -4333,7 +4367,7 @@ class CMF_implicit(_CMF):
                  niter=10, NA_as_zero_user=False, NA_as_zero_item=False,
                  nonneg=False, nonneg_C=False, nonneg_D=False, max_cd_steps=100,
                  apply_log_transf=False,
-                 precompute_for_predictions=True, use_float=False,
+                 precompute_for_predictions=True, use_float=True,
                  max_cg_steps=3, finalize_chol=False,
                  random_state=1, verbose=False,
                  produce_dicts=False, handle_interrupt=True,
@@ -7235,9 +7269,9 @@ class ContentBased(_OMF_Base):
            arXiv preprint arXiv:1809.00366 (2018).
     """
     def __init__(self, k=20, lambda_=1e2, user_bias=False, item_bias=False,
-                 add_intercepts=True, maxiter=15000, corr_pairs=3,
+                 add_intercepts=True, maxiter=3000, corr_pairs=3,
                  parallelize="separate", verbose=True, print_every=100,
-                 random_state=1, use_float=False,
+                 random_state=1, use_float=True,
                  produce_dicts=False, handle_interrupt=True, start_with_ALS=True,
                  copy_data=True, nthreads=-1):
         self._take_params(implicit=False, alpha=40., downweight=False,

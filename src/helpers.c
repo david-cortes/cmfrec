@@ -504,7 +504,7 @@ static inline uint64_t xoshiro256pp(uint64_t state[4])
     return result;
 }
 
-static inline uint64_t xoshiro128pp(uint32_t state[4])
+static inline uint32_t xoshiro128pp(uint32_t state[4])
 {
     const uint32_t result = rotl32(state[0] + state[3], 7) + state[0];
     const uint32_t t = state[1] << 9;
@@ -517,19 +517,78 @@ static inline uint64_t xoshiro128pp(uint32_t state[4])
     return result;
 }
 
-/* Note: this uses the Box-Muller transform with raw form,
-   which is less efficient than the polar form. Nevertheless,
-   from some experiments, this seems to give slightly better
-   end results, even though it is slower and loses more numeric
-   precision by boxing to [0, 1] instead of [-1, 1].
+static inline void xoshiro256pp_jump(uint64_t state[4])
+{
+    static const uint64_t JUMP[] = { 0x180ec6d33cfd0aba, 0xd5a61266f0c9392c,
+                                     0xa9582618e03fc9aa, 0x39abdc4529b1661c };
+    uint64_t s0 = 0;
+    uint64_t s1 = 0;
+    uint64_t s2 = 0;
+    uint64_t s3 = 0;
+    for (int i = 0; i < (int)(sizeof (JUMP) / sizeof (*JUMP)); i++)
+    {
+        for (int b = 0; b < 64; b++)
+        {
+            if (JUMP[i] & UINT64_C(1) << b)
+            {
+                s0 ^= state[0];
+                s1 ^= state[1];
+                s2 ^= state[2];
+                s3 ^= state[3];
+            }
+            xoshiro256pp(state);
+        }
+    }
+        
+    state[0] = s0;
+    state[1] = s1;
+    state[2] = s2;
+    state[3] = s3;
+}
+
+static inline void xoshiro128pp_jump(uint32_t state[4])
+{
+    static const uint32_t JUMP[] = { 0x8764000b, 0xf542d2d3,
+                                     0x6fa035c3, 0x77f2db5b };
+    uint32_t s0 = 0;
+    uint32_t s1 = 0;
+    uint32_t s2 = 0;
+    uint32_t s3 = 0;
+    for(int i = 0; i < (int)(sizeof (JUMP) / sizeof (*JUMP)); i++)
+    {
+        for(int b = 0; b < 32; b++)
+        {
+            if (JUMP[i] & UINT32_C(1) << b)
+            {
+                s0 ^= state[0];
+                s1 ^= state[1];
+                s2 ^= state[2];
+                s3 ^= state[3];
+            }
+            xoshiro128pp(state);
+        }
+    }
+        
+    state[0] = s0;
+    state[1] = s1;
+    state[2] = s2;
+    state[3] = s3;
+}
+
+/* Note: for double precision, this uses the Box-Muller transform
+   with raw form, which is less efficient than the polar form.
+   Nevertheless, from some experiments, this seems to give slightly better
+   end results when using double precision, even though it is slower and
+   loses more numeric precision by boxing to [0, 1] instead of [-1, 1].
+   For single precision, the polar form tended to give better results.
 
    Note: if generating a uniform random number ~ (0,1), dividing
    a random draw by the maximum will not result in a uniform
    distribution, as the upper possible numbers are not evenly-spaced.
    In these cases, it's necessary to take something up to 2^53 as
    this is the interval that's evenly-representable. */
-#if defined(USE_DOUBLE) || !defined(USE_FLOAT)
-int_t rnorm_xoshiro(double *seq, const size_t n, rng_state_t state[4])
+#if defined(USE_DOUBLE) || !(defined(USE_FLOAT) && USE_XOSHIRO128)
+void rnorm_xoshiro(real_t *seq, const size_t n, rng_state_t state[4])
 {
     const uint64_t two53_i = (UINT64_C(1) << 53) - UINT64_C(1);
     const double two53_d = (double)(UINT64_C(1) << 53);
@@ -568,8 +627,8 @@ int_t rnorm_xoshiro(double *seq, const size_t n, rng_state_t state[4])
         while (u == 0 || v == 0);
 
         mult = sqrt(-2. * log(u));
-        seq[(size_t)2*ix] = (real_t)(cos(twoPI * v) * mult);
-        seq[(size_t)2*ix + (size_t)1] = (real_t)(sin(twoPI * v) * mult);
+        seq[(size_t)2*ix] = (real_t)((cos(twoPI * v) * mult) / 128.);
+        seq[(size_t)2*ix + (size_t)1] = (real_t)((sin(twoPI * v) * mult) / 128.);
     }
 
     if ((n % (size_t)2) != 0)
@@ -597,17 +656,15 @@ int_t rnorm_xoshiro(double *seq, const size_t n, rng_state_t state[4])
         while (u == 0 || v == 0);
 
         mult = sqrt(-2. * log(u));
-        seq[n - (size_t)1] = (real_t)(cos(twoPI * v) * mult);
+        seq[n - (size_t)1] = (real_t)((cos(twoPI * v) * mult) / 128.);
     }
-
-    return 0;
 }
 #else
-int_t rnorm_xoshiro(float *seq, const size_t n, rng_state_t state[4])
+void rnorm_xoshiro(float *seq, const size_t n, rng_state_t state[4])
 {
-    const uint32_t two24_i = (UINT32_C(1) << 24) - UINT32_C(1);
+    const uint32_t two25_i = (UINT32_C(1) << 25) - UINT32_C(1);
+    const int32_t two24_i = (UINT32_C(1) << 24);
     const float two24_f = (float)(UINT32_C(1) << 24);
-    const double twoPI = 2.0f * M_PI;
     #ifdef USE_XOSHIRO128
     uint32_t rnd1, rnd2;
     #else
@@ -615,7 +672,7 @@ int_t rnorm_xoshiro(float *seq, const size_t n, rng_state_t state[4])
     uint32_t *restrict rnd1 = (uint32_t*)&rnd0;
     uint32_t *restrict rnd2 = rnd1 + 1;
     #endif
-    float u, v, mult;
+    float u, v, s;
     size_t n_ = n / (size_t)2;
     for (size_t ix = 0; ix < n_; ix++)
     {
@@ -625,8 +682,8 @@ int_t rnorm_xoshiro(float *seq, const size_t n, rng_state_t state[4])
             rnd1 = xoshiro128pp(state);
             rnd2 = xoshiro128pp(state);
             #if defined(FLT_MANT_DIG) && (FLT_MANT_DIG == 24)
-            u = (float)(rnd1 & two24_i) / two24_f;
-            v = (float)(rnd2 & two24_i) / two24_f;
+            u = (float)((int32_t)(rnd1 & two25_i) - two24_i) / two24_f;
+            v = (float)((int32_t)(rnd2 & two25_i) - two24_i) / two24_f;
             #else
             u = (float)rnd1 / (float)UINT32_MAX;
             v = (float)rnd2 / (float)UINT32_MAX;
@@ -634,20 +691,21 @@ int_t rnorm_xoshiro(float *seq, const size_t n, rng_state_t state[4])
             #else
             rnd0 = xoshiro256pp(state);
             #if defined(FLT_MANT_DIG) && (FLT_MANT_DIG == 24)
-            u = (float)(*rnd1 & two24_i) / two24_f;
-            v = (float)(*rnd2 & two24_i) / two24_f;
+            u = (float)((int32_t)(*rnd1 & two25_i) - two24_i) / two24_f;
+            v = (float)((int32_t)(*rnd2 & two25_i) - two24_i) / two24_f;
             #else
             u = (float)(*rnd1) / (float)UINT32_MAX;
             v = (float)(*rnd2) / (float)UINT32_MAX;
             #endif
             #endif
+
+            s = square(u) + square(v);
         }
-        while (u == 0 || v == 0);
+        while (s == 0 || s >= 1);
 
-
-        mult = sqrtf(-2.0f * logf(u));
-        seq[(size_t)2*ix] = (real_t)(cosf(twoPI * v) * mult);
-        seq[(size_t)2*ix + (size_t)1] = (real_t)(sinf(twoPI * v) * mult);
+        s = sqrtf((-2.0f / s) * logf(s));
+        seq[(size_t)2*ix] = (real_t)((u * s) / 128.0f);
+        seq[(size_t)2*ix + (size_t)1] = (real_t)((v * s) / 128.0f);
     }
 
     if ((n % (size_t)2) != 0)
@@ -658,8 +716,8 @@ int_t rnorm_xoshiro(float *seq, const size_t n, rng_state_t state[4])
             rnd1 = xoshiro128pp(state);
             rnd2 = xoshiro128pp(state);
             #if defined(FLT_MANT_DIG) && (FLT_MANT_DIG == 24)
-            u = (float)(rnd1 & two24_i) / two24_f;
-            v = (float)(rnd2 & two24_i) / two24_f;
+            u = (float)((int32_t)(rnd1 & two25_i) - two24_i) / two24_f;
+            v = (float)((int32_t)(rnd2 & two25_i) - two24_i) / two24_f;
             #else
             u = (float)rnd1 / (float)UINT32_MAX;
             v = (float)rnd2 / (float)UINT32_MAX;
@@ -667,21 +725,21 @@ int_t rnorm_xoshiro(float *seq, const size_t n, rng_state_t state[4])
             #else
             rnd0 = xoshiro256pp(state);
             #if defined(FLT_MANT_DIG) && (FLT_MANT_DIG == 24)
-            u = (float)(*rnd1 & two24_i) / two24_f;
-            v = (float)(*rnd2 & two24_i) / two24_f;
+            u = (float)((int32_t)(*rnd1 & two25_i) - two24_i) / two24_f;
+            v = (float)((int32_t)(*rnd2 & two25_i) - two24_i) / two24_f;
             #else
             u = (float)(*rnd1) / (float)UINT32_MAX;
             v = (float)(*rnd2) / (float)UINT32_MAX;
             #endif
             #endif
+
+            s = square(u) + square(v);
         }
-        while (u == 0 || v == 0);
+        while (s == 0 || s >= 1);
 
-        mult = sqrtf(-2.0f * logf(u));
-        seq[n - (size_t)1] = (real_t)(cosf(twoPI * v) * mult);
+        s = sqrtf((-2.0f / s) * logf(s));
+        seq[n - (size_t)1] = (real_t)((u * s) / 128.0f);
     }
-
-    return 0;
 }
 #endif
 
@@ -700,16 +758,102 @@ void seed_state(int_t seed, rng_state_t state[4])
     #endif
 }
 
-int_t rnorm(real_t *restrict arr, size_t n, int_t seed, int nthreads)
+void fill_rnorm_buckets
+(
+    const size_t n_buckets, real_t *arr, const size_t n,
+    real_t **ptr_bucket, size_t *sz_bucket, const size_t BUCKET_SIZE
+)
 {
-    rng_state_t state[4];
-    seed_state(seed, state);
-    return rnorm_xoshiro(arr, n, state);
+    if (n_buckets == 0 || n == 0) return;
+    for (size_t bucket = 0; bucket < n_buckets; bucket++)
+    {
+        ptr_bucket[bucket] = arr;
+        arr += BUCKET_SIZE;
+    }
+    sz_bucket[n_buckets-(size_t)1] = n - BUCKET_SIZE*(n_buckets-(size_t)1);
 }
 
-int_t rnorm_preserve_seed(real_t *restrict arr, size_t n, rng_state_t seed_arr[4])
+void rnorm_singlethread(ArraysToFill arrays, rng_state_t state[4])
 {
-    return rnorm_xoshiro(arr, n, seed_arr);
+    if (arrays.sizeA)
+        rnorm_xoshiro(arrays.A, arrays.sizeA, state);
+    if (arrays.sizeB)
+        rnorm_xoshiro(arrays.B, arrays.sizeB, state);
+}
+
+/* This function generates random normal numbers in parallel, but dividing the
+   arrays to fill into buckets of up to 250k each. It uses the jumping technique
+   from the Xorshiro family in order to ensure that the generated numbers will
+   not overlap. */
+int_t rnorm_parallel(ArraysToFill arrays, int_t seed, int nthreads)
+{
+    const size_t BUCKET_SIZE = (size_t)250000;
+    rng_state_t initial_state[4];
+    seed_state(seed, initial_state);
+    if (arrays.sizeA + arrays.sizeB < BUCKET_SIZE)
+    {
+        rnorm_singlethread(arrays, initial_state);
+        return 0;
+    }
+
+    const size_t buckA  = arrays.sizeA  / BUCKET_SIZE + (arrays.sizeA %  BUCKET_SIZE) != 0;
+    const size_t buckB  = arrays.sizeB  / BUCKET_SIZE + (arrays.sizeB %  BUCKET_SIZE) != 0;
+    const size_t tot_buckets = buckA + buckB;
+
+    real_t **ptr_bucket = (real_t**)malloc(tot_buckets*sizeof(real_t*));
+    size_t *sz_bucket   =  (size_t*)malloc(tot_buckets*sizeof(size_t));
+    rng_state_t *states = (rng_state_t*)malloc((size_t)4*tot_buckets*sizeof(rng_state_t));
+
+    if (ptr_bucket == NULL || sz_bucket == NULL || states == NULL)
+    {
+        free(ptr_bucket);
+        free(sz_bucket);
+        free(states);
+        return 1;
+    }
+
+    for (size_t ix = 0; ix < tot_buckets; ix++)
+        sz_bucket[ix] = BUCKET_SIZE;
+
+    memcpy(states, initial_state, 4*sizeof(rng_state_t));
+    for (size_t ix = 1; ix < tot_buckets; ix++)
+    {
+        memcpy(states + (size_t)4*ix, states + (size_t)4*(ix-(size_t)1), 4*sizeof(rng_state_t));
+        #ifdef USE_XOSHIRO128
+        xoshiro128pp_jump(states + 4*ix);
+        #else
+        xoshiro256pp_jump(states + 4*ix);
+        #endif
+    }
+
+    real_t ** const ptr_bucket_ = ptr_bucket;
+    size_t *  const sz_bucket_  = sz_bucket;
+    
+    fill_rnorm_buckets(
+        buckA, arrays.A, arrays.sizeA,
+        ptr_bucket, sz_bucket, BUCKET_SIZE
+    );
+    ptr_bucket += buckA; sz_bucket += buckA;
+    fill_rnorm_buckets(
+        buckB, arrays.B, arrays.sizeB,
+        ptr_bucket, sz_bucket, BUCKET_SIZE
+    );
+
+    #pragma omp parallel for schedule(static) num_threads(nthreads) \
+            shared(ptr_bucket_, sz_bucket_, states)
+    for (size_t_for ix = 0; ix < tot_buckets; ix++)
+    {
+        rng_state_t state[] = {states[(size_t)4*ix],
+                               states[(size_t)4*ix + (size_t)1],
+                               states[(size_t)4*ix + (size_t)2],
+                               states[(size_t)4*ix + (size_t)3]};
+        rnorm_xoshiro(ptr_bucket_[ix], sz_bucket_[ix], state);
+    }
+
+    free(ptr_bucket_);
+    free(sz_bucket_);
+    free(states);
+    return 0;
 }
 
 void reduce_mat_sum(real_t *restrict outp, size_t lda, real_t *restrict inp,

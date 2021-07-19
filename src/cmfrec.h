@@ -331,6 +331,10 @@ extern bool GELSD_free_inputs;
 
 
 /* helpers.c */
+typedef struct ArraysToFill {
+    real_t *A; size_t sizeA;
+    real_t *B; size_t sizeB;
+} ArraysToFill;
 void set_to_zero_(real_t *arr, const size_t n, int nthreads);
 void copy_arr_(real_t *restrict src, real_t *restrict dest, size_t n, int nthreads);
 int_t count_NAs(real_t arr[], size_t n, int nthreads);
@@ -368,10 +372,10 @@ void mult_elemwise(real_t *restrict inout, real_t *restrict other, size_t n, int
 real_t sum_squares(real_t *restrict arr, size_t n, int nthreads);
 void taxpy_large(real_t *restrict A, real_t x, real_t *restrict Y, size_t n, int nthreads);
 void tscal_large(real_t *restrict arr, real_t alpha, size_t n, int nthreads);
-int_t rnorm_xoshiro(real_t *seq, const size_t n, rng_state_t state[4]);
+void rnorm_xoshiro(real_t *seq, const size_t n, rng_state_t state[4]);
 void seed_state(int_t seed, rng_state_t state[4]);
-int_t rnorm(real_t *restrict arr, size_t n, int_t seed, int nthreads);
-int_t rnorm_preserve_seed(real_t *restrict arr, size_t n, rng_state_t seed_arr[4]);
+void rnorm_singlethread(ArraysToFill arrays, rng_state_t state[4]);
+int_t rnorm_parallel(ArraysToFill arrays, int_t seed, int nthreads);
 void reduce_mat_sum(real_t *restrict outp, size_t lda, real_t *restrict inp,
                     int_t m, int_t n, int nthreads);
 void exp_neg_x(real_t *restrict arr, size_t n, int nthreads);

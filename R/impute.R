@@ -46,7 +46,6 @@
 #' SeqMat <- matrix(1:50, nrow=10)
 #' SeqMat[2,1] <- NaN
 #' SeqMat[8,3] <- NaN
-#' set.seed(123)
 #' m <- CMF(SeqMat, k=1, lambda=1e-10, nthreads=1L, verbose=FALSE)
 #' imputeX(m, SeqMat)
 #' 
@@ -73,7 +72,6 @@
 #'     }
 #'     
 #'     ### Impute missing values with model
-#'     set.seed(1)
 #'     model <- CMF(X_na, k=15, lambda=50, user_bias=FALSE,
 #'                  verbose=FALSE, nthreads=1L)
 #'     X_imputed <- imputeX(model, X_na)
