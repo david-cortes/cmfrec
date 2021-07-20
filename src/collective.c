@@ -5254,8 +5254,8 @@ void optimizeA_collective
                         C, p,
                         Bi, k_main_i, add_implicit_features,
                         (Xfull == NULL)?
-                            (Xones) : (Xones + (do_B? ix : (ix*(size_t)(n)))),
-                        (Xfull == NULL)? ((int_t)1) : (do_B? ldXones : (int_t)1),
+                            (Xones) : (Xones + (do_B? ix:(ix*(size_t)ldXones))),
+                        (Xfull == NULL)? ((int_t)1) : (do_B? ldXones :(int_t)1),
                         (real_t*)NULL,
                         lam, w_user, w_implicit, lam_last,
                         l1_lam, l1_lam_bias,
@@ -7314,12 +7314,13 @@ int_t fit_collective_explicit_als
             zeros_n = (int_t*)calloc(n, sizeof(int_t));
             if (Xones == NULL || zeros_m == NULL || zeros_n == NULL)
                 goto throw_oom;
+            /* TODO: maybe should add a transposed version too */
             
             for (size_t row = 0; row < (size_t)m; row++)
                 for (size_t col = 0; col < (size_t)n; col++)
-                    Xones[col + row*(size_t)m]
+                    Xones[col + row*(size_t)n]
                         =
-                    isnan(Xfull[col + row*(size_t)m])? 0. : 1.;
+                    isnan(Xfull[col + row*(size_t)n])? 0. : 1.;
         }
     }
 
@@ -7558,7 +7559,7 @@ int_t fit_collective_explicit_als
         );
     else
         size_bufferB = buffer_size_optimizeA(
-            m, full_dense, near_dense_col, Xtrans != NULL,
+            m, full_dense, near_dense_col, Xtrans == NULL,
             Xfull != NULL, weight != NULL, NA_as_zero_X,
             nonneg, l1_lam != 0. || l1_lam_unique != NULL,
             k+k_main+(int)item_bias, nthreads,
@@ -8129,7 +8130,7 @@ int_t fit_collective_explicit_als
                 n, m, k+k_main,
                 Xcsc_p, Xcsc_i, (Xfull == NULL)? (Xones) : ((real_t*)NULL),
                 (Xfull == NULL)? ((real_t*)NULL) : (Xones),
-                m,
+                n,
                 Xfull != NULL, false,
                 (Xfull == NULL)? ((int_t*)NULL) : (zeros_n),
                 (real_t*)NULL, Xfull == NULL,
@@ -8174,7 +8175,7 @@ int_t fit_collective_explicit_als
                 m, n, k+k_main,
                 Xcsr_p, Xcsr_i, (Xfull == NULL)? (Xones) : ((real_t*)NULL),
                 (Xfull == NULL)? ((real_t*)NULL) : (Xones),
-                n,
+                m,
                 Xfull != NULL, false,
                 (Xfull == NULL)? ((int_t*)NULL) : (zeros_m),
                 (real_t*)NULL, Xfull == NULL,
@@ -8215,7 +8216,7 @@ int_t fit_collective_explicit_als
                 A_bias[(size_t)(k_user+k+k_main)
                         + ix*(size_t)(k_user+k+k_main + 1)] = 1.;
 
-            if (use_cg_B && iter == 0)
+            if (use_cg_B && user_bias)
                 cblas_tcopy(n, biasB, 1, B + (k_totB-1), k_totB);
         }
 
@@ -8315,11 +8316,11 @@ int_t fit_collective_explicit_als
                 k, k_main+(int)item_bias, k_item, k_user,
                 Xcsc_p, Xcsc_i, Xcsc,
                 (Xtrans != NULL)? (Xtrans) : (Xfull),
-                full_dense, near_dense_col, (Xtrans == NULL)? (m) : (n),
+                full_dense, near_dense_col, (Xtrans != NULL)? m : n,
                 cnt_NA_bycol,
                 (Xtrans != NULL)? (Wtrans) : ((Xfull == NULL)? weight:weightC),
                 NA_as_zero_X,
-                Xones, k_main, m,
+                Xones, k_main, n,
                 add_implicit_features,
                 I_csr_p, I_csr_i, I_csr,
                 II, cnt_NA_i_byrow, I_colmeans,
@@ -8361,7 +8362,7 @@ int_t fit_collective_explicit_als
                 n, m, k+k_main+(int)item_bias,
                 Xcsc_p, Xcsc_i, Xcsc,
                 (Xtrans != NULL)? (Xtrans) : (Xfull),
-                (Xtrans == NULL)? m : n,
+                (Xtrans != NULL)? m : n,
                 full_dense, near_dense_col,
                 cnt_NA_bycol,
                 (Xtrans != NULL)? (Wtrans) : ((Xfull == NULL)? weight:weightC),
@@ -8411,7 +8412,7 @@ int_t fit_collective_explicit_als
                 B_bias[(size_t)(k_item+k+k_main)
                         + ix*(size_t)(k_item+k+k_main + 1)] = 1.;
 
-            if (use_cg_A && iter == 0)
+            if (use_cg_A && item_bias)
                 cblas_tcopy(m, biasA, 1, A + (k_totA-1), k_totA);
         }
 
@@ -8493,7 +8494,7 @@ int_t fit_collective_explicit_als
                 cnt_NA_byrow,
                 (Xfull == NULL)? (weightR) : (weight),
                 NA_as_zero_X,
-                Xones, k_main, n,
+                Xones, k_main, m,
                 add_implicit_features,
                 U_csr_p, U_csr_i, U_csr,
                 U, cnt_NA_u_byrow, U_colmeans,
