@@ -10338,7 +10338,7 @@ int_t factors_collective_explicit_single
         );
     }
 
-    if (u_vec== NULL && NA_as_zero_U && U_colmeans != NULL && CtUbias == NULL)
+    if (u_vec == NULL && NA_as_zero_U && U_colmeans != NULL && CtUbias == NULL)
     {
         buffer_CtUbias = (real_t*)malloc((size_t)(k_user+k)*sizeof(real_t));
         if (buffer_CtUbias == NULL) goto throw_oom;

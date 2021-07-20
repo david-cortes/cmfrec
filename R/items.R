@@ -66,7 +66,7 @@ process.inputs.items <- function(model, obj, X=NULL, X_col=NULL, X_val=NULL, wei
     }
 
     if (!NROW(processed_I$U) && NROW(obj$matrices$D) && obj$info$NA_as_zero_item) {
-        processed_I$p <- nrow(obj$matrices$D)
+        processed_I$p <- ncol(obj$matrices$D)
     }
     
     return(list(
@@ -168,6 +168,7 @@ item_factors <- function(model, X=NULL, X_col=NULL, X_val=NULL,
         b_bias <- numeric()
         if (NROW(model$matrices$item_bias))
             b_bias <- numeric(1L)
+
         ret_code <- .Call("call_factors_collective_explicit_single",
                           b_vec, b_bias,
                           inputs$processed_I$U, inputs$processed_I$p,
