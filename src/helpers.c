@@ -789,6 +789,16 @@ void rnorm_singlethread(ArraysToFill arrays, rng_state_t state[4])
    not overlap. */
 int_t rnorm_parallel(ArraysToFill arrays, int_t seed, int nthreads)
 {
+    #ifdef USE_R_RNG
+    GetRNGstate();
+    for (size_t ix = 0; ix < arrays.sizeA; ix++)
+        A[ix] = norm_rand();
+    for (size_t ix = 0; ix < arrays.sizeB; ix++)
+        B[ix] = norm_rand();
+    PutRNGstate();
+    return 0;
+    #endif
+    
     const size_t BUCKET_SIZE = (size_t)250000;
     rng_state_t initial_state[4];
     seed_state(seed, initial_state);
