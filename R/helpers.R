@@ -763,6 +763,7 @@ process.new.U <- function(U, U_cols, p, name="U",
     
     if (is.null(U) || !max(c(NROW(U), NCOL(U)))) {
         if (allow_null) {
+            out$p <- p
             return(out)
         } else {
             stop(sprintf("'%s' cannot be empty.", name))
