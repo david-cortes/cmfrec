@@ -2096,8 +2096,7 @@ void optimizeA
     real_t lam, real_t lam_last,
     real_t l1_lam, real_t l1_lam_last,
     bool scale_lam, bool scale_bias_const, real_t *restrict wsumA,
-    bool do_B, bool is_first_iter,
-    int nthreads,
+    bool do_B, int nthreads,
     bool use_cg, int_t max_cg_steps,
     bool nonneg, int_t max_cd_steps,
     real_t *restrict bias_restore,
@@ -2613,7 +2612,7 @@ void optimizeA_implicit
     size_t Xcsr_p[], int_t Xcsr_i[], real_t *restrict Xcsr,
     real_t lam, real_t l1_lam,
     int nthreads,
-    bool use_cg, int_t max_cg_steps, bool force_set_to_zero,
+    bool use_cg, int_t max_cg_steps,
     bool nonneg, int_t max_cd_steps,
     real_t *restrict precomputedBtB, /* <- will be calculated if not passed */
     real_t *restrict buffer_real_t
@@ -2631,10 +2630,10 @@ void optimizeA_implicit
                 k, n,
                 1., B, ldb,
                 0., precomputedBtB, k);
-    if (!use_cg)
+    if (!use_cg) {
         add_to_diag(precomputedBtB, lam, k);
-    if (!use_cg || force_set_to_zero)
         set_to_zero_(A, (size_t)m*(size_t)k - (lda-(size_t)k), nthreads);
+    }
     size_t size_buffer = use_cg? (3 * k) : (square(k));
     if (nonneg)
         size_buffer += k;
@@ -2898,7 +2897,7 @@ int_t calc_mean_and_center
                 Xcsr[ix] -= *glob_mean;
                 Xcsc[ix] -= *glob_mean;
             }
-        } else {
+        } else if (X != NULL && nnz) {
 
             if (!allow_overwrite_X) {
                 X = (real_t*)malloc(nnz*sizeof(real_t));

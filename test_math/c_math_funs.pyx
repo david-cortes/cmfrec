@@ -161,7 +161,7 @@ cdef extern from "cmfrec.h":
         double lam, double lam_last,
         double l1_lam, double l1_lam_last,
         bint scale_lam, bint scale_bias_const, double *wsumA,
-        bint do_B, bint is_first_iter,
+        bint do_B,
         int nthreads,
         bint use_cg, int max_cg_steps,
         bint nonneg, int max_cd_steps,
@@ -180,7 +180,7 @@ cdef extern from "cmfrec.h":
         size_t Xcsr_p[], int Xcsr_i[], double *Xcsr,
         double lam, double l1_lam,
         int nthreads,
-        bint use_cg, int max_cg_steps, bint force_set_to_zero,
+        bint use_cg, int max_cg_steps,
         bint nonneg, int max_cd_steps,
         double *precomputedBtB,
         double *buffer_double
@@ -204,7 +204,7 @@ cdef extern from "cmfrec.h":
         bint scale_bias_const, double *wsumA,
         bint do_B,
         int nthreads,
-        bint use_cg, int max_cg_steps, bint is_first_iter,
+        bint use_cg, int max_cg_steps,
         bint nonneg, int max_cd_steps,
         double *bias_restore,
         double *bias_BtX, double *bias_X, double bias_X_glob,
@@ -230,7 +230,7 @@ cdef extern from "cmfrec.h":
         bint full_dense_u, bint near_dense_u, bint NA_as_zero_U,
         double lam, double l1_lam, double w_user,
         int nthreads,
-        bint use_cg, int max_cg_steps, bint is_first_iter,
+        bint use_cg, int max_cg_steps,
         bint nonneg, int max_cd_steps,
         double *precomputedBtB,
         double *precomputedBeTBe,
@@ -321,23 +321,25 @@ cdef extern from "cmfrec.h":
         double *scaling_biasA, double *scaling_biasB,
         int m, int n,
         int m_bias, int n_bias,
-        int ixA[], int ixB[], double *X, size_t nnz,
-        double *Xfull, double *Xtrans,
+        int ixA[], int ixB[], double **X, size_t nnz,
+        double **Xfull, double *Xtrans,
         size_t Xcsr_p[], int Xcsr_i[], double *Xcsr,
         size_t Xcsc_p[], int Xcsc_i[], double *Xcsc,
         double *weight, double *Wtrans,
         double *weightR, double *weightC,
         bint nonneg,
-        int nthreads
+        int nthreads,
+        c_bool *modified_X, c_bool *modified_Xfull,
+        bint allow_overwrite_X
     )
 
     int center_by_cols(
         double *col_means,
-        double *Xfull, int m, int n,
-        int ixA[], int ixB[], double *X, size_t nnz,
+        double **Xfull, int m, int n,
+        int ixA[], int ixB[], double **X, size_t nnz,
         size_t Xcsr_p[], int Xcsr_i[], double *Xcsr,
         size_t Xcsc_p[], int Xcsc_i[], double *Xcsc,
-        int nthreads
+        int nthreads, c_bool *modified_X, c_bool *modified_Xfull
     )
 
     int topN(
@@ -1091,6 +1093,8 @@ def py_optimizeA(
     if w != 1.:
         lam /= w
 
+    A[:,:] = 0
+
     cdef c_bool ignore = 0
     
     optimizeA(
@@ -1103,7 +1107,7 @@ def py_optimizeA(
         lam, lam,
         0., 0.,
         0, 0, <double*>NULL,
-        is_B, 1,
+        is_B,
         nthreads,
         0, 0, 0, 0,
         <double*>NULL,
@@ -1216,6 +1220,8 @@ def py_optimizeA_collective(
             Xones1 = np.ones(Xcsr.shape[0], dtype="float64")
             ptr_X_ones = &Xones1[0]
 
+    A[:,:] = 0
+
     optimizeA_collective(
         &A[0,0], A.shape[1], &B[0,0], B.shape[1], &C[0,0], ptr_Bi,
         m, m_u, n, p,
@@ -1232,7 +1238,7 @@ def py_optimizeA_collective(
         0., 0., 0, 0, 0, <double*>NULL,
         is_B,
         nthreads,
-        0, 0, 1,
+        0, 0,
         0, 0,
         <double*>NULL,
         <double*>NULL, <double*>NULL, 0.,
@@ -1259,6 +1265,8 @@ def py_optimizeA_implicit(
     cdef size_t ldb = B.shape[1]
 
     cdef np.ndarray[double, ndim=1] Xcsr_pass = Xcsr * alpha
+
+    A[:,:] = 0
     
     optimizeA_implicit(
         &A[0,0], lda,
@@ -1267,7 +1275,7 @@ def py_optimizeA_implicit(
         &Xcsr_p[0], &Xcsr_i[0], &Xcsr_pass[0],
         lam, 0.,
         nthreads,
-        0, 0, 1,
+        0, 0,
         0, 0,
         <double*>NULL,
         &buffer_double[0]
@@ -1328,6 +1336,8 @@ def py_optimizeA_collective_implicit(
     cdef c_bool ignore3 = 0
     cdef c_bool ignore4 = 0
 
+    A[:,:] = 0
+
     optimizeA_collective_implicit(
         &A[0,0], &B[0,0], &C[0,0],
         m, m_u, n, p,
@@ -1338,7 +1348,7 @@ def py_optimizeA_collective_implicit(
         full_dense_u, as_near_dense_u, NA_as_zero_U,
         lam/w_main, 0., w_user/w_main,
         nthreads,
-        0, 0, 1,
+        0, 0,
         0, 0,
         <double*>NULL,
         <double*>NULL,
@@ -1609,19 +1619,23 @@ def py_initialize_biases(
             ptr_Xcsc = &Xcsc[0]
     
     cdef double glob_mean, unused1, unused2
+    cdef c_bool ignore1 = 0
+    cdef c_bool ignore2 = 0
     initialize_biases(
         &glob_mean, ptr_biasA, ptr_biasB,
         user_bias, item_bias, 1,
         0., 0., 0, 0, 0, 0, &unused1, &unused2,
         m, n,
         m, n,
-        ptr_ixA, ptr_ixB, ptr_X, nnz,
-        ptr_Xfull, ptr_Xtrans,
+        ptr_ixA, ptr_ixB, &ptr_X, nnz,
+        &ptr_Xfull, ptr_Xtrans,
         ptr_Xcsr_p, ptr_Xcsr_i, ptr_Xcsr,
         ptr_Xcsc_p, ptr_Xcsc_i, ptr_Xcsc,
         <double*>NULL, <double*>NULL, <double*>NULL, <double*>NULL,
         0,
-        nthreads
+        nthreads,
+        &ignore1, &ignore2,
+        1
     )
     return glob_mean, biasA, biasB
 
@@ -1668,13 +1682,15 @@ def py_center_by_cols(
             ptr_Xcsc_i = &Xcsc_i[0]
             ptr_Xcsc = &Xcsc[0]
 
+    cdef c_bool ignore1 = 0
+    cdef c_bool ignore2 = 0
     center_by_cols(
         &col_means[0],
-        ptr_Xfull, m, n,
-        ptr_ixA, ptr_ixB, ptr_X, nnz,
+        &ptr_Xfull, m, n,
+        ptr_ixA, ptr_ixB, &ptr_X, nnz,
         ptr_Xcsr_p, ptr_Xcsr_i, ptr_Xcsr,
         ptr_Xcsc_p, ptr_Xcsc_i, ptr_Xcsc,
-        nthreads
+        nthreads, &ignore1, &ignore2
     )
     return col_means
 

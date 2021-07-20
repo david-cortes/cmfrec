@@ -107,12 +107,13 @@ void copy_arr_(real_t *restrict src, real_t *restrict dest, size_t n, int nthrea
     /* Note: don't use BLAS scopy as it's actually much slower */
     if (n == 0) return;
     #if defined(_OPENMP)
-    nthreads = cap_to_4(nthreads);
-    size_t chunk_size = n / (size_t)nthreads;
-    size_t remainder = n % (size_t)nthreads;
-    int_t i = 0;
     if (nthreads > 1 && n > (size_t)1e8)
     {
+        nthreads = cap_to_4(nthreads);
+        size_t chunk_size = n / (size_t)nthreads;
+        size_t remainder = n % (size_t)nthreads;
+        int_t i = 0;
+        
         #pragma omp parallel for schedule(static, 1) \
                 firstprivate(src, dest, chunk_size, nthreads) num_threads(nthreads)
         for (i = 0; i < nthreads; i++)

@@ -323,9 +323,9 @@ extern bool GELSD_free_inputs;
 #include "lbfgs.h"
 
 #define square(x) ( (x) * (x) )
-#define cap_to_4(x) (((x) > 4)? 4 : (x))
 #define max2(a, b) ((a) >= ((b))? (a) : (b))
 #define min2(a, b) ((a) <= ((b))? (a) : (b))
+#define cap_to_4(x) (((x) > 4)? 4 : (min2(x, 1)))
 #define set_to_zero(arr, n) memset((arr), 0, (size_t)(n)*sizeof(real_t))
 #define copy_arr(from, to, n) memcpy((to), (from), (size_t)(n)*sizeof(real_t))
 
@@ -745,8 +745,7 @@ void optimizeA
     real_t lam, real_t lam_last,
     real_t l1_lam, real_t l1_lam_last,
     bool scale_lam, bool scale_bias_const, real_t *restrict wsumA,
-    bool do_B, bool is_first_iter,
-    int nthreads,
+    bool do_B, int nthreads,
     bool use_cg, int_t max_cg_steps,
     bool nonneg, int_t max_cd_steps,
     real_t *restrict bias_restore,
@@ -764,7 +763,7 @@ void optimizeA_implicit
     size_t Xcsr_p[], int_t Xcsr_i[], real_t *restrict Xcsr,
     real_t lam, real_t l1_lam,
     int nthreads,
-    bool use_cg, int_t max_cg_steps, bool force_set_to_zero,
+    bool use_cg, int_t max_cg_steps,
     bool nonneg, int_t max_cd_steps,
     real_t *restrict precomputedBtB, /* <- will be calculated if not passed */
     real_t *restrict buffer_real_t
@@ -1131,7 +1130,7 @@ void optimizeA_collective_implicit
     bool full_dense_u, bool near_dense_u, bool NA_as_zero_U,
     real_t lam, real_t l1_lam, real_t w_user,
     int nthreads,
-    bool use_cg, int_t max_cg_steps, bool is_first_iter,
+    bool use_cg, int_t max_cg_steps,
     bool nonneg, int_t max_cd_steps,
     real_t *restrict precomputedBtB, /* will not have lambda with CG */
     real_t *restrict precomputedBeTBe,
@@ -1319,7 +1318,7 @@ void optimizeA_collective
     bool scale_bias_const, real_t *restrict wsumA,
     bool do_B,
     int nthreads,
-    bool use_cg, int_t max_cg_steps, bool is_first_iter,
+    bool use_cg, int_t max_cg_steps,
     bool nonneg, int_t max_cd_steps,
     real_t *restrict bias_restore,
     real_t *restrict bias_BtX, real_t *restrict bias_X, real_t bias_X_glob,
