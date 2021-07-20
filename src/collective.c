@@ -7360,6 +7360,12 @@ int_t fit_collective_explicit_als
             Xfull_orig = (real_t*)malloc((size_t)m*(size_t)n*sizeof(real_t));
             if (Xfull_orig == NULL) goto throw_oom;
             copy_arr_(Xfull, Xfull_orig, (size_t)m*(size_t)n, nthreads);
+            if (!free_Xfull) {
+                real_t *temp = Xfull_orig;
+                Xfull_orig = Xfull;
+                Xfull = temp;
+                free_Xfull = true;
+            }
         }
 
         if (Xtrans != NULL && user_bias)
@@ -8277,12 +8283,10 @@ int_t fit_collective_explicit_als
             cblas_tscal(k+k_main+item_bias, -(*glob_mean), buffer_BtX, 1);
         }
 
-        else if (Xfull_orig != NULL || Xtrans_orig != NULL)
+        else if (Xfull != NULL && Xfull_orig != NULL &&
+                 Xtrans == NULL && item_bias)
         {
-            if (Xtrans_orig != NULL)
-                copy_arr_(Xtrans, Xtrans_orig, (size_t)m*(size_t)n, nthreads);
-            else
-                copy_arr_(Xfull, Xfull_orig, (size_t)m*(size_t)n, nthreads);
+            copy_arr_(Xfull_orig, Xfull, (size_t)m*(size_t)n, nthreads);
         }
 
         /* Optimize B */
@@ -8468,9 +8472,10 @@ int_t fit_collective_explicit_als
             cblas_tscal(k+k_main+user_bias, -(*glob_mean), buffer_BtX, 1);
         }
 
-        else if (Xfull_orig != NULL)
+        else if (Xfull != NULL && Xfull_orig != NULL &&
+                 Xtrans == NULL && user_bias)
         {
-            copy_arr_(Xfull, Xfull_orig, (size_t)m*(size_t)n, nthreads);
+            copy_arr_(Xfull_orig, Xfull, (size_t)m*(size_t)n, nthreads);
         }
 
         /* Optimize A */
@@ -8987,7 +8992,7 @@ int_t fit_collective_explicit_als
             free(Xcsr_orig); Xcsr_orig = NULL;
             free(Xcsc_orig); Xcsc_orig = NULL;
         }
-        if (Xfull_orig != NULL) {
+        if (Xfull_orig != NULL && !free_Xfull) {
             free(Xfull_orig); Xfull_orig = NULL;
         }
         if (Xtrans_orig != NULL) {
