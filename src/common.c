@@ -4193,13 +4193,14 @@ int_t center_by_cols
                 )
     long long ix, ib;
     #endif
+    int_t retval = 0;
     real_t *restrict X = (X_ == NULL)? NULL : (*X_);
     real_t *restrict Xfull = (Xfull_ == NULL)? NULL : (*Xfull_);
 
     int_t *restrict cnt_by_col = NULL;
     if (Xfull != NULL || Xcsc == NULL) {
         cnt_by_col = (int_t*)calloc(n, sizeof(int_t));
-        if (cnt_by_col == NULL) return 1;
+        if (cnt_by_col == NULL) goto throw_oom;
     }
     set_to_zero(col_means, n);
 
@@ -4254,7 +4255,7 @@ int_t center_by_cols
     if (Xfull != NULL)
     {
         Xfull = (real_t*)malloc((size_t)m*(size_t)n*sizeof(real_t));
-        if (Xfull == NULL) return 1;
+        if (Xfull == NULL) goto throw_oom;
         copy_arr_(*Xfull_, Xfull, ((size_t)m*(size_t)n), nthreads);
         *Xfull_ = Xfull;
         *modified_Xfull = true;
@@ -4277,20 +4278,15 @@ int_t center_by_cols
 
         if (Xcsr != NULL)
         {
-            if (X != NULL)
-                for (size_t ix = 0; ix < nnz; ix++)
-                    Xcsr[ix] -= col_means[Xcsr_i[ix]];
-            else
-                for (size_t ia = 0; ia < (size_t)m; ia++)
-                    for (size_t ix = Xcsr_p[ia]; ix < Xcsr_p[ia+(size_t)1];ix++)
-                        Xcsr[ix] -= col_means[Xcsr_i[ix]];
+            for (size_t ix = 0; ix < Xcsr_p[m-1]; ix++)
+                Xcsr[ix] -= col_means[Xcsr_i[ix]];
         }
     }
 
     else
     {
         X = (real_t*)malloc(nnz*sizeof(real_t));
-        if (X == NULL) return 1;
+        if (X == NULL) goto throw_oom;
         copy_arr_(*X_, X, nnz, nthreads);
         *X_ = X;
         *modified_X = true;
@@ -4303,8 +4299,12 @@ int_t center_by_cols
 
     }
 
-    free(cnt_by_col);
-    return 0;
+    cleanup:
+        free(cnt_by_col);
+        return retval;
+    throw_oom:
+        retval = 1;
+        goto cleanup;
 }
 
 bool check_sparse_indices

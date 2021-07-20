@@ -6534,7 +6534,12 @@ int_t fit_collective_explicit_lbfgs_internal
     );
     if (retval != 0) goto cleanup;
 
-    if (U != NULL || U_sp != NULL) {
+    if (U != NULL || U_sp != NULL || U_csr_p != NULL)
+    {
+        real_t *U_before = U;
+        bool free_U_before = free_U;
+        real_t *U_sp_before = U_sp;
+        bool free_Usp_before = free_Usp;
         retval = center_by_cols(
             U_colmeans,
             &U, m_u, p,
@@ -6542,12 +6547,19 @@ int_t fit_collective_explicit_lbfgs_internal
             U_csr_p, U_csr_i, U_csr,
             U_csc_p, U_csc_i, U_csc,
             nthreads,
-            &free_U, &free_Usp
+            &free_Usp, &free_U
         );
+        if (free_U_before && U_before != U) free(U_before);
+        if (free_Usp_before && U_sp_before != U_sp) free(U_sp_before);
         if (retval != 0) goto cleanup;
     }
 
-    if (II != NULL || I_sp != NULL) {
+    if (II != NULL || I_sp != NULL || I_csr_p != NULL)
+    {
+        real_t *I_before = II;
+        bool free_I_before = free_I;
+        real_t *I_sp_before = I_sp;
+        bool free_Isp_before = free_Isp;
         retval = center_by_cols(
             I_colmeans,
             &II, n_i, q,
@@ -6555,8 +6567,10 @@ int_t fit_collective_explicit_lbfgs_internal
             I_csr_p, I_csr_i, I_csr,
             I_csc_p, I_csc_i, I_csc,
             nthreads,
-            &free_U, &free_Usp
+            &free_Isp, &free_I
         );
+        if (free_I_before && I_before != II) free(I_before);
+        if (free_Isp_before && I_sp_before != I_sp) free(I_sp_before);
         if (retval != 0) goto cleanup;
     }
 
@@ -6695,6 +6709,8 @@ int_t fit_collective_explicit_lbfgs_internal
         free(I_csc);
         if (free_X)
             free(X);
+        if (free_Xfull)
+            free(Xfull);
         if (free_U)
             free(U);
         if (free_Usp)
