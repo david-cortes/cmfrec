@@ -42,7 +42,7 @@ class _CMF:
                      precompute_for_predictions=True, use_float=False,
                      random_state=1, verbose=True,
                      print_every=10, handle_interrupt=True,
-                     produce_dicts=False, copy_data=True, nthreads=-1):
+                     produce_dicts=False, nthreads=-1):
         assert method in ["als", "lbfgs"]
         assert parallelize in ["separate", "single"]
 
@@ -195,7 +195,6 @@ class _CMF:
         self.random_state = int(random_state)
         self.produce_dicts = bool(produce_dicts)
         self.handle_interrupt = bool(handle_interrupt)
-        self.copy_data = bool(copy_data)
         self.nthreads = nthreads
 
         self._implicit = bool(implicit)
@@ -295,17 +294,25 @@ class _CMF:
 
     def _append_NAs(self, U, m_u, p, append_U):
         U_new = np.repeat(np.nan, m_u*p).reshape((m_u, p))
-        if U_new.dtype != U.dtype:
+        if U_new.dtype != self.dtype_:
             U_new = U_new.astype(U.dtype)
         if not U_new.flags["C_CONTIGUOUS"]:
             U_new = np.ascontiguousarray(U_new)
         U_new[np.setdiff1d(np.arange(m_u), append_U), :] = U
+        if U_new.dtype != self.dtype_:
+            U_new = U_new.astype(U.dtype)
         return U_new
 
     def _decompose_coo(self, X):
-        row = X.row.astype(ctypes.c_int)
-        col = X.col.astype(ctypes.c_int)
-        val = X.data.astype(self.dtype_)
+        row = X.row
+        col = X.col
+        val = X.data
+        if row.dtype != ctypes.c_int:
+            row = row.astype(ctypes.c_int)
+        if col.dtype != ctypes.c_int:
+            col = col.astype(ctypes.c_int)
+        if val.dtype != self.dtype_:
+            val = val.astype(self.dtype_)
         return row, col, val
 
     def _process_U_arr(self, U):
@@ -325,7 +332,7 @@ class _CMF:
                 U = U.to_numpy()
             if not U.flags["C_CONTIGUOUS"]:
                 U = np.ascontiguousarray(U)
-            if not U.dtype != self.dtype_:
+            if U.dtype != self.dtype_:
                 U = U.astype(self.dtype_)
             Uarr = U
             m, p = Uarr.shape
@@ -372,9 +379,15 @@ class _CMF:
                     append_Ub = x_not_b
 
             _, user_mapping_ = pd.factorize(user_ids)
-            X[col] = pd.Categorical(X[col], user_mapping_).codes.astype(ctypes.c_int)
-            U[col] = pd.Categorical(U[col], user_mapping_).codes.astype(ctypes.c_int)
-            U_bin[col] = pd.Categorical(U_bin[col], user_mapping_).codes.astype(ctypes.c_int)
+            X = X.assign(**{col : pd.Categorical(X[col], user_mapping_).codes})
+            if X[col].dtype != ctypes.c_int:
+                X = X.assign(**{col : X[col].astype(ctypes.c_int)})
+            U = U.assign(**{col : pd.Categorical(U[col], user_mapping_).codes})
+            if U[col].dtype != ctypes.c_int:
+                U = U.assign({col : U[col].astype(ctypes.c_int)})
+            U_bin = U_bin.assign(**{col : pd.Categorical(U_bin[col], user_mapping_).codes})
+            if U_bin[col].dtype != ctypes.c_int:
+                U_bin = U_bin.assign(**{col : U_bin[col].astype(ctypes.c_int)})
 
             if append_U.shape[0]:
                 append_U = pd.Categorical(np.unique(append_U), user_mapping_).codes.astype(ctypes.c_int)
@@ -417,14 +430,21 @@ class _CMF:
                 _, user_mapping_ = pd.factorize(user_ids)
                 if user_mapping_.__class__.__name__ == "CategoricalIndex":
                     user_mapping_ = user_mapping_.to_numpy()
-                X[col] = pd.Categorical(X[col], user_mapping_).codes.astype(ctypes.c_int)
-                U[col] = pd.Categorical(U[col], user_mapping_).codes.astype(ctypes.c_int)
+                X = X.assign(**{col : pd.Categorical(X[col], user_mapping_).codes})
+                if X[col].dtype != ctypes.c_int:
+                    X = X.assign(**{col : X[col].astype(ctypes.c_int)})
+                U = U.assign(**{col : pd.Categorical(U[col], user_mapping_).codes})
+                if U[col].dtype != ctypes.c_int:
+                    U = U.assign(**{col : U[col].astype(ctypes.c_int)})
                 if append_U.shape[0]:
                     append_U = pd.Categorical(append_U, user_mapping_).codes.astype(ctypes.c_int)
                     append_U = np.sort(append_U)
 
             else:
-                X[col], user_mapping_ = pd.factorize(X[col].to_numpy())
+                X_col, user_mapping_ = pd.factorize(X[col].to_numpy())
+                X = X.assign(**{col : X_col})
+                if X[col].dtype != ctypes.c_int:
+                    X = X.assign(**{col : X[col].astype(ctypes.c_int)})
                 if user_mapping_.__class__.__name__ == "CategoricalIndex":
                     user_mapping_ = user_mapping_.to_numpy()
 
@@ -457,9 +477,11 @@ class _CMF:
                 U = U.sort_values(cl_take)
                 Uarr = U[[cl for cl in U.columns.values if cl != cl_take]]
                 Ucols = Uarr.columns.to_numpy()
-                Uarr = Uarr.astype(self.dtype_).to_numpy()
-                if np.isfortran(Uarr):
+                Uarr = Uarr.to_numpy()
+                if not Uarr.flags["C_CONTIGUOUS"]:
                     Uarr = np.ascontiguousarray(Uarr)
+                if Uarr.dtype != self.dtype_:
+                    Uarr = Uarr.astype(self.dtype_)
                 m, p = Uarr.shape
         return Urow, Ucol, Uval, Uarr, Ucols, m, p
 
@@ -482,12 +504,6 @@ class _CMF:
         if (U is None) and (U_col is None) and (U_bin is None):
             raise ValueError("Must pass %s side information in some format."
                              % name)
-
-        if self.copy_data:
-            U = U.copy() if U is not None else U
-            U_bin = U_bin.copy() if U_bin is not None else U_bin
-            U_col = U_col.copy() if U_col is not None else U_col
-            U_val = U_val.copy() if U_val is not None else U_val
 
         ###
         if U is not None:
@@ -559,9 +575,6 @@ class _CMF:
         Cols = self._U_cols if not is_I else self._I_cols
         Mat = self.C_ if not is_I else self.D_
 
-        if self.copy_data and U is not None:
-            U = U.copy()
-
         Uarr = np.empty((0,0), dtype=self.dtype_)
         Urow = np.empty(0, dtype=ctypes.c_int)
         Ucol = np.empty(0, dtype=ctypes.c_int)
@@ -630,9 +643,6 @@ class _CMF:
             msg += "as the data passed to 'fit'."
             raise ValueError(msg % letter)
 
-        if self.copy_data and U_bin is not None:
-            U_bin = U_bin.copy() if U_bin is not None else U_bin
-
         if U_bin.__class__.__name__ == "DataFrame":
             if col_id in U_bin.columns.values:
                 warnings.warn("'%s' not meaningful for new inputs." % col_id)
@@ -669,10 +679,6 @@ class _CMF:
         W_dense = np.empty((0,0), dtype=self.dtype_)
         W_sp = np.empty(0, dtype=self.dtype_)
         m, n = X.shape
-
-        if self.copy_data:
-            X = X.copy() if X is not None else X
-            W = W.copy() if W is not None else W
 
         if X.__class__.__name__ == "coo_matrix":
             Xrow = X.row.astype(ctypes.c_int)
@@ -747,7 +753,9 @@ class _CMF:
                 assert user.shape[0] > 0
                 if self.reindex_:
                     if user.shape[0] > 1:
-                        user = pd.Categorical(user, self.user_mapping_).codes.astype(ctypes.c_int)
+                        user = pd.Categorical(user, self.user_mapping_).codes
+                        if user.dtype != ctypes.c_int:
+                            user = user.astype(ctypes.c_int)
                     else:
                         if len(self.user_dict_):
                             try:
@@ -775,7 +783,9 @@ class _CMF:
                 assert item.shape[0] > 0
                 if self.reindex_:
                     if item.shape[0] > 1:
-                        item = pd.Categorical(item, self.item_mapping_).codes.astype(ctypes.c_int)
+                        item = pd.Categorical(item, self.item_mapping_).codes
+                        if item.dtype != ctypes.c_int:
+                            item = item.astype(ctypes.c_int)
                     else:
                         if len(self.item_dict_):
                             try:
@@ -807,10 +817,13 @@ class _CMF:
                     except:
                         raise ValueError(msg % "include")
                 else:
-                    include = pd.Categorical(include, self.item_mapping_).codes.astype(ctypes.c_int)
+                    include = pd.Categorical(include, self.item_mapping_).codes
                     if np.any(include < 0):
                         raise ValueError(msg % "include")
-                include = include.astype(ctypes.c_int).reshape(-1)
+                
+                if include.dtype != ctypes.c_int:
+                    include = include.astype(ctypes.c_int)
+                include = include.reshape(-1)
             if exclude.shape[0]:
                 if len(self.item_dict_):
                     try:
@@ -818,10 +831,15 @@ class _CMF:
                     except:
                         raise ValueError(msg % "exclude")
                 else:
-                    exclude = pd.Categorical(exclude, self.item_mapping_).codes.astype(ctypes.c_int)
+                    exclude = pd.Categorical(exclude, self.item_mapping_).codes
+                    if exclude.dtype != ctypes.c_int:
+                        exclude = exclude.astype(ctypes.c_int)
                     if np.any(exclude < 0):
                         raise ValueError(msg % "exclude")
-                exclude = exclude.astype(ctypes.c_int).reshape(-1)
+                
+                if exclude.dtype != ctypes.c_int:
+                    exclude = exclude.astype(ctypes.c_int)
+                exclude = exclude.reshape(-1)
 
         else:
             msg  = "'%s' entries must be within the range of the %s (%s)"
@@ -852,14 +870,6 @@ class _CMF:
         if (U_bin is not None or I_bin is not None) and self.method != "lbfgs":
             msg  = "Binary side info is only supported when using method='lbfgs'."
             raise ValueError(msg)
-
-        if self.copy_data:
-            X = X.copy()
-            U = U.copy() if U is not None else None
-            I = I.copy() if I is not None else None
-            U_bin = U_bin.copy() if U_bin is not None else None
-            I_bin = I_bin.copy() if I_bin is not None else None
-            W = W.copy() if W is not None else None
 
         self._reset()
 
@@ -900,12 +910,18 @@ class _CMF:
             X, U, U_bin, self.user_mapping_, append_U, append_Ub = self._convert_ids(X, U, U_bin, "UserId")
             X, I, I_bin, self.item_mapping_, append_I, append_Ib = self._convert_ids(X, I, I_bin, "ItemId")
 
-            Xrow = X.UserId.astype(ctypes.c_int).to_numpy()
-            Xcol = X.ItemId.astype(ctypes.c_int).to_numpy()
+            Xrow = X.UserId.to_numpy()
+            Xcol = X.ItemId.to_numpy()
+            if Xrow.dtype != ctypes.c_int:
+                Xrow = Xrow.astype(ctypes.c_int)
+            if Xcol.dtype != ctypes.c_int:
+                Xcol = Xcol.astype(ctypes.c_int)
             if self._implicit:
-                Xval = X.Value.astype(self.dtype_).to_numpy()
+                Xval = X.Value.to_numpy()
             else:
-                Xval = X.Rating.astype(self.dtype_).to_numpy()
+                Xval = X.Rating.to_numpy()
+            if Xval.dtype != self.dtype_:
+                Xval = Xval.astype(self.dtype_)
             if Xval.shape[0] == 0:
                 raise ValueError("'X' contains no non-zero entries.")
             Xarr = np.empty((0,0), dtype=self.dtype_)
@@ -1444,12 +1460,6 @@ class _CMF:
         if (self.Cbin_.shape[0] == 0) and (U_bin is not None):
             raise ValueError("Cannot pass binary user information if the model was not fit to it.")
 
-        if self.copy_data:
-            X = X.copy() if X is not None else None
-            X_col = X_col.copy() if X_col is not None else None
-            X_val = X_val.copy() if X_val is not None else None
-            W = W.copy() if W is not None else None
-
         if (U is not None) or (U_val is not None) or (U_bin is not None):
             U, U_col, U_val, U_bin = self._process_new_U(U, U_col, U_val, U_bin)
         else:
@@ -1464,11 +1474,15 @@ class _CMF:
             W_sp = np.empty(0, dtype=self.dtype_)
             if len(X.shape) > 1:
                 warnings.warn("Passed a 2-d array for 'X' - method expects a single row.")
-            X = np.array(X).reshape(-1).astype(self.dtype_)
+            X = np.array(X).reshape(-1)
+            if X.dtype != self.dtype_:
+                X = X.astype(self.dtype_)
             if X.shape[0] != self._n_orig:
                 raise ValueError("'X' must have the same columns as when passed to 'fit'.")
             if W is not None:
-                W_dense = np.array(W).reshape(-1).astype(self.dtype_)
+                W_dense = np.array(W).reshape(-1)
+                if W_dense.dtype != self.dtype_:
+                    W_dense = W_dense.astype(self.dtype_)
                 if W_dense.shape[0] != X.shape[0]:
                     raise ValueError("'W' must have the same number of entries as X.")
             else:
@@ -1476,20 +1490,28 @@ class _CMF:
         else:
             X = np.empty(0, dtype=self.dtype_)
             W_dense = np.empty(0, dtype=self.dtype_)
-            X_val = np.array(X_val).reshape(-1).astype(self.dtype_)
+            X_val = np.array(X_val).reshape(-1)
+            if X_val.dtype != self.dtype_:
+                X_val = X_val.astype(self.dtype_)
 
             if X_val.shape[0] == 0:
-                X_col = np.array(X_col).reshape(-1).astype(ctypes.c_int)
+                X_col = np.array(X_col).reshape(-1)
+                if X_col.dtype != ctypes.c_int:
+                    X_col = X_col.astype(ctypes.c_int)
                 if X_col.shape[0] > 0:
                     raise ValueError("'X_col' and 'X_val' must have the same number of entries.")
             else:
                 if self.reindex_:
                     X_col = np.array(X_col).reshape(-1)
-                    X_col = pd.Categorical(X_col, self.item_mapping_).codes.astype(ctypes.c_int)
+                    X_col = pd.Categorical(X_col, self.item_mapping_).codes
+                    if X_col.dtype != ctypes.c_int:
+                        X_col = X_col.astype(ctypes.c_int)
                     if np.any(X_col < 0):
                         raise ValueError("'X_col' must have the same item/column entries as passed to 'fit'.")
                 else:
-                    X_col = np.array(X_col).reshape(-1).astype(ctypes.c_int)
+                    X_col = np.array(X_col).reshape(-1)
+                    if X_col.dtype != ctypes.c_int:
+                        X_col = X_col.astype(ctypes.c_int)
                     imin, imax = np.min(X_col), np.max(X_col)
                     if (imin < 0) or (imax >= self._n_orig) or np.isnan(imin) or np.isnan(imax):
                         msg  = "Column indices ('X_col') must be within the range"
@@ -1504,7 +1526,9 @@ class _CMF:
                 raise ValueError("'X' is empty.")
 
             if W is not None:
-                W_sp = np.array(W).reshape(-1).astype(self.dtype_)
+                W_sp = np.array(W).reshape(-1)
+                if W_sp.dtype != self.dtype_:
+                    W_sp = W_sp.astype(self.dtype_)
                 if W_sp.shape[0] != X_col.shape[0]:
                     raise ValueError("'W' must have the same number of entries as 'X_val'.")
             else:
@@ -2085,7 +2109,7 @@ class _CMF:
                 use_float=self.use_float,
                 random_state=self.random_state, verbose=self.verbose, print_every=self.print_every,
                 handle_interrupt=self.handle_interrupt, produce_dicts=self.produce_dicts,
-                copy_data=self.copy_data, nthreads=self.nthreads)
+                nthreads=self.nthreads)
         elif isinstance(self, CMF_implicit):
             new_model = CMF_implicit(
                 k=self.k, lambda_=new_lambda, alpha=self.alpha, use_cg=self.use_cg,
@@ -2099,7 +2123,7 @@ class _CMF:
                 max_cg_steps=self.max_cg_steps, finalize_chol=self.finalize_chol,
                 random_state=self.random_state, verbose=self.verbose,
                 produce_dicts=self.produce_dicts, handle_interrupt=self.handle_interrupt,
-                copy_data=self.copy_data, nthreads=self.nthreads)
+                nthreads=self.nthreads)
         elif isinstance(self, MostPopular):
             if self.implicit:
                 raise ValueError("Cannot swap users and items for MostPopular-implicit.")
@@ -2109,7 +2133,7 @@ class _CMF:
                 implicit=self.implicit, user_bias=True, lambda_=new_lambda, alpha=self.alpha,
                 apply_log_transf=self.apply_log_transf,
                 use_float=self.use_float, produce_dicts=self.produce_dicts,
-                copy_data=self.copy_data, nthreads=self.nthreads)
+                nthreads=self.nthreads)
         elif isinstance(self, ContentBased):
             new_model = ContentBased(
                 k=self.k, lambda_=new_lambda, user_bias=self.user_bias, item_bias=self.item_bias,
@@ -2117,7 +2141,7 @@ class _CMF:
                 parallelize=self.parallelize, verbose=self.verbose, print_every=self.print_every,
                 random_state=self.random_state, use_float=self.use_float,
                 produce_dicts=self.produce_dicts, handle_interrupt=self.handle_interrupt, start_with_ALS=self.start_with_ALS,
-                copy_data=self.copy_data, nthreads=self.nthreads)
+                nthreads=self.nthreads)
         elif isinstance(self, OMF_explicit):
             new_model = OMF_explicit(
                 k=self.k, lambda_=new_lambda, method=self.method, use_cg=self.use_cg,
@@ -2128,7 +2152,7 @@ class _CMF:
                 NA_as_zero=self.NA_as_zero, use_float=self.use_float,
                 random_state=self.random_state, verbose=self.verbose, print_every=self.print_every,
                 produce_dicts=self.produce_dicts, handle_interrupt=self.handle_interrupt,
-                copy_data=self.copy_data, nthreads=self.nthreads)
+                nthreads=self.nthreads)
         elif isinstance(self, OMF_implicit):
             new_model = OMF_implicit(
                 k=self.k, lambda_=new_lambda, alpha=self.alpha, use_cg=self.use_cg, downweight=self.downweight,
@@ -2138,7 +2162,7 @@ class _CMF:
                 max_cg_steps=self.max_cg_steps, finalize_chol=self.finalize_chol,
                 random_state=self.random_state, verbose=self.verbose,
                 produce_dicts=self.produce_dicts, handle_interrupt=self.handle_interrupt,
-                copy_data=self.copy_data, nthreads=self.nthreads)
+                nthreads=self.nthreads)
         else:
             raise ValueError("Unexpected error.")
 
@@ -2646,11 +2670,6 @@ class CMF(_CMF):
         to the point when it was interrupted (when passing 'True'), or
         raise an interrupt exception without producing a fitted model object
         (when passing 'False').
-    copy_data : bool
-        Whether to make copies of the input data that is passed to this
-        object's methods (``fit``, ``predict``, etc.), in order to avoid
-        modifying such data in-place. Passing ``False`` will save some
-        computation time and memory usage.
     nthreads : int
         Number of parallel threads to use. If passing -1, will take the
         maximum available number of threads in the system.
@@ -2744,7 +2763,7 @@ class CMF(_CMF):
                  use_float=True,
                  random_state=1, verbose=True, print_every=10,
                  handle_interrupt=True, produce_dicts=False,
-                 copy_data=True, nthreads=-1):
+                 nthreads=-1):
         self._take_params(implicit=False, alpha=0., downweight=False,
                           k=k, lambda_=lambda_, method=method,
                           add_implicit_features=add_implicit_features,
@@ -2769,7 +2788,7 @@ class CMF(_CMF):
                           random_state=random_state,
                           verbose=verbose, print_every=print_every,
                           handle_interrupt=handle_interrupt,
-                          produce_dicts=produce_dicts, copy_data=copy_data,
+                          produce_dicts=produce_dicts,
                           nthreads=nthreads)
         self.include_all_X = bool(include_all_X)
         if (self.NA_as_zero) and (not self.include_all_X):
@@ -4300,11 +4319,6 @@ class CMF_implicit(_CMF):
         to the point when it was interrupted (when passing 'True'), or
         raise an interrupt exception without producing a fitted model object
         (when passing 'False').
-    copy_data : bool
-        Whether to make copies of the input data that is passed to this
-        object's methods (``fit``, ``predict``, etc.), in order to avoid
-        modifying such data in-place. Passing ``False`` will save some
-        computation time and memory usage.
     nthreads : int
         Number of parallel threads to use. If passing -1, will take the
         maximum available number of threads in the system.
@@ -4371,7 +4385,7 @@ class CMF_implicit(_CMF):
                  max_cg_steps=3, finalize_chol=False,
                  random_state=1, verbose=False,
                  produce_dicts=False, handle_interrupt=True,
-                 copy_data=True, nthreads=-1):
+                 nthreads=-1):
         self._take_params(implicit=True, alpha=alpha, downweight=False,
                           k=k, lambda_=lambda_, method="als",
                           use_cg=use_cg, max_cg_steps=max_cg_steps,
@@ -4392,7 +4406,7 @@ class CMF_implicit(_CMF):
                           random_state=random_state,
                           verbose=verbose, print_every=0,
                           handle_interrupt=handle_interrupt,
-                          produce_dicts=produce_dicts, copy_data=copy_data,
+                          produce_dicts=produce_dicts,
                           nthreads=nthreads)
 
     def __str__(self):
@@ -5823,11 +5837,6 @@ class OMF_explicit(_OMF):
         but it will add some extra overhead at the time of fitting the model
         and extra memory usage. Ignored when passing the data as matrices
         and arrays instead of data frames.
-    copy_data : bool
-        Whether to make copies of the input data that is passed to this
-        object's methods (``fit``, ``predict``, etc.), in order to avoid
-        modifying such data in-place. Passing ``False`` will save some
-        computation time and memory usage.
     nthreads : int
         Number of parallel threads to use. If passing -1, will take the
         maximum available number of threads in the system.
@@ -5899,7 +5908,7 @@ class OMF_explicit(_OMF):
                  NA_as_zero=False, use_float=False,
                  random_state=1, verbose=True, print_every=100,
                  produce_dicts=False, handle_interrupt=True,
-                 copy_data=True, nthreads=-1):
+                 nthreads=-1):
         assert k>0 or k_sec>0 or k_main>0
         self._take_params(implicit=False, alpha=0., downweight=False,
                           k=1, lambda_=lambda_, method=method,
@@ -5918,7 +5927,7 @@ class OMF_explicit(_OMF):
                           random_state=random_state,
                           verbose=verbose, print_every=print_every,
                           handle_interrupt=handle_interrupt,
-                          produce_dicts=produce_dicts, copy_data=copy_data,
+                          produce_dicts=produce_dicts,
                           nthreads=nthreads)
         self.k = int(k)
         self._take_params_offsets(k_sec=k_sec, k_main=k_main,
@@ -6701,11 +6710,6 @@ class OMF_implicit(_OMF):
         but it will add some extra overhead at the time of fitting the model
         and extra memory usage. Ignored when passing the data as matrices
         and arrays instead of data frames.
-    copy_data : bool
-        Whether to make copies of the input data that is passed to this
-        object's methods (``fit``, ``predict``, etc.), in order to avoid
-        modifying such data in-place. Passing ``False`` will save some
-        computation time and memory usage.
     nthreads : int
         Number of parallel threads to use. If passing -1, will take the
         maximum available number of threads in the system.
@@ -6764,7 +6768,7 @@ class OMF_implicit(_OMF):
                  max_cg_steps=3, finalize_chol=False,
                  random_state=1, verbose=False,
                  produce_dicts=False, handle_interrupt=True,
-                 copy_data=True, nthreads=-1):
+                 nthreads=-1):
         self._take_params(implicit=True, alpha=alpha, downweight=False,
                           k=k, lambda_=lambda_, method="als",
                           apply_log_transf=apply_log_transf,
@@ -6782,7 +6786,7 @@ class OMF_implicit(_OMF):
                           random_state=random_state,
                           verbose=verbose, print_every=0,
                           handle_interrupt=handle_interrupt,
-                          produce_dicts=produce_dicts, copy_data=copy_data,
+                          produce_dicts=produce_dicts,
                           nthreads=nthreads)
         self._take_params_offsets(k_sec=0, k_main=0, add_intercepts=add_intercepts)
         msg  = "This model was implemented for experimentation purposes."
@@ -7208,11 +7212,6 @@ class ContentBased(_OMF_Base):
         This might help to speed up the procedure by starting closer to an
         optimum. This option is not available when the side information is passed
         as sparse matrices.
-    copy_data : bool
-        Whether to make copies of the input data that is passed to this
-        object's methods (``fit``, ``predict``, etc.), in order to avoid
-        modifying such data in-place. Passing ``False`` will save some
-        computation time and memory usage.
     nthreads : int
         Number of parallel threads to use. If passing -1, will take the
         maximum available number of threads in the system.
@@ -7273,7 +7272,7 @@ class ContentBased(_OMF_Base):
                  parallelize="separate", verbose=True, print_every=100,
                  random_state=1, use_float=True,
                  produce_dicts=False, handle_interrupt=True, start_with_ALS=True,
-                 copy_data=True, nthreads=-1):
+                 nthreads=-1):
         self._take_params(implicit=False, alpha=40., downweight=False,
                           k=1, lambda_=lambda_, method="lbfgs", use_cg=False,
                           user_bias=user_bias, item_bias=item_bias,
@@ -7289,7 +7288,7 @@ class ContentBased(_OMF_Base):
                           random_state=random_state,
                           verbose=verbose, print_every=print_every,
                           handle_interrupt=handle_interrupt,
-                          produce_dicts=produce_dicts, copy_data=copy_data,
+                          produce_dicts=produce_dicts,
                           nthreads=nthreads)
         self._take_params_offsets(k_sec=k, k_main=0,
                                   add_intercepts=add_intercepts)
@@ -7728,11 +7727,6 @@ class MostPopular(_CMF):
         but it will add some extra overhead at the time of fitting the model
         and extra memory usage. Ignored when passing the data as matrices
         and arrays instead of data frames.
-    copy_data : bool
-        Whether to make copies of the input data that is passed to this
-        object's methods (``fit``, ``predict``, etc.), in order to avoid
-        modifying such data in-place. Passing ``False`` will save some
-        computation time and memory usage.
     nthreads : int
         Number of parallel threads to use.  If passing -1, will take the
         maximum available number of threads in the system. Most of the
@@ -7782,7 +7776,7 @@ class MostPopular(_CMF):
     def __init__(self, implicit=False, center=True, user_bias=False, lambda_=1e1, alpha=1.,
                  NA_as_zero=False, scale_lam=False, scale_bias_const=False, apply_log_transf=False,
                  use_float=False, produce_dicts=False,
-                 copy_data=True, nthreads=-1):
+                 nthreads=-1):
         self._take_params(implicit=implicit, alpha=alpha, downweight=False,
                           k=1, lambda_=lambda_, method="als", use_cg=False,
                           apply_log_transf=apply_log_transf,
@@ -7800,7 +7794,7 @@ class MostPopular(_CMF):
                           random_state=1,
                           verbose=0, print_every=0,
                           handle_interrupt=False,
-                          produce_dicts=produce_dicts, copy_data=copy_data,
+                          produce_dicts=produce_dicts,
                           nthreads=nthreads)
         self.k = 0
         self.niter = 0

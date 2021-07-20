@@ -374,6 +374,11 @@ void taxpy_large(real_t *restrict A, real_t x, real_t *restrict Y, size_t n, int
 void tscal_large(real_t *restrict arr, real_t alpha, size_t n, int nthreads);
 void rnorm_xoshiro(real_t *seq, const size_t n, rng_state_t state[4]);
 void seed_state(int_t seed, rng_state_t state[4]);
+void fill_rnorm_buckets
+(
+    const size_t n_buckets, real_t *arr, const size_t n,
+    real_t **ptr_bucket, size_t *sz_bucket, const size_t BUCKET_SIZE
+);
 void rnorm_singlethread(ArraysToFill arrays, rng_state_t state[4]);
 int_t rnorm_parallel(ArraysToFill arrays, int_t seed, int nthreads);
 void reduce_mat_sum(real_t *restrict outp, size_t lda, real_t *restrict inp,
@@ -764,16 +769,18 @@ void optimizeA_implicit
     real_t *restrict precomputedBtB, /* <- will be calculated if not passed */
     real_t *restrict buffer_real_t
 );
-void calc_mean_and_center
+int_t calc_mean_and_center
 (
-    int_t ixA[], int_t ixB[], real_t *restrict X, size_t nnz,
-    real_t *restrict Xfull, real_t *restrict Xtrans,
+    int_t ixA[], int_t ixB[], real_t *restrict *X_, size_t nnz,
+    real_t *restrict *Xfull_, real_t *restrict Xtrans,
     int_t m, int_t n,
     size_t Xcsr_p[], int_t Xcsr_i[], real_t *restrict Xcsr,
     size_t Xcsc_p[], int_t Xcsc_i[], real_t *restrict Xcsc,
     real_t *restrict weight,
     bool NA_as_zero, bool nonneg, bool center, int nthreads,
-    real_t *restrict glob_mean
+    real_t *restrict glob_mean,
+    bool *modified_X, bool *modified_Xfull,
+    bool allow_overwrite_X
 );
 int_t initialize_biases
 (
@@ -785,14 +792,16 @@ int_t initialize_biases
     real_t *restrict scaling_biasA, real_t *restrict scaling_biasB,
     int_t m, int_t n,
     int_t m_bias, int_t n_bias,
-    int_t ixA[], int_t ixB[], real_t *restrict X, size_t nnz,
-    real_t *restrict Xfull, real_t *restrict Xtrans,
+    int_t ixA[], int_t ixB[], real_t *restrict *X_, size_t nnz,
+    real_t *restrict *Xfull_, real_t *restrict Xtrans,
     size_t Xcsr_p[], int_t Xcsr_i[], real_t *restrict Xcsr,
     size_t Xcsc_p[], int_t Xcsc_i[], real_t *restrict Xcsc,
     real_t *restrict weight, real_t *restrict Wtrans,
     real_t *restrict weightR, real_t *restrict weightC,
     bool nonneg,
-    int nthreads
+    int nthreads,
+    bool *modified_X, bool *modified_Xfull,
+    bool allow_overwrite_X
 );
 int_t initialize_biases_onesided
 (
@@ -823,11 +832,11 @@ int_t initialize_biases_twosided
 int_t center_by_cols
 (
     real_t *restrict col_means,
-    real_t *restrict Xfull, int_t m, int_t n,
-    int_t ixA[], int_t ixB[], real_t *restrict X, size_t nnz,
+    real_t *restrict *Xfull_, int_t m, int_t n,
+    int_t ixA[], int_t ixB[], real_t *restrict *X_, size_t nnz,
     size_t Xcsr_p[], int_t Xcsr_i[], real_t *restrict Xcsr,
     size_t Xcsc_p[], int_t Xcsc_i[], real_t *restrict Xcsc,
-    int nthreads
+    int nthreads, bool *modified_X, bool *modified_Xfull
 );
 bool check_sparse_indices
 (
@@ -890,13 +899,15 @@ int_t fit_most_popular_internal
     bool scale_lam, bool scale_bias_const,
     real_t alpha,
     int_t m, int_t n,
-    int_t ixA[], int_t ixB[], real_t *restrict X, size_t nnz,
-    real_t *restrict Xfull,
+    int_t ixA[], int_t ixB[], real_t *restrict *X_, size_t nnz,
+    real_t *restrict *Xfull_,
     real_t *restrict weight,
     bool implicit, bool adjust_weight, bool apply_log_transf,
     bool nonneg,
     real_t *restrict w_main_multiplier,
-    int nthreads
+    int nthreads,
+    bool *free_X, bool *free_Xfull,
+    bool allow_overwrite_X
 );
 CMFREC_EXPORTABLE int_t topN_old_most_popular
 (
@@ -1349,14 +1360,15 @@ void build_XBw
     real_t w,
     bool do_B, bool overwrite
 );
-void preprocess_vec
+int_t preprocess_vec
 (
-    real_t *restrict vec_full, int_t n,
-    int_t *restrict ix_vec, real_t *restrict vec_sp, size_t nnz,
+    real_t *restrict *vec_full_, int_t n,
+    int_t *restrict ix_vec, real_t *restrict *vec_sp_, size_t nnz,
     real_t glob_mean, real_t lam,
     real_t *restrict col_means,
     real_t *restrict vec_mean,
-    int_t *restrict cnt_NA
+    int_t *restrict cnt_NA,
+    bool *modified_vec, bool *modified_vec_sp
 );
 int_t convert_sparse_X
 (
@@ -1368,14 +1380,15 @@ int_t convert_sparse_X
 );
 int_t preprocess_sideinfo_matrix
 (
-    real_t *U, int_t m_u, int_t p,
-    int_t U_row[], int_t U_col[], real_t *U_sp, size_t nnz_U,
+    real_t *restrict *U_, int_t m_u, int_t p,
+    int_t U_row[], int_t U_col[], real_t *restrict *U_sp_, size_t nnz_U,
     real_t *U_colmeans, real_t *restrict *Utrans,
     size_t **U_csr_p, int_t **U_csr_i, real_t *restrict *U_csr,
     size_t **U_csc_p, int_t **U_csc_i, real_t *restrict *U_csc,
     int_t *restrict *cnt_NA_u_byrow, int_t *restrict *cnt_NA_u_bycol,
     bool *full_dense_u, bool *near_dense_u_row, bool *near_dense_u_col,
-    bool NA_as_zero_U, bool nonneg, int nthreads
+    bool NA_as_zero_U, bool nonneg, int nthreads,
+    bool *modified_U, bool *modified_Usp
 );
 real_t wrapper_collective_fun_grad
 (

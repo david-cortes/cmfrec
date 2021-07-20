@@ -220,7 +220,7 @@ process.X <- function(X, weight=NULL) {
             stop("'weight' should be passed as 4th column of 'X' when 'X' is a 'data.frame'.")
         out$Xrow <- as.integer(X[[1L]]) - 1L
         out$Xcol <- as.integer(X[[2L]]) - 1L
-        out$Xval <- .Call("deep_copy", as.numeric(X[[3L]]))
+        out$Xval <- as.numeric(X[[3L]])
         if (NCOL(X) > 3L) {
             out$Wsp <- as.numeric(X[[4L]])
         }
@@ -229,13 +229,13 @@ process.X <- function(X, weight=NULL) {
     } else if ("matrix.coo" %in% class(X)) {
         out$Xrow <- X@ia - 1L
         out$Xcol <- X@ja - 1L
-        out$Xval <- .Call("deep_copy", X@ra)
+        out$Xval <- X@ra
         out$m    <- X@dimension[1L]
         out$n    <- X@dimension[2L]
     } else if ("dgTMatrix" %in% class(X)) {
         out$Xrow <- X@i
         out$Xcol <- X@j
-        out$Xval <- .Call("deep_copy", X@x)
+        out$Xval <- X@x
         out$m    <- X@Dim[1L]
         out$n    <- X@Dim[2L]
     } else if ("matrix" %in% class(X)) {
@@ -294,13 +294,13 @@ process.side.info <- function(U, name="U", allow_missing=TRUE) {
     } else if ("matrix.coo" %in% class(U)) {
         out$Urow <- U@ia - 1L
         out$Ucol <- U@ja - 1L
-        out$Uval <- .Call("deep_copy", U@ra)
+        out$Uval <- U@ra
         out$m    <- U@dimension[1L]
         out$p    <- U@dimension[2L]
     } else if ("dgTMatrix" %in% class(U)) {
         out$Urow <- U@i
         out$Ucol <- U@j
-        out$Uval <- .Call("deep_copy", U@x)
+        out$Uval <- U@x
         out$m    <- U@Dim[1L]
         out$p    <- U@Dim[2L]
     } else {
@@ -440,11 +440,11 @@ process.new.X.single <- function(X, X_col, X_val, weight, info, n_max) {
         if ("integer" %in% class(X))
             X <- as.numeric(X)
         if ("numeric" %in% class(X)) {
-            out$X <- .Call("deep_copy", X)
+            out$X <- X
             out$n <- NROW(X)
         } else {
             out$X_col <- X@i - 1L
-            out$X_val <- .Call("deep_copy", X@x)
+            out$X_val <- X@x
             out$n     <- n_use
         }
     }
@@ -469,7 +469,7 @@ process.new.X.single <- function(X, X_col, X_val, weight, info, n_max) {
             stop("'X_val' must be a numeric vector.")
         
         out$X_col <- X_col
-        out$X_val <- .Call("deep_copy", X_val)
+        out$X_val <- X_val
         out$n     <- n_use
     }
     
@@ -545,13 +545,13 @@ process.new.U.single <- function(U, U_col, U_val, name, mapping, p, colnames,
                 stop(sprintf("'%s' has different number of columns than model was fit to.", name))
             if (!allow_na && anyNA(U))
                 stop(sprintf("'%s' cannot have NAN values.", name))
-            out$U <- .Call("deep_copy", U)
+            out$U <- U
             out$p <- NROW(U)
         } else {
             if (U@length > p)
                 stop(sprintf("'%s' has more columns than the model was fit to.", name))
             out$U_col <- U@i - 1L
-            out$U_val <- .Call("deep_copy", U@x)
+            out$U_val <- U@x
             out$p     <- p
         }
     }
@@ -576,7 +576,7 @@ process.new.U.single <- function(U, U_col, U_val, name, mapping, p, colnames,
             stop(sprintf("'%s_val' must be a numeric vector.", name))
         
         out$U_col <- U_col
-        out$U_val <- .Call("deep_copy", U_val)
+        out$U_val <- U_val
         out$p     <- p
     }
     
@@ -644,7 +644,7 @@ process.new.X <- function(obj, X, weight=NULL,
         
         out$Xrow <- X[[1L]]
         out$Xcol <- X[[2L]]
-        out$Xval <- .Call("deep_copy", X[[3L]])
+        out$Xval <- as.numeric(X[[3L]])
         
         if (ncol(X) >= 4L) {
             out$Wsp <- X[[4L]]
@@ -653,32 +653,32 @@ process.new.X <- function(obj, X, weight=NULL,
     } else if (inherits(X, "dgTMatrix")) {
         out$Xrow <- X@i
         out$Xcol <- X@j
-        out$Xval <- .Call("deep_copy", X@x)
+        out$Xval <- X@x
         out$m    <- X@Dim[1L]
         out$n    <- X@Dim[2L]
     } else if (inherits(X, "matrix.coo")) {
         out$Xrow <- X@ia - 1L
         out$Xcol <- X@ja - 1L
-        out$Xval <- .Call("deep_copy", X@ra)
+        out$Xval <- X@ra
         out$m    <- X@dimension[1L]
         out$n    <- X@dimension[2L]
     } else if (inherits(X, "dgRMatrix")) {
         out$Xcsr_p <- .Call("as_size_t", X@p)
         out$Xcsr_i <- X@j
-        out$Xcsr   <- .Call("deep_copy", X@x)
+        out$Xcsr   <- X@x
         out$m      <- X@Dim[1L]
         out$n      <- X@Dim[2L]
     } else if (inherits(X, "matrix.csr")) {
         out$Xcsr_p <- .Call("as_size_t", X@ia - 1L)
         out$Xcsr_i <- X@ja - 1L
-        out$Xcsr   <- .Call("deep_copy", X@ra)
+        out$Xcsr   <- X@ra
         out$m      <- X@dimension[1L]
         out$n      <- X@dimension[2L]
     } else if (inherits(X, "sparseVector")) {
         out$Xcsr_p <- .Call("as_size_t", c(0L, NROW(X@i)))
         out$Xcsr_i <- X@i - 1L
         if ("x" %in% names(attributes(X)))
-            out$Xcsr <- .Call("deep_copy", as.numeric(X@x))
+            out$Xcsr <- as.numeric(X@x)
         else
             out$Xcsr <- rep(1., length(out$Xcsr_i))
         out$m      <- 1L
@@ -805,28 +805,28 @@ process.new.U <- function(U, U_cols, p, name="U",
             stop(msg_new_cols)
         out$Urow <- U@i
         out$Ucol <- U@j
-        out$Uval <- .Call("deep_copy", U@x)
+        out$Uval <- U@x
         out$m    <- U@Dim[1L]
     } else if (inherits(U, "matrix.coo")) {
         if (U@dimension[2L] > p)
             stop(msg_new_cols)
         out$Urow <- U@ia - 1L
         out$Ucol <- U@ja - 1L
-        out$Uval <- .Call("deep_copy", U@ra)
+        out$Uval <- U@ra
         out$m    <- U@dimension[1L]
     } else if (inherits(U, "dgRMatrix")) {
         if (U@Dim[2L] > p)
             stop(msg_new_cols)
         out$Ucsr_p <- .Call("as_size_t", U@p)
         out$Ucsr_i <- U@j
-        out$Ucsr   <- .Call("deep_copy", U@x)
+        out$Ucsr   <- U@x
         out$m      <- U@Dim[1L]
     } else if (inherits(U, "matrix.csr")) {
         if (U@dimension[2L] > p)
             stop(msg_new_cols)
         out$Ucsr_p <- .Call("as_size_t", U@ia - 1L)
         out$Ucsr_i <- U@ja - 1L
-        out$Ucsr   <- .Call("deep_copy", U@ra)
+        out$Ucsr   <- U@ra
         out$m      <- U@dimension[1L]
     } else if (inherits(U, "sparseVector")) {
         if (U@length > p)
@@ -834,7 +834,7 @@ process.new.U <- function(U, U_cols, p, name="U",
         out$Ucsr_p <- .Call("as_size_t", c(0L, NROW(U@i)))
         out$Ucsr_i <- U@i - 1L
         if ("x" %in% names(attributes(U)))
-            out$Ucsr <- .Call("deep_copy", as.numeric(U@x))
+            out$Ucsr <- as.numeric(U@x)
         else
             out$Ucsr <- rep(1., length(U@i))
         out$m      <- 1L

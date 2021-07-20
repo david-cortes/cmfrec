@@ -2036,6 +2036,10 @@ def call_factors_collective_explicit_single(
         )
     if retval == 1:
         raise MemoryError("Could not allocate sufficient memory.")
+    elif retval == 2:
+        raise ValueError("Unexpected error.")
+    elif retval != 0:
+        raise ValueError("Error: could not calculate factors.")
 
     return Abias, A
 
@@ -2122,6 +2126,10 @@ def call_factors_collective_implicit_single(
         )
     if retval == 1:
         raise MemoryError("Could not allocate sufficient memory.")
+    elif retval == 2:
+        raise ValueError("Unexpected error.")
+    elif retval != 0:
+        raise ValueError("Error: could not calculate factors.")
 
     return A
 
@@ -2163,6 +2171,10 @@ def call_factors_offsets_cold(
         )
     if retval == 1:
         raise MemoryError("Could not allocate sufficient memory.")
+    elif retval == 2:
+        raise ValueError("Unexpected error.")
+    elif retval != 0:
+        raise ValueError("Error: could not calculate factors.")
 
     return A
 
@@ -2282,6 +2294,10 @@ def call_factors_offsets_explicit_single(
         )
     if retval == 1:
         raise MemoryError("Could not allocate sufficient memory.")
+    elif retval == 2:
+        raise ValueError("Unexpected error.")
+    elif retval != 0:
+        raise ValueError("Error: could not calculate factors.")
 
     return Amean, Am, A
 
@@ -2360,6 +2376,10 @@ def call_factors_offsets_implicit_single(
         )
     if retval == 1:
         raise MemoryError("Could not allocate sufficient memory.")
+    elif retval == 2:
+        raise ValueError("Unexpected error.")
+    elif retval != 0:
+        raise ValueError("Error: could not calculate factors.")
 
     return Am, A
 
@@ -2394,6 +2414,11 @@ def call_factors_content_based_single(
         )
     if retval == 1:
         raise MemoryError("Could not allocate sufficient memory.")
+    elif retval == 2:
+        raise ValueError("Unexpected error.")
+    elif retval != 0:
+        raise ValueError("Error: could not calculate factors.")
+
     return a_vec
 
 def call_predict_multiple(
@@ -2512,6 +2537,10 @@ def call_topN(
         )
     if retval == 1:
         raise MemoryError("Could not allocate sufficient memory.")
+    elif retval == 2:
+        raise ValueError("Unexpected error.")
+    elif retval != 0:
+        raise ValueError("Error: could not rank items.")
 
     return outp_ix, outp_score
 

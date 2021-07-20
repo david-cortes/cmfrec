@@ -612,16 +612,36 @@ int_t offsets_factors_warm
     real_t *restrict buffer_remainder = NULL;
     real_t *restrict bufferBtB = NULL;
 
-    if (!implicit)
-        preprocess_vec(Xa_dense, n, ixB, Xa, nnz,
-                       glob_mean, lam_bias, biasB,
-                       (Bm_plus_bias == NULL)? a_bias : (real_t*)NULL,
-                       &cnt_NA);
+    bool free_xdense = false;
+    bool free_xsp = false;
+
+    if (!implicit) {
+        retval = preprocess_vec(&Xa_dense, n, ixB, &Xa, nnz,
+                                glob_mean, lam_bias, biasB,
+                                (Bm_plus_bias == NULL)? a_bias : (real_t*)NULL,
+                                &cnt_NA, &free_xdense, &free_xsp);
+        if (retval != 0) return retval;
+    }
+    
     else if (alpha != 1.) {
-        if (Xa != NULL)
+        real_t *restrict temp = NULL;
+
+        if (Xa != NULL) {
+            temp = (real_t*)malloc(nnz*sizeof(real_t));
+            if (temp == NULL) return 1;
+            copy_arr(Xa, temp, nnz);
+            Xa = temp;
+            free_xsp = true;
             tscal_large(Xa, alpha, nnz, 1);
-        else
+        }
+        else {
+            temp = (real_t*)malloc((size_t)n*sizeof(real_t));
+            if (temp == NULL) return 1;
+            copy_arr(Xa_dense, temp, n);
+            Xa_dense = temp;
+            free_xdense = true;
             cblas_tscal(n, alpha, Xa_dense, 1); /* should not be reached */
+        }
     }
 
     real_t *restrict a_plus_bias = NULL;
@@ -835,6 +855,10 @@ int_t offsets_factors_warm
         free(buffer_real_t);
         free(a_plus_bias);
         free(bufferBtB);
+        if (free_xdense)
+            free(Xa_dense);
+        if (free_xsp)
+            free(Xa);
         return retval;
     throw_oom:
     {
@@ -1239,6 +1263,13 @@ int_t fit_offsets_explicit_lbfgs_internal
     int_t *I_csc_i = NULL;
     real_t *restrict I_csc = NULL;
 
+    bool free_X = false;
+    bool free_Xfull = false;
+    bool free_U = false;
+    bool free_Usp = false;
+    bool free_I = false;
+    bool free_Isp = false;
+
     bool full_dense = false;
     if (Xfull != NULL)
         full_dense = (count_NAs(Xfull, (size_t)m*(size_t)n, nthreads)) == 0;
@@ -1290,31 +1321,45 @@ int_t fit_offsets_explicit_lbfgs_internal
     if (U_sp != NULL)
     {
         retval = preprocess_sideinfo_matrix(
-            (real_t*)NULL, m, p,
-            U_row, U_col, U_sp, nnz_U,
+            (real_t**)NULL, m, p,
+            U_row, U_col, &U_sp, nnz_U,
             (real_t*)NULL, (real_t**)NULL,
             &U_csr_p, &U_csr_i, &U_csr,
             &U_csc_p, &U_csc_i, &U_csc,
             (int_t**)NULL, (int_t**)NULL,
             (bool*)NULL, (bool*)NULL, (bool*)NULL,
-            false, false, nthreads
+            false, false, nthreads,
+            &free_U, &free_Usp
         );
         if (retval != 0) goto cleanup;
+
+        if (free_Usp) {
+            free(U_sp);
+            U_sp = NULL;
+            free_Usp = false;
+        }
     }
 
     if (I_sp != NULL)
     {
         retval = preprocess_sideinfo_matrix(
-            (real_t*)NULL, n, q,
-            I_row, I_col, I_sp, nnz_I,
+            (real_t**)NULL, n, q,
+            I_row, I_col, &I_sp, nnz_I,
             (real_t*)NULL, (real_t**)NULL,
             &I_csr_p, &I_csr_i, &I_csr,
             &I_csc_p, &I_csc_i, &I_csc,
             (int_t**)NULL, (int_t**)NULL,
             (bool*)NULL, (bool*)NULL, (bool*)NULL,
-            false, false, nthreads
+            false, false, nthreads,
+            &free_I, &free_Isp
         );
         if (retval != 0) goto cleanup;
+
+        if (free_Isp) {
+            free(I_sp);
+            I_sp = NULL;
+            free_Isp = false;
+        }
     }
 
     *glob_mean = 0;
@@ -1328,14 +1373,16 @@ int_t fit_offsets_explicit_lbfgs_internal
         (real_t*)NULL, (real_t*)NULL,
         m, n,
         m, n,
-        ixA, ixB, X, nnz,
-        Xfull, (real_t*)NULL,
+        ixA, ixB, &X, nnz,
+        &Xfull, (real_t*)NULL,
         Xcsr_p, Xcsr_i, Xcsr,
         Xcsc_p, Xcsc_i, Xcsc,
         weight, (real_t*)NULL,
         weightR, weightC,
         false,
-        nthreads
+        nthreads,
+        &free_X, &free_Xfull,
+        false
     );
     if (retval != 0) goto cleanup;
 
@@ -1489,6 +1536,18 @@ int_t fit_offsets_explicit_lbfgs_internal
         free(I_csc_p);
         free(I_csc_i);
         free(I_csc);
+        if (free_X)
+            free(X);
+        if (free_Xfull)
+            free(Xfull);
+        if (free_U)
+            free(U);
+        if (free_Usp)
+            free(U_sp);
+        if (free_I)
+            free(II);
+        if (free_Isp)
+            free(I_sp);
         #pragma omp critical
         {
             if (has_lock_on_handle && handle_is_locked)
@@ -2419,6 +2478,7 @@ int_t factors_offsets_implicit_single
     real_t *restrict output_a
 )
 {
+    bool free_xsp = false;
     bool set_to_nan = check_sparse_indices(
         n, p,
         u_vec_sp, u_vec_ixB, nnz_u_vec,
@@ -2442,10 +2502,18 @@ int_t factors_offsets_implicit_single
         );
     else {
         if (apply_log_transf)
+        {
+            real_t *restrict temp = (real_t*)malloc(nnz*sizeof(real_t));
+            if (temp == NULL) return 1;
+            copy_arr(Xa, temp, nnz);
+            Xa = temp;
+            free_xsp = true;
+
             for (size_t ix = 0; ix < nnz; ix++)
                 Xa[ix] = log_t(Xa[ix]);
+        }
 
-        return offsets_factors_warm(
+        int_t retval = offsets_factors_warm(
             a_vec, (real_t*)NULL,
             u_vec,
             u_vec_ixB, u_vec_sp, nnz_u_vec,
@@ -2464,6 +2532,10 @@ int_t factors_offsets_implicit_single
             output_a,
             (real_t*)NULL
         );
+
+        if (free_xsp)
+            free(Xa);
+        return retval;
     }
 }
 

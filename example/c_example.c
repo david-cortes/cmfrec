@@ -98,9 +98,6 @@ int main()
     int niter = 10;
     bool finalize_chol = true;
 
-    /* Important: the "X" data will be modified in-place while
-       the model is being fit. The values on exit will be
-       different than on input */
     fit_collective_explicit_als(
         NULL, NULL,
         A, B,

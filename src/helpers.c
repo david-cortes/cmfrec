@@ -475,20 +475,16 @@ void tscal_large(real_t *restrict arr, real_t alpha, size_t n, int nthreads)
 
 /* Xoshiro256++ and Xoshiro128++
    https://prng.di.unimi.it */
-static inline uint64_t rotl64(const uint64_t x, const int k) {
-    return (x << k) | (x >> (64 - k));
-}
-
-static inline uint32_t rotl32(const uint32_t x, const int k) {
-    return (x << k) | (x >> (32 - k));
-}
-
 static inline uint64_t splitmix64(const uint64_t seed)
 {
     uint64_t z = (seed + 0x9e3779b97f4a7c15);
     z = (z ^ (z >> 30)) * 0xbf58476d1ce4e5b9;
     z = (z ^ (z >> 27)) * 0x94d049bb133111eb;
     return z ^ (z >> 31);
+}
+#ifndef USE_XOSHIRO128
+static inline uint64_t rotl64(const uint64_t x, const int k) {
+    return (x << k) | (x >> (64 - k));
 }
 
 static inline uint64_t xoshiro256pp(uint64_t state[4])
@@ -501,19 +497,6 @@ static inline uint64_t xoshiro256pp(uint64_t state[4])
     state[0] ^= state[3];
     state[2] ^= t;
     state[3] = rotl64(state[3], 45);
-    return result;
-}
-
-static inline uint32_t xoshiro128pp(uint32_t state[4])
-{
-    const uint32_t result = rotl32(state[0] + state[3], 7) + state[0];
-    const uint32_t t = state[1] << 9;
-    state[2] ^= state[0];
-    state[3] ^= state[1];
-    state[1] ^= state[2];
-    state[0] ^= state[3];
-    state[2] ^= t;
-    state[3] = rotl32(state[3], 11);
     return result;
 }
 
@@ -545,6 +528,24 @@ static inline void xoshiro256pp_jump(uint64_t state[4])
     state[2] = s2;
     state[3] = s3;
 }
+#else
+
+static inline uint32_t rotl32(const uint32_t x, const int k) {
+    return (x << k) | (x >> (32 - k));
+}
+
+static inline uint32_t xoshiro128pp(uint32_t state[4])
+{
+    const uint32_t result = rotl32(state[0] + state[3], 7) + state[0];
+    const uint32_t t = state[1] << 9;
+    state[2] ^= state[0];
+    state[3] ^= state[1];
+    state[1] ^= state[2];
+    state[0] ^= state[3];
+    state[2] ^= t;
+    state[3] = rotl32(state[3], 11);
+    return result;
+}
 
 static inline void xoshiro128pp_jump(uint32_t state[4])
 {
@@ -574,6 +575,7 @@ static inline void xoshiro128pp_jump(uint32_t state[4])
     state[2] = s2;
     state[3] = s3;
 }
+#endif
 
 /* Note: for double precision, this uses the Box-Muller transform
    with raw form, which is less efficient than the polar form.

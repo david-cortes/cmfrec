@@ -198,9 +198,6 @@ extern "C" {
         A -> D, B -> B, C -> NULL, X -> I
         m -> q, n -> n, p -> 0, k_main -> 0
 
-    All the functions assume that the matrices are pre-allocated, and might
-    modify the input data "X"-"U"-"I" in-place.
-
     All the matrices are assumed to be in row-major order (the opposite of
     FORTRAN), unless they are sparse, in which case either COO or CSR are
     assumed depending on the function. One should pass the data for a given
