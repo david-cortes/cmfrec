@@ -590,7 +590,8 @@ NULL
 #' to the point when it was interrupted (when passing `TRUE`), or
 #' raise an interrupt exception without producing a fitted model object
 #' (when passing `FALSE`).
-#' @param seed Seed to use for random number generation.
+#' @param seed Seed to use for random number generation. If passing `NULL`, will draw
+#' a non-reproducible random integer to use as seed.
 #' @param nthreads Number of parallel threads to use. Note that, the more threads that
 #' are used, the higher the memory consumption.
 #' @return Returns a model object (class named just like the function that produced it,
@@ -860,6 +861,9 @@ validate.inputs <- function(model, implicit=FALSE,
                             handle_interrupt=TRUE,
                             seed=1L,
                             nthreads=parallel::detectCores()) {
+
+    if (is.null(seed) || is.na(seed))
+        seed <- sample.int(.Machine$integer.max, size=1)
     
     k        <-  check.pos.int(k, "k", model != "OMF_explicit")
     k_user   <-  check.pos.int(k_user, "k_user", FALSE)

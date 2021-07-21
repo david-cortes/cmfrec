@@ -69,7 +69,7 @@ class _CMF:
                      precompute_for_predictions=True, use_float=False,
                      random_state=1, verbose=True,
                      print_every=10, handle_interrupt=True,
-                     produce_dicts=False, nthreads=-1):
+                     produce_dicts=False, nthreads=-1, n_jobs=None):
         assert method in ["als", "lbfgs"]
         assert parallelize in ["separate", "single"]
 
@@ -116,8 +116,10 @@ class _CMF:
             maxiter = int(maxiter) if isinstance(maxiter, float) else maxiter
             assert isinstance(maxiter, int) and maxiter >= 0
 
+        if n_jobs is not None:
+            nthreads = n_jobs
         if nthreads < 1:
-            nthreads = multiprocessing.cpu_count()
+            nthreads = multiprocessing.cpu_count() + 1 - nthreads
         if nthreads is None:
             nthreads = 1
         assert isinstance(nthreads, int) and nthreads > 0
@@ -129,6 +131,9 @@ class _CMF:
         if not implicit and method == "lbfgs":
             corr_pairs = int(corr_pairs) if isinstance(corr_pairs, float) else corr_pairs
             assert isinstance(corr_pairs, int) and corr_pairs >= 2
+
+        if random_state is None:
+            random_state = rng.default_rng()
 
         if isinstance(random_state, np.random.RandomState):
             random_state = random_state.randint(np.iinfo(np.int32).max)
@@ -2757,12 +2762,14 @@ class CMF(_CMF):
         ``np.float32``). If passing ``False``, will use C double (typically this
         is ``np.float64``). Using float types will speed up computations and
         use less memory, at the expense of reduced numerical precision.
-    random_state : int, RandomState, or Generator
+    random_state : int, RandomState, Generator, or None
         Seed used to initialize parameters at random. If passing a NumPy
         RandomState or Generator, will use it to draw a random integer. Note
         however that, if using more than one thread, results might not be
         100% reproducible with ``method='lbfgs'`` due to round-off errors
         in parallelized aggregations.
+        If passing ``None``, will draw a non-reproducible random integer
+        to use as seed.
     verbose : bool
         Whether to print informational messages about the optimization
         routine used to fit the model. Note that, if running this from a
@@ -2787,8 +2794,8 @@ class CMF(_CMF):
         raise an interrupt exception without producing a fitted model object
         (when passing 'False').
     nthreads : int
-        Number of parallel threads to use. If passing -1, will take the
-        maximum available number of threads in the system.
+        Number of parallel threads to use. If passing a negative number, will
+        use the same formula as joblib (maximum threads + 1 - nthreads).
     n_jobs : None or int
         Synonym for nthreads, kept for better compatibility with scikit-learn.
 
@@ -2999,7 +3006,7 @@ class CMF(_CMF):
                           verbose=verbose, print_every=print_every,
                           handle_interrupt=handle_interrupt,
                           produce_dicts=produce_dicts,
-                          nthreads=nthreads)
+                          nthreads=nthreads, n_jobs=n_jobs)
         self.include_all_X = bool(include_all_X)
         if (self.NA_as_zero) and (not self.include_all_X):
             warnings.warn("Warning: 'include_all_X' is forced to 'True' when using 'NA_as_zero'.")
@@ -4218,8 +4225,8 @@ class CMF(_CMF):
             is ``np.float64``). Using float types will speed up computations and
             use less memory, at the expense of reduced numerical precision.
         nthreads : int
-            Number of parallel threads to use. If passing -1, will take the
-            maximum available number of threads in the system.
+            Number of parallel threads to use. If passing a negative number, will
+            use the same formula as joblib (maximum threads + 1 - nthreads).
         n_jobs : None or int
             Synonym for nthreads, kept for better compatibility with scikit-learn.
 
@@ -4535,9 +4542,11 @@ class CMF_implicit(_CMF):
         the Cholesky solver. This will make it slower, but will avoid the issue
         of potential mismatches between the result from ``fit`` and calls to
         ``factors_warm`` or similar with the same data.
-    random_state : int, RandomState, or Generator
+    random_state : int, RandomState, Generator, or None
         Seed used to initialize parameters at random. If passing a NumPy
         RandomState or Generator, will use it to draw a random integer.
+        If passing ``None``, will draw a non-reproducible random integer
+        to use as seed.
     verbose : bool
         Whether to print informational messages about the optimization
         routine used to fit the model. Note that, if running this from a
@@ -4557,8 +4566,8 @@ class CMF_implicit(_CMF):
         raise an interrupt exception without producing a fitted model object
         (when passing 'False').
     nthreads : int
-        Number of parallel threads to use. If passing -1, will take the
-        maximum available number of threads in the system.
+        Number of parallel threads to use. If passing a negative number, will
+        use the same formula as joblib (maximum threads + 1 - nthreads).
     n_jobs : None or int
         Synonym for nthreads, kept for better compatibility with scikit-learn.
 
@@ -4712,7 +4721,7 @@ class CMF_implicit(_CMF):
                           verbose=verbose, print_every=0,
                           handle_interrupt=handle_interrupt,
                           produce_dicts=produce_dicts,
-                          nthreads=nthreads)
+                          nthreads=nthreads, n_jobs=n_jobs)
 
     def __str__(self):
         msg  = "Collective matrix factorization model\n"
@@ -5514,8 +5523,8 @@ class CMF_implicit(_CMF):
             is ``np.float64``). Using float types will speed up computations and
             use less memory, at the expense of reduced numerical precision.
         nthreads : int
-            Number of parallel threads to use. If passing -1, will take the
-            maximum available number of threads in the system.
+            Number of parallel threads to use. If passing a negative number, will
+            use the same formula as joblib (maximum threads + 1 - nthreads).
         n_jobs : None or int
             Synonym for nthreads, kept for better compatibility with scikit-learn.
 
@@ -6140,12 +6149,14 @@ class OMF_explicit(_OMF):
         ``np.float32``). If passing ``False``, will use C double (typically this
         is ``np.float64``). Using float types will speed up computations and
         use less memory, at the expense of reduced numerical precision.
-    random_state : int, RandomState, or Generator
+    random_state : int, RandomState, Generator, or None
         Seed used to initialize parameters at random. If passing a NumPy
         RandomState or Generator, will use it to draw a random integer. Note
         however that, if using more than one thread, results might not be
         100% reproducible with ``method='lbfgs'`` due to round-off errors
         in parallelized aggregations.
+        If passing ``None``, will draw a non-reproducible random integer
+        to use as seed.
     verbose : bool
         Whether to print informational messages about the optimization
         routine used to fit the model. Note that, if running this from a
@@ -6170,8 +6181,8 @@ class OMF_explicit(_OMF):
         and extra memory usage. Ignored when passing the data as matrices
         and arrays instead of data frames.
     nthreads : int
-        Number of parallel threads to use. If passing -1, will take the
-        maximum available number of threads in the system.
+        Number of parallel threads to use. If passing a negative number, will
+        use the same formula as joblib (maximum threads + 1 - nthreads).
     n_jobs : None or int
         Synonym for nthreads, kept for better compatibility with scikit-learn.
 
@@ -6320,7 +6331,7 @@ class OMF_explicit(_OMF):
                           verbose=verbose, print_every=print_every,
                           handle_interrupt=handle_interrupt,
                           produce_dicts=produce_dicts,
-                          nthreads=nthreads)
+                          nthreads=nthreads, n_jobs=n_jobs)
         self.k = int(k)
         self._take_params_offsets(k_sec=k_sec, k_main=k_main,
                                   add_intercepts=add_intercepts)
@@ -7096,9 +7107,11 @@ class OMF_implicit(_OMF):
         the Cholesky solver. This will make it slower, but will avoid the issue
         of potential mismatches between the result from ``fit`` and calls to
         ``factors_warm`` or similar with the same data.
-    random_state : int, RandomState, or Generator
+    random_state : int, RandomState, Generator, None
         Seed used to initialize parameters at random. If passing a NumPy
         RandomState or Generator, will use it to draw a random integer.
+        If passing ``None``, will draw a non-reproducible random integer
+        to use as seed.
     verbose : bool
         Whether to print informational messages about the optimization
         routine used to fit the model. Note that, if running this from a
@@ -7118,8 +7131,8 @@ class OMF_implicit(_OMF):
         and extra memory usage. Ignored when passing the data as matrices
         and arrays instead of data frames.
     nthreads : int
-        Number of parallel threads to use. If passing -1, will take the
-        maximum available number of threads in the system.
+        Number of parallel threads to use. If passing a negative number, will
+        use the same formula as joblib (maximum threads + 1 - nthreads).
     n_jobs : None or int
         Synonym for nthreads, kept for better compatibility with scikit-learn.
 
@@ -7232,7 +7245,7 @@ class OMF_implicit(_OMF):
                           verbose=verbose, print_every=0,
                           handle_interrupt=handle_interrupt,
                           produce_dicts=produce_dicts,
-                          nthreads=nthreads)
+                          nthreads=nthreads, n_jobs=n_jobs)
         self._take_params_offsets(k_sec=0, k_main=0, add_intercepts=add_intercepts)
         msg  = "This model was implemented for experimentation purposes."
         msg += " Performance is likely to be bad. Be warned."
@@ -7646,11 +7659,13 @@ class ContentBased(_OMF_Base):
     print_every : int
         Print L-BFGS convergence messages every n-iterations. Ignored
         when passing ``verbose=False``.
-    random_state : int, RandomState, or Generator
+    random_state : int, RandomState, Generator, or None
         Seed used to initialize parameters at random. If passing a NumPy
         RandomState or Generator, will use it to draw a random integer. Note
         however that, if using more than one thread, results might not be
         100% reproducible due to round-off errors in parallelized aggregations.
+        If passing ``None``, will draw a non-reproducible random integer
+        to use as seed.
     use_float : bool
         Whether to use C float type for the model parameters (typically this is
         ``np.float32``). If passing ``False``, will use C double (typically this
@@ -7675,8 +7690,8 @@ class ContentBased(_OMF_Base):
         optimum. This option is not available when the side information is passed
         as sparse matrices.
     nthreads : int
-        Number of parallel threads to use. If passing -1, will take the
-        maximum available number of threads in the system.
+        Number of parallel threads to use. If passing a negative number, will
+        use the same formula as joblib (maximum threads + 1 - nthreads).
     n_jobs : None or int
         Synonym for nthreads, kept for better compatibility with scikit-learn.
 
@@ -7791,7 +7806,7 @@ class ContentBased(_OMF_Base):
                           verbose=verbose, print_every=print_every,
                           handle_interrupt=handle_interrupt,
                           produce_dicts=produce_dicts,
-                          nthreads=nthreads)
+                          nthreads=nthreads, n_jobs=n_jobs)
         self._take_params_offsets(k_sec=k, k_main=0,
                                   add_intercepts=add_intercepts)
         self.k = 0
@@ -8244,9 +8259,9 @@ class MostPopular(_CMF):
         and extra memory usage. Ignored when passing the data as matrices
         and arrays instead of data frames.
     nthreads : int
-        Number of parallel threads to use.  If passing -1, will take the
-        maximum available number of threads in the system. Most of the
-        work is done single-threaded however.
+        Number of parallel threads to use. If passing a negative number, will
+        use the same formula as joblib (maximum threads + 1 - nthreads).
+        Most of the work is done single-threaded however.
     n_jobs : None or int
         Synonym for nthreads, kept for better compatibility with scikit-learn.
 
@@ -8343,7 +8358,7 @@ class MostPopular(_CMF):
                           verbose=0, print_every=0,
                           handle_interrupt=False,
                           produce_dicts=produce_dicts,
-                          nthreads=nthreads)
+                          nthreads=nthreads, n_jobs=n_jobs)
         self.k = 0
         self.niter = 0
         self.implicit = bool(implicit)

@@ -641,7 +641,8 @@ to the point when it was interrupted (when passing `TRUE`), or
 raise an interrupt exception without producing a fitted model object
 (when passing `FALSE`).}
 
-\item{seed}{Seed to use for random number generation.}
+\item{seed}{Seed to use for random number generation. If passing `NULL`, will draw
+a non-reproducible random integer to use as seed.}
 
 \item{nthreads}{Number of parallel threads to use. Note that, the more threads that
 are used, the higher the memory consumption.}
