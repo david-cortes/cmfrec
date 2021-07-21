@@ -4,7 +4,7 @@ Implementation of collective matrix factorization, based on _Relational learning
 
 This is a hybrid collaborative filtering model for recommender systems that takes as input either explicit item ratings or implicit-feedback data, and side information about users and/or items (although it can also fit pure collaborative-filtering and pure content-based models). The overall idea was extended here to also be able to do cold-start recommendations (for users and items that were not in the training data but which have side information available).
 
-Although the package was developed with recommender systems in mind, it can also be used in other domains (e.g. topic modeling, dimensionality reduction, missing value imputation) - just take any mention of users as rows in the main matrix, any mention of items as columns, and use the "explicit" models.
+Although the package was developed with recommender systems in mind, it can also be used in other domains (e.g. topic modeling, dimensionality reduction, [missing value imputation](http://nbviewer.jupyter.org/github/david-cortes/cmfrec/blob/master/example/cmfrec_imputer.ipynb)) - just take any mention of users as rows in the main matrix, any mention of items as columns, and use the "explicit" models.
 
 For more information about the implementation here, or if you would like to cite this in your research, see ["Cold-start recommendations in Collective Matrix Factorization"](https://arxiv.org/abs/1809.00366)
 
@@ -66,7 +66,7 @@ Alternatively, can produce factorizations in wich the factor matrices are determ
 
 While the method was initially devised for recommender systems, can also be used as a general technique for dimensionality reduction by taking the `A` matrix as low-dimensional factors, which can be calculated for new data too.
 
-Alternatively, it might also produce good results when used as an imputer for missing values in tabular data. The Python version is scikit-learn compatible and has a separate class aimed at being used for imputation in scikit-learn pipelines.
+Alternatively, it might also produce good results when used as an imputer for missing values in tabular data. The Python version is scikit-learn compatible and has a separate class aimed at being used for imputation in scikit-learn pipelines. [Example here](http://nbviewer.jupyter.org/github/david-cortes/cmfrec/blob/master/example/cmfrec_imputer.ipynb).
 
 ## Update 2020-03-20
 
@@ -86,7 +86,7 @@ The new version is faster, multi-threaded, and has some new functionality, but i
 * Supports user and item biases (these are not just pre-estimated beforehand as in other software).
 * Can fit models with non-negativity constraints on the factors and/or with L1 regularization.
 * Provides an API for top-N recommended lists and for calculating latent factors from new data.
-* Can work with both sparse and dense matrices for each input (e.g. can also be used as a general missing-value imputer for 2-d data), and can work efficiently with a mix of dense and sparse inputs.
+* Can work with both sparse and dense matrices for each input (e.g. can also be used as a general missing-value imputer for 2D data - [example](http://nbviewer.jupyter.org/github/david-cortes/cmfrec/blob/master/example/cmfrec_imputer.ipynb)), and can work efficiently with a mix of dense and sparse inputs.
 * Can produce factorizations for variations of the problem such as sparse inputs with missing-as-zero instead of missing-as-unknown (e.g. when used for dimensionality reduction).
 * Can use either an alternating least-squares procedure (ALS) or a gradient-based procedure using an L-BFGS optimizer for the explicit-feedback models (the package bundles a modified version of [Okazaki's C implementation](https://github.com/chokkan/liblbfgs)).
 * For the ALS option, can use either the exact Cholesky method or the faster conjugate gradient method (see [4]). Can also use coordinate descent methods (when having non-negativity constraints or L1 regularization).
@@ -224,6 +224,8 @@ model.factors_warm(X_col=ratings.ItemId.loc[ratings.UserId == 3],
 ```
 
 Users and items can be reindexed internally (if passing data frames, but not when pasing sparse or dense matrices), so you can use strings or non-consecutive numbers as IDs when passing data to the object's methods.
+
+(See also [example using it for imputing missing values](http://nbviewer.jupyter.org/github/david-cortes/cmfrec/blob/master/example/cmfrec_imputer.ipynb))
 
 * R:
 
