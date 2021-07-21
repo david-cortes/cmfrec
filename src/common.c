@@ -786,19 +786,29 @@ void factors_closed_form
     }
 
     /* If the input is sparse and it's assumed that the non-present
-       entries are zero, with no missing values, it's still possible
-       to use the precomputed and pre-factorized matrix. */
-    else if (NA_as_zero && weight == NULL && !nonneg &&
-             Xa_dense == NULL && precomputedBtBchol != NULL &&
-             l1_lam == 0. && l1_lam_last == 0.)
+       entries are zero, with no missing values, or if it is full dense,
+       it's still possible to use the precomputed and pre-factorized matrix. */
+    else if ( (  (Xa_dense == NULL && NA_as_zero) ||
+                 (Xa_dense != NULL && full_dense)    ) &&
+             weight == NULL && !nonneg &&
+             precomputedBtBchol != NULL && l1_lam == 0. && l1_lam_last == 0.)
     {
         set_to_zero(a_vec, k);
-        tgemv_dense_sp(n, k,
-                       1., B, (size_t)ldb,
-                       ixB, Xa, nnz,
-                       a_vec);
-        if (bias_BtX != NULL)
-            cblas_taxpy(k, 1./multiplier_bias_BtX, bias_BtX, 1, a_vec, 1);
+        if (Xa_dense == NULL) {
+            tgemv_dense_sp(n, k,
+                           1., B, (size_t)ldb,
+                           ixB, Xa, nnz,
+                           a_vec);
+            if (bias_BtX != NULL)
+                cblas_taxpy(k, 1./multiplier_bias_BtX, bias_BtX, 1, a_vec, 1);
+        }
+        else {
+            cblas_tgemv(CblasRowMajor, CblasTrans,
+                        n, k,
+                        1., B, ldb,
+                        Xa_dense, 1,
+                        0., a_vec, 1);
+        }
         tpotrs_(&lo, &k, &one,
                 precomputedBtBchol, &k,
                 a_vec, &k,
@@ -1896,7 +1906,7 @@ real_t wrapper_fun_grad_Bdense
 
 size_t buffer_size_optimizeA
 (
-    size_t n, bool full_dense, bool near_dense, bool do_B,
+    size_t n, bool full_dense, bool near_dense, bool some_full, bool do_B,
     bool has_dense, bool has_weights, bool NA_as_zero,
     bool nonneg, bool has_l1,
     size_t k, size_t nthreads,
@@ -1909,7 +1919,7 @@ size_t buffer_size_optimizeA
     {
         return max2(
                 buffer_size_optimizeA(
-                        n, full_dense, near_dense, do_B,
+                        n, full_dense, near_dense, some_full, do_B,
                         has_dense, has_weights, NA_as_zero,
                         nonneg, has_l1,
                         k, nthreads,
@@ -1918,7 +1928,7 @@ size_t buffer_size_optimizeA
                         true, false
                 ),
                 buffer_size_optimizeA(
-                    n, full_dense, near_dense, do_B,
+                    n, full_dense, near_dense, some_full, do_B,
                     has_dense, has_weights, NA_as_zero,
                     nonneg, has_l1,
                     k, nthreads,
@@ -1995,6 +2005,10 @@ size_t buffer_size_optimizeA
         }
         if (do_B && has_weights) {
             buffer_size += n * nthreads;
+        }
+        if (!has_weights) {
+            if (some_full && !nonneg && !has_l1)
+                buffer_size += square(k);
         }
         size_t size_thread_buffer = square(k) + (use_cg? (3*k) : 0);
         if (nonneg)
@@ -2091,7 +2105,8 @@ void optimizeA
     real_t *restrict B, int_t ldb,
     int_t m, int_t n, int_t k,
     size_t Xcsr_p[], int_t Xcsr_i[], real_t *restrict Xcsr,
-    real_t *restrict Xfull, int_t ldX, bool full_dense, bool near_dense,
+    real_t *restrict Xfull, int_t ldX,
+    bool full_dense, bool near_dense, bool some_full,
     int_t cnt_NA[], real_t *restrict weight, bool NA_as_zero,
     real_t lam, real_t lam_last,
     real_t l1_lam, real_t l1_lam_last,
@@ -2342,9 +2357,9 @@ void optimizeA
             bufferW = buffer_real_t;
             buffer_real_t += (size_t)n * (size_t)nthreads;
         }
-        real_t *restrict buffer_remainder = buffer_real_t;
 
 
+        real_t *restrict bufferBtBchol = NULL;
         if (bufferBtB != NULL)
         {
             cblas_tsyrk(CblasRowMajor, CblasUpper, CblasTrans,
@@ -2356,9 +2371,24 @@ void optimizeA
                 copy_arr(bufferBtB, precomputedBtB, square(k));
                 *filled_BtB = true;
             }
-            add_to_diag(bufferBtB, lam, k);
-            if (lam_last != lam) bufferBtB[square(k)-1] += (lam_last - lam);
+            add_to_diag(bufferBtB, scale_lam? (lam*(real_t)n) : (lam), k);
+            if (lam_last != lam)
+            {
+                if (!scale_lam)
+                    bufferBtB[square(k)-1] += (lam_last - lam);
+                else
+                    bufferBtB[square(k)-1] += (lam_last-lam)*(real_t)n;
+            }
+
+            if (some_full && !nonneg && !l1_lam && !l1_lam_last)
+            {
+                bufferBtBchol = buffer_real_t;
+                buffer_real_t += square(k);
+                copy_arr(bufferBtB, bufferBtBchol, square(k));
+                tpotrf_(&uplo, &k, bufferBtBchol, &k, &ignore);
+            }
         }
+        real_t *restrict buffer_remainder = buffer_real_t;
 
         int nthreads_restore = 1;
         set_blas_threads(1, &nthreads_restore);
@@ -2370,7 +2400,8 @@ void optimizeA
                        lam, lam_last, l1_lam, l1_lam_last, \
                        scale_lam, scale_bias_const, wsumA, \
                        bufferBtB, cnt_NA, buffer_remainder, \
-                       use_cg, max_cg_steps, nonneg, max_cd_steps) \
+                       use_cg, max_cg_steps, nonneg, max_cd_steps, \
+                       bufferBtBchol) \
                 firstprivate(bufferX, bufferW)
         for (size_t_for ix = 0; ix < (size_t)m; ix++)
         {
@@ -2409,7 +2440,7 @@ void optimizeA
                 (real_t*)NULL,
                 bufferBtB, cnt_NA[ix], k,
                 true, false, 1., n,
-                (real_t*)NULL, false,
+                bufferBtBchol, false,
                 use_cg, max_cg_steps,
                 nonneg, max_cd_steps,
                 (real_t*)NULL, (real_t*)NULL, 0., 1.,

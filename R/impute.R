@@ -54,14 +54,14 @@
 #' if (require("MASS")) {
 #'     ### Generate random data, set some values as NA
 #'     set.seed(1)
-#'     n_rows <- 100
-#'     n_cols <- 50
+#'     n_rows <- 1000
+#'     n_cols <- 5
 #'     mu <- rnorm(n_cols)
 #'     S <- matrix(rnorm(n_cols^2), nrow = n_cols)
-#'     S <- t(S) %*% S + diag(1, n_cols)
+#'     S <- t(S) %*% S
 #'     X <- MASS::mvrnorm(n_rows, mu, S)
 #'     X_na <- X
-#'     values_NA <- matrix(runif(n_rows*n_cols) < .25, nrow=n_rows)
+#'     values_NA <- matrix(runif(n_rows*n_cols) < .15, nrow=n_rows)
 #'     X_na[values_NA] <- NaN
 #'     
 #'     ### In the event that any column is fully missing
@@ -72,7 +72,8 @@
 #'     }
 #'     
 #'     ### Impute missing values with model
-#'     model <- CMF(X_na, k=15, lambda=50, user_bias=FALSE,
+#'     model <- CMF(X_na, k=3, lambda=c(0,0,1,1,1,1),
+#'                  user_bias=FALSE,
 #'                  verbose=FALSE, nthreads=1L)
 #'     X_imputed <- imputeX(model, X_na)
 #'     cat(sprintf("RMSE for imputed values w/model: %f\n",

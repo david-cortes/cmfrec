@@ -113,7 +113,7 @@ void copy_arr_(real_t *restrict src, real_t *restrict dest, size_t n, int nthrea
         size_t chunk_size = n / (size_t)nthreads;
         size_t remainder = n % (size_t)nthreads;
         int_t i = 0;
-        
+
         #pragma omp parallel for schedule(static, 1) \
                 firstprivate(src, dest, chunk_size, nthreads) num_threads(nthreads)
         for (i = 0; i < nthreads; i++)
@@ -150,7 +150,8 @@ void count_NAs_by_row
 (
     real_t *restrict arr, int_t m, int_t n,
     int_t *restrict cnt_NA, int nthreads,
-    bool *restrict full_dense, bool *restrict near_dense
+    bool *restrict full_dense, bool *restrict near_dense,
+    bool *restrict some_full
 )
 {
     #if defined(_OPENMP) && \
@@ -183,12 +184,24 @@ void count_NAs_by_row
        based approach or closed-form when optimizing a matrix in isolation */
     *near_dense = false;
     int_t cnt_rows_w_NA = 0;
-    if (!full_dense)
+    if (!(*full_dense))
     {
         for (int_t ix = 0; ix < m; ix++)
             cnt_rows_w_NA += (cnt_NA[ix] > 0);
         if ((m - cnt_rows_w_NA) >= (int)(0.75 * (double)m))
             *near_dense = true;
+    }
+
+    *some_full = *full_dense;
+    if (!(*full_dense))
+    {
+        for (int_t ix = 0; ix < m; ix++)
+        {
+            if (cnt_NA[ix] == 0) {
+                *some_full = true;
+                break;
+            }
+        }
     }
 }
 
@@ -196,7 +209,8 @@ void count_NAs_by_col
 (
     real_t *restrict arr, int_t m, int_t n,
     int_t *restrict cnt_NA,
-    bool *restrict full_dense, bool *restrict near_dense
+    bool *restrict full_dense, bool *restrict near_dense,
+    bool *restrict some_full
 )
 {
     for (size_t row = 0; row < (size_t)m; row++)
@@ -213,12 +227,24 @@ void count_NAs_by_col
 
     *near_dense = false;
     int_t cnt_rows_w_NA = 0;
-    if (!full_dense)
+    if (!(*full_dense))
     {
         for (int_t ix = 0; ix < n; ix++)
             cnt_rows_w_NA += (cnt_NA[ix] > 0);
         if ((n - cnt_rows_w_NA) >= (int_t)(0.75 * (real_t)n))
             *near_dense = true;
+    }
+
+    *some_full = full_dense;
+    if (!(*full_dense))
+    {
+        for (int_t ix = 0; ix < n; ix++)
+        {
+            if (cnt_NA[ix] == 0) {
+                *some_full = true;
+                break;
+            }
+        }
     }
 }
 

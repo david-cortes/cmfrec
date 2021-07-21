@@ -6,7 +6,8 @@ import warnings
 
 __all__ = ["CMF", "CMF_implicit",
            "OMF_explicit", "OMF_implicit",
-           "MostPopular", "ContentBased"]
+           "MostPopular", "ContentBased",
+           "CMF_imputer"]
 
 ### TODO: this module should move from doing operations in Python to
 ### using the new designated C functions for each type of prediction.
@@ -2804,8 +2805,8 @@ class CMF(_CMF):
 
     def get_params(self, deep=None):
         return {
-            "k" : self.k, "lambda_" : self.lambda_, "method" : self.method,
-            "user_bias" : self.user_bias, "item_bias" : self.item_bias,
+            "k" : self.k, "lambda_" : self.lambda_, "l1_lambda" : self.l1_lambda, "method" : self.method,
+            "user_bias" : self.user_bias, "item_bias" : self.item_bias, "center" : self.center,
             "k_user" : self.k_user, "k_item" : self.k_item, "k_main" : self.k_main,
             "w_main" : self.w_main, "w_user" : self.w_user, "w_item" : self.w_item,
             "maxiter" : self.maxiter, "niter" : self.niter,

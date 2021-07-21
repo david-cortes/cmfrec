@@ -342,13 +342,15 @@ void count_NAs_by_row
 (
     real_t *restrict arr, int_t m, int_t n,
     int_t *restrict cnt_NA, int nthreads,
-    bool *restrict full_dense, bool *restrict near_dense
+    bool *restrict full_dense, bool *restrict near_dense,
+    bool *restrict some_full
 );
 void count_NAs_by_col
 (
     real_t *restrict arr, int_t m, int_t n,
     int_t *restrict cnt_NA,
-    bool *restrict full_dense, bool *restrict near_dense
+    bool *restrict full_dense, bool *restrict near_dense,
+    bool *restrict some_full
 );
 void sum_by_rows(real_t *restrict A, real_t *restrict outp, int_t m, int_t n, int nthreads);
 void sum_by_cols(real_t *restrict A, real_t *restrict outp, int_t m, int_t n, size_t lda, int nthreads);
@@ -719,7 +721,7 @@ real_t wrapper_fun_grad_Bdense
 );
 size_t buffer_size_optimizeA
 (
-    size_t n, bool full_dense, bool near_dense, bool do_B,
+    size_t n, bool full_dense, bool near_dense, bool some_full, bool do_B,
     bool has_dense, bool has_weights, bool NA_as_zero,
     bool nonneg, bool has_l1,
     size_t k, size_t nthreads,
@@ -740,7 +742,8 @@ void optimizeA
     real_t *restrict B, int_t ldb,
     int_t m, int_t n, int_t k,
     size_t Xcsr_p[], int_t Xcsr_i[], real_t *restrict Xcsr,
-    real_t *restrict Xfull, int_t ldX, bool full_dense, bool near_dense,
+    real_t *restrict Xfull, int_t ldX,
+    bool full_dense, bool near_dense, bool some_full,
     int_t cnt_NA[], real_t *restrict weight, bool NA_as_zero,
     real_t lam, real_t lam_last,
     real_t l1_lam, real_t l1_lam_last,
@@ -1268,10 +1271,10 @@ size_t buffer_size_optimizeA_collective
 (
     size_t m, size_t m_u, size_t n, size_t p,
     size_t k, size_t k_main, size_t k_user,
-    bool full_dense, bool near_dense, bool do_B,
+    bool full_dense, bool near_dense, bool some_full, bool do_B,
     bool has_dense, bool has_sparse, bool has_weights, bool NA_as_zero_X,
     bool has_dense_U, bool has_sparse_U,
-    bool full_dense_u, bool near_dense_u, bool NA_as_zero_U,
+    bool full_dense_u, bool near_dense_u, bool some_full_u, bool NA_as_zero_U,
     bool add_implicit_features, size_t k_main_i,
     size_t nthreads,
     bool use_cg, bool finalize_chol,
@@ -1305,13 +1308,14 @@ void optimizeA_collective
     int_t m, int_t m_u, int_t n, int_t p,
     int_t k, int_t k_main, int_t k_user, int_t k_item,
     size_t Xcsr_p[], int_t Xcsr_i[], real_t *restrict Xcsr,
-    real_t *restrict Xfull, bool full_dense, bool near_dense, int_t ldX,
+    real_t *restrict Xfull, int_t ldX,
+    bool full_dense, bool near_dense, bool some_full,
     int_t cnt_NA_x[], real_t *restrict weight, bool NA_as_zero_X,
     real_t *restrict Xones, int_t k_main_i, int_t ldXones,
     bool add_implicit_features,
     size_t U_csr_p[], int_t U_csr_i[], real_t *restrict U_csr,
     real_t *restrict U, int_t cnt_NA_u[], real_t *restrict U_colmeans,
-    bool full_dense_u, bool near_dense_u, bool NA_as_zero_U,
+    bool full_dense_u, bool near_dense_u, bool some_full_u, bool NA_as_zero_U,
     real_t lam, real_t w_user, real_t w_implicit, real_t lam_last,
     real_t l1_lam, real_t l1_lam_bias,
     bool scale_lam, bool scale_lam_sideinfo,
@@ -1385,7 +1389,9 @@ int_t preprocess_sideinfo_matrix
     size_t **U_csr_p, int_t **U_csr_i, real_t *restrict *U_csr,
     size_t **U_csc_p, int_t **U_csc_i, real_t *restrict *U_csc,
     int_t *restrict *cnt_NA_u_byrow, int_t *restrict *cnt_NA_u_bycol,
-    bool *full_dense_u, bool *near_dense_u_row, bool *near_dense_u_col,
+    bool *restrict full_dense_u, bool *restrict near_dense_u_row,
+    bool *restrict near_dense_u_col,
+    bool *restrict some_full_u_row, bool *restrict some_full_u_col,
     bool NA_as_zero_U, bool nonneg, int nthreads,
     bool *modified_U, bool *modified_Usp
 );

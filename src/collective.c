@@ -4013,10 +4013,10 @@ size_t buffer_size_optimizeA_collective
 (
     size_t m, size_t m_u, size_t n, size_t p,
     size_t k, size_t k_main, size_t k_user,
-    bool full_dense, bool near_dense, bool do_B,
+    bool full_dense, bool near_dense, bool some_full, bool do_B,
     bool has_dense, bool has_sparse, bool has_weights, bool NA_as_zero_X,
     bool has_dense_U, bool has_sparse_U,
-    bool full_dense_u, bool near_dense_u, bool NA_as_zero_U,
+    bool full_dense_u, bool near_dense_u, bool some_full_u, bool NA_as_zero_U,
     bool add_implicit_features, size_t k_main_i,
     size_t nthreads,
     bool use_cg, bool finalize_chol,
@@ -4034,10 +4034,10 @@ size_t buffer_size_optimizeA_collective
             buffer_size_optimizeA_collective(
                 m, m_u, n, p,
                 k, k_main, k_user,
-                full_dense, near_dense, do_B,
+                full_dense, near_dense, some_full, do_B,
                 has_dense, has_sparse, has_weights, NA_as_zero_X,
                 has_dense_U, has_sparse_U,
-                full_dense_u, near_dense_u, NA_as_zero_U,
+                full_dense_u, near_dense_u, some_full_u, NA_as_zero_U,
                 add_implicit_features, k_main_i,
                 nthreads,
                 true, false,
@@ -4051,10 +4051,10 @@ size_t buffer_size_optimizeA_collective
             buffer_size_optimizeA_collective(
                 m, m_u, n, p,
                 k, k_main, k_user,
-                full_dense, near_dense, do_B,
+                full_dense, near_dense, some_full, do_B,
                 has_dense, has_sparse, has_weights, NA_as_zero_X,
                 has_dense_U, has_sparse_U,
-                full_dense_u, near_dense_u, NA_as_zero_U,
+                full_dense_u, near_dense_u, some_full_u, NA_as_zero_U,
                 add_implicit_features, k_main_i,
                 nthreads,
                 false, false,
@@ -4118,7 +4118,7 @@ size_t buffer_size_optimizeA_collective
 
         if (!add_implicit_features)
             size_optimizeA = buffer_size_optimizeA(
-                n, full_dense, near_dense, do_B,
+                n, full_dense, near_dense, some_full, do_B,
                 has_dense, has_weights, NA_as_zero_X,
                 nonneg, has_l1,
                 k+k_main, nthreads,
@@ -4130,10 +4130,10 @@ size_t buffer_size_optimizeA_collective
             size_optimizeA = buffer_size_optimizeA_collective(
                 m_x - m_u, 0, n, 0,
                 k, k_main, k_user,
-                full_dense, near_dense, do_B,
+                full_dense, near_dense, some_full, do_B,
                 has_dense, has_sparse, has_weights, NA_as_zero_X,
                 false, false,
-                false, false, false,
+                false, false, false, false,
                 add_implicit_features, k_main_i,
                 nthreads,
                 use_cg, finalize_chol,
@@ -4171,7 +4171,7 @@ size_t buffer_size_optimizeA_collective
 
         if (!add_implicit_features)
             size_optimizeA = buffer_size_optimizeA(
-                p, full_dense_u, near_dense_u, false,
+                p, full_dense_u, near_dense_u, some_full_u, false,
                 has_dense_U, false, NA_as_zero_U,
                 nonneg, has_l1,
                 k_user+k, nthreads,
@@ -4193,10 +4193,10 @@ size_t buffer_size_optimizeA_collective
             size_optimizeA += buffer_size_optimizeA_collective(
                 m_diff, m_diff, n, p,
                 k, k_main_i, k_user,
-                false, false, false,
+                false, false, false, false,
                 false, true, false, true,
                 has_dense_U, has_sparse_U,
-                full_dense_u, near_dense_u, NA_as_zero_U,
+                full_dense_u, near_dense_u, some_full_u, NA_as_zero_U,
                 false, 0,
                 nthreads,
                 use_cg, finalize_chol,
@@ -4465,13 +4465,14 @@ void optimizeA_collective
     int_t m, int_t m_u, int_t n, int_t p,
     int_t k, int_t k_main, int_t k_user, int_t k_item,
     size_t Xcsr_p[], int_t Xcsr_i[], real_t *restrict Xcsr,
-    real_t *restrict Xfull, bool full_dense, bool near_dense, int_t ldX,
+    real_t *restrict Xfull, int_t ldX,
+    bool full_dense, bool near_dense, bool some_full,
     int_t cnt_NA_x[], real_t *restrict weight, bool NA_as_zero_X,
     real_t *restrict Xones, int_t k_main_i, int_t ldXones,
     bool add_implicit_features,
     size_t U_csr_p[], int_t U_csr_i[], real_t *restrict U_csr,
     real_t *restrict U, int_t cnt_NA_u[], real_t *restrict U_colmeans,
-    bool full_dense_u, bool near_dense_u, bool NA_as_zero_U,
+    bool full_dense_u, bool near_dense_u, bool some_full_u, bool NA_as_zero_U,
     real_t lam, real_t w_user, real_t w_implicit, real_t lam_last,
     real_t l1_lam, real_t l1_lam_bias,
     bool scale_lam, bool scale_lam_sideinfo,
@@ -4615,7 +4616,7 @@ void optimizeA_collective
                         :
                     (do_B? (Xfull + m_u) : (Xfull + (size_t)m_u*(size_t)n)),
                 ldX,
-                full_dense, near_dense,
+                full_dense, near_dense, some_full,
                 (Xfull == NULL)? ((int_t*)NULL) : (cnt_NA_x + m_u),
                 (weight == NULL)? ((real_t*)NULL)
                                 : ( (Xfull == NULL)?
@@ -4656,7 +4657,8 @@ void optimizeA_collective
                     ((real_t*)NULL)
                         :
                     (do_B? (Xfull + m_u) : (Xfull + (size_t)m_u*(size_t)n)),
-                full_dense, near_dense, ldX,
+                ldX,
+                full_dense, near_dense, some_full,
                 (Xfull == NULL)? ((int_t*)NULL) : (cnt_NA_x + m_u),
                 (weight == NULL)? ((real_t*)NULL)
                                 : ( (Xfull == NULL)?
@@ -4674,7 +4676,7 @@ void optimizeA_collective
                 k_main_i, ldXones, add_implicit_features,
                 (size_t*)NULL, (int_t*)NULL, (real_t*)NULL,
                 (real_t*)NULL, (int_t*)NULL, (real_t*)NULL,
-                false, false, false,
+                false, false, false, false,
                 lam, w_user, w_implicit, lam_last,
                 l1_lam, l1_lam_bias,
                 scale_lam, false,
@@ -4738,7 +4740,7 @@ void optimizeA_collective
                 (U != NULL)? ((real_t*)NULL) : U_csr,
                 (U == NULL)? ((real_t*)NULL) : (U + (size_t)m*(size_t)p),
                 p,
-                full_dense_u, near_dense_u,
+                full_dense_u, near_dense_u, some_full_u,
                 (U == NULL)? ((int_t*)NULL) : (cnt_NA_u + m),
                 (real_t*)NULL,
                 NA_as_zero_U,
@@ -4782,7 +4784,7 @@ void optimizeA_collective
                 m_diff, m_diff, n, p,
                 k, k_main_i, k_user, 0,
                 buffer_empty_csr_p, (int_t*)NULL, (real_t*)NULL,
-                (real_t*)NULL, false, false, 0,
+                (real_t*)NULL, 0, false, false, false,
                 (int_t*)NULL, (real_t*)NULL, true,
                 (real_t*)NULL, 0, 0,
                 false,
@@ -4792,7 +4794,7 @@ void optimizeA_collective
                 (U == NULL)? ((real_t*)NULL) : (U + (size_t)m*(size_t)p),
                 (U == NULL)? ((int_t*)NULL) : (cnt_NA_u + m),
                 U_colmeans,
-                full_dense_u, near_dense_u, NA_as_zero_U,
+                full_dense_u, near_dense_u, some_full_u, NA_as_zero_U,
                 lam/w_implicit, w_user/w_implicit, 1., lam/w_implicit,
                 (l1_lam/w_implicit) / (real_t)(scale_lam_sideinfo? n : 1),
                 (l1_lam/w_implicit) / (real_t)(scale_lam_sideinfo? n : 1),
@@ -6191,7 +6193,9 @@ int_t preprocess_sideinfo_matrix
     size_t **U_csr_p, int_t **U_csr_i, real_t *restrict *U_csr,
     size_t **U_csc_p, int_t **U_csc_i, real_t *restrict *U_csc,
     int_t *restrict *cnt_NA_u_byrow, int_t *restrict *cnt_NA_u_bycol,
-    bool *full_dense_u, bool *near_dense_u_row, bool *near_dense_u_col,
+    bool *restrict full_dense_u, bool *restrict near_dense_u_row,
+    bool *restrict near_dense_u_col,
+    bool *restrict some_full_u_row, bool *restrict some_full_u_col,
     bool NA_as_zero_U, bool nonneg, int nthreads,
     bool *modified_U, bool *modified_Usp
 )
@@ -6207,6 +6211,8 @@ int_t preprocess_sideinfo_matrix
     *full_dense_u = false;
     *near_dense_u_row = false;
     *near_dense_u_col = false;
+    *some_full_u_row = false;
+    *some_full_u_col = false;
     if (U != NULL)
     {
         *cnt_NA_u_byrow = (int_t*)calloc(m_u, sizeof(int_t));
@@ -6214,9 +6220,9 @@ int_t preprocess_sideinfo_matrix
         if (*cnt_NA_u_byrow == NULL || *cnt_NA_u_bycol == NULL)
             return 1;
         count_NAs_by_row(U, m_u, p, *cnt_NA_u_byrow, nthreads,
-                         full_dense_u, near_dense_u_row);
+                         full_dense_u, near_dense_u_row, some_full_u_row);
         count_NAs_by_col(U, m_u, p, *cnt_NA_u_bycol,
-                         full_dense_u, near_dense_u_col);
+                         full_dense_u, near_dense_u_col, some_full_u_col);
     }
 
     if ((U != NULL || !NA_as_zero_U) && U_colmeans != NULL)
@@ -6438,7 +6444,6 @@ int_t fit_collective_explicit_lbfgs_internal
     }
 
     #ifdef _OPENMP
-    bool ignore = false;
     if (nthreads > 1 && (Xfull == NULL || U_sp != NULL || I_sp != NULL))
     {
         if (prefer_onepass)
@@ -6466,6 +6471,7 @@ int_t fit_collective_explicit_lbfgs_internal
 
             if (U_sp != NULL)
             {
+                bool ignore[5];
                 retval = preprocess_sideinfo_matrix(
                     (real_t**)NULL, m_u, p,
                     U_row, U_col, &U_sp, nnz_U,
@@ -6473,7 +6479,8 @@ int_t fit_collective_explicit_lbfgs_internal
                     &U_csr_p, &U_csr_i, &U_csr,
                     &U_csc_p, &U_csc_i, &U_csc,
                     (int_t**)NULL, (int_t**)NULL,
-                    &ignore, &ignore, &ignore,
+                    &ignore[0], &ignore[1], &ignore[2],
+                    &ignore[3], &ignore[4],
                     false, false, nthreads,
                     &free_U, &free_Usp
                 );
@@ -6488,6 +6495,7 @@ int_t fit_collective_explicit_lbfgs_internal
 
             if (I_sp != NULL)
             {
+                bool ignore[5];
                 retval = preprocess_sideinfo_matrix(
                     (real_t**)NULL, n_i, q,
                     I_row, I_col, &I_sp, nnz_I,
@@ -6495,7 +6503,8 @@ int_t fit_collective_explicit_lbfgs_internal
                     &I_csr_p, &I_csr_i, &I_csr,
                     &I_csc_p, &I_csc_i, &I_csc,
                     (int_t**)NULL, (int_t**)NULL,
-                    &ignore, &ignore, &ignore,
+                    &ignore[0], &ignore[1], &ignore[2],
+                    &ignore[3], &ignore[4],
                     false, false, nthreads,
                     &free_I, &free_Isp
                 );
@@ -7106,12 +7115,18 @@ int_t fit_collective_explicit_als
     bool full_dense = false;
     bool near_dense_row = false;
     bool near_dense_col = false;
+    bool some_full_row = false;
+    bool some_full_col = false;
     bool full_dense_u = false;
     bool near_dense_u_row = false;
     bool near_dense_u_col = false;
+    bool some_full_u_row = false;
+    bool some_full_u_col = false;
     bool full_dense_i = false;
     bool near_dense_i_row = false;
     bool near_dense_i_col = false;
+    bool some_full_i_row = false;
+    bool some_full_i_col = false;
 
     bool filled_BtB = false;
     bool filled_CtCw = false;
@@ -7255,9 +7270,9 @@ int_t fit_collective_explicit_als
             goto throw_oom;
 
         count_NAs_by_row(Xfull, m, n, cnt_NA_byrow, nthreads,
-                         &full_dense, &near_dense_row);
+                         &full_dense, &near_dense_row, &some_full_row);
         count_NAs_by_col(Xfull, m, n, cnt_NA_bycol,
-                         &full_dense, &near_dense_col);
+                         &full_dense, &near_dense_col, &some_full_col);
     }
 
     else
@@ -7411,6 +7426,7 @@ int_t fit_collective_explicit_als
             &U_csc_p, &U_csc_i, &U_csc,
             &cnt_NA_u_byrow, &cnt_NA_u_bycol,
             &full_dense_u, &near_dense_u_row, &near_dense_u_col,
+            &some_full_u_row, &some_full_u_col,
             NA_as_zero_U, nonneg_C, nthreads,
             &free_U, &free_Usp
         );
@@ -7438,6 +7454,7 @@ int_t fit_collective_explicit_als
             &I_csc_p, &I_csc_i, &I_csc,
             &cnt_NA_i_byrow, &cnt_NA_i_bycol,
             &full_dense_i, &near_dense_i_row, &near_dense_i_col,
+            &some_full_i_row, &some_full_i_col,
             NA_as_zero_I, nonneg_D, nthreads,
             &free_I, &free_Isp
         );
@@ -7455,6 +7472,7 @@ int_t fit_collective_explicit_als
         size_bufferC = buffer_size_optimizeA(
             m_u, full_dense_u,
             near_dense_u_col,
+            some_full_u_col,
             Utrans == NULL,
             U != NULL, false, NA_as_zero_U,
             nonneg_C, l1_lam != 0. || l1_lam_unique != NULL,
@@ -7473,6 +7491,7 @@ int_t fit_collective_explicit_als
         size_bufferD = buffer_size_optimizeA(
             n_i, full_dense_i,
             near_dense_i_col,
+            some_full_i_col,
             Itrans == NULL,
             II != NULL, false, NA_as_zero_I,
             nonneg_D, l1_lam != 0. || l1_lam_unique != NULL,
@@ -7491,7 +7510,7 @@ int_t fit_collective_explicit_als
 
     if (add_implicit_features)
         size_bufferAi = buffer_size_optimizeA(
-            n, true, false, false,
+            n, true, false, false, false,
             Xfull != NULL, false, Xfull == NULL,
             nonneg, l1_lam != 0. || l1_lam_unique != NULL,
             k+k_main, nthreads,
@@ -7501,7 +7520,7 @@ int_t fit_collective_explicit_als
         );
     if (add_implicit_features)
         size_bufferBi = buffer_size_optimizeA(
-            m, true, false, Xfull != NULL,
+            m, true, false, false, Xfull != NULL,
             Xfull != NULL, false, Xfull == NULL,
             nonneg, l1_lam != 0. || l1_lam_unique != NULL,
             k+k_main, nthreads,
@@ -7514,11 +7533,10 @@ int_t fit_collective_explicit_als
         size_bufferA = buffer_size_optimizeA_collective(
             m, m_u, n, p,
             k, k_main + (int)user_bias, k_user,
-            full_dense,
-            near_dense_row, false,
+            full_dense, near_dense_row, some_full_row, false,
             Xfull != NULL, Xcsr_p != NULL, weight != NULL, NA_as_zero_X,
             U != NULL, U_csr_p != NULL,
-            full_dense_u, near_dense_u_row, NA_as_zero_U,
+            full_dense_u, near_dense_u_row, some_full_u_row, NA_as_zero_U,
             add_implicit_features, k_main,
             nthreads,
             use_cg_A && !nonneg, finalize_chol,
@@ -7531,7 +7549,7 @@ int_t fit_collective_explicit_als
         );
     else
         size_bufferA = buffer_size_optimizeA(
-            n, full_dense, near_dense_row, false,
+            n, full_dense, near_dense_row, some_full_row, false,
             Xfull != NULL, weight != NULL, NA_as_zero_X,
             nonneg, l1_lam != 0. || l1_lam_unique != NULL,
             k+k_main+(int)user_bias, nthreads,
@@ -7544,12 +7562,11 @@ int_t fit_collective_explicit_als
         size_bufferB = buffer_size_optimizeA_collective(
             n, n_i, m, q,
             k, k_main + (int)item_bias, k_item,
-            full_dense,
-            near_dense_col,
+            full_dense, near_dense_col, some_full_col,
             (Xtrans != NULL)? false : true,
             Xfull != NULL, Xcsc_p != NULL, weight != NULL, NA_as_zero_X,
             II != NULL, I_csr_p != NULL,
-            full_dense_i, near_dense_i_row, NA_as_zero_I,
+            full_dense_i, near_dense_i_row, some_full_i_col, NA_as_zero_I,
             add_implicit_features, k_main,
             nthreads,
             use_cg_B && !nonneg, finalize_chol,
@@ -7565,7 +7582,7 @@ int_t fit_collective_explicit_als
         );
     else
         size_bufferB = buffer_size_optimizeA(
-            m, full_dense, near_dense_col, Xtrans == NULL,
+            m, full_dense, near_dense_col, some_full_col, Xtrans == NULL,
             Xfull != NULL, weight != NULL, NA_as_zero_X,
             nonneg, l1_lam != 0. || l1_lam_unique != NULL,
             k+k_main+(int)item_bias, nthreads,
@@ -8027,8 +8044,7 @@ int_t fit_collective_explicit_als
                 U_csc_p, U_csc_i, U_csc,
                 (Utrans != NULL)? (Utrans) : (U),
                 (Utrans != NULL)? m_u : p,
-                full_dense_u,
-                near_dense_u_col,
+                full_dense_u, near_dense_u_col, some_full_u_col,
                 cnt_NA_u_bycol, (real_t*)NULL, NA_as_zero_U,
                 (lam_unique == NULL)? (lam/w_user) : (lam_unique[4]/w_user),
                 (lam_unique == NULL)? (lam/w_user) : (lam_unique[4]/w_user),
@@ -8083,8 +8099,7 @@ int_t fit_collective_explicit_als
                 I_csc_p, I_csc_i, I_csc,
                 (Itrans != NULL)? (Itrans) : (II),
                 (Itrans != NULL)? n_i : q,
-                full_dense_i,
-                near_dense_i_col,
+                full_dense_i, near_dense_i_col, some_full_i_col,
                 cnt_NA_i_bycol, (real_t*)NULL, NA_as_zero_I,
                 (lam_unique == NULL)? (lam/w_item) : (lam_unique[5]/w_item),
                 (lam_unique == NULL)? (lam/w_item) : (lam_unique[5]/w_item),
@@ -8137,7 +8152,7 @@ int_t fit_collective_explicit_als
                 Xcsc_p, Xcsc_i, (Xfull == NULL)? (Xones) : ((real_t*)NULL),
                 (Xfull == NULL)? ((real_t*)NULL) : (Xones),
                 n,
-                Xfull != NULL, false,
+                Xfull != NULL, false, true,
                 (Xfull == NULL)? ((int_t*)NULL) : (zeros_n),
                 (real_t*)NULL, Xfull == NULL,
                 (lam_unique == NULL)?
@@ -8182,7 +8197,7 @@ int_t fit_collective_explicit_als
                 Xcsr_p, Xcsr_i, (Xfull == NULL)? (Xones) : ((real_t*)NULL),
                 (Xfull == NULL)? ((real_t*)NULL) : (Xones),
                 m,
-                Xfull != NULL, false,
+                Xfull != NULL, false, true,
                 (Xfull == NULL)? ((int_t*)NULL) : (zeros_m),
                 (real_t*)NULL, Xfull == NULL,
                 (lam_unique == NULL)?
@@ -8319,8 +8334,8 @@ int_t fit_collective_explicit_als
                 n, n_i, m, q,
                 k, k_main+(int)item_bias, k_item, k_user,
                 Xcsc_p, Xcsc_i, Xcsc,
-                (Xtrans != NULL)? (Xtrans) : (Xfull),
-                full_dense, near_dense_col, (Xtrans != NULL)? m : n,
+                (Xtrans != NULL)? (Xtrans) : (Xfull), (Xtrans != NULL)? m : n,
+                full_dense, near_dense_col, some_full_col,
                 cnt_NA_bycol,
                 (Xtrans != NULL)? (Wtrans) : ((Xfull == NULL)? weight:weightC),
                 NA_as_zero_X,
@@ -8328,7 +8343,7 @@ int_t fit_collective_explicit_als
                 add_implicit_features,
                 I_csr_p, I_csr_i, I_csr,
                 II, cnt_NA_i_byrow, I_colmeans,
-                full_dense_i, near_dense_i_row, NA_as_zero_I,
+                full_dense_i, near_dense_i_row, some_full_i_row, NA_as_zero_I,
                 (lam_unique == NULL)? (lam) : (lam_unique[3]),
                 w_item, w_implicit,
                 (lam_unique == NULL)? (lam) : (lam_unique[item_bias? 1 : 3]),
@@ -8367,7 +8382,7 @@ int_t fit_collective_explicit_als
                 Xcsc_p, Xcsc_i, Xcsc,
                 (Xtrans != NULL)? (Xtrans) : (Xfull),
                 (Xtrans != NULL)? m : n,
-                full_dense, near_dense_col,
+                full_dense, near_dense_col, some_full_col,
                 cnt_NA_bycol,
                 (Xtrans != NULL)? (Wtrans) : ((Xfull == NULL)? weight:weightC),
                 NA_as_zero_X,
@@ -8495,7 +8510,7 @@ int_t fit_collective_explicit_als
                 m, m_u, n, p,
                 k, k_main+(int)user_bias, k_user, k_item,
                 Xcsr_p, Xcsr_i, Xcsr,
-                Xfull, full_dense, near_dense_row, n,
+                Xfull, n, full_dense, near_dense_row, some_full_row,
                 cnt_NA_byrow,
                 (Xfull == NULL)? (weightR) : (weight),
                 NA_as_zero_X,
@@ -8503,7 +8518,7 @@ int_t fit_collective_explicit_als
                 add_implicit_features,
                 U_csr_p, U_csr_i, U_csr,
                 U, cnt_NA_u_byrow, U_colmeans,
-                full_dense_u, near_dense_u_row, NA_as_zero_U,
+                full_dense_u, near_dense_u_row, some_full_u_row, NA_as_zero_U,
                 (lam_unique == NULL)? (lam) : (lam_unique[2]),
                 w_user, w_implicit,
                 (lam_unique == NULL)? (lam) : (lam_unique[user_bias? 0 : 2]),
@@ -8537,7 +8552,7 @@ int_t fit_collective_explicit_als
                 m, n, k+k_main+(int)user_bias,
                 Xcsr_p, Xcsr_i, Xcsr,
                 Xfull, n,
-                full_dense, near_dense_row,
+                full_dense, near_dense_row, some_full_row,
                 cnt_NA_byrow,
                 (Xfull == NULL)? (weightR) : (weight),
                 NA_as_zero_X,
@@ -9175,9 +9190,13 @@ int_t fit_collective_implicit_als
     bool full_dense_u = false;
     bool near_dense_u_row = false;
     bool near_dense_u_col = false;
+    bool some_full_u_row = false;
+    bool some_full_u_col = false;
     bool full_dense_i = false;
     bool near_dense_i_row = false;
     bool near_dense_i_col = false;
+    bool some_full_i_row = false;
+    bool some_full_i_col = false;
 
     real_t *restrict buffer_CtUbias = NULL;
     real_t *restrict DtIbias = NULL;
@@ -9300,6 +9319,7 @@ int_t fit_collective_implicit_als
         &U_csc_p, &U_csc_i, &U_csc,
         &cnt_NA_u_byrow, &cnt_NA_u_bycol,
         &full_dense_u, &near_dense_u_row, &near_dense_u_col,
+        &some_full_u_row, &some_full_u_col,
         NA_as_zero_U, nonneg_C, nthreads,
         &free_U, &free_Usp
     );
@@ -9313,6 +9333,7 @@ int_t fit_collective_implicit_als
         size_bufferC = buffer_size_optimizeA(
             m_u, full_dense_u,
             near_dense_u_col,
+            some_full_u_col,
             Utrans == NULL,
             U != NULL, false, NA_as_zero_U,
             nonneg_C, l1_lam != 0. || l1_lam_unique != NULL,
@@ -9333,6 +9354,7 @@ int_t fit_collective_implicit_als
         &I_csc_p, &I_csc_i, &I_csc,
         &cnt_NA_i_byrow, &cnt_NA_i_bycol,
         &full_dense_i, &near_dense_i_row, &near_dense_i_col,
+        &some_full_i_row, &some_full_i_col,
         NA_as_zero_I, nonneg_D, nthreads,
         &free_I, &free_Isp
     );
@@ -9346,6 +9368,7 @@ int_t fit_collective_implicit_als
         size_bufferD = buffer_size_optimizeA(
             n_i, full_dense_i,
             near_dense_i_col,
+            some_full_i_col,
             Itrans == NULL,
             II != NULL, false, NA_as_zero_I,
             nonneg_D, l1_lam != 0. || l1_lam_unique != NULL,
@@ -9524,6 +9547,7 @@ int_t fit_collective_implicit_als
                 (Utrans != NULL)? m_u : p,
                 full_dense_u,
                 near_dense_u_col,
+                some_full_u_col,
                 cnt_NA_u_bycol, (real_t*)NULL, NA_as_zero_U,
                 (lam_unique == NULL)? (lam/w_user) : (lam_unique[4]/w_user),
                 (lam_unique == NULL)? (lam/w_user) : (lam_unique[4]/w_user),
@@ -9571,6 +9595,7 @@ int_t fit_collective_implicit_als
                 (Itrans != NULL)? n_i : q,
                 full_dense_i,
                 near_dense_i_col,
+                some_full_i_col,
                 cnt_NA_i_bycol, (real_t*)NULL, NA_as_zero_I,
                 (lam_unique == NULL)? (lam/w_item) : (lam_unique[5]/w_item),
                 (lam_unique == NULL)? (lam/w_item) : (lam_unique[5]/w_item),

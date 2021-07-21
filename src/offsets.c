@@ -1320,6 +1320,7 @@ int_t fit_offsets_explicit_lbfgs_internal
 
     if (U_sp != NULL)
     {
+        bool ignore[5];
         retval = preprocess_sideinfo_matrix(
             (real_t**)NULL, m, p,
             U_row, U_col, &U_sp, nnz_U,
@@ -1327,7 +1328,8 @@ int_t fit_offsets_explicit_lbfgs_internal
             &U_csr_p, &U_csr_i, &U_csr,
             &U_csc_p, &U_csc_i, &U_csc,
             (int_t**)NULL, (int_t**)NULL,
-            (bool*)NULL, (bool*)NULL, (bool*)NULL,
+            &ignore[0], &ignore[1], &ignore[2],
+            &ignore[3], &ignore[4],
             false, false, nthreads,
             &free_U, &free_Usp
         );
@@ -1342,6 +1344,7 @@ int_t fit_offsets_explicit_lbfgs_internal
 
     if (I_sp != NULL)
     {
+        bool ignore[5];
         retval = preprocess_sideinfo_matrix(
             (real_t**)NULL, n, q,
             I_row, I_col, &I_sp, nnz_I,
@@ -1349,7 +1352,8 @@ int_t fit_offsets_explicit_lbfgs_internal
             &I_csr_p, &I_csr_i, &I_csr,
             &I_csc_p, &I_csc_i, &I_csc,
             (int_t**)NULL, (int_t**)NULL,
-            (bool*)NULL, (bool*)NULL, (bool*)NULL,
+            &ignore[0], &ignore[1], &ignore[2],
+            &ignore[3], &ignore[4],
             false, false, nthreads,
             &free_I, &free_Isp
         );
