@@ -103,7 +103,9 @@ NULL
 #' and use single-precision floating point numbers (not supported in the R version of this
 #' package).
 #' }
-#' 
+#' @section Evaluating models:
+#' Metrics for implicit-feedback recommendations or model quality can be calculated using the
+#' \href{https://cran.r-project.org/package=recometrics}{recometrics} package.
 #' @section Performance tips:
 #' It is recommended to have the \href{https://cran.r-project.org/package=RhpcBLASctl}{RhpcBLASctl}
 #' package installed for better performance - if available, will be used to control the number

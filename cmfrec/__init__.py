@@ -4383,6 +4383,11 @@ class CMF_implicit(_CMF):
     biases. If desired, an equivalent problem formulation can be made through
     ``CMF`` which can accommodate mean centering and biases.
 
+    Note
+    ----
+    Recommendation quality metrics for this model can be calculated with the
+    `recometrics <https://github.com/david-cortes/recometrics>`_ library.
+
     Parameters
     ----------
     k : int
@@ -7046,6 +7051,11 @@ class OMF_implicit(_OMF):
     to number of entries, so hyperparameters such as ``lambda_`` will require
     more tuning than in other software and trying out values over a wider range.
 
+    Note
+    ----
+    Recommendation quality metrics for this model can be calculated with the
+    `recometrics <https://github.com/david-cortes/recometrics>`_ library.
+
     Parameters
     ----------
     k : int
@@ -8191,6 +8201,11 @@ class MostPopular(_CMF):
     It minimizes the same objective functions as the other classes and offers
     the same options (e.g. centering, scaling regulatization, etc.),
     but fitting only the biases.
+
+    Note
+    ----
+    Implicit-feedback recommendation quality metrics for this model can be calculated with the
+    `recometrics <https://github.com/david-cortes/recometrics>`_ library.
 
     Parameters
     ----------

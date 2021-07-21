@@ -66,6 +66,8 @@ Alternatively, can produce factorizations in wich the factor matrices are determ
 
 While the method was initially devised for recommender systems, can also be used as a general technique for dimensionality reduction by taking the `A` matrix as low-dimensional factors, which can be calculated for new data too.
 
+Alternatively, it might also produce good results when used as an imputer for missing values in tabular data. The Python version is scikit-learn compatible and has a separate class aimed at being used for imputation in scikit-learn pipelines.
+
 ## Update 2020-03-20
 
 
@@ -310,6 +312,10 @@ See [external repository](https://github.com/ankane/cmfrec) for syntax and [Pyth
 * C:
 
 Documentation is available in the public header that is generated through the build script - see [include/cmfrec.h.in](https://github.com/david-cortes/cmfrec/blob/master/include/cmfrec.h.in).
+
+## Evaluating model quality
+
+Metrics for implicit-feedback model quality for this package can be calculated using the [recometrics](https://github.com/david-cortes/recometrics) library.
 
 ## Some comments
 

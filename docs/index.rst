@@ -29,6 +29,14 @@ For an introduction to the package and methods, see the example IPython notebook
 
 `<http://nbviewer.jupyter.org/github/david-cortes/cmfrec/blob/master/example/cmfrec_movielens_sideinfo.ipynb>`_
 
+Model evaluation
+================
+
+Metrics for implicit-feedback models or recommendation quality can be calculated using the recometrics library:
+
+`<https://www.github.com/david-cortes/recometrics/>`_
+
+
 Naming conventions
 ==================
 

@@ -932,6 +932,12 @@ by columns/items and also pass the data data with item indices sorted beforehand
 to the prediction functions. The package does not perform any indices sorting or
 de-duplication of entries of sparse matrices.
 }
+\section{Evaluating models}{
+
+Metrics for implicit-feedback recommendations or model quality can be calculated using the
+\href{https://cran.r-project.org/package=recometrics}{recometrics} package.
+}
+
 \section{Performance tips}{
 
 It is recommended to have the \href{https://cran.r-project.org/package=RhpcBLASctl}{RhpcBLASctl}
