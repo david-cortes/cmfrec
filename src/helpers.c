@@ -878,6 +878,13 @@ int_t rnorm_parallel(ArraysToFill arrays, int_t seed, int nthreads)
         ptr_bucket, sz_bucket, BUCKET_SIZE
     );
 
+    #if defined(_OPENMP) && \
+                ( (_OPENMP < 200801)  /* OpenMP < 3.0 */ \
+                  || defined(_WIN32) || defined(_WIN64) \
+                )
+    long long ix;
+    #endif
+
     #pragma omp parallel for schedule(static) num_threads(nthreads) \
             shared(states)
     for (size_t_for ix = 0; ix < tot_buckets; ix++)
