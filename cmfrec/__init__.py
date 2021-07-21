@@ -17,6 +17,27 @@ class _CMF:
         return self.__str__()
 
     def set_params(self, **params):
+        """
+        Set the parameters of this estimator.
+
+        Kept for compatibility with scikit-learn.
+
+        Note
+        ----
+        Setting any parameter that is related to model hyperparameters (i.e. anything not
+        related to verbosity or number of threads) will reset the model - that is,
+        it will no longer be possible to use it for predictions without a new refit.
+        
+        Parameters
+        ----------
+        **params : dict
+            Estimator parameters.
+
+        Returns
+        -------
+        self : estimator instance
+            Estimator instance.
+        """
         if not params:
             return self
         valid_params = self.get_params()
@@ -24,6 +45,8 @@ class _CMF:
             if k not in valid_params.keys():
                 raise ValueError("Invalid parameter %s" % k)
             else:
+                if v not in ["verbose", "nthreads", "n_jobs", "print_every", "handle_interrupt", "random_state"]:
+                    self.is_fitted_ = False
                 setattr(self, k, v)
         return self
 
@@ -2167,6 +2190,7 @@ class _CMF:
         else:
             raise ValueError("Unexpected error.")
 
+        new_model._init()
 
         new_model.A_ = self.B_
         new_model.B_ = self.A_
@@ -2674,6 +2698,8 @@ class CMF(_CMF):
     nthreads : int
         Number of parallel threads to use. If passing -1, will take the
         maximum available number of threads in the system.
+    n_jobs : None or int
+        Synonym for nthreads, kept for better compatibility with scikit-learn.
 
     Attributes
     ----------
@@ -2764,7 +2790,99 @@ class CMF(_CMF):
                  use_float=True,
                  random_state=1, verbose=True, print_every=10,
                  handle_interrupt=True, produce_dicts=False,
-                 nthreads=-1):
+                 nthreads=-1, n_jobs=None):
+        self.k = k
+        self.lambda_ = lambda_
+        self.method = method
+        self.use_cg = use_cg
+        self.user_bias = user_bias
+        self.item_bias = item_bias
+        self.center = center
+        self.add_implicit_features = add_implicit_features
+        self.scale_lam = scale_lam
+        self.scale_lam_sideinfo = scale_lam_sideinfo
+        self.scale_bias_const = scale_bias_const
+        self.k_user = k_user
+        self.k_item = k_item
+        self.k_main = k_main
+        self.w_main = w_main
+        self.w_user = w_user
+        self.w_item = w_item
+        self.w_implicit = w_implicit
+        self.l1_lambda = l1_lambda
+        self.center_U = center_U
+        self.center_I = center_I
+        self.maxiter = maxiter
+        self.niter = niter
+        self.parallelize = parallelize
+        self.corr_pairs = corr_pairs
+        self.max_cg_steps = max_cg_steps
+        self.finalize_chol = finalize_chol
+        self.NA_as_zero = NA_as_zero
+        self.NA_as_zero_user = NA_as_zero_user
+        self.NA_as_zero_item = NA_as_zero_item
+        self.nonneg = nonneg
+        self.nonneg_C = nonneg_C
+        self.nonneg_D = nonneg_D
+        self.max_cd_steps = max_cd_steps
+        self.precompute_for_predictions = precompute_for_predictions
+        self.include_all_X = include_all_X
+        self.use_float = use_float
+        self.random_state = random_state
+        self.verbose = verbose
+        self.print_every = print_every
+        self.handle_interrupt = handle_interrupt
+        self.produce_dicts = produce_dicts
+        self.nthreads = nthreads
+        self.n_jobs = n_jobs
+        self.is_fitted_ = False
+
+    def _init(self):
+        k = self.k
+        lambda_ = self.lambda_
+        method = self.method
+        use_cg = self.use_cg
+        user_bias = self.user_bias
+        item_bias = self.item_bias
+        center = self.center
+        add_implicit_features = self.add_implicit_features
+        scale_lam = self.scale_lam
+        scale_lam_sideinfo = self.scale_lam_sideinfo
+        scale_bias_const = self.scale_bias_const
+        k_user = self.k_user
+        k_item = self.k_item
+        k_main = self.k_main
+        w_main = self.w_main
+        w_user = self.w_user
+        w_item = self.w_item
+        w_implicit = self.w_implicit
+        l1_lambda = self.l1_lambda
+        center_U = self.center_U
+        center_I = self.center_I
+        maxiter = self.maxiter
+        niter = self.niter
+        parallelize = self.parallelize
+        corr_pairs = self.corr_pairs
+        max_cg_steps = self.max_cg_steps
+        finalize_chol = self.finalize_chol
+        NA_as_zero = self.NA_as_zero
+        NA_as_zero_user = self.NA_as_zero_user
+        NA_as_zero_item = self.NA_as_zero_item
+        nonneg = self.nonneg
+        nonneg_C = self.nonneg_C
+        nonneg_D = self.nonneg_D
+        max_cd_steps = self.max_cd_steps
+        precompute_for_predictions = self.precompute_for_predictions
+        include_all_X = self.include_all_X
+        use_float = self.use_float
+        random_state = self.random_state
+        verbose = self.verbose
+        print_every = self.print_every
+        handle_interrupt = self.handle_interrupt
+        produce_dicts = self.produce_dicts
+        nthreads = self.nthreads
+        n_jobs = self.n_jobs
+
         self._take_params(implicit=False, alpha=0., downweight=False,
                           k=k, lambda_=lambda_, method=method,
                           add_implicit_features=add_implicit_features,
@@ -2803,20 +2921,39 @@ class CMF(_CMF):
             msg += "Model has not been fitted to data.\n"
         return msg
 
-    def get_params(self, deep=None):
+    def get_params(self, deep=True):
+        """
+        Get parameters for this estimator.
+
+        Kept for compatibility with scikit-learn.
+
+        Parameters
+        ----------
+        deep : bool
+            Ignored.
+
+        Returns
+        -------
+        params : dict
+            Parameter names mapped to their values.
+        """
         return {
-            "k" : self.k, "lambda_" : self.lambda_, "l1_lambda" : self.l1_lambda, "method" : self.method,
-            "user_bias" : self.user_bias, "item_bias" : self.item_bias, "center" : self.center,
-            "k_user" : self.k_user, "k_item" : self.k_item, "k_main" : self.k_main,
-            "w_main" : self.w_main, "w_user" : self.w_user, "w_item" : self.w_item,
-            "maxiter" : self.maxiter, "niter" : self.niter,
-            "parallelize" : self.parallelize, "corr_pairs" : self.corr_pairs,
-            "NA_as_zero" : self.NA_as_zero,
-            "NA_as_zero_user" : self.NA_as_zero_user,
-            "NA_as_zero_item" : self.NA_as_zero_item,
-            "random_state" : self.random_state,
-            "use_cg" : self.use_cg, "use_float" : self.use_float,
-            "nthreads" : self.nthreads
+                "k":self.k, "lambda_":self.lambda_, "method":self.method, "use_cg":self.use_cg,
+                "user_bias":self.user_bias, "item_bias":self.item_bias, "center":self.center,
+                "add_implicit_features":self.add_implicit_features,
+                "scale_lam":self.scale_lam, "scale_lam_sideinfo":self.scale_lam_sideinfo, "scale_bias_const":self.scale_bias_const,
+                "k_user":self.k_user, "k_item":self.k_item, "k_main":self.k_main,
+                "w_main":self.w_main, "w_user":self.w_user, "w_item":self.w_item, "w_implicit":self.w_implicit,
+                "l1_lambda":self.l1_lambda, "center_U":self.center_U, "center_I":self.center_I,
+                "maxiter":self.maxiter, "niter":self.niter, "parallelize":self.parallelize, "corr_pairs":self.corr_pairs,
+                "max_cg_steps":self.max_cg_steps, "finalize_chol":self.finalize_chol,
+                "NA_as_zero":self.NA_as_zero, "NA_as_zero_user":self.NA_as_zero_user, "NA_as_zero_item":self.NA_as_zero_item,
+                "nonneg":self.nonneg, "nonneg_C":self.nonneg_C, "nonneg_D":self.nonneg_D, "max_cd_steps":self.max_cd_steps,
+                "precompute_for_predictions":self.precompute_for_predictions, "include_all_X":self.include_all_X,
+                "use_float":self.use_float,
+                "random_state":self.random_state, "verbose":self.verbose, "print_every":self.print_every,
+                "handle_interrupt":self.handle_interrupt, "produce_dicts":self.produce_dicts,
+                "nthreads":self.nthreads
         }
 
     def fit(self, X, U=None, I=None, U_bin=None, I_bin=None, W=None):
@@ -2900,6 +3037,7 @@ class CMF(_CMF):
         self
         
         """
+        self._init()
         return self._fit_common(X, U=U, I=I, U_bin=U_bin, I_bin=I_bin, W=W)
 
     def _fit(self, Xrow, Xcol, Xval, W_sp, Xarr, W_dense,
@@ -3249,6 +3387,7 @@ class CMF(_CMF):
         scores : array(n,)
             Predicted ratings for the requested user-item combinations.
         """
+        assert self.is_fitted_
         if self._only_prediction_info:
             raise ValueError("Cannot use this function after dropping non-essential matrices.")
         B = self._factors_cold_multiple(U=I, U_bin=I_bin, is_I=True)
@@ -3297,6 +3436,7 @@ class CMF(_CMF):
             when passing ``output_score=True``, in which case the result will
             be a tuple with these two entries.
         """
+        assert self.is_fitted_
         if self._only_prediction_info:
             raise ValueError("Cannot use this function after dropping non-essential matrices.")
         B = self._factors_cold_multiple(U=I, U_bin=I_bin, is_I=True)
@@ -3802,6 +3942,7 @@ class CMF(_CMF):
             The 'X' matrix as a dense array with all missing entries imputed
             according to the model.
         """
+        assert self.is_fitted_
         if self._only_prediction_info:
             raise ValueError("Cannot use this function after dropping non-essential matrices.")
         if (X is not None) and (not isinstance(X, np.ndarray)):
@@ -3915,7 +4056,7 @@ class CMF(_CMF):
                             user_bias=None, item_bias=None,
                             lambda_=1e+1, scale_lam=False, l1_lambda=0., nonneg=False,
                             NA_as_zero=False, scaling_biasA=None, scaling_biasB=None,
-                            use_float=False, nthreads=-1):
+                            use_float=False, nthreads=-1, n_jobs=None):
         """
         Create a CMF model object from fitted matrices
 
@@ -3988,6 +4129,8 @@ class CMF(_CMF):
         nthreads : int
             Number of parallel threads to use. If passing -1, will take the
             maximum available number of threads in the system.
+        n_jobs : None or int
+            Synonym for nthreads, kept for better compatibility with scikit-learn.
 
         Returns
         -------
@@ -4043,7 +4186,9 @@ class CMF(_CMF):
                         nonneg = nonneg,
                         NA_as_zero = NA_as_zero,
                         use_float = use_float,
-                        nthreads = nthreads)
+                        nthreads = nthreads,
+                        n_jobs = n_jobs)
+        new_model._init()
 
         dtype = ctypes.c_double if not use_float else ctypes.c_float
 
@@ -4323,6 +4468,8 @@ class CMF_implicit(_CMF):
     nthreads : int
         Number of parallel threads to use. If passing -1, will take the
         maximum available number of threads in the system.
+    n_jobs : None or int
+        Synonym for nthreads, kept for better compatibility with scikit-learn.
 
     Attributes
     ----------
@@ -4386,7 +4533,73 @@ class CMF_implicit(_CMF):
                  max_cg_steps=3, finalize_chol=False,
                  random_state=1, verbose=False,
                  produce_dicts=False, handle_interrupt=True,
-                 nthreads=-1):
+                 nthreads=-1, n_jobs=None):
+        self.k = k
+        self.lambda_ = lambda_
+        self.alpha = alpha
+        self.use_cg = use_cg
+        self.k_user = k_user
+        self.k_item = k_item
+        self.k_main = k_main
+        self.w_main = w_main
+        self.w_user = w_user
+        self.w_item = w_item
+        self.l1_lambda = l1_lambda
+        self.center_U = center_U
+        self.center_I = center_I
+        self.niter = niter
+        self.NA_as_zero_user = NA_as_zero_user
+        self.NA_as_zero_item = NA_as_zero_item
+        self.nonneg = nonneg
+        self.nonneg_C = nonneg_C
+        self.nonneg_D = nonneg_D
+        self.max_cd_steps = max_cd_steps
+        self.apply_log_transf = apply_log_transf
+        self.precompute_for_predictions = precompute_for_predictions
+        self.use_float = use_float
+        self.max_cg_steps = max_cg_steps
+        self.finalize_chol = finalize_chol
+        self.random_state = random_state
+        self.verbose = verbose
+        self.produce_dicts = produce_dicts
+        self.handle_interrupt = handle_interrupt
+        self.nthreads = nthreads
+        self.n_jobs = n_jobs
+        self.is_fitted_ = False
+
+    def _init(self):
+        k = self.k
+        lambda_ = self.lambda_
+        alpha = self.alpha
+        use_cg = self.use_cg
+        k_user = self.k_user
+        k_item = self.k_item
+        k_main = self.k_main
+        w_main = self.w_main
+        w_user = self.w_user
+        w_item = self.w_item
+        l1_lambda = self.l1_lambda
+        center_U = self.center_U
+        center_I = self.center_I
+        niter = self.niter
+        NA_as_zero_user = self.NA_as_zero_user
+        NA_as_zero_item = self.NA_as_zero_item
+        nonneg = self.nonneg
+        nonneg_C = self.nonneg_C
+        nonneg_D = self.nonneg_D
+        max_cd_steps = self.max_cd_steps
+        apply_log_transf = self.apply_log_transf
+        precompute_for_predictions = self.precompute_for_predictions
+        use_float = self.use_float
+        max_cg_steps = self.max_cg_steps
+        finalize_chol = self.finalize_chol
+        random_state = self.random_state
+        verbose = self.verbose
+        produce_dicts = self.produce_dicts
+        handle_interrupt = self.handle_interrupt
+        nthreads = self.nthreads
+        n_jobs = self.n_jobs
+
         self._take_params(implicit=True, alpha=alpha, downweight=False,
                           k=k, lambda_=lambda_, method="als",
                           use_cg=use_cg, max_cg_steps=max_cg_steps,
@@ -4417,17 +4630,35 @@ class CMF_implicit(_CMF):
             msg += "Model has not been fitted to data.\n"
         return msg
 
-    def get_params(self, deep=None):
+    def get_params(self, deep=True):
+        """
+        Get parameters for this estimator.
+
+        Kept for compatibility with scikit-learn.
+
+        Parameters
+        ----------
+        deep : bool
+            Ignored.
+
+        Returns
+        -------
+        params : dict
+            Parameter names mapped to their values.
+        """
         return {
-            "k" : self.k, "lambda_" : self.lambda_, "alpha" : self.alpha,
-            "k_user" : self.k_user, "k_item" : self.k_item, "k_main" : self.k_main,
-            "w_main" : self.w_main, "w_user" : self.w_user, "w_item" : self.w_item,
-            "downweight" : self.downweight,
-            "niter" : self.niter, "NA_as_zero_user" : self.NA_as_zero_user,
-            "NA_as_zero_item" : self.NA_as_zero_item,
-            "use_float" : self.use_float, "use_cg" : self.use_cg,
-            "random_state" : self.random_state,
-            "nthreads" : self.nthreads
+            "k":self.k, "lambda_":self.lambda_, "alpha":self.alpha, "use_cg":self.use_cg,
+            "k_user":self.k_user, "k_item":self.k_item, "k_main":self.k_main,
+            "w_main":self.w_main, "w_user":self.w_user, "w_item":self.w_item,
+            "l1_lambda":self.l1_lambda, "center_U":self.center_U, "center_I":self.center_I,
+            "niter":self.niter, "NA_as_zero_user":self.NA_as_zero_user, "NA_as_zero_item":self.NA_as_zero_item,
+            "nonneg":self.nonneg, "nonneg_C":self.nonneg_C, "nonneg_D":self.nonneg_D, "max_cd_steps":self.max_cd_steps,
+            "apply_log_transf":self.apply_log_transf,
+            "precompute_for_predictions":self.precompute_for_predictions, "use_float":self.use_float,
+            "max_cg_steps":self.max_cg_steps, "finalize_chol":self.finalize_chol,
+            "random_state":self.random_state, "verbose":self.verbose,
+            "produce_dicts":self.produce_dicts, "handle_interrupt":self.handle_interrupt,
+            "nthreads":self.nthreads
         }
 
     def fit(self, X, U=None, I=None):
@@ -4489,6 +4720,7 @@ class CMF_implicit(_CMF):
         self
 
         """
+        self._init()
         if X.__class__.__name__ not in ("coo_matrix", "DataFrame"):
             raise ValueError("'X' must be a Pandas DataFrame or SciPy sparse COO matrix.")
         return self._fit_common(X, U=U, I=I, U_bin=None, I_bin=None, W=None)
@@ -4778,6 +5010,7 @@ class CMF_implicit(_CMF):
         scores : array(n,)
             Predicted ratings for the requested user-item combinations.
         """
+        assert self.is_fitted_
         if self._only_prediction_info:
             raise ValueError("Cannot use this function after dropping non-essential matrices.")
         B = self._factors_cold_multiple(U=I, U_bin=None, is_I=True)
@@ -4814,6 +5047,7 @@ class CMF_implicit(_CMF):
             when passing ``output_score=True``, in which case the result will
             be a tuple with these two entries.
         """
+        assert self.is_fitted_
         if self._only_prediction_info:
             raise ValueError("Cannot use this function after dropping non-essential matrices.")
         B = self._factors_cold_multiple(U=I, U_bin=None, is_I=True)
@@ -5140,7 +5374,7 @@ class CMF_implicit(_CMF):
     def from_model_matrices(A, B, precompute=True,
                             lambda_=1e0, l1_lambda=0., nonneg=False,
                             apply_log_transf=False, alpha=1.,
-                            use_float=False, nthreads=-1):
+                            use_float=False, nthreads=-1, n_jobs=None):
         """
         Create a CMF_implicit model object from fitted matrices
 
@@ -5189,6 +5423,8 @@ class CMF_implicit(_CMF):
         nthreads : int
             Number of parallel threads to use. If passing -1, will take the
             maximum available number of threads in the system.
+        n_jobs : None or int
+            Synonym for nthreads, kept for better compatibility with scikit-learn.
 
         Returns
         -------
@@ -5220,7 +5456,9 @@ class CMF_implicit(_CMF):
                                  apply_log_transf = apply_log_transf,
                                  alpha = alpha,
                                  use_float = use_float,
-                                 nthreads = nthreads)
+                                 nthreads = nthreads,
+                                 n_jobs = n_jobs)
+        new_model._init()
 
         if (A.dtype != dtype):
             A = A.astype(dtype)
@@ -5841,6 +6079,8 @@ class OMF_explicit(_OMF):
     nthreads : int
         Number of parallel threads to use. If passing -1, will take the
         maximum available number of threads in the system.
+    n_jobs : None or int
+        Synonym for nthreads, kept for better compatibility with scikit-learn.
 
     Attributes
     ----------
@@ -5909,7 +6149,65 @@ class OMF_explicit(_OMF):
                  NA_as_zero=False, use_float=False,
                  random_state=1, verbose=True, print_every=100,
                  produce_dicts=False, handle_interrupt=True,
-                 nthreads=-1):
+                 nthreads=-1, n_jobs=None):
+        self.k = k
+        self.lambda_ = lambda_
+        self.method = method
+        self.use_cg = use_cg
+        self.user_bias = user_bias
+        self.item_bias = item_bias
+        self.center = center
+        self.k_sec = k_sec
+        self.k_main = k_main
+        self.add_intercepts = add_intercepts
+        self.w_user = w_user
+        self.w_item = w_item
+        self.maxiter = maxiter
+        self.niter = niter
+        self.parallelize = parallelize
+        self.corr_pairs = corr_pairs
+        self.max_cg_steps = max_cg_steps
+        self.finalize_chol = finalize_chol
+        self.NA_as_zero = NA_as_zero
+        self.use_float = use_float
+        self.random_state = random_state
+        self.verbose = verbose
+        self.print_every = print_every
+        self.produce_dicts = produce_dicts
+        self.handle_interrupt = handle_interrupt
+        self.nthreads = nthreads
+        self.n_jobs = n_jobs
+        self.is_fitted_ = False
+
+    def _init(self):
+        k = self.k
+        lambda_ = self.lambda_
+        method = self.method
+        use_cg = self.use_cg
+        user_bias = self.user_bias
+        item_bias = self.item_bias
+        center = self.center
+        k_sec = self.k_sec
+        k_main = self.k_main
+        add_intercepts = self.add_intercepts
+        w_user = self.w_user
+        w_item = self.w_item
+        maxiter = self.maxiter
+        niter = self.niter
+        parallelize = self.parallelize
+        corr_pairs = self.corr_pairs
+        max_cg_steps = self.max_cg_steps
+        finalize_chol = self.finalize_chol
+        NA_as_zero = self.NA_as_zero
+        use_float = self.use_float
+        random_state = self.random_state
+        verbose = self.verbose
+        print_every = self.print_every
+        produce_dicts = self.produce_dicts
+        handle_interrupt = self.handle_interrupt
+        nthreads = self.nthreads
+        n_jobs = self.n_jobs
+
         assert k>0 or k_sec>0 or k_main>0
         self._take_params(implicit=False, alpha=0., downweight=False,
                           k=1, lambda_=lambda_, method=method,
@@ -5945,18 +6243,32 @@ class OMF_explicit(_OMF):
             msg += "Model has not been fitted to data.\n"
         return msg
 
-    def get_params(self, deep=None):
+    def get_params(self, deep=True):
+        """
+        Get parameters for this estimator.
+
+        Kept for compatibility with scikit-learn.
+
+        Parameters
+        ----------
+        deep : bool
+            Ignored.
+
+        Returns
+        -------
+        params : dict
+            Parameter names mapped to their values.
+        """
         return {
-            "k" : self.k, "lambda_" : self.lambda_, "method" : self.method,
-            "user_bias" : self.user_bias, "item_bias" : self.item_bias,
-            "k_sec" : self.k_sec, "k_main" : self.k_main,
-            "add_intercepts" : self.add_intercepts,
-            "w_user" : self.w_user, "w_item" : self.w_item,
-            "maxiter" : self.maxiter, "niter" : self.niter,
-            "parallelize" : self.parallelize, "corr_pairs" : self.corr_pairs,
-            "NA_as_zero" : self.NA_as_zero, "use_float" : self.use_float,
-            "use_cg" : self.use_cg, "random_state" : self.random_state,
-            "nthreads" : self.nthreads
+            "k":self.k, "lambda_":self.lambda_, "method":self.method, "use_cg":self.use_cg,
+            "user_bias":self.user_bias, "item_bias":self.item_bias, "center":self.center, "k_sec":self.k_sec, "k_main":self.k_main,
+            "add_intercepts":self.add_intercepts, "w_user":self.w_user, "w_item":self.w_item,
+            "maxiter":self.maxiter, "niter":self.niter, "parallelize":self.parallelize, "corr_pairs":self.corr_pairs,
+            "max_cg_steps":self.max_cg_steps, "finalize_chol":self.finalize_chol,
+            "NA_as_zero":self.NA_as_zero, "use_float":self.use_float,
+            "random_state":self.random_state, "verbose":self.verbose, "print_every":self.print_every,
+            "produce_dicts":self.produce_dicts, "handle_interrupt":self.handle_interrupt,
+            "nthreads":self.nthreads
         }
 
     def fit(self, X, U=None, I=None, W=None):
@@ -6011,6 +6323,7 @@ class OMF_explicit(_OMF):
         self
 
         """
+        self._init()
         if self.method == "als":
             if "coo_matrix" in [U.__class__.__name__, I.__class__.__name__]:
                 msg  = "Cannot pass user/item side info in sparse format"
@@ -6714,6 +7027,8 @@ class OMF_implicit(_OMF):
     nthreads : int
         Number of parallel threads to use. If passing -1, will take the
         maximum available number of threads in the system.
+    n_jobs : None or int
+        Synonym for nthreads, kept for better compatibility with scikit-learn.
 
     Attributes
     ----------
@@ -6769,7 +7084,43 @@ class OMF_implicit(_OMF):
                  max_cg_steps=3, finalize_chol=False,
                  random_state=1, verbose=False,
                  produce_dicts=False, handle_interrupt=True,
-                 nthreads=-1):
+                 nthreads=-1, n_jobs=None):
+        self.k = k
+        self.lambda_ = lambda_
+        self.alpha = alpha
+        self.use_cg = use_cg
+        self.add_intercepts = add_intercepts
+        self.niter = niter
+        self.apply_log_transf = apply_log_transf
+        self.use_float = use_float
+        self.max_cg_steps = max_cg_steps
+        self.finalize_chol = finalize_chol
+        self.random_state = random_state
+        self.verbose = verbose
+        self.produce_dicts = produce_dicts
+        self.handle_interrupt = handle_interrupt
+        self.nthreads = nthreads
+        self.n_jobs = n_jobs
+        self.is_fitted_ = False
+
+    def _init(self):
+        k = self.k
+        lambda_ = self.lambda_
+        alpha = self.alpha
+        use_cg = self.use_cg
+        add_intercepts = self.add_intercepts
+        niter = self.niter
+        apply_log_transf = self.apply_log_transf
+        use_float = self.use_float
+        max_cg_steps = self.max_cg_steps
+        finalize_chol = self.finalize_chol
+        random_state = self.random_state
+        verbose = self.verbose
+        produce_dicts = self.produce_dicts
+        handle_interrupt = self.handle_interrupt
+        nthreads = self.nthreads
+        n_jobs = self.n_jobs
+
         self._take_params(implicit=True, alpha=alpha, downweight=False,
                           k=k, lambda_=lambda_, method="als",
                           apply_log_transf=apply_log_transf,
@@ -6801,14 +7152,30 @@ class OMF_implicit(_OMF):
             msg += "Model has not been fitted to data.\n"
         return msg
 
-    def get_params(self, deep=None):
+    def get_params(self, deep=True):
+        """
+        Get parameters for this estimator.
+
+        Kept for compatibility with scikit-learn.
+
+        Parameters
+        ----------
+        deep : bool
+            Ignored.
+
+        Returns
+        -------
+        params : dict
+            Parameter names mapped to their values.
+        """
         return {
-            "k" : self.k, "lambda_" : self.lambda_, "alpha" : self.alpha,
-            "downweight" : self.downweight,
-            "add_intercepts" : self.add_intercepts, "niter" : self.niter,
-            "use_float" : self.use_float, "use_cg" : self.use_cg,
-            "random_state" : self.random_state,
-            "nthreads" : self.nthreads
+            "k":self.k, "lambda_":self.lambda_, "alpha":self.alpha, "use_cg":self.use_cg,
+            "add_intercepts":self.add_intercepts, "niter":self.niter,
+            "apply_log_transf":self.apply_log_transf, "use_float":self.use_float,
+            "max_cg_steps":self.max_cg_steps, "finalize_chol":self.finalize_chol,
+            "random_state":self.random_state, "verbose":self.verbose,
+            "produce_dicts":self.produce_dicts, "handle_interrupt":self.handle_interrupt,
+            "nthreads":self.nthreads
         }
 
     def fit(self, X, U=None, I=None):
@@ -6856,6 +7223,7 @@ class OMF_implicit(_OMF):
         self
 
         """
+        self._init()
         if "coo_matrix" in [U.__class__.__name__, I.__class__.__name__]:
             msg  = "Cannot pass user/item side info in sparse format"
             msg += " for implicit-feedback model."
@@ -7216,6 +7584,8 @@ class ContentBased(_OMF_Base):
     nthreads : int
         Number of parallel threads to use. If passing -1, will take the
         maximum available number of threads in the system.
+    n_jobs : None or int
+        Synonym for nthreads, kept for better compatibility with scikit-learn.
 
     Attributes
     ----------
@@ -7273,7 +7643,45 @@ class ContentBased(_OMF_Base):
                  parallelize="separate", verbose=True, print_every=100,
                  random_state=1, use_float=True,
                  produce_dicts=False, handle_interrupt=True, start_with_ALS=True,
-                 nthreads=-1):
+                 nthreads=-1, n_jobs=None):
+        self.k = k
+        self.lambda_ = lambda_
+        self.user_bias = user_bias
+        self.item_bias = item_bias
+        self.add_intercepts = add_intercepts
+        self.maxiter = maxiter
+        self.corr_pairs = corr_pairs
+        self.parallelize = parallelize
+        self.verbose = verbose
+        self.print_every = print_every
+        self.random_state = random_state
+        self.use_float = use_float
+        self.produce_dicts = produce_dicts
+        self.handle_interrupt = handle_interrupt
+        self.start_with_ALS = start_with_ALS
+        self.nthreads = nthreads
+        self.n_jobs = n_jobs
+        self.is_fitted_ = False
+
+    def _init(self):
+        k = self.k
+        lambda_ = self.lambda_
+        user_bias = self.user_bias
+        item_bias = self.item_bias
+        add_intercepts = self.add_intercepts
+        maxiter = self.maxiter
+        corr_pairs = self.corr_pairs
+        parallelize = self.parallelize
+        verbose = self.verbose
+        print_every = self.print_every
+        random_state = self.random_state
+        use_float = self.use_float
+        produce_dicts = self.produce_dicts
+        handle_interrupt = self.handle_interrupt
+        start_with_ALS = self.start_with_ALS
+        nthreads = self.nthreads
+        n_jobs = self.n_jobs
+
         self._take_params(implicit=False, alpha=40., downweight=False,
                           k=1, lambda_=lambda_, method="lbfgs", use_cg=False,
                           user_bias=user_bias, item_bias=item_bias,
@@ -7304,16 +7712,29 @@ class ContentBased(_OMF_Base):
             msg += "Model has not been fitted to data.\n"
         return msg
 
-    def get_params(self, deep=None):
+    def get_params(self, deep=True):
+        """
+        Get parameters for this estimator.
+
+        Kept for compatibility with scikit-learn.
+
+        Parameters
+        ----------
+        deep : bool
+            Ignored.
+
+        Returns
+        -------
+        params : dict
+            Parameter names mapped to their values.
+        """
         return {
-            "k" : self.k, "lambda_" : self.lambda_,
-            "user_bias" : self.user_bias, "item_bias" : self.item_bias,
-            "add_intercepts" : self.add_intercepts, "maxiter" : self.maxiter,
-            "corr_pairs" : self.corr_pairs,
-            "parallelize" : self.parallelize, "verbose" : self.verbose,
-            "print_every" : self.print_every,
-            "random_state" : self.random_state, "use_float" : self.use_float,
-            "nthreads" : self.nthreads
+            "k":self.k, "lambda_":self.lambda_, "user_bias":self.user_bias, "item_bias":self.item_bias,
+            "add_intercepts":self.add_intercepts, "maxiter":self.maxiter, "corr_pairs":self.corr_pairs,
+            "parallelize":self.parallelize, "verbose":self.verbose, "print_every":self.print_every,
+            "random_state":self.random_state, "use_float":self.use_float,
+            "produce_dicts":self.produce_dicts, "handle_interrupt":self.handle_interrupt, "start_with_ALS":self.start_with_ALS,
+            "nthreads":self.nthreads
         }
 
     def fit(self, X, U, I, W=None):
@@ -7367,6 +7788,7 @@ class ContentBased(_OMF_Base):
         self
 
         """
+        self._init()
         return self._fit_common(X, U=U, I=I, U_bin=None, I_bin=None, W=W,
                                 enforce_same_shape=True)
 
@@ -7732,6 +8154,8 @@ class MostPopular(_CMF):
         Number of parallel threads to use.  If passing -1, will take the
         maximum available number of threads in the system. Most of the
         work is done single-threaded however.
+    n_jobs : None or int
+        Synonym for nthreads, kept for better compatibility with scikit-learn.
 
     Attributes
     ----------
@@ -7777,7 +8201,37 @@ class MostPopular(_CMF):
     def __init__(self, implicit=False, center=True, user_bias=False, lambda_=1e1, alpha=1.,
                  NA_as_zero=False, scale_lam=False, scale_bias_const=False, apply_log_transf=False,
                  use_float=False, produce_dicts=False,
-                 nthreads=-1):
+                 nthreads=-1, n_jobs=None):
+        self.implicit = implicit
+        self.center = center
+        self.user_bias = user_bias
+        self.lambda_ = lambda_
+        self.alpha = alpha
+        self.NA_as_zero = NA_as_zero
+        self.scale_lam = scale_lam
+        self.scale_bias_const = scale_bias_const
+        self.apply_log_transf = apply_log_transf
+        self.use_float = use_float
+        self.produce_dicts = produce_dicts
+        self.nthreads = nthreads
+        self.n_jobs = n_jobs
+        self.is_fitted_ = False
+
+    def _init(self):
+        implicit = self.implicit
+        center = self.center
+        user_bias = self.user_bias
+        lambda_ = self.lambda_
+        alpha = self.alpha
+        NA_as_zero = self.NA_as_zero
+        scale_lam = self.scale_lam
+        scale_bias_const = self.scale_bias_const
+        apply_log_transf = self.apply_log_transf
+        use_float = self.use_float
+        produce_dicts = self.produce_dicts
+        nthreads = self.nthreads
+        n_jobs = self.n_jobs
+
         self._take_params(implicit=implicit, alpha=alpha, downweight=False,
                           k=1, lambda_=lambda_, method="als", use_cg=False,
                           apply_log_transf=apply_log_transf,
@@ -7819,12 +8273,27 @@ class MostPopular(_CMF):
             msg += "Model has not been fitted to data.\n"
         return msg
 
-    def get_params(self, deep=None):
+    def get_params(self, deep=True):
+        """
+        Get parameters for this estimator.
+
+        Kept for compatibility with scikit-learn.
+
+        Parameters
+        ----------
+        deep : bool
+            Ignored.
+
+        Returns
+        -------
+        params : dict
+            Parameter names mapped to their values.
+        """
         return {
-            "implicit" : self.implicit, "user_bias" : self.user_bias,
-            "lambda_" : self.lambda_, "alpha" : self.alpha,
-            "downweight" : self.downweight, "use_float" : self.use_float,
-            "nthreads" : self.nthreads
+            "implicit":self.implicit, "center":self.center, "user_bias":self.user_bias, "lambda_":self.lambda_, "alpha":self.alpha,
+            "NA_as_zero":self.NA_as_zero, "scale_lam":self.scale_lam, "scale_bias_const":self.scale_bias_const, "apply_log_transf":self.apply_log_transf,
+            "use_float":self.use_float, "produce_dicts":self.produce_dicts,
+            "nthreads":self.nthreads
         }
 
     def fit(self, X, W=None):
@@ -7855,6 +8324,7 @@ class MostPopular(_CMF):
         self
 
         """
+        self._init()
         if (self.implicit) and (W is not None):
             raise ValueError("'W' not supported when using 'implicit=True'.")
         return self._fit_common(X, U=None, I=None, U_bin=None, I_bin=None, W=W)
@@ -7962,11 +8432,12 @@ class MostPopular(_CMF):
 class CMF_imputer(CMF):
     """
     A wrapper for CMF allowing argument 'y' in 'fit' and
-    'transform' (used as a placeholder only, not used for anything),
+    'transform' (left as a placeholder only, not used for anything),
     which can be used as part of SciKit-Learn pipelines due to having
     this extra parameter.
 
-    Everything else is exactly the same as for 'CMF'
+    Everything else is exactly the same as for 'CMF' - see its
+    documentation for details.
     """
     def fit(self, X, y=None, U=None, I=None, U_bin=None, I_bin=None, W=None):
         return super().fit(X=X, U=U, U_bin=U_bin, I=I, I_bin=I_bin, W=W)
