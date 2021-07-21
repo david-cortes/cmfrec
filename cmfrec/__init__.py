@@ -1,5 +1,6 @@
 from . import wrapper_double, wrapper_float
 import numpy as np, pandas as pd
+from scipy.sparse import coo_matrix, csr_matrix, csc_matrix, issparse, isspmatrix_coo, isspmatrix_csr, isspmatrix_csc
 import multiprocessing
 import ctypes
 import warnings
@@ -11,6 +12,8 @@ __all__ = ["CMF", "CMF_implicit",
 
 ### TODO: this module should move from doing operations in Python to
 ### using the new designated C functions for each type of prediction.
+
+### TODO: eliminate the hard dependency on pandas.
 
 class _CMF:
     def __repr__(self):
@@ -86,7 +89,8 @@ class _CMF:
             raise ValueError("Number of factors is too large.")
 
         lambda_ = float(lambda_) if isinstance(lambda_, int) else lambda_
-        lambda_ = np.array(lambda_) if lambda_.__class__.__name__ in ["list", "Series", "tuple"] else lambda_
+        if (isinstance(lambda_, list) or isinstance(lambda_, tuple) or isinstance(lambda_, pd.Series)):
+            lambda_ = np.array(lambda_)
         if isinstance(lambda_, np.ndarray):
             lambda_ = lambda_.reshape(-1)
             assert lambda_.shape[0] == 6
@@ -95,7 +99,8 @@ class _CMF:
             assert isinstance(lambda_, float) and lambda_ >= 0.
 
         l1_lambda = float(l1_lambda) if isinstance(l1_lambda, int) else l1_lambda
-        l1_lambda = np.array(l1_lambda) if l1_lambda.__class__.__name__ in ["list", "Series", "tuple"] else l1_lambda
+        if (isinstance(l1_lambda, list) or isinstance(l1_lambda, tuple) or isinstance(l1_lambda, pd.Series)):
+            l1_lambda = np.array(l1_lambda)
         if isinstance(l1_lambda, np.ndarray):
             l1_lambda = l1_lambda.reshape(-1)
             assert l1_lambda.shape[0] == 6
@@ -347,11 +352,13 @@ class _CMF:
         Ucols = np.empty(0, dtype=object)
         m = 0
         p = 0
-        if U.__class__.__name__ == "coo_matrix":
+        if issparse(U) and not isspmatrix_coo(U):
+            U = U.tocoo()
+        if isspmatrix_coo(U):
             Urow, Ucol, Uval = self._decompose_coo(U)
             m, p = U.shape
         elif U is not None:
-            if U.__class__.__name__ == "DataFrame":
+            if isinstance(U, pd.DataFrame):
                 Ucols = U.columns.to_numpy()
                 U = U.to_numpy()
             if not U.flags["C_CONTIGUOUS"]:
@@ -452,7 +459,7 @@ class _CMF:
                         append_U = x_not_u
 
                 _, user_mapping_ = pd.factorize(user_ids)
-                if user_mapping_.__class__.__name__ == "CategoricalIndex":
+                if not isinstance(user_mapping_, np.ndarray):
                     user_mapping_ = user_mapping_.to_numpy()
                 X = X.assign(**{col : pd.Categorical(X[col], user_mapping_).codes})
                 if X[col].dtype != ctypes.c_int:
@@ -469,7 +476,7 @@ class _CMF:
                 X = X.assign(**{col : X_col})
                 if X[col].dtype != ctypes.c_int:
                     X = X.assign(**{col : X[col].astype(ctypes.c_int)})
-                if user_mapping_.__class__.__name__ == "CategoricalIndex":
+                if not isinstance(user_mapping_, np.ndarray):
                     user_mapping_ = user_mapping_.to_numpy()
 
         if swapped:
@@ -533,7 +540,7 @@ class _CMF:
         if U is not None:
             if Mat.shape[0] == 0:
                 raise ValueError("Model was not fit to %s data." % name)
-            if U.__class__.__name__ == "DataFrame" and Cols.shape[0]:
+            if isinstance(U, pd.DataFrame) and Cols.shape[0]:
                 U = U[Cols]
             U = np.array(U).reshape(-1).astype(self.dtype_)
             if U.shape[0] != Mat.shape[0]:
@@ -545,7 +552,7 @@ class _CMF:
         if U_bin is not None:
             if MatBin.shape[0] == 0:
                 raise ValueError("Model was not fit to %s binary data." % name)
-            if (U_bin.__class__.__name__  == "DataFrame") and (ColsBin.shape[0]):
+            if isinstance(U_bin, pd.DataFrame) and (ColsBin.shape[0]):
                 U_bin = U_bin[ColsBin]
             U_bin = np.array(U_bin).reshape(-1).astype(self.dtype_)
             if U_bin.shape[0] != MatBin.shape[0]:
@@ -612,7 +619,12 @@ class _CMF:
             msg += "as the data passed to 'fit'."
             raise ValueError(msg % letter)
 
-        if U.__class__.__name__ == "DataFrame":
+        if issparse(U) and (not isspmatrix_coo(U)) and (not isspmatrix_csr(U)):
+            U = U.tocoo()
+        elif isspmatrix_csr(U) and not allow_csr:
+            U = U.tocoo()
+
+        if isinstance(U, pd.DataFrame):
             if col_id in U.columns.values:
                 warnings.warn("'%s' not meaningful for new inputs." % col_id)
             if Cols.shape[0]:
@@ -622,13 +634,13 @@ class _CMF:
             if Uarr.dtype != self.dtype_:
                 Uarr = Uarr.astype(self.dtype_)
 
-        elif U.__class__.__name__ == "coo_matrix":
+        elif isspmatrix_coo(U):
             Urow = U.row.astype(ctypes.c_int)
             Ucol = U.col.astype(ctypes.c_int)
             Uval = U.data.astype(self.dtype_)
-        elif U.__class__.__name__ == "csr_matrix":
+        elif isspmatrix_csr(U):
             if not allow_csr:
-                raise ValueError("Sparse matrices only supported in COO format.")
+                raise ValueError("Unexpected error.")
             Ucsr_p = U.indptr.astype(ctypes.c_size_t)
             Ucsr_i = U.indices.astype(ctypes.c_int)
             Ucsr = U.data.astype(self.dtype_)
@@ -667,7 +679,7 @@ class _CMF:
             msg += "as the data passed to 'fit'."
             raise ValueError(msg % letter)
 
-        if U_bin.__class__.__name__ == "DataFrame":
+        if isinstance(U_bin, pd.DataFrame):
             if col_id in U_bin.columns.values:
                 warnings.warn("'%s' not meaningful for new inputs." % col_id)
             if Cols.shape[0]:
@@ -704,7 +716,29 @@ class _CMF:
         W_sp = np.empty(0, dtype=self.dtype_)
         m, n = X.shape
 
-        if X.__class__.__name__ == "coo_matrix":
+        if issparse(X) and (not isspmatrix_coo(X)) and (not isspmatrix_csr(X)):
+            if (W is not None) and (not issparse(W)):
+                if not isinstance(W, np.ndarray):
+                    W = np.array(W).reshape(-1)
+                    if W.shape[0] != X.nnz:
+                        raise ValueError("'X' and 'W' have different number of entries.")
+                if isspmatrix_csc(X):
+                    W = csc_matrix((W, X.indices, X.indptr), shape=(X.shape[0], X.shape[1]))
+                    W = W.tocoo()
+                else:
+                    raise ValueError("Must pass 'X' as SciPy sparse COO if there are weights.")
+            X = X.tocoo()
+        if issparse(W) and (not isspmatrix_coo(W)) and (not isspmatrix_csr(W)):
+            W = W.tocoo()
+        if (isspmatrix_coo(X) != isspmatrix_coo(W)):
+            if not isspmatrix_coo(X):
+                X = X.tocoo()
+            if not isspmatrix_coo(W):
+                W = W.tocoo()
+        if issparse(W):
+            W = W.data
+
+        if isspmatrix_coo(X):
             Xrow = X.row.astype(ctypes.c_int)
             Xcol = X.col.astype(ctypes.c_int)
             Xval = X.data.astype(self.dtype_)
@@ -714,7 +748,7 @@ class _CMF:
                     msg =  "'W' must have the same number of non-zero entries "
                     msg += "as 'X'."
                     raise ValueError(msg)
-        elif X.__class__.__name__ == "csr_matrix":
+        elif isspmatrix_csr(X):
             Xcsr_p = X.indptr.astype(ctypes.c_size_t)
             Xcsr_i = X.indices.astype(ctypes.c_int)
             Xcsr = X.data.astype(self.dtype_)
@@ -765,9 +799,9 @@ class _CMF:
             user = np.array(user)
         if isinstance(item, list) or isinstance(item, tuple):
             item = np.array(item)
-        if user.__class__.__name__=='Series':
+        if isinstance(user, pd.Series):
             user = user.to_numpy()
-        if item.__class__.__name__=='Series':
+        if isinstance(item, pd.Series):
             item = item.to_numpy()
             
         if user is not None:
@@ -897,15 +931,39 @@ class _CMF:
 
         self._reset()
 
-        if X.__class__.__name__ == "DataFrame":
+        if issparse(X) and (not isspmatrix_coo(X)):
+            if (W is not None) and (not issparse(W)):
+                if isspmatrix_csr(X):
+                    if not isinstance(W, np.ndarray):
+                        W = np.array(W).reshape(-1)
+                    if W.shape[0] != X.nnz:
+                        raise ValueError("'X' and 'W' have different number of entries.")
+                    W = csr_matrix((W, X.indices, X.indptr), shape=(X.shape[0], X.shape[1]))
+                    W = W.tocoo()
+                elif isspmatrix_csc(X):
+                    if not isinstance(W, np.ndarray):
+                        W = np.array(W).reshape(-1)
+                    if W.shape[0] != X.nnz:
+                        raise ValueError("'X' and 'W' have different number of entries.")
+                    W = csc_matrix((W, X.indices, X.indptr), shape=(X.shape[0], X.shape[1]))
+                    W = W.tocoo()
+                else:
+                    raise ValueError("Must pass 'X' as SciPy COO if passing weights.")
+            X = X.tocoo()
+        if issparse(W) and (not isspmatrix_coo(W)):
+            W = W.tocoo()
+        if issparse(W):
+            W = W.data
+
+        if isinstance(X, pd.DataFrame):
             msg = "If passing 'X' as DataFrame, '%s' must also be a DataFrame."
-            if U is not None and U.__class__.__name__ != "DataFrame":
+            if U is not None and (not isinstance(U, pd.DataFrame)):
                 raise ValueError(msg % "U")
-            if I is not None and I.__class__.__name__ != "DataFrame":
+            if I is not None and (not isinstance(I, pd.DataFrame)):
                 raise ValueError(msg % "I")
-            if U_bin is not None and U_bin.__class__.__name__ != "DataFrame":
+            if U_bin is not None and (not isinstance(U_bin, pd.DataFrame)):
                 raise ValueError(msg % "U_bin")
-            if I_bin is not None and I_bin.__class__.__name__ != "DataFrame":
+            if I_bin is not None and (not isinstance(I_bin, pd.DataFrame)):
                 raise ValueError(msg % "I_bin")
             if W is not None:
                 msg  = "Passing 'W' with 'X' as DataFrame is not supported."
@@ -995,28 +1053,30 @@ class _CMF:
                 self.user_dict_ = {self.user_mapping_[i]:i for i in range(self.user_mapping_.shape[0])}
                 self.item_dict_ = {self.item_mapping_[i]:i for i in range(self.item_mapping_.shape[0])}
 
-        elif (X.__class__.__name__ in ["coo_matrix"]) or isinstance(X, np.ndarray):
-            allowed_sideinfo = ["DataFrame", "ndarray", "coo_matrix"]
-            allowed_bin = ["DataFrame", "ndarray"]
+        elif isspmatrix_coo(X) or isinstance(X, np.ndarray):
+            if issparse(U) and not isspmatrix_coo(U):
+                U = U.tocoo()
+            if issparse(I) and not isspmatrix_coo(I):
+                I = I.tocoo()
             msg = " must be a Pandas DataFrame, NumPy array, or SciPy sparse COO matrix."
             msg_bin = " must be a Pandas DataFrame or NumPy array."
-            if U is not None and U.__class__.__name__ not in allowed_sideinfo:
+            if U is not None and not (isinstance(U, pd.DataFrame) or isinstance(U, np.ndarray) or isspmatrix_coo(U)):
                 raise ValueError("'U'" + msg)
-            if I is not None and I.__class__.__name__ not in allowed_sideinfo:
+            if I is not None and not (isinstance(I, pd.DataFrame) or isinstance(I, np.ndarray) or isspmatrix_coo(I)):
                 raise ValueError("'I'" + msg)
-            if U_bin is not None and U_bin.__class__.__name__ not in allowed_bin:
+            if U_bin is not None and not (isinstance(U_bin, pd.DataFrame) or isinstance(U_bin, np.ndarray)):
                 raise ValueError("'U_bin'" + msg_bin)
-            if I_bin is not None and I_bin.__class__.__name__ not in allowed_bin:
+            if I_bin is not None and not (isinstance(I_bin, pd.DataFrame) or isinstance(I_bin, np.ndarray)):
                 raise ValueError("'I_bin'" + msg_bin)
             if W is not None:
-                if isinstance(W, list):
+                if isinstance(W, list) or isinstance(W, pd.Series):
                     W = np.array(W)
-                if (len(W.shape) > 1) and (X.__class__.__name__ == "coo_matrix"):
+                if (len(W.shape) > 1) and isspmatrix_coo(X):
                     W = W.reshape(-1)
                 if (not isinstance(W, np.ndarray)) or \
-                   (X.__class__.__name__ == "coo_matrix" and W.shape[0] != X.nnz) or\
-                   (isinstance(X, np.ndarray) and W.shape[0] != X.shape[0]):
-                    raise ValueError("'W' must be a 1-d array with the same number of entries as 'X'.")
+                   (isspmatrix_coo(X) and W.shape[0] != X.nnz) or\
+                   (isinstance(X, np.ndarray) and (W.shape[0] != X.shape[0] or W.shape[1] != X.shape[1])):
+                    raise ValueError("'W' must be an array with the same number of entries as 'X'.")
 
             if (self._implicit) and (isinstance(X, np.ndarray)) and (self.k_sec == 0):
                 raise ValueError("Dense arrays for 'X' not supported with implicit-feedback.")
@@ -1027,13 +1087,17 @@ class _CMF:
             _1, _2, _3, Ub_arr, self._Ub_cols, m_ub, pbin = self._process_U_arr(U_bin)
             _1, _2, _3, Ib_arr, self._Ib_cols, n_ib, qbin = self._process_U_arr(I_bin)
 
-            if (X.__class__.__name__ == "coo_matrix") and (Xval.shape[0] == 0):
+            if issparse(X) and (Xval.shape[0] == 0):
                 raise ValueError("'X' contains no non-zero entries.")
 
             W_sp = np.empty(0, dtype=self.dtype_)
             W_dense = np.empty((0,0), dtype=self.dtype_)
             if W is not None:
-                if X.__class__.__name__ == "coo_matrix":
+                if issparse(W) and not isspmatrix_coo(W):
+                    W = W.tocoo()
+                if issparse(W):
+                    W = W.data
+                if isspmatrix_coo(X):
                     W_sp = W.astype(self.dtype_)
                 else:
                     W_dense = W.astype(self.dtype_)
@@ -1049,7 +1113,7 @@ class _CMF:
         else:
             m = int(Xrow.max() + 1)
             n = int(Xcol.max() + 1)
-            if X.__class__.__name__ == "coo_matrix":
+            if isspmatrix_coo(X):
                 m = max(m, X.shape[0])
                 n = max(n, X.shape[1])
             if enforce_same_shape:
@@ -1574,6 +1638,30 @@ class _CMF:
                                       bool(exact), bool(output_a))
 
     def _process_transform_inputs(self, X, U, U_bin, W, replace_existing):
+        if (W is not None) and (issparse(W) != issparse(X)):
+            raise ValueError("'X' and 'W' must be in the same format.")
+        if issparse(X) and not isspmatrix_coo(X):
+            if (W is not None) and (not issparse(W)):
+                if not isinstance(W, np.ndarray):
+                    W = np.array(W).reshape(-1)
+                    if W.shape[0] != X.nnz:
+                        raise ValueError("'X' and 'W' must have the same number of entries.")
+                if isspmatrix_csr(X):
+                    W = csr_matrix((W, X.indices, X.indptr), shape=(X.shape[0], X.shape[1]))
+                    W = W.tocoo()
+                elif isspmatrix_csc(X):
+                    W = csc_matrix((W, X.indices, X.indptr), shape=(X.shape[0], X.shape[1]))
+                    W = W.tocoo()
+                else:
+                    raise ValueError("Must pass 'X' as SciPy COO if there are weights.")
+            X = X.tocoo()
+        if issparse(W) and not isspmatrix_coo(W):
+            W = W.tocoo()
+        if issparse(W):
+            W = W.data
+        if issparse(U) and (not isspmatrix_coo(U)) and (not isspmatrix_csr(U)):
+            U = U.tocoo()
+        
         if (X is None) and (U is None) and (U_bin is None):
             if (self.Cbin_.shape[0]) or (self.Dbin_.shape[0]):
                 raise ValueError("Must pass at least one of 'X', 'U', 'U_bin'.")
@@ -1584,7 +1672,7 @@ class _CMF:
                 raise ValueError("Must pass 'X' if not passing 'replace_existing'.")
             if isinstance(X, np.ndarray):
                 mask_take = ~pd.isnull(X)
-            elif X.__class__.__name__ == "coo_matrix":
+            elif isspmatrix_coo(X):
                 mask_take = np.repeat(False, X.shape[0]*X.shape[1]).reshape((X.shape[0], X.shape[1]))
                 mask_take[X.row, X.col] = True
             else:
@@ -1660,10 +1748,13 @@ class _CMF:
         if self.item_bias:
             outp += self.item_bias_.reshape((1,-1))
 
+        if issparse(Xorig) and not isspmatrix_coo(Xorig):
+            Xorig = Xorig.tocoo()
+
         if mask_take is not None:
             if isinstance(Xorig, np.ndarray):
                 outp[mask_take] = Xorig[mask_take]
-            elif Xorig.__class__.__name__ == "coo_matrix":
+            elif isspmatrix_coo(X):
                 outp[mask_take] = Xorig.data
             else:
                 raise ValueError("'X' must be a SciPy COO matrix or NumPy array.")
@@ -4721,7 +4812,9 @@ class CMF_implicit(_CMF):
 
         """
         self._init()
-        if X.__class__.__name__ not in ("coo_matrix", "DataFrame"):
+        if issparse(X) and not isspmatrix_coo(X):
+            X = X.tocoo()
+        if not isspmatrix_coo(X) and not isinstance(X, pd.DataFrame):
             raise ValueError("'X' must be a Pandas DataFrame or SciPy sparse COO matrix.")
         return self._fit_common(X, U=U, I=I, U_bin=None, I_bin=None, W=None)
 
@@ -6325,7 +6418,7 @@ class OMF_explicit(_OMF):
         """
         self._init()
         if self.method == "als":
-            if "coo_matrix" in [U.__class__.__name__, I.__class__.__name__]:
+            if issparse(U) or issparse(I):
                 msg  = "Cannot pass user/item side info in sparse format"
                 msg += " when using method='als'."
                 raise ValueError(msg)
@@ -7224,7 +7317,7 @@ class OMF_implicit(_OMF):
 
         """
         self._init()
-        if "coo_matrix" in [U.__class__.__name__, I.__class__.__name__]:
+        if issparse(U) or issparse(I):
             msg  = "Cannot pass user/item side info in sparse format"
             msg += " for implicit-feedback model."
             raise ValueError(msg)
