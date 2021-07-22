@@ -29,7 +29,7 @@ process.inputs.topN <- function(model, obj, user=NULL, a_vec=NULL, a_bias=NULL,
         a_bias <- 0.
     
     if (!is.null(user)) {
-        if (("numeric" %in% class(user)) || ("character" %in% class(user)))
+        if (inherits(user, c("numeric", "character")))
             user <- as.integer(user)
         user <- check.pos.int(user, "user", TRUE)
         if (model != "MostPopular") {
@@ -55,9 +55,9 @@ process.inputs.topN <- function(model, obj, user=NULL, a_vec=NULL, a_bias=NULL,
     }
     
     if (!is.null(include)) {
-        if (NROW(intersect(class(include), c("numeric", "character", "matrix"))))
+        if (inherits(include, c("numeric", "character", "matrix")))
             include <- as.integer(include)
-        if (!("integer" %in% class(include)))
+        if (!inherits(include, "integer"))
             stop("Invalid data type for 'include'.")
         
         if (model != "MostPopular") {
@@ -77,9 +77,9 @@ process.inputs.topN <- function(model, obj, user=NULL, a_vec=NULL, a_bias=NULL,
     }
     
     if (!is.null(exclude)) {
-        if (NROW(intersect(class(exclude), c("numeric", "character", "matrix"))))
+        if (inherits(exclude, c("numeric", "character", "matrix")))
             exclude <- as.integer(exclude)
-        if (!("integer" %in% class(exclude)))
+        if (!inherits(exclude, "integer"))
             stop("Invalid data type for 'exclude'.")
         
         if (model != "MostPopular") {

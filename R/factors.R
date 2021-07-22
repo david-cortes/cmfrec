@@ -31,7 +31,8 @@
 #' Dense `X` data is not supported for `CMF_implicit` or `OMF_implicit`.
 #' @param weight Associated observation weights for entries in `X`. If passed, must
 #' have the same shape as `X` - that is, if `X` is a sparse matrix, should be a
-#' numeric vector with length equal to the non-missing elements, if `X` is a dense
+#' numeric vector with length equal to the non-missing elements (or a sparse matrix in
+#' the same format, but will not make any checks on the indices), if `X` is a dense
 #' matrix, should also be a dense matrix with the same number of rows and columns.
 #' @param U New `U` data, with rows denoting new users.
 #' Can be passed in the same formats as `X`, or additionally

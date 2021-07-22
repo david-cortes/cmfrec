@@ -116,7 +116,9 @@ not mutually exclusive.}
 Associated weight to each non-missing observation in `X`. Must have the same
 number of entries as `X` - that is, if passing a dense vector of length `n`,
 `weight` should be a numeric vector of length `n` too, if passing a sparse
-vector, should have a length corresponding to the number of non-missing elements.}
+vector, should have a length corresponding to the number of non-missing elements.
+or alternatively, may be a sparse matrix/vector with the same non-missing indices
+as `X` (but this will not be checked).}
 
 \item{output_bias}{Whether to also return the user bias determined by the model
 given the data in `X`.}

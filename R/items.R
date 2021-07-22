@@ -370,18 +370,18 @@ predict_new_items <- function(model, user, item=NULL,
         return(numeric())
     if (NROW(model$info$user_mapping))
         user <- as.integer(factor(user, model$info$user_mapping))
-    if (NROW(intersect(class(user), c("numeric", "character", "matrix"))))
+    if (inherits(user, c("numeric", "character", "matrix")))
         user <- as.integer(user)
-    if (!("integer" %in% class(user)))
+    if (!inherits(user, "integer"))
         stop("'user' must be an integer vector.")
     user <- user - 1L
     
     if (!is.null(item)) {
         if (NROW(model$info$user_mapping))
             item <- as.integer(factor(item, model$info$item_mapping))
-        if (NROW(intersect(class(item), c("numeric", "character", "matrix"))))
+        if (inherits(item, c("numeric", "character", "matrix")))
             item <- as.integer(item)
-        if (!("integer" %in% class(item)))
+        if (!inherits(item, "integer"))
             stop("'item' must be an integer vector.")
         item <- item - 1L
     } else {

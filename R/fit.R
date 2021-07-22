@@ -242,6 +242,7 @@ NULL
 #' denotes the user/row IDs of the non-zero entries). Cannot be passed
 #' as a sparse matrix.
 #' Note that `U` and `U_bin` are not mutually exclusive.
+#' 
 #' Only supported with ``method='lbfgs'``.
 #' @param I_bin Item binary columns/attributes (all values should be zero, one,
 #' or missing), for which a sigmoid transformation will be applied on the
@@ -250,14 +251,19 @@ NULL
 #' denotes the item/column IDs of the non-zero entries). Cannot be passed
 #' as a sparse matrix.
 #' Note that `I` and `I_bin` are not mutually exclusive.
+#' 
 #' Only supported with ``method='lbfgs'``.
 #' @param weight (Optional and not recommended) Observation weights for entries in `X`.
 #' Must have the same shape as `X` - that is,
 #' if `X` is a sparse matrix, must be a vector with the same
 #' number of non-zero entries as `X`, if `X` is a dense matrix,
-#' `weight` must also be a dense matrix.
+#' `weight` must also be a dense matrix. Alternatively, if `X` is a sparse COO
+#' matrix, `weight` may also be passed as a sparse COO matrix in the same format,
+#' but it will not check whether the indices match between the two.
 #' If `X` is a `data.frame`, should be passed instead as its fourth column.
+#' 
 #' Cannot have missing values.
+#' 
 #' This is only supported for the explicit-feedback models, as the implicit-feedback
 #' ones determine the weights through `X`.
 #' @param k Number of latent factors to use (dimensionality of the low-rank
@@ -268,6 +274,7 @@ NULL
 #' Additional non-shared components
 #' can also be specified through `k_user`, `k_item`, and `k_main`
 #' (also `k_sec` for `OMF_explicit`).
+#' 
 #' Typical values are 30 to 100.
 #' @param lambda Regularization parameter to apply on the squared L2 norms of the matrices.
 #' Some models (`CMF`, `CMF_implicit`, `ContentBased`, and `OMF_explicit` with the L-BFGS method)
@@ -281,6 +288,7 @@ NULL
 #' For example, a good value for the MovieLens10M would be `lambda=35`
 #' (or `lambda=0.05` with `scale_lam=TRUE`), whereas for the
 #' LastFM-360K, a good value would be `lambda=5`.
+#' 
 #' Typical values are \eqn{10^{-2}}{0.01} to \eqn{10^2}{100}, with the
 #' implicit-feedback models requiring less regularization.
 #' @param scale_lam Whether to scale (increase) the regularization parameter
@@ -336,6 +344,7 @@ NULL
 #' fit through a coordinate descent procedure, which is significantly
 #' slower than the Cholesky method with L2 regularization.
 #' Only supported with the ALS method.
+#' 
 #' Not recommended.
 #' @param center_U Whether to center the 'U' matrix column-by-column. Be aware that this
 #' is a simple mean centering without regularization. One might want to
@@ -431,11 +440,13 @@ NULL
 #' weight in the optimization objective for the errors in the factorization
 #' of the `U` and `U_bin` matrices. For the `OMF_explicit` model, this denotes
 #' the multiplier for the effect of the user attributes in the final factor matrices.
+#' 
 #' Ignored when passing neither `U` nor `U_bin`.
 #' @param w_item For the `CMF` and `CMF_implicit` models, this denotes the
 #' weight in the optimization objective for the errors in the factorization
 #' of the `I` and `I_bin` matrices. For the `OMF_explicit` model, this denotes
 #' the multiplier for the effect of the item attributes in the final factor matrices.
+#' 
 #' Ignored when passing neither `I` nor `I_bin`.
 #' @param w_implicit Weight in the optimization objective for the errors in the factorizations
 #' of the implicit `X` matrices. Note that, depending on the sparsity of the
@@ -447,6 +458,7 @@ NULL
 #' one iteration denotes an update round for all the matrices rather than
 #' an update of a single matrix. In general, the more iterations, the better
 #' the end result. Ignored when using the L-BFGS method.
+#' 
 #' Typical values are 6 to 30.
 #' @param maxiter Maximum L-BFGS iterations to perform. The procedure will halt if it
 #' has not converged after this number of updates. Note that the `CMF` model is likely to
@@ -458,6 +470,7 @@ NULL
 #' If the procedure is spending hundreds of iterations
 #' without any significant decrease in the loss function or gradient norm,
 #' it's highly likely that the regularization is too low.
+#' 
 #' Ignored when using the ALS method.
 #' @param finalize_chol When passing `use_cg=TRUE` and using the ALS method, whether to perform the last iteration with
 #' the Cholesky solver. This will make it slower, but will avoid the issue
@@ -527,7 +540,9 @@ NULL
 #' Note that, when determining non-negative factors, it will always
 #' use a coordinate descent method, regardless of the value passed
 #' for `use_cg` and `finalize_chol`.
+#' 
 #' When used for recommender systems, one usually wants to pass `FALSE` here.
+#' 
 #' For better results, do not use centering alongside this option,
 #' and use a higher regularization coupled with more iterations..
 #' @param nonneg_C Whether to constrain the `C` matrix to be non-negative.
@@ -1011,40 +1026,40 @@ validate.inputs <- function(model, implicit=FALSE,
     allowed_X   <- c("data.frame", "dgTMatrix", "matrix.coo", "matrix")
     allowed_U   <- c("data.frame", "matrix")
     allowed_bin <- c("data.frame", "matrix")
-    allowed_W   <- c("data.frame", "matrix", "numeric")
+    allowed_W   <- c("data.frame", "matrix", "numeric", "dgTMatrix", "matrix.coo")
     msg_err     <- "Invalid '%s' - allowed types: %s"
     msg_empty   <- "'%s' is empty. If non-present, should pass it as NULL."
     if (!(model %in% c("OMF_explicit", "OMF_implicit") && method == "als"))
         allowed_U <- c(allowed_U, c("dgTMatrix", "matrix.coo"))
     
-    if (!NROW(intersect(class(X), allowed_X)))
+    if (!inherits(X, allowed_X))
         stop(sprintf(msg_err, "X", paste(allowed_X, collapse=", ")))
     if (!is.null(U)) {
-        if (!NROW(intersect(class(U), allowed_U)))
+        if (!inherits(U, allowed_U))
             stop(sprintf(msg_err, "U", paste(allowed_U, collapse=", ")))
         if (!max(c(NROW(U), NCOL(U))))
             stop(sprintf(msg_empty, "U"))
     }
     if (!is.null(I)) {
-        if (!NROW(intersect(class(I), allowed_U)))
+        if (!inherits(I, allowed_U))
             stop(sprintf(msg_err, "I", paste(allowed_U, collapse=", ")))
         if (!max(c(NROW(I), NCOL(I))))
             stop(sprintf(msg_empty, "I"))
     }
     if (!is.null(U_bin)) {
-        if (!NROW(intersect(class(U_bin), allowed_bin)))
+        if (!inherits(U_bin, allowed_bin))
             stop(sprintf(msg_err, "U_bin", paste(allowed_bin, collapse=", ")))
         if (!max(c(NROW(U_bin), NCOL(U_bin))))
             stop(sprintf(msg_empty, "U_bin"))
     }
     if (!is.null(I_bin)) {
-        if (!NROW(intersect(class(I_bin), allowed_bin)))
+        if (!inherits(I_bin, allowed_bin))
             stop(sprintf(msg_err, "I_bin", paste(allowed_bin, collapse=", ")))
         if (!max(c(NROW(I_bin), NCOL(I_bin))))
             stop(sprintf(msg_empty, "I_bin"))
     }
     if (!is.null(weight)) {
-        if (!NROW(intersect(class(weight), allowed_W)))
+        if (!inherits(weight, allowed_W))
             stop(sprintf(msg_err, "weight", paste(allowed_W, collapse=", ")))
     }
     
@@ -1052,13 +1067,13 @@ validate.inputs <- function(model, implicit=FALSE,
     I_cols      <-  character()
     U_bin_cols  <-  character()
     I_bin_cols  <-  character()
-    if ("data.frame" %in% class(U))
+    if (is.data.frame(U))
         U_cols <- names(U)
-    if ("data.frame" %in% class(I))
+    if (is.data.frame(I))
         I_cols <- names(I)
-    if ("data.frame" %in% class(U_bin))
+    if (is.data.frame(U_bin))
         U_bin_cols <- names(U_bin)
-    if ("data.frame" %in% class(I_bin))
+    if (is.data.frame(I_bin))
         I_bin_cols <- names(I_bin)
     
     U      <-  cast.df.to.matrix(U)

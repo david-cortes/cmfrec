@@ -49,19 +49,19 @@ predict.cmfrec <- function(object, user, item=NULL, ...) {
     if (object$info$only_prediction_info)
         stop("Cannot use this function after dropping non-essential matrices.")
     return_mat <- FALSE
-    if (NROW(intersect(class(user), c("dgTMatrix", "matrix.coo", "ngTMatrix")))) {
+    if (inherits(user, c("dgTMatrix", "matrix.coo", "ngTMatrix"))) {
         mat_out <- user
         return_mat <- TRUE
-        if (("dgTMatrix" %in% class(mat_out)) || ("ngTMatrix" %in% class(mat_out))) {
+        if (inherits(mat_out, c("dgTMatrix", "ngTMatrix"))) {
             user <- mat_out@i + 1L
             item <- mat_out@j + 1L
-        } else if ("matrix.coo" %in% class(mat_out)) {
+        } else if (inherits(mat_out, "matrix.coo")) {
             user <- mat_out@ia
             item <- mat_out@ja
         } else {
             stop("Unexpected error.")
         }
-        if ("ngTMatrix" %in% class(mat_out))
+        if (inherits(mat_out, "ngTMatrix"))
             return_mat <- FALSE
     }
     
@@ -92,13 +92,13 @@ predict.cmfrec <- function(object, user, item=NULL, ...) {
         user <- as.integer(factor(user, object$info$user_mapping))
         item <- as.integer(factor(item, object$info$item_mapping))
     } else {
-        if (NROW(intersect(class(user), c("numeric", "character", "matrix"))))
+        if (inherits(user, c("numeric", "character", "matrix")))
             user <- as.integer(user)
-        if (NROW(intersect(class(item), c("numeric", "character", "matrix"))))
+        if (inherits(item, c("numeric", "character", "matrix")))
             item <- as.integer(item)
-        if (!("integer" %in% class(user)))
+        if (!inherits(user, "integer"))
             stop("'user' must be an integer vector.")
-        if (!("integer" %in% class(item)))
+        if (!inherits(item, "integer"))
             stop("'item' must be an integer vector.")
     }
     user <- user - 1L
@@ -166,9 +166,9 @@ predict.cmfrec <- function(object, user, item=NULL, ...) {
     if (!return_mat) {
         return(scores)
     } else {
-        if ("dgTMatrix" %in% class(mat_out)) {
+        if (inherits(mat_out, "dgTMatrix")) {
             mat_out@x   <- scores
-        } else if ("matrix.coo" %in% class(mat_out)) {
+        } else if (inherits(mat_out, "matrix.coo")) {
             mat_out@ra  <- scores
         } else {
             stop("Unsupported iput type.")

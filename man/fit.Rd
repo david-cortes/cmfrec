@@ -282,6 +282,7 @@ be a `data.frame`, with row names matching to the first column of `X` (which
 denotes the user/row IDs of the non-zero entries). Cannot be passed
 as a sparse matrix.
 Note that `U` and `U_bin` are not mutually exclusive.
+
 Only supported with ``method='lbfgs'``.}
 
 \item{I_bin}{Item binary columns/attributes (all values should be zero, one,
@@ -291,15 +292,20 @@ be a `data.frame`, with row names matching to the second column of `X` (which
 denotes the item/column IDs of the non-zero entries). Cannot be passed
 as a sparse matrix.
 Note that `I` and `I_bin` are not mutually exclusive.
+
 Only supported with ``method='lbfgs'``.}
 
 \item{weight}{(Optional and not recommended) Observation weights for entries in `X`.
 Must have the same shape as `X` - that is,
 if `X` is a sparse matrix, must be a vector with the same
 number of non-zero entries as `X`, if `X` is a dense matrix,
-`weight` must also be a dense matrix.
+`weight` must also be a dense matrix. Alternatively, if `X` is a sparse COO
+matrix, `weight` may also be passed as a sparse COO matrix in the same format,
+but it will not check whether the indices match between the two.
 If `X` is a `data.frame`, should be passed instead as its fourth column.
+
 Cannot have missing values.
+
 This is only supported for the explicit-feedback models, as the implicit-feedback
 ones determine the weights through `X`.}
 
@@ -311,6 +317,7 @@ in the `OMF_explicit` and `OMF_implicit` models.
 Additional non-shared components
 can also be specified through `k_user`, `k_item`, and `k_main`
 (also `k_sec` for `OMF_explicit`).
+
 Typical values are 30 to 100.}
 
 \item{lambda}{Regularization parameter to apply on the squared L2 norms of the matrices.
@@ -325,6 +332,7 @@ so this parameter needs good tuning.
 For example, a good value for the MovieLens10M would be `lambda=35`
 (or `lambda=0.05` with `scale_lam=TRUE`), whereas for the
 LastFM-360K, a good value would be `lambda=5`.
+
 Typical values are \eqn{10^{-2}}{0.01} to \eqn{10^2}{100}, with the
 implicit-feedback models requiring less regularization.}
 
@@ -464,12 +472,14 @@ of the `X` matrix.}
 weight in the optimization objective for the errors in the factorization
 of the `U` and `U_bin` matrices. For the `OMF_explicit` model, this denotes
 the multiplier for the effect of the user attributes in the final factor matrices.
+
 Ignored when passing neither `U` nor `U_bin`.}
 
 \item{w_item}{For the `CMF` and `CMF_implicit` models, this denotes the
 weight in the optimization objective for the errors in the factorization
 of the `I` and `I_bin` matrices. For the `OMF_explicit` model, this denotes
 the multiplier for the effect of the item attributes in the final factor matrices.
+
 Ignored when passing neither `I` nor `I_bin`.}
 
 \item{w_implicit}{Weight in the optimization objective for the errors in the factorizations
@@ -485,6 +495,7 @@ details). Note that, when adding L1 regularization, the model will be
 fit through a coordinate descent procedure, which is significantly
 slower than the Cholesky method with L2 regularization.
 Only supported with the ALS method.
+
 Not recommended.}
 
 \item{center_U}{Whether to center the 'U' matrix column-by-column. Be aware that this
@@ -505,12 +516,14 @@ of required iterations. Pass zero for no L-BFGS iterations limit.
 If the procedure is spending hundreds of iterations
 without any significant decrease in the loss function or gradient norm,
 it's highly likely that the regularization is too low.
+
 Ignored when using the ALS method.}
 
 \item{niter}{Number of alternating least-squares iterations to perform. Note that
 one iteration denotes an update round for all the matrices rather than
 an update of a single matrix. In general, the more iterations, the better
 the end result. Ignored when using the L-BFGS method.
+
 Typical values are 6 to 30.}
 
 \item{parallelize}{How to parallelize gradient calculations when using more than one
@@ -581,7 +594,9 @@ This option is not available when using the L-BFGS method.
 Note that, when determining non-negative factors, it will always
 use a coordinate descent method, regardless of the value passed
 for `use_cg` and `finalize_chol`.
+
 When used for recommender systems, one usually wants to pass `FALSE` here.
+
 For better results, do not use centering alongside this option,
 and use a higher regularization coupled with more iterations..}
 

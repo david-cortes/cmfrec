@@ -74,9 +74,9 @@ process.data.predict.new <- function(model, obj, X=NULL, weight=NULL,
         stop("'items' cannot be empty.")
     if (NROW(obj$info$item_mapping))
         items <- as.integer(factor(items, obj$info$item_mapping))
-    if (NROW(intersect(class(items), c("numeric", "character", "matrix"))))
+    if (inherits(items, c("numeric", "character", "matrix")))
         items <- as.integer(items)
-    if (!("integer" %in% class(items)))
+    if (!inherits(items, "integer"))
         stop("Invalid 'items'.")
     items <- items - 1L
     
@@ -92,9 +92,9 @@ process.data.predict.new <- function(model, obj, X=NULL, weight=NULL,
     if (!is.null(rows)) {
         if (NROW(obj$info$item_mapping))
             rows <- as.integer(factor(rows, obj$info$user_mapping))
-        if (NROW(intersect(class(rows), c("numeric", "character", "matrix"))))
+        if (inherits(rows, c("numeric", "character", "matrix")))
             rows <- as.integer(rows)
-        if (!("integer" %in% class(rows)))
+        if (!inherits(rows, "integer"))
             stop("Invalid 'rows'.")
         if (NROW(rows) != NROW(items)) {
             if (NROW(rows) == 1L) {

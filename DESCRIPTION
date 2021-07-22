@@ -2,7 +2,14 @@ Package: cmfrec
 Type: Package
 Title: Collective Matrix Factorization for Recommender Systems
 Version: 3.2.0
-Author: David Cortes [aut, cre, cph], Jorge Nocedal [cph], Naoaki Okazaki [cph]
+Authors@R: c(
+  person(given="David", family="Cortes", role=c("aut", "cre", "cph"),
+         email="david.cortes.rivera@gmail.com"),
+  person(given="Jorge", family="Nocedal", role="cph"),
+  person(given="Naoaki", family="Okazaki", role="cph"),
+  person(given="David", family="Blackman", role="cph"),
+  person(given="Sebastiano", family="Vigna", role="cph")
+  )
 Maintainer: David Cortes <david.cortes.rivera@gmail.com>
 URL: https://github.com/david-cortes/cmfrec
 BugReports: https://github.com/david-cortes/cmfrec/issues

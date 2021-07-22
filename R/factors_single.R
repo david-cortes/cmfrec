@@ -30,6 +30,8 @@
 #' number of entries as `X` - that is, if passing a dense vector of length `n`,
 #' `weight` should be a numeric vector of length `n` too, if passing a sparse
 #' vector, should have a length corresponding to the number of non-missing elements.
+#' or alternatively, may be a sparse matrix/vector with the same non-missing indices
+#' as `X` (but this will not be checked).
 #' @param U New `U` data, either as a numeric vector (class `numeric`), or as a
 #' sparse vector from package `Matrix` (class `dsparseVector`). Alternatively,
 #' if `U` is sparse, can instead pass the indices of the non-missing columns
