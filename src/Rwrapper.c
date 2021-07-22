@@ -161,6 +161,14 @@ SEXP prepare_RhpcBLASctl_Call()
     ptr_glob_lst = NULL; \
 }
 
+SEXP deep_copy_vec(SEXP x)
+{
+    SEXP out = PROTECT(Rf_allocVector(REALSXP, Rf_xlength(x)));
+    memcpy(REAL(out), REAL(x), (size_t)Rf_xlength(x)*sizeof(double));
+    UNPROTECT(1);
+    return out;
+}
+
 SEXP as_size_t(SEXP x)
 {
     size_t n = (size_t)Rf_xlength(x);
@@ -2534,6 +2542,7 @@ SEXP call_topN_new_offsets_implicit
 /* Note: argument limit is 65 */
 static const R_CallMethodDef callMethods [] = {
     {"as_size_t", (DL_FUNC) &as_size_t, 1},
+    {"deep_copy_vec", (DL_FUNC) &as_size_t, 1},
     /* ---------------------------------------------------- */
     {"call_fit_collective_explicit_lbfgs", (DL_FUNC) &call_fit_collective_explicit_lbfgs, 64},
     {"call_fit_collective_explicit_als", (DL_FUNC) &call_fit_collective_explicit_als, 64},

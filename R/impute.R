@@ -96,6 +96,8 @@ imputeX <- function(model, X, weight = NULL, U = NULL, U_bin = NULL) {
         stop("'X' must be a matrix with NAN values.")
     if (!anyNA(X))
         return(X)
+    if (nrow(X) == 1L || ncol(X) == 1L)
+        X <- matrix(deep_copy_vec(X), nrow=nrow(X), ncol=ncol(X))
     
     inputs <- process.data.factors("CMF", model,
                                    X = X, weight = weight,
