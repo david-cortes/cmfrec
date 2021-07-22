@@ -714,8 +714,8 @@ void rnorm_xoshiro(float *seq, const size_t n, rng_state_t state[4])
             u = (float)((int32_t)(rnd1 & two25_i) - two24_i) / two24_f;
             v = (float)((int32_t)(rnd2 & two25_i) - two24_i) / two24_f;
             #else
-            u = (float)rnd1 / (float)UINT32_MAX;
-            v = (float)rnd2 / (float)UINT32_MAX;
+            u = (float)rnd1 / (float)INT32_MAX;
+            v = (float)rnd2 / (float)INT32_MAX;
             #endif
             #else
             rnd0 = xoshiro256pp(state);
@@ -723,8 +723,8 @@ void rnorm_xoshiro(float *seq, const size_t n, rng_state_t state[4])
             u = (float)((int32_t)(*rnd1 & two25_i) - two24_i) / two24_f;
             v = (float)((int32_t)(*rnd2 & two25_i) - two24_i) / two24_f;
             #else
-            u = (float)(*rnd1) / (float)UINT32_MAX;
-            v = (float)(*rnd2) / (float)UINT32_MAX;
+            u = (float)(*rnd1) / (float)INT32_MAX;
+            v = (float)(*rnd2) / (float)INT32_MAX;
             #endif
             #endif
 
@@ -748,8 +748,8 @@ void rnorm_xoshiro(float *seq, const size_t n, rng_state_t state[4])
             u = (float)((int32_t)(rnd1 & two25_i) - two24_i) / two24_f;
             v = (float)((int32_t)(rnd2 & two25_i) - two24_i) / two24_f;
             #else
-            u = (float)rnd1 / (float)UINT32_MAX;
-            v = (float)rnd2 / (float)UINT32_MAX;
+            u = (float)rnd1 / (float)INT32_MAX;
+            v = (float)rnd2 / (float)INT32_MAX;
             #endif
             #else
             rnd0 = xoshiro256pp(state);
@@ -757,8 +757,8 @@ void rnorm_xoshiro(float *seq, const size_t n, rng_state_t state[4])
             u = (float)((int32_t)(*rnd1 & two25_i) - two24_i) / two24_f;
             v = (float)((int32_t)(*rnd2 & two25_i) - two24_i) / two24_f;
             #else
-            u = (float)(*rnd1) / (float)UINT32_MAX;
-            v = (float)(*rnd2) / (float)UINT32_MAX;
+            u = (float)(*rnd1) / (float)INT32_MAX;
+            v = (float)(*rnd2) / (float)INT32_MAX;
             #endif
             #endif
 
