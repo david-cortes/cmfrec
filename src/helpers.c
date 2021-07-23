@@ -529,8 +529,8 @@ static inline uint64_t xoshiro256pp(uint64_t state[4])
 
 static inline void xoshiro256pp_jump(uint64_t state[4])
 {
-    static const uint64_t JUMP[] = { 0x180ec6d33cfd0aba, 0xd5a61266f0c9392c,
-                                     0xa9582618e03fc9aa, 0x39abdc4529b1661c };
+    const uint64_t JUMP[] = { 0x180ec6d33cfd0aba, 0xd5a61266f0c9392c,
+                              0xa9582618e03fc9aa, 0x39abdc4529b1661c };
     uint64_t s0 = 0;
     uint64_t s1 = 0;
     uint64_t s2 = 0;
@@ -576,8 +576,8 @@ static inline uint32_t xoshiro128pp(uint32_t state[4])
 
 static inline void xoshiro128pp_jump(uint32_t state[4])
 {
-    static const uint32_t JUMP[] = { 0x8764000b, 0xf542d2d3,
-                                     0x6fa035c3, 0x77f2db5b };
+    const uint32_t JUMP[] = { 0x8764000b, 0xf542d2d3,
+                              0x6fa035c3, 0x77f2db5b };
     uint32_t s0 = 0;
     uint32_t s1 = 0;
     uint32_t s2 = 0;
@@ -619,15 +619,14 @@ static inline void xoshiro128pp_jump(uint32_t state[4])
 #if defined(USE_DOUBLE) || !(defined(USE_FLOAT) && defined(USE_XOSHIRO128))
 void rnorm_xoshiro(real_t *seq, const size_t n, rng_state_t state[4])
 {
+    #ifndef USE_XOSHIRO128
     const uint64_t two53_i = (UINT64_C(1) << 53) - UINT64_C(1);
+    #endif
     const double two53_d = (double)(UINT64_C(1) << 53);
     const double twoPI = 2. * M_PI;
     uint64_t rnd1, rnd2;
     #ifdef USE_XOSHIRO128
-    uint32_t *restrict rnd11 = (uint32_t*)&rnd1;
-    uint32_t *restrict rnd12 = rnd11 + 1;
-    uint32_t *restrict rnd21 = (uint32_t*)&rnd2;
-    uint32_t *restrict rnd22 = rnd21 + 1;
+    uint32_t rnd11, rnd12, rnd21, rnd22;
     const uint32_t ONE = 1;
     const bool is_little_endian = *((unsigned char*)&ONE) != 0;
     #endif
@@ -638,10 +637,10 @@ void rnorm_xoshiro(real_t *seq, const size_t n, rng_state_t state[4])
         do
         {
             #ifdef USE_XOSHIRO128
-            *rnd11 = xoshiro128pp(state);
-            *rnd12 = xoshiro128pp(state);
-            *rnd21 = xoshiro128pp(state);
-            *rnd22 = xoshiro128pp(state);
+            rnd11 = xoshiro128pp(state);
+            rnd12 = xoshiro128pp(state);
+            rnd21 = xoshiro128pp(state);
+            rnd22 = xoshiro128pp(state);
             #else
             rnd1 = xoshiro256pp(state);
             rnd2 = xoshiro256pp(state);
@@ -650,12 +649,16 @@ void rnorm_xoshiro(real_t *seq, const size_t n, rng_state_t state[4])
             #if defined(DBL_MANT_DIG) && (DBL_MANT_DIG == 53)
             #ifdef USE_XOSHIRO128
             if (is_little_endian) {
-                *rnd12 = *rnd12 >> 11;
-                *rnd22 = *rnd22 >> 11;
+                rnd12 = rnd12 >> 11;
+                rnd22 = rnd22 >> 11;
             } else {
-                *rnd11 = *rnd11 >> 11;
-                *rnd21 = *rnd21 >> 11;
+                rnd11 = rnd11 >> 11;
+                rnd21 = rnd21 >> 11;
             }
+            memcpy((char*)&rnd1, &rnd11, sizeof(uint32_t));
+            memcpy((char*)&rnd1 + sizeof(uint32_t), &rnd12, sizeof(uint32_t));
+            memcpy((char*)&rnd2, &rnd21, sizeof(uint32_t));
+            memcpy((char*)&rnd2 + sizeof(uint32_t), &rnd22, sizeof(uint32_t));
             u = (double)rnd1 / two53_d;
             v = (double)rnd2 / two53_d;
             #else
@@ -679,10 +682,10 @@ void rnorm_xoshiro(real_t *seq, const size_t n, rng_state_t state[4])
         do
         {
             #ifdef USE_XOSHIRO128
-            *rnd11 = xoshiro128pp(state);
-            *rnd12 = xoshiro128pp(state);
-            *rnd21 = xoshiro128pp(state);
-            *rnd22 = xoshiro128pp(state);
+            rnd11 = xoshiro128pp(state);
+            rnd12 = xoshiro128pp(state);
+            rnd21 = xoshiro128pp(state);
+            rnd22 = xoshiro128pp(state);
             #else
             rnd1 = xoshiro256pp(state);
             rnd2 = xoshiro256pp(state);
@@ -691,12 +694,16 @@ void rnorm_xoshiro(real_t *seq, const size_t n, rng_state_t state[4])
             #if defined(DBL_MANT_DIG) && (DBL_MANT_DIG == 53)
             #ifdef USE_XOSHIRO128
             if (is_little_endian) {
-                *rnd12 = *rnd12 >> 11;
-                *rnd22 = *rnd22 >> 11;
+                rnd12 = rnd12 >> 11;
+                rnd22 = rnd22 >> 11;
             } else {
-                *rnd11 = *rnd11 >> 11;
-                *rnd21 = *rnd21 >> 11;
+                rnd11 = rnd11 >> 11;
+                rnd21 = rnd21 >> 11;
             }
+            memcpy((char*)&rnd1, &rnd11, sizeof(uint32_t));
+            memcpy((char*)&rnd1 + sizeof(uint32_t), &rnd12, sizeof(uint32_t));
+            memcpy((char*)&rnd2, &rnd21, sizeof(uint32_t));
+            memcpy((char*)&rnd2 + sizeof(uint32_t), &rnd22, sizeof(uint32_t));
             u = (double)rnd1 / two53_d;
             v = (double)rnd2 / two53_d;
             #else
@@ -720,12 +727,9 @@ void rnorm_xoshiro(float *seq, const size_t n, rng_state_t state[4])
     const uint32_t two25_i = (UINT32_C(1) << 25) - UINT32_C(1);
     const int32_t two24_i = (UINT32_C(1) << 24);
     const float two24_f = (float)(UINT32_C(1) << 24);
-    #ifdef USE_XOSHIRO128
     uint32_t rnd1, rnd2;
-    #else
+    #ifndef USE_XOSHIRO128
     uint64_t rnd0;
-    uint32_t *restrict rnd1 = (uint32_t*)&rnd0;
-    uint32_t *restrict rnd2 = rnd1 + 1;
     #endif
     float u, v, s;
     size_t n_ = n / (size_t)2;
@@ -736,22 +740,18 @@ void rnorm_xoshiro(float *seq, const size_t n, rng_state_t state[4])
             #ifdef USE_XOSHIRO128
             rnd1 = xoshiro128pp(state);
             rnd2 = xoshiro128pp(state);
+            #else
+            rnd0 = xoshiro256pp(state);
+            memcpy(&rnd1, (char*)&rnd0, sizeof(uint32_t));
+            memcpy(&rnd2, (char*)&rnd0 + sizeof(uint32_t), sizeof(uint32_t));
+            #endif
+
             #if defined(FLT_MANT_DIG) && (FLT_MANT_DIG == 24)
             u = (float)((int32_t)(rnd1 & two25_i) - two24_i) / two24_f;
             v = (float)((int32_t)(rnd2 & two25_i) - two24_i) / two24_f;
             #else
             u = (float)rnd1 / (float)INT32_MAX;
             v = (float)rnd2 / (float)INT32_MAX;
-            #endif
-            #else
-            rnd0 = xoshiro256pp(state);
-            #if defined(FLT_MANT_DIG) && (FLT_MANT_DIG == 24)
-            u = (float)((int32_t)(*rnd1 & two25_i) - two24_i) / two24_f;
-            v = (float)((int32_t)(*rnd2 & two25_i) - two24_i) / two24_f;
-            #else
-            u = (float)(*rnd1) / (float)INT32_MAX;
-            v = (float)(*rnd2) / (float)INT32_MAX;
-            #endif
             #endif
 
             s = square(u) + square(v);
@@ -770,22 +770,18 @@ void rnorm_xoshiro(float *seq, const size_t n, rng_state_t state[4])
             #ifdef USE_XOSHIRO128
             rnd1 = xoshiro128pp(state);
             rnd2 = xoshiro128pp(state);
+            #else
+            rnd0 = xoshiro256pp(state);
+            memcpy(&rnd1, (char*)&rnd0, sizeof(uint32_t));
+            memcpy(&rnd2, (char*)&rnd0 + sizeof(uint32_t), sizeof(uint32_t));
+            #endif
+
             #if defined(FLT_MANT_DIG) && (FLT_MANT_DIG == 24)
             u = (float)((int32_t)(rnd1 & two25_i) - two24_i) / two24_f;
             v = (float)((int32_t)(rnd2 & two25_i) - two24_i) / two24_f;
             #else
             u = (float)rnd1 / (float)INT32_MAX;
             v = (float)rnd2 / (float)INT32_MAX;
-            #endif
-            #else
-            rnd0 = xoshiro256pp(state);
-            #if defined(FLT_MANT_DIG) && (FLT_MANT_DIG == 24)
-            u = (float)((int32_t)(*rnd1 & two25_i) - two24_i) / two24_f;
-            v = (float)((int32_t)(*rnd2 & two25_i) - two24_i) / two24_f;
-            #else
-            u = (float)(*rnd1) / (float)INT32_MAX;
-            v = (float)(*rnd2) / (float)INT32_MAX;
-            #endif
             #endif
 
             s = square(u) + square(v);
