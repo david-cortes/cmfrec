@@ -616,7 +616,7 @@ static inline void xoshiro128pp_jump(uint32_t state[4])
    distribution, as the upper possible numbers are not evenly-spaced.
    In these cases, it's necessary to take something up to 2^53 as
    this is the interval that's evenly-representable. */
-#if defined(USE_DOUBLE) || !(defined(USE_FLOAT) && USE_XOSHIRO128)
+#if defined(USE_DOUBLE) || !(defined(USE_FLOAT) && defined(USE_XOSHIRO128))
 void rnorm_xoshiro(real_t *seq, const size_t n, rng_state_t state[4])
 {
     const uint64_t two53_i = (UINT64_C(1) << 53) - UINT64_C(1);
@@ -628,8 +628,10 @@ void rnorm_xoshiro(real_t *seq, const size_t n, rng_state_t state[4])
     uint32_t *restrict rnd12 = rnd11 + 1;
     uint32_t *restrict rnd21 = (uint32_t*)&rnd2;
     uint32_t *restrict rnd22 = rnd21 + 1;
+    const uint32_t ONE = 1;
+    const bool is_little_endian = *((unsigned char*)&ONE) != 0;
     #endif
-    double u, v, mult;
+    double u, v;
     size_t n_ = n / (size_t)2;
     for (size_t ix = 0; ix < n_; ix++)
     {
@@ -646,8 +648,20 @@ void rnorm_xoshiro(real_t *seq, const size_t n, rng_state_t state[4])
             #endif
 
             #if defined(DBL_MANT_DIG) && (DBL_MANT_DIG == 53)
+            #ifdef USE_XOSHIRO128
+            if (is_little_endian) {
+                *rnd12 = *rnd12 >> 11;
+                *rnd22 = *rnd22 >> 11;
+            } else {
+                *rnd11 = *rnd11 >> 11;
+                *rnd21 = *rnd21 >> 11;
+            }
+            u = (double)rnd1 / two53_d;
+            v = (double)rnd2 / two53_d;
+            #else
             u = (double)(rnd1 & two53_i) / two53_d;
             v = (double)(rnd2 & two53_i) / two53_d;
+            #endif
             #else
             u = (double)rnd1 / (double)UINT64_MAX;
             v = (double)rnd2 / (double)UINT64_MAX;
@@ -655,9 +669,9 @@ void rnorm_xoshiro(real_t *seq, const size_t n, rng_state_t state[4])
         }
         while (u == 0 || v == 0);
 
-        mult = sqrt(-2. * log(u));
-        seq[(size_t)2*ix] = (real_t)((cos(twoPI * v) * mult) / 128.);
-        seq[(size_t)2*ix + (size_t)1] = (real_t)((sin(twoPI * v) * mult) / 128.);
+        u = sqrt(-2. * log(u));
+        seq[(size_t)2*ix] = (real_t)((cos(twoPI * v) * u) / 128.);
+        seq[(size_t)2*ix + (size_t)1] = (real_t)((sin(twoPI * v) * u) / 128.);
     }
 
     if ((n % (size_t)2) != 0)
@@ -675,8 +689,20 @@ void rnorm_xoshiro(real_t *seq, const size_t n, rng_state_t state[4])
             #endif
 
             #if defined(DBL_MANT_DIG) && (DBL_MANT_DIG == 53)
+            #ifdef USE_XOSHIRO128
+            if (is_little_endian) {
+                *rnd12 = *rnd12 >> 11;
+                *rnd22 = *rnd22 >> 11;
+            } else {
+                *rnd11 = *rnd11 >> 11;
+                *rnd21 = *rnd21 >> 11;
+            }
+            u = (double)rnd1 / two53_d;
+            v = (double)rnd2 / two53_d;
+            #else
             u = (double)(rnd1 & two53_i) / two53_d;
             v = (double)(rnd2 & two53_i) / two53_d;
+            #endif
             #else
             u = (double)rnd1 / (double)UINT64_MAX;
             v = (double)rnd2 / (double)UINT64_MAX;
@@ -684,8 +710,8 @@ void rnorm_xoshiro(real_t *seq, const size_t n, rng_state_t state[4])
         }
         while (u == 0 || v == 0);
 
-        mult = sqrt(-2. * log(u));
-        seq[n - (size_t)1] = (real_t)((cos(twoPI * v) * mult) / 128.);
+        u = sqrt(-2. * log(u));
+        seq[n - (size_t)1] = (real_t)((cos(twoPI * v) * u) / 128.);
     }
 }
 #else

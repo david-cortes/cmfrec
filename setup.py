@@ -137,7 +137,7 @@ if (force_openblas):
 setup(
     name  = "cmfrec",
     packages = ["cmfrec"],
-    version = '3.2.0-1',
+    version = '3.2.0-2',
     description = 'Collective matrix factorization',
     author = 'David Cortes',
     author_email = 'david.cortes.rivera@gmail.com',
