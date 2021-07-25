@@ -5,10 +5,14 @@ Version: 3.2.0
 Authors@R: c(
   person(given="David", family="Cortes", role=c("aut", "cre", "cph"),
          email="david.cortes.rivera@gmail.com"),
-  person(given="Jorge", family="Nocedal", role="cph"),
-  person(given="Naoaki", family="Okazaki", role="cph"),
-  person(given="David", family="Blackman", role="cph"),
-  person(given="Sebastiano", family="Vigna", role="cph")
+  person(given="Jorge", family="Nocedal", role="cph",
+         comment="Copyright holder of included LBFGS library"),
+  person(given="Naoaki", family="Okazaki", role="cph",
+         comment="Copyright holder of included LBFGS library"),
+  person(given="David", family="Blackman", role="cph",
+         comment="Copyright holder of original Xoshiro code"),
+  person(given="Sebastiano", family="Vigna", role="cph",
+         comment="Copyright holder of original Xoshiro code")
   )
 Maintainer: David Cortes <david.cortes.rivera@gmail.com>
 URL: https://github.com/david-cortes/cmfrec
