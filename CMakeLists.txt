@@ -62,9 +62,10 @@ if (NO_NAN_PROPAGATION)
 endif()
 
 ### Option (e): Optimizing for a given CPU architecture
+include(CheckCSourceCompiles)
 option(USE_MARCH_NATIVE "Build with -march=native" OFF)
 if (USE_MARCH_NATIVE AND NOT MSVC)
-    include(CheckCSourceCompiles)
+    set(OLD_FLAGS ${CMAKE_REQUIRED_FLAGS})
     set(CMAKE_REQUIRED_FLAGS "-march=native")
     check_c_source_compiles(
         "
@@ -75,9 +76,10 @@ if (USE_MARCH_NATIVE AND NOT MSVC)
         "
         SUPPORTS_MARCH_NATIVE
     )
+    set(CMAKE_REQUIRED_FLAGS ${OLD_FLAGS})
     if (SUPPORTS_MARCH_NATIVE)
         message(STATUS "Adding flag -march=native.")
-        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -march=native")
+        set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -march=native")
     else()
         set(CMAKE_REQUIRED_FLAGS "-mcpu=native")
         check_c_source_compiles(
@@ -89,12 +91,12 @@ if (USE_MARCH_NATIVE AND NOT MSVC)
             "
             SUPPORTS_MCPU_NATIVE
         )
+        set(CMAKE_REQUIRED_FLAGS ${OLD_FLAGS})
         if (SUPPORTS_MCPU_NATIVE)
             message(STATUS "Adding flag -mcpu=native.")
-            set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -mcpu=native")
+            set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -mcpu=native")
         else()
             message(WARNING "Flags -march=native and -mcpu=native not supported by the compiler.")
-            set(CMAKE_REQUIRED_FLAGS "")
         endif()
     endif()
 endif()
@@ -135,9 +137,56 @@ endif()
 
 # Compiler optimizations
 if (MSVC)
-    add_compile_options(/O2)
+    if (NOT (${CMAKE_C_FLAGS_RELEASE} MATCHES "/O2"))
+        set(OLD_FLAGS ${CMAKE_REQUIRED_FLAGS})
+        set(CMAKE_REQUIRED_FLAGS "/O2")
+        check_c_source_compiles(
+            "
+            int main(int argc, char **argv)
+            {
+                return 0;
+            }
+            "
+            SUPPORTS_O2
+        )
+        set(CMAKE_REQUIRED_FLAGS ${OLD_FLAGS})
+        if (SUPPORTS_O2)
+            set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} /O2")
+        endif()
+    endif()
 else()
-    add_compile_options(-O3)
+    if (NOT (${CMAKE_C_FLAGS_RELEASE} MATCHES "-O3 "))
+        set(OLD_FLAGS ${CMAKE_REQUIRED_FLAGS})
+        set(CMAKE_REQUIRED_FLAGS "-O3")
+        check_c_source_compiles(
+            "
+            int main(int argc, char **argv)
+            {
+                return 0;
+            }
+            "
+            SUPPORTS_O3
+        )
+        set(CMAKE_REQUIRED_FLAGS ${OLD_FLAGS})
+        if (SUPPORTS_O3)
+            set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -O3")
+        else()
+            set(CMAKE_REQUIRED_FLAGS "-O2")
+            check_c_source_compiles(
+                "
+                int main(int argc, char **argv)
+                {
+                    return 0;
+                }
+                "
+                SUPPORTS_O2
+            )
+            set(CMAKE_REQUIRED_FLAGS ${OLD_FLAGS})
+            if (SUPPORTS_O2)
+                set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -O2")
+            endif()
+        endif()
+    endif()
 endif()
 
 # Linkage to BLAS and LAPACK
