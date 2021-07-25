@@ -118,64 +118,27 @@ list(APPEND union_list ${LAPACK_LIBRARIES} ${BLAS_LIBRARIES})
 list(REMOVE_DUPLICATES union_list)
 
 # See https://github.com/xianyi/OpenBLAS/issues/3237
-# TODO
-add_compile_definitions(AVOID_BLAS_SYR)
-# set(CMAKE_REQUIRED_LINK_OPTIONS  ${union_list})
-# set(CMAKE_REQUIRED_LIBRARIES  ${union_list})
-# check_c_source_compiles(
-#     "
-#     int openblas_get_num_threads(void);
-#     int main(int argc, char **argv)
-#     {
-#         int nt = openblas_get_num_threads;
-#         return 0;
-#     }
-#     "
-#     HAS_OPENBLAS
-# )
-# if (HAS_OPENBLAS)
-#     message(STATUS "Using OpenBLAS - will replace its SYR function.")
-#     add_compile_definitions(AVOID_BLAS_SYR)
-#     add_compile_definitions(HAS_OPENBLAS)
-# else()
-#     check_c_source_compiles(
-#         "
-#         int mkl_get_max_threads(void);
-#         int main(int argc, char **argv)
-#         {
-#             int nt = mkl_get_max_threads();
-#             return 0;
-#         }
-#         "
-#         HAS_MKL
-#     )
-#     if (HAS_MKL)
-#         add_compile_definitions(HAS_MKL)
-#     else()
-#         check_c_source_compiles(
-#             "
-#             void catlas_saxpby(const int N, const float alpha, const float *X,
-#                   const int incX, const float beta, float *Y, const int incY);
-#             int main(int argc, char **argv)
-#             {
-#                 float dont_optimize_out[] = {1., 2., 3., 4.};
-#                 int nt = catlas_saxpby(4, 1., NULL, 1, 0., dont_optimize_out, 1);
-#                 double s = dont_optimize_out[1] + dont_optimize_out[3];
-#                 printf(\"res:%f\n\", s);
-#                 return 0;
-#             }
-#             "
-#             HAS_ATLAS
-#         )
-#         if (HAS_ATLAS)
-#             message(STATUS "Using ATLAS - will replace its SYR function.")
-#             message(WARNING "Note: ATLAS multi-threading might make this library very slow.")
-#             add_compile_definitions(HAS_ATLAS)
-#             add_compile_definitions(AVOID_BLAS_SYR)
-#         endif()
-#     endif()
-# endif()
-
+set(CMAKE_REQUIRED_LINK_OPTIONS  ${union_list})
+set(CMAKE_REQUIRED_LIBRARIES  ${union_list})
+CHECK_LIBRARY_EXISTS("" "openblas_get_num_threads" "" HAS_OPENBLAS)
+if (HAS_OPENBLAS)
+    message(STATUS "Using OpenBLAS - will replace its SYR function.")
+    add_compile_definitions(AVOID_BLAS_SYR)
+    add_compile_definitions(HAS_OPENBLAS)
+else()
+    CHECK_LIBRARY_EXISTS("" "mkl_get_max_threads" "" HAS_MKL)
+    if (HAS_MKL)
+        add_compile_definitions(HAS_MKL)
+    else()
+        CHECK_LIBRARY_EXISTS("" "catlas_saxpby" "" HAS_ATLAS)
+        if (HAS_ATLAS)
+            message(STATUS "Using ATLAS - will replace its SYR function.")
+            message(WARNING "Note: ATLAS multi-threading might make this library very slow.")
+            add_compile_definitions(HAS_ATLAS)
+            add_compile_definitions(AVOID_BLAS_SYR)
+        endif()
+    endif()
+endif()
 
 target_link_libraries(cmfrec PUBLIC ${union_list})
 
