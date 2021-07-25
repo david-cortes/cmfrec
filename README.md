@@ -157,7 +157,7 @@ git clone https://www.github.com/david-cortes/cmfrec.git
 cd cmfrec
 mkdir build
 cd build
-cmake ..
+cmake -DUSE_MARCH_NATIVE=1 ..
 cmake --build .
 
 ## For a system-wide install
@@ -165,7 +165,11 @@ sudo make install
 sudo ldconfig
 ```
 
-Linkage is then done with `-lcmfrec`. By default, it compiles for types `double` and `int`, but this can be changed in the CMake script to `float` and/or `int64_t`.
+Linkage is then done with `-lcmfrec`.
+
+By default, it compiles for types `double` and `int`, but this can be changed in the CMake script to `float` (passing option `-DUSE_FLOAT=1`) and/or `int64_t` (passing option `-DUSE_INT64=1` - but note that if not using MKL, will require manually setting linkage to a BLAS library with int64 support - see the CMakeLists.txt file). Additionally, if the LAPACK library used does not do fully IEEE754-compliant propagation of NAs (e.g. some very old versions of OpenBLAS), can pass option `-DNO_NAN_PROPAGATION=1`.
+
+Be aware that the snippet above includes option `-DUSE_MARCH_NATIVE=1`, which will make it use the highest-available CPU instruction set (e.g. AVX2) and will produces objects that might not run on older CPUs - to build more "portable" objects, remove this option from the cmake command.
 
 (Recommended to have MKL or OpenBLAS installed)
 

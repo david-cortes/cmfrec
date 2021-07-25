@@ -11,11 +11,13 @@ set(CMAKE_BUILD_TYPE Release)
 ### Option (a): Numeric precision
 # Library will by default compile with double precision (double),
 # but can be changed to single-precision (float) if desired.
-set(USE_FLOAT OFF)
+option(USE_FLOAT "Build for single-precision (float) type" OFF)
 if (USE_FLOAT)
+    message(STATUS "Will build for single-precision (float) type.")
     set(real_t float)
     add_compile_definitions(USE_FLOAT)
 else()
+    message(STATUS "Will build for double-precision (double) type.")
     set(real_t double) # <- this is the default
     add_compile_definitions(USE_DOUBLE)
 endif()
@@ -27,11 +29,13 @@ endif()
 # 'FindBLAS' script won't search for OpenBLAS'es ILP64,
 # so if turning this ON and using something other than MKL,
 # must also pass the BLAS and LAPACK link arguments.
-set(USE_INT64 OFF)
+option(USE_INT64 "Use larger int width" OFF)
 if (USE_INT64)
+    message(STATUS "Will use int64_t instead of machine's 'int' type.")
     set(int_t int64_t)
     add_compile_definitions(USE_INT64)
 else()
+    message(STATUS "Will use machine's native 'int' type.")
     set(int_t int) # <- this is the default
     add_compile_definitions(USE_INT)
 endif()
@@ -52,11 +56,48 @@ set(LAPACK_LIBRARIES "")
 #  in which it shouldn't according to the inputs that had NAN values).
 # Note that it is still assummed that the BLAS library will propagate
 # NANs properly according to IEEE754 rules.
-set(NO_NAN_PROPAGATION OFF)
+option(NO_NAN_PROPAGATION "In case the LAPACK library doesn't do proper NAN propagation" OFF)
 if (NO_NAN_PROPAGATION)
     add_compile_definitions(FORCE_NO_NAN_PROPAGATION)
 endif()
 
+### Option (e): Optimizing for a given CPU architecture
+option(USE_MARCH_NATIVE "Build with -march=native" OFF)
+if (USE_MARCH_NATIVE AND NOT MSVC)
+    include(CheckCSourceCompiles)
+    set(CMAKE_REQUIRED_FLAGS "-march=native")
+    check_c_source_compiles(
+        "
+        int main(int argc, char **argv)
+        {
+            return 0;
+        }
+        "
+        SUPPORTS_MARCH_NATIVE
+    )
+    if (SUPPORTS_MARCH_NATIVE)
+        message(STATUS "Adding flag -march=native.")
+        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -march=native")
+    else()
+        set(CMAKE_REQUIRED_FLAGS "-mcpu=native")
+        check_c_source_compiles(
+            "
+            int main(int argc, char **argv)
+            {
+                return 0;
+            }
+            "
+            SUPPORTS_MCPU_NATIVE
+        )
+        if (SUPPORTS_MCPU_NATIVE)
+            message(STATUS "Adding flag -mcpu=native.")
+            set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -mcpu=native")
+        else()
+            message(WARNING "Flags -march=native and -mcpu=native not supported by the compiler.")
+            set(CMAKE_REQUIRED_FLAGS "")
+        endif()
+    endif()
+endif()
 
 
 
@@ -96,7 +137,7 @@ endif()
 if (MSVC)
     add_compile_options(/O2)
 else()
-    add_compile_options(-O3 -march=native)
+    add_compile_options(-O3)
 endif()
 
 # Linkage to BLAS and LAPACK
