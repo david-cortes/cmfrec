@@ -1514,9 +1514,11 @@ void fill_lower_triangle(real_t A[], size_t n, size_t lda)
 
 void print_err_msg(const char *msg)
 {
-    fprintf(stderr, msg);
     #ifndef _FOR_R
+    fprintf(stderr, "%s", msg);
     fflush(stderr);
+    #else
+    fprintf(stderr, msg);
     #endif
 }
 
