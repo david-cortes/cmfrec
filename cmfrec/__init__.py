@@ -124,6 +124,13 @@ class _CMF:
             nthreads = 1
         assert isinstance(nthreads, int) and nthreads > 0
 
+        if (nthreads > 1) and (not wrapper_double._get_has_openmp()):
+            msg_omp  = "Attempting to use more than 1 thread, but "
+            msg_omp += "package was built without multi-threading "
+            msg_omp += "support - see the project's GitHub page for "
+            msg_omp += "more information."
+            warnings.warn(msg_omp)
+
         if not implicit and method == "lbfgs":
             print_every = int(print_every) if isinstance(print_every, float) else print_every
             assert isinstance(print_every, int) and print_every >= 0

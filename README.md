@@ -116,13 +116,15 @@ or if that fails:
 pip install --no-use-pep517 cmfrec
 ```
 
-**Note for macOS users:** on macOS, this package will compile without multi-threading capabilities. This is due to default apple's redistribution of clang not providing OpenMP modules, and aliasing it to gcc which causes confusions in build scripts. If you have a non-apple version of clang with the OpenMP modules, or if you have gcc installed, you can compile this package with multi-threading enabled by setting up an environment variable `ENABLE_OMP=1`:
+** *
 
+**Note for macOS users:** on macOS, the Python version of this package might compile **without** multi-threading capabilities. In order to enable multi-threading support, first install OpenMP:
 ```
-export ENABLE_OMP=1
-pip install cmfrec
+brew install libomp
 ```
-(Alternatively, can also pass argument `enable-omp` to the setup.py file: `python setup.py install enable-omp`)
+And then reinstall this package: `pip install --force-reinstall recometrics`.
+
+** *
 
 _Note2: earlier versions of `cmfrec` used the package `findblas` to link to BLAS's CBLAS interface, while newer versions take the BLAS from SciPy and build CBLAS wrapper around it, which can make it run slightly lower. To use `findblas`, define an environment variable `USE_FINDBLAS=1` before installing:_
 ```

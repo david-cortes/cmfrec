@@ -6,18 +6,15 @@ except:
     from distutils.extension import Extension
 import numpy as np
 from Cython.Distutils import build_ext
-import re
-import os, sys
+import sys, os, subprocess, warnings, re
 
-## If you do not wish to use findblas:
-## -uncomment the SciPy imports in 'wrapper_untyped.pxi'
-##  (or manually add linkage to another blas/lapack implementation
-##   in this setup file)
-## -comment out the line that imports 'build_ext_with_blas'
-## -uncomment the next line
-# from Cython.Distutils import build_ext as build_ext_with_blas
 
-## Or alternatively, pass your own BLAS/LAPACK linkage parameters here:
+found_omp = True
+def set_omp_false():
+    global found_omp
+    found_omp = False
+
+## Modify this to pass your own BLAS/LAPACK linkage parameters:
 custom_blas_link_args = []
 custom_blas_compile_args = []
 # example:
@@ -37,16 +34,20 @@ if not (len(custom_blas_link_args) or len(custom_blas_compile_args)):
     else:
         build_ext_with_blas = build_ext
 
+
 class build_ext_subclass( build_ext_with_blas ):
     def build_extensions(self):
-        compiler = self.compiler.compiler_type
-        if compiler == 'msvc': # visual studio
+        
+        if self.compiler.compiler_type == 'msvc':
             for e in self.extensions:
                 e.extra_compile_args += ['/O2', '/openmp']
-        else: # everything else that cares about following standards
+        else:
+            self.add_march_native()
+            self.add_openmp_linkage()
+
+            ### Now add arguments as appropriate for good performance
             for e in self.extensions:
-                e.extra_compile_args += ['-O3', '-fopenmp', '-march=native', '-std=c99']
-                e.extra_link_args += ['-fopenmp']
+                e.extra_compile_args += ['-O3', '-std=c99']
                 
                 # e.extra_compile_args += ['-O2', '-fopenmp', '-march=native', '-std=c99', '-ggdb']
                 # e.extra_link_args += ['-fopenmp']
@@ -57,15 +58,6 @@ class build_ext_subclass( build_ext_with_blas ):
 
                 # e.extra_compile_args += ['-fsanitize=address', '-static-libasan', '-ggdb']
                 # e.extra_link_args += ['-fsanitize=address', '-static-libasan']                
-
-        ## Note: apple will by default alias 'gcc' to 'clang', and will ship its own "special"
-        ## 'clang' which has no OMP support and nowadays will purposefully fail to compile when passed
-        ## '-fopenmp' flags. If you are using mac, and have an OMP-capable compiler,
-        ## comment out the code below, or set 'use_omp' to 'True'.
-        if not use_omp:
-            for e in self.extensions:
-                e.extra_compile_args = [arg for arg in e.extra_compile_args if arg != '-fopenmp']
-                e.extra_link_args    = [arg for arg in e.extra_link_args    if arg != '-fopenmp']
 
         ## If a custom BLAS/LAPACK is provided:
         if len(custom_blas_link_args) or len(custom_blas_compile_args):
@@ -106,20 +98,68 @@ class build_ext_subclass( build_ext_with_blas ):
 
         build_ext_with_blas.build_extensions(self)
 
+    def add_march_native(self):
+        arg_march_native = "-march=native"
+        arg_mcpu_native = "-mcpu=native"
+        if self.test_supports_compile_arg(arg_march_native):
+            for e in self.extensions:
+                e.extra_compile_args.append(arg_march_native)
+        elif self.test_supports_compile_arg(arg_mcpu_native):
+            for e in self.extensions:
+                e.extra_compile_args.append(arg_mcpu_native)
 
-use_omp = (("enable-omp" in sys.argv)
-           or ("-enable-omp" in sys.argv)
-           or ("--enable-omp" in sys.argv))
-if use_omp:
-    sys.argv = [a for a in sys.argv if a not in ("enable-omp", "-enable-omp", "--enable-omp")]
-if os.environ.get('ENABLE_OMP') is not None:
-    use_omp = True
-if sys.platform[:3] != "dar":
-    use_omp = True
+    def add_openmp_linkage(self):
+        arg_omp1 = "-fopenmp"
+        arg_omp2 = "-qopenmp"
+        arg_omp3 = "-xopenmp"
+        args_apple_omp = ["-Xclang", "-fopenmp", "-lomp"]
+        if self.test_supports_compile_arg(arg_omp1):
+            for e in self.extensions:
+                e.extra_compile_args.append(arg_omp1)
+                e.extra_link_args.append(arg_omp1)
+        elif (sys.platform[:3].lower() == "dar") and self.test_supports_compile_arg(args_apple_omp):
+            for e in self.extensions:
+                e.extra_compile_args += ["-Xclang", "-fopenmp"]
+                e.extra_link_args += ["-lomp"]
+        elif self.test_supports_compile_arg(arg_omp2):
+            for e in self.extensions:
+                e.extra_compile_args.append(arg_omp2)
+                e.extra_link_args.append(arg_omp2)
+        elif self.test_supports_compile_arg(arg_omp3):
+            for e in self.extensions:
+                e.extra_compile_args.append(arg_omp3)
+                e.extra_link_args.append(arg_omp3)
+        else:
+            set_omp_false()
 
-### Shorthand for apple computer:
-### uncomment line below
-# use_omp = True
+    def test_supports_compile_arg(self, comm):
+        is_supported = False
+        try:
+            if not hasattr(self.compiler, "compiler"):
+                return False
+            if not isinstance(comm, list):
+                comm = [comm]
+            print("--- Checking compiler support for option '%s'" % " ".join(comm))
+            fname = "cmfrec_compiler_testing.c"
+            with open(fname, "w") as ftest:
+                ftest.write(u"int main(int argc, char**argv) {return 0;}\n")
+            try:
+                cmd = [self.compiler.compiler_cxx[0]]
+            except:
+                cmd = list(self.compiler.compiler_cxx)
+            val_good = subprocess.call(cmd + [fname])
+            try:
+                val = subprocess.call(cmd + comm + [fname])
+                is_supported = (val == val_good)
+            except:
+                is_supported = False
+        except:
+            pass
+        try:
+            os.remove(fname)
+        except:
+            pass
+        return is_supported
 
 
 force_openblas = (("openblas" in sys.argv)
@@ -137,7 +177,7 @@ if (force_openblas):
 setup(
     name  = "cmfrec",
     packages = ["cmfrec"],
-    version = '3.2.0-3',
+    version = '3.2.0-4',
     description = 'Collective matrix factorization',
     author = 'David Cortes',
     author_email = 'david.cortes.rivera@gmail.com',
@@ -178,10 +218,13 @@ setup(
         ]
 )
 
-if not use_omp:
-    import warnings
-    apple_msg  = "\n\n\nMacOS detected. Package will be built without multi-threading capabilities, "
-    apple_msg += "due to Apple's lack of OpenMP support in default clang installs. In order to enable it, "
-    apple_msg += "reinstall with an environment variable 'export ENABLE_OMP=1' or install from GitHub. "
-    apple_msg += "You'll also need an OpenMP-capable compiler.\n\n\n"
-    warnings.warn(apple_msg)
+if not found_omp:
+    omp_msg  = "\n\n\nCould not detect OpenMP. Package will be built without multi-threading capabilities. "
+    omp_msg += " To enable multi-threading, first install OpenMP"
+    if (sys.platform[:3] == "dar"):
+        omp_msg += " - for macOS: 'brew install libomp'\n"
+    else:
+        omp_msg += " modules for your compiler. "
+    
+    omp_msg += "Then reinstall this package from scratch: 'pip install --force-reinstall cmfrec'.\n"
+    warnings.warn(omp_msg)

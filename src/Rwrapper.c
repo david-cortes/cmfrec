@@ -181,6 +181,15 @@ SEXP as_size_t(SEXP x)
     return out;
 }
 
+SEXP R_has_openmp()
+{
+    #ifdef _OPENMP
+    return Rf_ScalarLogical(1);
+    #else
+    return Rf_ScalarLogical(0);
+    #endif
+}
+
 double* get_ptr(SEXP x)
 {
     if (Rf_xlength(x))
@@ -2543,6 +2552,7 @@ SEXP call_topN_new_offsets_implicit
 static const R_CallMethodDef callMethods [] = {
     {"as_size_t", (DL_FUNC) &as_size_t, 1},
     {"deep_copy_vec", (DL_FUNC) &as_size_t, 1},
+    {"R_has_openmp", (DL_FUNC) &R_has_openmp, 1},
     /* ---------------------------------------------------- */
     {"call_fit_collective_explicit_lbfgs", (DL_FUNC) &call_fit_collective_explicit_lbfgs, 64},
     {"call_fit_collective_explicit_als", (DL_FUNC) &call_fit_collective_explicit_als, 64},

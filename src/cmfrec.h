@@ -530,6 +530,7 @@ void set_blas_threads(int nthreads_set, int *nthreads_curr);
 SEXP wrapper_GELSD(void *data);
 void clean_after_GELSD(void *cdata, Rboolean jump);
 #endif
+bool get_has_openmp(void);
 
 /* common.c */
 real_t fun_grad_cannonical_form

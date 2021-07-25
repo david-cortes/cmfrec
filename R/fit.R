@@ -931,6 +931,14 @@ validate.inputs <- function(model, implicit=FALSE,
     
     method       <-  check.str.option(method, "method", c("als", "lbfgs"))
     parallelize  <-  check.str.option(parallelize, "parallelize", c("separate", "single"))
+
+    if (nthreads > 1L && !.Call("R_has_openmp")) {
+        msg <- paste0("Attempting to use more than 1 thread, but ",
+                      "package was compiled without OpenMP support.")
+        if (tolower(Sys.info()[["sysname"]]) == "darwin")
+            msg <- paste0(msg, " See https://mac.r-project.org/openmp/")
+        warning(msg)
+    }
     
     allow_different_lambda <- TRUE
     if (model == "OMF_implicit")

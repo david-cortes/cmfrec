@@ -13,6 +13,8 @@ ctypedef int int_t
 
 
 cdef extern from "cmfrec.h":
+    bint get_has_openmp()
+
     int_t fit_collective_explicit_lbfgs_internal(
         real_t *values, bint reset_values,
         real_t *glob_mean,
@@ -552,6 +554,8 @@ cdef extern from "cmfrec.h":
     # void py_set_threads(int) nogil
     # int py_get_threads() nogil
 
+def _get_has_openmp():
+    return get_has_openmp()
 
 def call_fit_collective_explicit_lbfgs(
         np.ndarray[int_t, ndim=1] ixA,

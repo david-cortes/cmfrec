@@ -627,6 +627,7 @@ void rnorm_xoshiro(real_t *seq, const size_t n, rng_state_t state[4])
     uint64_t rnd1, rnd2;
     #ifdef USE_XOSHIRO128
     uint32_t rnd11, rnd12, rnd21, rnd22;
+    const uint32_t two21_i = (UINT32_C(1) << 21) - UINT32_C(1);
     const uint32_t ONE = 1;
     const bool is_little_endian = *((unsigned char*)&ONE) != 0;
     #endif
@@ -649,11 +650,11 @@ void rnorm_xoshiro(real_t *seq, const size_t n, rng_state_t state[4])
             #if defined(DBL_MANT_DIG) && (DBL_MANT_DIG == 53)
             #ifdef USE_XOSHIRO128
             if (is_little_endian) {
-                rnd12 = rnd12 >> 11;
-                rnd22 = rnd22 >> 11;
+                rnd12 = rnd12 & two21_i;
+                rnd22 = rnd22 & two21_i;
             } else {
-                rnd11 = rnd11 >> 11;
-                rnd21 = rnd21 >> 11;
+                rnd11 = rnd11 & two21_i;
+                rnd21 = rnd21 & two21_i;
             }
             memcpy((char*)&rnd1, &rnd11, sizeof(uint32_t));
             memcpy((char*)&rnd1 + sizeof(uint32_t), &rnd12, sizeof(uint32_t));
@@ -694,11 +695,11 @@ void rnorm_xoshiro(real_t *seq, const size_t n, rng_state_t state[4])
             #if defined(DBL_MANT_DIG) && (DBL_MANT_DIG == 53)
             #ifdef USE_XOSHIRO128
             if (is_little_endian) {
-                rnd12 = rnd12 >> 11;
-                rnd22 = rnd22 >> 11;
+                rnd12 = rnd12 & two21_i;
+                rnd22 = rnd22 & two21_i;
             } else {
-                rnd11 = rnd11 >> 11;
-                rnd21 = rnd21 >> 11;
+                rnd11 = rnd11 & two21_i;
+                rnd21 = rnd21 & two21_i;
             }
             memcpy((char*)&rnd1, &rnd11, sizeof(uint32_t));
             memcpy((char*)&rnd1 + sizeof(uint32_t), &rnd12, sizeof(uint32_t));
@@ -1668,3 +1669,12 @@ void clean_after_GELSD(void *cdata, Rboolean jump)
     }
 }
 #endif
+
+bool get_has_openmp(void)
+{
+    #ifdef _OPENMP
+    return true;
+    #else
+    return false;
+    #endif
+}
