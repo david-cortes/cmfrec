@@ -183,6 +183,7 @@ typedef void (*sig_t_)(int);
     #define fabs_t fabs
     #define fmax_t fmax
     #define sqrt_t sqrt
+    #define fma_t fma
     #define EPSILON_T DBL_EPSILON
     #define HUGE_VAL_T HUGE_VAL
     #define cblas_tdot cblas_ddot
@@ -209,6 +210,7 @@ typedef void (*sig_t_)(int);
     #define fmax_t fmaxf
     #define fabs_t fabsf
     #define sqrt_t sqrtf
+    #define fma_t fmaf
     #define EPSILON_T FLT_EPSILON
     #define HUGE_VAL_T HUGE_VALF
     #define cblas_tdot cblas_sdot

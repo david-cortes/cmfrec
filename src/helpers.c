@@ -476,7 +476,7 @@ void taxpy_large(real_t *restrict A, real_t x, real_t *restrict Y, size_t n, int
         else
             #pragma omp parallel for schedule(static) num_threads(nthreads) shared(A, x, Y, n)
             for (size_t_for ix = 0; ix < n; ix++)
-                Y[ix] += x*A[ix];
+                Y[ix] = fma_t(x, A[ix], Y[ix]);
     }
 }
 
@@ -1573,7 +1573,7 @@ long double compensated_sum_product(real_t *restrict arr1, real_t *restrict arr2
 
     for (size_t ix = 0; ix < n; ix++)
     {
-        diff = arr1[ix]*arr2[ix] - err;
+        diff = fmal(arr1[ix], arr2[ix], -err);
         temp = res + diff;
         err = (temp - res) - diff;
         res = temp;
@@ -1592,7 +1592,7 @@ void custom_syr(const int_t n, const real_t alpha, const real_t *restrict x, rea
         temp = alpha*x[i];
         Arow = A + (size_t)i*(size_t)lda;
         for (int j = i; j < n; j++)
-            Arow[j] += temp*x[j];
+            Arow[j] = fma_t(temp, x[j], Arow[j]);
     }
 }
 #endif
