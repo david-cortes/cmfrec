@@ -2551,7 +2551,7 @@ SEXP call_topN_new_offsets_implicit
 /* Note: argument limit is 65 */
 static const R_CallMethodDef callMethods [] = {
     {"as_size_t", (DL_FUNC) &as_size_t, 1},
-    {"deep_copy_vec", (DL_FUNC) &as_size_t, 1},
+    {"deep_copy_vec", (DL_FUNC) &deep_copy_vec, 1},
     {"R_has_openmp", (DL_FUNC) &R_has_openmp, 0},
     /* ---------------------------------------------------- */
     {"call_fit_collective_explicit_lbfgs", (DL_FUNC) &call_fit_collective_explicit_lbfgs, 64},
