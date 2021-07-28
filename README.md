@@ -122,7 +122,7 @@ pip install --no-use-pep517 cmfrec
 ```
 brew install libomp
 ```
-And then reinstall this package: `pip install --force-reinstall recometrics`.
+And then reinstall this package: `pip install --force-reinstall cmfrec`.
 
 ** *
 
