@@ -659,8 +659,8 @@ void rnorm_xoshiro(real_t *seq, const size_t n, rng_state_t state[4])
             memcpy((char*)&rnd1 + sizeof(uint32_t), &rnd12, sizeof(uint32_t));
             memcpy((char*)&rnd2, &rnd21, sizeof(uint32_t));
             memcpy((char*)&rnd2 + sizeof(uint32_t), &rnd22, sizeof(uint32_t));
-            u = (double)rnd1 / two53_d;
-            v = (double)rnd2 / two53_d;
+            u = ldexp((double)rnd1, -53);
+            v = ldexp((double)rnd2, -53);
             #else
             u = ldexp((double)(rnd1 & two53_i), -53);
             v = ldexp((double)(rnd2 & two53_i), -53);
@@ -673,8 +673,8 @@ void rnorm_xoshiro(real_t *seq, const size_t n, rng_state_t state[4])
         while (u == 0 || v == 0);
 
         u = sqrt(-2. * log(u));
-        seq[(size_t)2*ix] = (real_t)((cos(twoPI * v) * u) / 128.);
-        seq[(size_t)2*ix + (size_t)1] = (real_t)((sin(twoPI * v) * u) / 128.);
+        seq[(size_t)2*ix] = (real_t)ldexp(cos(twoPI * v) * u, -7);
+        seq[(size_t)2*ix + (size_t)1] = (real_t)ldexp(sin(twoPI * v) * u, -7);
     }
 
     if ((n % (size_t)2) != 0)
@@ -704,8 +704,8 @@ void rnorm_xoshiro(real_t *seq, const size_t n, rng_state_t state[4])
             memcpy((char*)&rnd1 + sizeof(uint32_t), &rnd12, sizeof(uint32_t));
             memcpy((char*)&rnd2, &rnd21, sizeof(uint32_t));
             memcpy((char*)&rnd2 + sizeof(uint32_t), &rnd22, sizeof(uint32_t));
-            u = (double)rnd1 / two53_d;
-            v = (double)rnd2 / two53_d;
+            u = ldexp((double)rnd1, -53);
+            v = ldexp((double)rnd2, -53);
             #else
             u = ldexp((double)(rnd1 & two53_i), -53);
             v = ldexp((double)(rnd2 & two53_i), -53);
@@ -718,7 +718,7 @@ void rnorm_xoshiro(real_t *seq, const size_t n, rng_state_t state[4])
         while (u == 0 || v == 0);
 
         u = sqrt(-2. * log(u));
-        seq[n - (size_t)1] = (real_t)((cos(twoPI * v) * u) / 128.);
+        seq[n - (size_t)1] = (real_t)ldexp(cos(twoPI * v) * u, -7);
     }
 }
 #else
@@ -758,8 +758,8 @@ void rnorm_xoshiro(float *seq, const size_t n, rng_state_t state[4])
         while (s == 0 || s >= 1);
 
         s = sqrtf((-2.0f / s) * logf(s));
-        seq[(size_t)2*ix] = (real_t)((u * s) / 128.0f);
-        seq[(size_t)2*ix + (size_t)1] = (real_t)((v * s) / 128.0f);
+        seq[(size_t)2*ix] = ldexpf(u * s, -7);
+        seq[(size_t)2*ix + (size_t)1] = ldexpf(v * s, -7);
     }
 
     if ((n % (size_t)2) != 0)
@@ -788,7 +788,7 @@ void rnorm_xoshiro(float *seq, const size_t n, rng_state_t state[4])
         while (s == 0 || s >= 1);
 
         s = sqrtf((-2.0f / s) * logf(s));
-        seq[n - (size_t)1] = (real_t)((u * s) / 128.0f);
+        seq[n - (size_t)1] = ldexpf(u * s, -7);
     }
 }
 #endif

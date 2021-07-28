@@ -79,7 +79,7 @@ inline static void vecadd(real_t *y, const real_t *x, const real_t c, const size
         cblas_taxpy((int)n, c, x, 1, y, 1);
     else
         for (size_t ix = 0; ix < n; ix++)
-            y[ix] += c*x[ix];
+            y[ix] = fma_t(c, x[ix], y[ix]);
 }
 
 inline static void vecdiff(real_t *restrict z, const real_t *restrict x, const real_t *restrict y, const size_t n)
