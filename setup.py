@@ -153,9 +153,9 @@ class build_ext_subclass( build_ext_with_blas ):
             with open(fname, "w") as ftest:
                 ftest.write(u"int main(int argc, char**argv) {return 0;}\n")
             try:
-                cmd = [self.compiler.compiler_cxx[0]]
+                cmd = [self.compiler.compiler[0]]
             except:
-                cmd = list(self.compiler.compiler_cxx)
+                cmd = list(self.compiler.compiler)
             val_good = subprocess.call(cmd + [fname])
             try:
                 val = subprocess.call(cmd + comm + [fname])
