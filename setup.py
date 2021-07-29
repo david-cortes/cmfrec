@@ -44,6 +44,8 @@ class build_ext_subclass( build_ext_with_blas ):
         else:
             self.add_march_native()
             self.add_openmp_linkage()
+            if sys.platform[:3].lower() != "win":
+                self.add_link_time_optimization()
 
             ### Now add arguments as appropriate for good performance
             for e in self.extensions:
@@ -107,6 +109,13 @@ class build_ext_subclass( build_ext_with_blas ):
         elif self.test_supports_compile_arg(arg_mcpu_native):
             for e in self.extensions:
                 e.extra_compile_args.append(arg_mcpu_native)
+
+    def add_link_time_optimization(self):
+        arg_lto = "-flto"
+        if self.test_supports_compile_arg(arg_lto):
+            for e in self.extensions:
+                e.extra_compile_args.append(arg_lto)
+                e.extra_link_args.append(arg_lto)
 
     def add_openmp_linkage(self):
         arg_omp1 = "-fopenmp"
