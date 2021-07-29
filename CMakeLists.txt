@@ -1,4 +1,4 @@
-cmake_minimum_required (VERSION 3.9)
+cmake_minimum_required (VERSION 3.9.4)
 project (cmfrec VERSION 3.2.0)
 set(CMAKE_BUILD_TYPE Release)
 
@@ -188,6 +188,15 @@ else()
         endif()
     endif()
 endif()
+
+# Link-time optimization if supported
+# https://stackoverflow.com/questions/31355692/how-do-i-enable-link-time-optimization-lto-with-cmake
+include(CheckIPOSupported)
+check_ipo_supported(RESULT LTO_SUPPORTED)
+if (LTO_SUPPORTED)
+    set_property(TARGET cmfrec PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
+endif()
+
 
 # Linkage to BLAS and LAPACK
 if (BLAS_LIBRARIES STREQUAL "")
