@@ -2281,7 +2281,7 @@ void optimizeA
                            nthreads, use_cg, nonneg, max_cd_steps) \
                     firstprivate(bufferX)
             for (size_t_for ix = 0; ix < (size_t)m; ix++)
-                if (cnt_NA[ix] > 0)
+                if (cnt_NA[ix])
                 {
                     if (cnt_NA[ix] == n) {
                         set_to_zero(A + ix*(size_t)lda, k);

@@ -1575,7 +1575,7 @@ void collective_closed_form_block
                             0., bufferBeTBe, k_totA);
             }
             
-            if (cnt_NA_u > 0 && u_vec != NULL)
+            if (cnt_NA_u && u_vec != NULL)
             {
                 for (size_t ix = 0; ix < (size_t)p; ix++)
                     if (isnan(u_vec[ix]))
@@ -1588,7 +1588,7 @@ void collective_closed_form_block
                     }
             }
             if (precomputedCtCw == NULL && w_user != 1. &&
-                (cnt_NA_u > 0 && u_vec != NULL) && p)
+                (cnt_NA_u && u_vec != NULL) && p)
             {
                 cblas_tscal(square(k_totA) - k_main*k_totA - k_main,
                             w_user, bufferBeTBe, 1);
@@ -1640,7 +1640,7 @@ void collective_closed_form_block
         }
 
         
-        if ((cnt_NA_x > 0 || n_BtB > n) && Xa_dense != NULL) {
+        if ((cnt_NA_x || n_BtB > n) && Xa_dense != NULL) {
             for (size_t ix = 0; ix < (size_t)n; ix++)
                 if (isnan(Xa_dense[ix]))
                     cblas_tsyr(CblasRowMajor, CblasUpper,
@@ -1892,7 +1892,7 @@ void collective_closed_form_block_implicit
     bool few_NAs = (u_vec != NULL && cnt_NA_u < k_user+k);
     if (cnt_NA_u)
         add_U = true;
-    if ((add_U || cnt_NA_u > 0) && !use_cg)
+    if ((add_U || cnt_NA_u) && !use_cg)
         set_to_zero(a_vec, k_totA);
 
     real_t *restrict BtB = buffer_real_t;
@@ -2039,7 +2039,7 @@ void collective_closed_form_block_implicit
 
     else
     {
-        if (few_NAs && cnt_NA_u > 0)
+        if (few_NAs && cnt_NA_u)
         {
             for (size_t ix = 0; ix < (size_t)p; ix++) {
                 if (isnan(u_vec[ix])) {
@@ -2061,7 +2061,7 @@ void collective_closed_form_block_implicit
             }
         }
 
-        if (add_U || cnt_NA_u > 0)
+        if (add_U || cnt_NA_u)
         {
             if (cnt_NA_u == 0)
             {
@@ -3601,7 +3601,7 @@ int_t collective_factors_warm
                 u_vec, p,
                 u_vec_ixB, u_vec_sp, nnz_u_vec,
                 u_bin_vec, pbin,
-                cnt_NA_u_vec>0, cnt_NA_u_bin_vec>0,
+                cnt_NA_u_vec!=0, cnt_NA_u_bin_vec!=0,
                 B, n,
                 C, Cb,
                 Xa, ixB, weight, nnz,
@@ -3616,7 +3616,7 @@ int_t collective_factors_warm
                 u_vec, p,
                 u_vec_ixB, u_vec_sp, nnz_u_vec,
                 u_bin_vec, pbin,
-                cnt_NA_u_vec>0, cnt_NA_u_bin_vec>0,
+                cnt_NA_u_vec!=0, cnt_NA_u_bin_vec!=0,
                 B_plus_bias, n,
                 C, Cb,
                 Xa, ixB, weight, nnz,
@@ -5671,8 +5671,8 @@ void optimizeA_collective
                 (U == NULL)? (int_t)0 : cnt_NA_u[ix],
                 bufferBeTBeChol, n,
                 bufferBiTBi,
-                (Xfull == NULL)? (add_X) : (add_X || cnt_NA_x[ix] > 0),
-                (U == NULL)? (add_U) : (add_U || cnt_NA_u[ix] > 0),
+                (Xfull == NULL)? (add_X) : (add_X || cnt_NA_x[ix] != 0),
+                (U == NULL)? (add_U) : (add_U || cnt_NA_u[ix] != 0),
                 use_cg, max_cg_steps,
                 nonneg, max_cd_steps,
                 bias_BtX, bias_X, bias_X_glob, precomputedCtUbias,
@@ -6119,7 +6119,7 @@ int_t preprocess_vec
         }
 
         else {
-            if (*cnt_NA > 0) {
+            if (*cnt_NA) {
                 for (int_t ix = 0; ix < n; ix++) {
                     *vec_mean += (!isnan(vec_full[ix]))? vec_full[ix] : 0;
                 }
@@ -11137,7 +11137,7 @@ int_t impute_X_collective_explicit
     }
 
     for (size_t ix = 0; ix < m_by_n; ix++)
-        cnt_NA += isnan(Xfull[ix]);
+        cnt_NA += isnan(Xfull[ix]) != 0;
     dont_produce_full_X = (cnt_NA <= m_by_n / (size_t)10);
     if (cnt_NA == 0) goto cleanup;
 

@@ -127,6 +127,8 @@ void copy_arr_(real_t *restrict src, real_t *restrict dest, size_t n, int nthrea
     }
 }
 
+/* Note: the C99 standard only guarantes that isnan(NAN)!=0, and some compilers
+   like mingw64 will NOT make isnan(NAN)==1. */
 int_t count_NAs(real_t arr[], size_t n, int nthreads)
 {
     int_t cnt_NA = 0;
@@ -141,7 +143,7 @@ int_t count_NAs(real_t arr[], size_t n, int nthreads)
 
     #pragma omp parallel for schedule(static) num_threads(nthreads) shared(arr, n) reduction(+:cnt_NA)
     for (size_t_for ix = 0; ix < n; ix++)
-        cnt_NA += isnan(arr[ix]);
+        cnt_NA += isnan(arr[ix]) != 0;
     if (cnt_NA < 0) cnt_NA = INT_MAX; /* <- overflow */
     return cnt_NA;
 }
@@ -166,7 +168,7 @@ void count_NAs_by_row
     {
         int_t cnt = 0;
         for (size_t col = 0; col < (size_t)n; col++)
-            cnt += isnan(arr[col + row*n]);
+            cnt += isnan(arr[col + row*n]) != 0;
         cnt_NA[row] = cnt;
     }
 
@@ -215,7 +217,7 @@ void count_NAs_by_col
 {
     for (size_t row = 0; row < (size_t)m; row++)
         for (size_t col = 0; col < (size_t)n; col++)
-            cnt_NA[col] += isnan(arr[col + row*n]);
+            cnt_NA[col] += isnan(arr[col + row*n]) != 0;
 
     *full_dense = true;
     for (int_t ix = 0; ix < n; ix++) {
