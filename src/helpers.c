@@ -237,7 +237,7 @@ void count_NAs_by_col
             *near_dense = true;
     }
 
-    *some_full = full_dense;
+    *some_full = *full_dense;
     if (!(*full_dense))
     {
         for (int_t ix = 0; ix < n; ix++)
