@@ -840,9 +840,9 @@ int_t rnorm_parallel(ArraysToFill arrays, int_t seed, int nthreads)
     #ifdef USE_R_RNG
     GetRNGstate();
     for (size_t ix = 0; ix < arrays.sizeA; ix++)
-        A[ix] = norm_rand();
+        arrays.A[ix] = norm_rand();
     for (size_t ix = 0; ix < arrays.sizeB; ix++)
-        B[ix] = norm_rand();
+        arrays.B[ix] = norm_rand();
     PutRNGstate();
     return 0;
     #endif
