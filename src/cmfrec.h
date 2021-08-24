@@ -113,6 +113,7 @@ typedef void (*sig_t_)(int);
     #include <R_ext/Print.h>
     #include <R_ext/BLAS.h>
     #include <R_ext/Lapack.h>
+    #include <R_ext/Visibility.h>
     #define USE_DOUBLE
     #define FORCE_NO_NAN_PROPAGATION
     #define printf Rprintf

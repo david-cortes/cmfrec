@@ -17,3 +17,4 @@ exclude cmfrec/*.hpp
 exclude docs/*
 prune docs/*
 exclude src/Rwrapper.c
+exclude src/cmfrec-win.def

@@ -1,0 +1,3 @@
+LIBRARY cmfrec.dll
+EXPORTS
+ R_init_cmfrec
