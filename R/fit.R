@@ -932,7 +932,7 @@ validate.inputs <- function(model, implicit=FALSE,
     method       <-  check.str.option(method, "method", c("als", "lbfgs"))
     parallelize  <-  check.str.option(parallelize, "parallelize", c("separate", "single"))
 
-    if (nthreads > 1L && !.Call("R_has_openmp")) {
+    if (nthreads > 1L && !.Call(R_has_openmp)) {
         msg <- paste0("Attempting to use more than 1 thread, but ",
                       "package was compiled without OpenMP support.")
         if (tolower(Sys.info()[["sysname"]]) == "darwin")
@@ -1504,7 +1504,7 @@ CMF_implicit <- function(X, U=NULL, I=NULL,
         NA_as_zero_X_NA_as_zero_U_NA_as_zero_I <- as.logical(c(NA_as_zero, NA_as_zero_user, NA_as_zero_item))
         user_bias_item_bias_center <- c(user_bias, item_bias, center)
         scale_lam_opts <- c(scale_lam, scale_lam_sideinfo, scale_bias_const)
-        ret_code <- .Call("call_fit_collective_explicit_als",
+        ret_code <- .Call(call_fit_collective_explicit_als,
                           this$matrices$user_bias, this$matrices$item_bias,
                           this$matrices$A, this$matrices$B,
                           this$matrices$C, this$matrices$D,
@@ -1544,7 +1544,7 @@ CMF_implicit <- function(X, U=NULL, I=NULL,
                           this$precomputed$CtUbias)
     } else {
         m_n_k <- as.integer(c(processed_X$m, processed_X$n, k))
-        ret_code <- .Call("call_fit_collective_explicit_lbfgs",
+        ret_code <- .Call(call_fit_collective_explicit_lbfgs,
                           this$matrices$user_bias, this$matrices$item_bias,
                           this$matrices$A, this$matrices$B,
                           this$matrices$C, this$matrices$Cb,
@@ -1678,7 +1678,7 @@ CMF_implicit <- function(X, U=NULL, I=NULL,
     ### this avoids potentially modifying other objects in the environment
     w_main_multiplier <- numeric(1L)
     
-    ret_code <- .Call("call_fit_collective_implicit_als",
+    ret_code <- .Call(call_fit_collective_implicit_als,
                       this$matrices$A, this$matrices$B,
                       this$matrices$C, this$matrices$D,
                       this$info$seed,
@@ -1781,7 +1781,7 @@ MostPopular <- function(X, weight=NULL, implicit=FALSE,
     glob_mean <- numeric(1L)
     w_main_multiplier <- numeric(1L)
     
-    ret_code <- .Call("call_fit_most_popular",
+    ret_code <- .Call(call_fit_most_popular,
                       this$matrices$user_bias, this$matrices$item_bias,
                       glob_mean,
                       lambda,
@@ -1888,7 +1888,7 @@ ContentBased <- function(X, U, I, weight=NULL,
     nfev <- integer(1L)
     
 
-    ret_code <- .Call("call_fit_content_based_lbfgs",
+    ret_code <- .Call(call_fit_content_based_lbfgs,
                       this$matrices$user_bias, this$matrices$item_bias,
                       this$matrices$C, this$matrices$C_bias,
                       this$matrices$D, this$matrices$D_bias,
@@ -2039,7 +2039,7 @@ OMF_explicit <- function(X, U=NULL, I=NULL, weight=NULL,
     nfev <- integer(1L)
     
     if (method == "lbfgs") {
-        ret_code <- .Call("call_fit_offsets_explicit_lbfgs",
+        ret_code <- .Call(call_fit_offsets_explicit_lbfgs,
                           this$matrices$user_bias, this$matrices$item_bias,
                           this$matrices$A, this$matrices$B,
                           this$matrices$C, this$matrices$C_bias,
@@ -2068,7 +2068,7 @@ OMF_explicit <- function(X, U=NULL, I=NULL, weight=NULL,
                           this$precomputed$BtB,
                           this$precomputed$TransBtBinvBt)
     } else {
-        ret_code <- .Call("call_fit_offsets_explicit_als",
+        ret_code <- .Call(call_fit_offsets_explicit_als,
                           this$matrices$user_bias, this$matrices$item_bias,
                           this$matrices$A, this$matrices$B,
                           this$matrices$C, this$matrices$C_bias,
@@ -2192,7 +2192,7 @@ OMF_implicit <- function(X, U=NULL, I=NULL,
         this$precomputed$BtB <- matrix(0., nrow=k, ncol=k)
     }
     
-    ret_code <- .Call("call_fit_offsets_implicit_als",
+    ret_code <- .Call(call_fit_offsets_implicit_als,
                       this$matrices$A, this$matrices$B,
                       this$matrices$C, this$matrices$C_bias,
                       this$matrices$D, this$matrices$D_bias,
@@ -2270,7 +2270,7 @@ precompute.for.predictions <- function(model) {
         if (model$info$NA_as_zero && (model$matrices$glob_mean || NROW(model$matrices$item_bias)))
             model$precomputed$BtXbias <- numeric(k+k_main+user_bias)
         
-        ret_code <- .Call("call_precompute_collective_explicit",
+        ret_code <- .Call(call_precompute_collective_explicit,
                           model$matrices$B, n_use, n_max, model$info$include_all_X,
                           model$matrices$C, p,
                           model$matrices$Bi, add_implicit_features,
@@ -2303,7 +2303,7 @@ precompute.for.predictions <- function(model) {
                                                       ncol=k_user+k+k_main)
         }
         
-        ret_code <- .Call("call_precompute_collective_implicit",
+        ret_code <- .Call(call_precompute_collective_implicit,
                           model$matrices$B, n_max,
                           model$matrices$C, p,
                           model$matrices$U_colmeans, model$info$NA_as_zero_user,

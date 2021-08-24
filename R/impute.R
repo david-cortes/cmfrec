@@ -97,13 +97,13 @@ imputeX <- function(model, X, weight = NULL, U = NULL, U_bin = NULL) {
     if (!anyNA(X))
         return(X)
     if (nrow(X) == 1L || ncol(X) == 1L)
-        X <- matrix(.Call("deep_copy_vec", X), nrow=nrow(X), ncol=ncol(X))
+        X <- matrix(.Call(deep_copy_vec, X), nrow=nrow(X), ncol=ncol(X))
     
     inputs <- process.data.factors("CMF", model,
                                    X = X, weight = weight,
                                    U = U, U_bin = U_bin,
                                    matched_shapes=TRUE)
-    ret_code <- .Call("call_impute_X_collective_explicit",
+    ret_code <- .Call(call_impute_X_collective_explicit,
                       inputs$processed_X$m, as.logical(NROW(model$matrices$user_bias)),
                       inputs$processed_U$Uarr, inputs$processed_U$m, inputs$processed_U$p,
                       model$info$NA_as_zero_user,

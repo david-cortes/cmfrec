@@ -113,7 +113,7 @@ process.inputs.topN <- function(model, obj, user=NULL, a_vec=NULL, a_bias=NULL,
     if (is.null(a_bias)) a_bias <- 0.
     
     if (model == "CMF") {
-        ret_code <- .Call("call_topN_old_collective_explicit",
+        ret_code <- .Call(call_topN_old_collective_explicit,
                           a_vec, a_bias,
                           obj$matrices$B,
                           obj$matrices$item_bias,
@@ -125,7 +125,7 @@ process.inputs.topN <- function(model, obj, user=NULL, a_vec=NULL, a_bias=NULL,
                           obj$info$n_orig, NCOL(obj$matrices$B),
                           obj$info$include_all_X, obj$info$nthreads)
     } else if (model == "CMF_implicit") {
-        ret_code <- .Call("call_topN_old_collective_implicit",
+        ret_code <- .Call(call_topN_old_collective_implicit,
                           a_vec,
                           obj$matrices$B,
                           obj$info$k, obj$info$k_user, obj$info$k_item, obj$info$k_main,
@@ -134,7 +134,7 @@ process.inputs.topN <- function(model, obj, user=NULL, a_vec=NULL, a_bias=NULL,
                           outp_ix, outp_score,
                           NCOL(obj$matrices$B), obj$info$nthreads)
     } else if (model == "MostPopular") {
-        ret_code <- .Call("call_topN_old_most_popular",
+        ret_code <- .Call(call_topN_old_most_popular,
                           as.logical(NROW(obj$matrices$user_bias)),
                           a_bias,
                           obj$matrices$item_bias,
@@ -144,7 +144,7 @@ process.inputs.topN <- function(model, obj, user=NULL, a_vec=NULL, a_bias=NULL,
                           outp_ix, outp_score,
                           NROW(obj$matrices$item_bias))
     } else if (model == "ContentBased") {
-        ret_code <- .Call("call_topN_old_content_based",
+        ret_code <- .Call(call_topN_old_content_based,
                           a_vec, a_bias,
                           obj$matrices$Bm,
                           obj$matrices$item_bias,
@@ -155,7 +155,7 @@ process.inputs.topN <- function(model, obj, user=NULL, a_vec=NULL, a_bias=NULL,
                           outp_ix, outp_score,
                           NCOL(obj$matrices$Bm), obj$info$nthreads)
     } else if (model == "OMF_explicit") {
-        ret_code <- .Call("call_topN_old_offsets_explicit",
+        ret_code <- .Call(call_topN_old_offsets_explicit,
                           a_vec, a_bias,
                           obj$matrices$Bm,
                           obj$matrices$item_bias,
@@ -166,7 +166,7 @@ process.inputs.topN <- function(model, obj, user=NULL, a_vec=NULL, a_bias=NULL,
                           outp_ix, outp_score,
                           NCOL(obj$matrices$Bm), obj$info$nthreads)
     } else if (model == "OMF_implicit") {
-        ret_code <- .Call("call_topN_old_offsets_implicit",
+        ret_code <- .Call(call_topN_old_offsets_implicit,
                           a_vec,
                           obj$matrices$Bm,
                           obj$info$k,
@@ -431,7 +431,7 @@ topN_new.ContentBased <- function(model, U=NULL, U_col=NULL, U_val=NULL, I=NULL,
         outp_ix <- integer(length = n)
         outp_score <- numeric(length = ifelse(output_score, n, 0L))
         
-        ret_code <- .Call("call_topN_new_content_based",
+        ret_code <- .Call(call_topN_new_content_based,
                           model$info$k, processed_I$m,
                           processed_U$U, processed_U$p,
                           processed_U$U_val, processed_U$U_col,

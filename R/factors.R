@@ -162,7 +162,7 @@ factors.CMF <- function(model, X=NULL, U=NULL, U_bin=NULL, weight=NULL,
     biasA <- numeric()
     if (NROW(model$matrices$user_bias))
         biasA <- numeric(length = m_max)
-    ret_code <- .Call("call_factors_collective_explicit_multiple",
+    ret_code <- .Call(call_factors_collective_explicit_multiple,
                       A, biasA, m_max,
                       inputs$processed_U$Uarr, inputs$processed_U$m, inputs$processed_U$p,
                       model$info$NA_as_zero_user, model$info$NA_as_zero,
@@ -216,7 +216,7 @@ factors.CMF_implicit <- function(model, X=NULL, U=NULL, ...) {
     lambda <- ifelse(NROW(model$info$lambda) == 1L, model$info$lambda, model$info$lambda[3L])
     l1_lambda <- ifelse(NROW(model$info$l1_lambda) == 1L, model$info$l1_lambda, model$info$l1_lambda[3L])
     
-    ret_code <- .Call("call_factors_collective_implicit_multiple",
+    ret_code <- .Call(call_factors_collective_implicit_multiple,
                       A, m_max,
                       inputs$processed_U$Uarr,inputs$processed_U$m, inputs$processed_U$p,
                       model$info$NA_as_zero_user,
@@ -251,7 +251,7 @@ factors.ContentBased <- function(model, U, ...) {
     m_max <- inputs$processed_U$m
     A <- matrix(0., ncol = m_max, nrow = model$info$k)
     
-    ret_code <- .Call("call_factors_content_based_mutliple",
+    ret_code <- .Call(call_factors_content_based_mutliple,
                       A, m_max, model$info$k,
                       model$matrices$C, model$matrices$C_bias,
                       inputs$processed_U$Uarr, inputs$processed_U$p,
@@ -295,7 +295,7 @@ factors.OMF_explicit <- function(model, X=NULL, U=NULL, weight=NULL,
         }
     }
     
-    ret_code <- .Call("call_factors_offsets_explicit_multiple",
+    ret_code <- .Call(call_factors_offsets_explicit_multiple,
                       A, biasA,
                       Aorig, m_max,
                       inputs$processed_U$Uarr, inputs$processed_U$p,
@@ -356,7 +356,7 @@ factors.OMF_implicit <- function(model, X=NULL, U=NULL, output_A=FALSE, ...) {
         }
     }
     
-    ret_code <- .Call("call_factors_offsets_implicit_multiple",
+    ret_code <- .Call(call_factors_offsets_implicit_multiple,
                       A, m_max,
                       Aorig,
                       inputs$processed_U$Uarr, inputs$processed_U$p,

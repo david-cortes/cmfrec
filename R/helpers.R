@@ -698,19 +698,19 @@ process.new.X <- function(obj, X, weight=NULL,
         out$m    <- X@dimension[1L]
         out$n    <- X@dimension[2L]
     } else if (inherits(X, "dgRMatrix")) {
-        out$Xcsr_p <- .Call("as_size_t", X@p)
+        out$Xcsr_p <- .Call(as_size_t, X@p)
         out$Xcsr_i <- X@j
         out$Xcsr   <- X@x
         out$m      <- X@Dim[1L]
         out$n      <- X@Dim[2L]
     } else if (inherits(X, "matrix.csr")) {
-        out$Xcsr_p <- .Call("as_size_t", X@ia - 1L)
+        out$Xcsr_p <- .Call(as_size_t, X@ia - 1L)
         out$Xcsr_i <- X@ja - 1L
         out$Xcsr   <- X@ra
         out$m      <- X@dimension[1L]
         out$n      <- X@dimension[2L]
     } else if (inherits(X, "sparseVector")) {
-        out$Xcsr_p <- .Call("as_size_t", c(0L, NROW(X@i)))
+        out$Xcsr_p <- .Call(as_size_t, c(0L, NROW(X@i)))
         out$Xcsr_i <- X@i - 1L
         if ("x" %in% names(attributes(X)))
             out$Xcsr <- as.numeric(X@x)
@@ -860,21 +860,21 @@ process.new.U <- function(U, U_cols, p, name="U",
     } else if (inherits(U, "dgRMatrix")) {
         if (U@Dim[2L] > p)
             stop(msg_new_cols)
-        out$Ucsr_p <- .Call("as_size_t", U@p)
+        out$Ucsr_p <- .Call(as_size_t, U@p)
         out$Ucsr_i <- U@j
         out$Ucsr   <- U@x
         out$m      <- U@Dim[1L]
     } else if (inherits(U, "matrix.csr")) {
         if (U@dimension[2L] > p)
             stop(msg_new_cols)
-        out$Ucsr_p <- .Call("as_size_t", U@ia - 1L)
+        out$Ucsr_p <- .Call(as_size_t, U@ia - 1L)
         out$Ucsr_i <- U@ja - 1L
         out$Ucsr   <- U@ra
         out$m      <- U@dimension[1L]
     } else if (inherits(U, "sparseVector")) {
         if (U@length > p)
             stop(msg_new_cols)
-        out$Ucsr_p <- .Call("as_size_t", c(0L, NROW(U@i)))
+        out$Ucsr_p <- .Call(as_size_t, c(0L, NROW(U@i)))
         out$Ucsr_i <- U@i - 1L
         if ("x" %in% names(attributes(U)))
             out$Ucsr <- as.numeric(U@x)

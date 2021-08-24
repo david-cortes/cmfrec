@@ -169,7 +169,7 @@ factors_single.CMF <- function(model, X = NULL, X_col = NULL, X_val = NULL,
     a_bias <- numeric()
     if (NROW(model$matrices$user_bias))
         a_bias <- numeric(length = 1L)
-    ret_code <- .Call("call_factors_collective_explicit_single",
+    ret_code <- .Call(call_factors_collective_explicit_single,
                       a_vec, a_bias,
                       inputs$processed_U$U, inputs$processed_U$p,
                       inputs$processed_U$U_val, inputs$processed_U$U_col,
@@ -217,7 +217,7 @@ factors_single.CMF_implicit <- function(model, X = NULL, X_col = NULL, X_val = N
     a_vec <- numeric(model$info$k_user + model$info$k + model$info$k_main)
     lambda <- ifelse(NROW(model$info$lambda) > 1L, model$info$lambda[3L], model$info$lambda)
     l1_lambda <- ifelse(NROW(model$info$l1_lambda) > 1L, model$info$l1_lambda[3L], model$info$l1_lambda)
-    ret_code <- .Call("call_factors_collective_implicit_single",
+    ret_code <- .Call(call_factors_collective_implicit_single,
                       a_vec,
                       inputs$processed_U$U, inputs$processed_U$p,
                       inputs$processed_U$U_val, inputs$processed_U$U_col,
@@ -247,7 +247,7 @@ factors_single.ContentBased <- function(model,
                                           U = U, U_col = U_col, U_val = U_val)
     a_vec <- numeric(model$info$k)
     
-    ret_code <- .Call("call_factors_content_based_single",
+    ret_code <- .Call(call_factors_content_based_single,
                       a_vec, model$info$k,
                       inputs$processed_U$U, inputs$processed_U$p,
                       inputs$processed_U$U_val,  inputs$processed_U$U_col,
@@ -299,7 +299,7 @@ factors_single.OMF_explicit <- function(model, X = NULL, X_col = NULL, X_val = N
     }
     lambda <- ifelse(NROW(model$info$lambda) > 1L, model$info$lambda[3L], model$info$lambda)
     
-    ret_code <- .Call("call_factors_offsets_explicit_single",
+    ret_code <- .Call(call_factors_offsets_explicit_single,
                       a_vec, a_bias, a_orig,
                       inputs$processed_U$U, inputs$processed_U$p,
                       inputs$processed_U$U_val,  inputs$processed_U$U_col,
@@ -353,7 +353,7 @@ factors_single.OMF_implicit <- function(model, X = NULL, X_col = NULL, X_val = N
     a_orig <- numeric()
     if (inputs$output_A)
         a_orig <- numeric(model$info$k)
-    ret_code <- .Call("call_factors_offsets_implicit_single",
+    ret_code <- .Call(call_factors_offsets_implicit_single,
                       a_vec,
                       inputs$processed_U$U, inputs$processed_U$p,
                       inputs$processed_U$U_val, inputs$processed_U$U_col,

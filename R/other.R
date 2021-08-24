@@ -136,7 +136,7 @@ swap.users.and.items <- function(model, precompute = TRUE) {
             }
             new_model$precomputed$BtB <- matrix(0., nrow=k_sec+k+k_main+user_bias, ncol=k_sec+k+k_main+user_bias)
             new_model$precomputed$TransBtBinvBt <- matrix(0., ncol=n_max, nrow=k_sec+k+k_main+user_bias)
-            ret_code <- .Call("call_precompute_collective_explicit",
+            ret_code <- .Call(call_precompute_collective_explicit,
                               new_model$matrices$Bm, n_max, n_max, TRUE,
                               numeric(), 0L,
                               numeric(), FALSE,
@@ -161,7 +161,7 @@ swap.users.and.items <- function(model, precompute = TRUE) {
             check.ret.code(ret_code)
         } else if ("OMF_implicit" %in% class(model)) {
             new_model$precomputed$BtB <- matrix(0., nrow=new_model$info$k, ncol=new_model$info$k)
-            ret_code <- .Call("call_precompute_collective_implicit",
+            ret_code <- .Call(call_precompute_collective_implicit,
                               new_model$matrices$Bm, NCOL(new_model$matrices$Bm),
                               numeric(), 0L,
                               numeric(), FALSE,

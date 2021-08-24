@@ -109,7 +109,7 @@ predict.cmfrec <- function(object, user, item=NULL, ...) {
     scores <- numeric(length = NROW(user))
     
     if ("CMF" %in% class(object)) {
-        ret_code <- .Call("call_predict_X_old_collective_explicit",
+        ret_code <- .Call(call_predict_X_old_collective_explicit,
                           user, item, scores,
                           object$matrices$A, object$matrices$user_bias,
                           object$matrices$B, object$matrices$item_bias,
@@ -118,7 +118,7 @@ predict.cmfrec <- function(object, user, item=NULL, ...) {
                           NCOL(object$matrices$A), NCOL(object$matrices$B),
                           object$info$nthreads)
     } else if ("CMF_implicit" %in% class(object)) {
-        ret_code <- .Call("call_predict_X_old_collective_implicit",
+        ret_code <- .Call(call_predict_X_old_collective_implicit,
                           user, item, scores,
                           object$matrices$A,
                           object$matrices$B,
@@ -126,14 +126,14 @@ predict.cmfrec <- function(object, user, item=NULL, ...) {
                           NCOL(object$matrices$A), NCOL(object$matrices$B),
                           object$info$nthreads)
     } else if ("MostPopular" %in% class(object)) {
-        ret_code <- .Call("call_predict_X_old_most_popular",
+        ret_code <- .Call(call_predict_X_old_most_popular,
                           user, item, scores,
                           object$matrices$user_bias, object$matrices$item_bias,
                           object$matrices$glob_mean,
                           NROW(object$matrices$user_bias),
                           NROW(object$matrices$item_bias))
     } else if ("ContentBased" %in% class(object)) {
-        ret_code <- .Call("call_predict_X_old_collective_explicit",
+        ret_code <- .Call(call_predict_X_old_collective_explicit,
                           user, item, scores,
                           object$matrices$Am, object$matrices$user_bias,
                           object$matrices$Bm, object$matrices$item_bias,
@@ -142,7 +142,7 @@ predict.cmfrec <- function(object, user, item=NULL, ...) {
                           NCOL(object$matrices$Am), NCOL(object$matrices$Bm),
                           object$info$nthreads)
     } else if ("OMF_explicit" %in% class(object)) {
-        ret_code <- .Call("call_predict_X_old_offsets_explicit",
+        ret_code <- .Call(call_predict_X_old_offsets_explicit,
                           user, item, scores,
                           object$matrices$Am, object$matrices$user_bias,
                           object$matrices$Bm, object$matrices$item_bias,
@@ -151,7 +151,7 @@ predict.cmfrec <- function(object, user, item=NULL, ...) {
                           NCOL(object$matrices$Am), NCOL(object$matrices$Bm),
                           object$info$nthreads)
     } else if ("OMF_implicit" %in% class(object)) {
-        ret_code <- .Call("call_predict_X_old_offsets_implicit",
+        ret_code <- .Call(call_predict_X_old_offsets_implicit,
                           user, item, scores,
                           object$matrices$Am,
                           object$matrices$Bm,

@@ -131,7 +131,7 @@ predict_new.CMF <- function(model, items, rows=NULL,
                                        items = items, rows = rows)
     n_predict <- NROW(inputs$rows)
     scores <- numeric(length = n_predict)
-    ret_code <- .Call("call_predict_X_new_collective_explicit",
+    ret_code <- .Call(call_predict_X_new_collective_explicit,
                       inputs$m_max,
                       inputs$rows, inputs$items, scores,
                       model$info$nthreads,
@@ -182,7 +182,7 @@ predict_new.CMF_implicit <- function(model, items, rows=NULL,
     lambda <- ifelse(NROW(model$info$lambda) == 6L, model$info$lambda[3L], model$info$lambda)
     l1_lambda <- ifelse(NROW(model$info$l1_lambda) == 6L, model$info$l1_lambda[3L], model$info$l1_lambda)
     
-    ret_code <- .Call("call_predict_X_new_collective_implicit",
+    ret_code <- .Call(call_predict_X_new_collective_implicit,
                       inputs$m_max,
                       inputs$rows, inputs$items, scores,
                       model$info$nthreads,
@@ -220,7 +220,7 @@ predict_new.OMF_explicit <- function(model, items, rows=NULL,
     n_predict <- NROW(inputs$rows)
     scores <- numeric(length = n_predict)
     
-    ret_code <- .Call("call_predict_X_new_offsets_explicit",
+    ret_code <- .Call(call_predict_X_new_offsets_explicit,
                       inputs$m_max, as.logical(NROW(model$matrices$user_bias)),
                       inputs$rows, inputs$items, scores,
                       model$info$nthreads,
@@ -254,7 +254,7 @@ predict_new.OMF_implicit <- function(model, items, rows=NULL,
     n_predict <- NROW(inputs$rows)
     scores <- numeric(length = n_predict)
     
-    ret_code <- .Call("call_predict_X_new_offsets_implicit",
+    ret_code <- .Call(call_predict_X_new_offsets_implicit,
                       inputs$m_max,
                       inputs$rows, inputs$items, scores,
                       NCOL(model$matrices$Bm),
@@ -325,7 +325,7 @@ predict_new.ContentBased <- function(model, items=NULL, rows=NULL,
             rows <- integer()
         
         scores <- numeric(length = n_predict)
-        ret_code <- .Call("call_predict_X_new_content_based",
+        ret_code <- .Call(call_predict_X_new_content_based,
                           scores,
                           inputs$processed_U$m, processed_I$m, model$info$k,
                           rows, items,
@@ -349,7 +349,7 @@ predict_new.ContentBased <- function(model, items=NULL, rows=NULL,
         }
         n_predict <- NROW(items)
         scores <- numeric(length = n_predict)
-        ret_code <- .Call("call_predict_X_new_offsets_explicit",
+        ret_code <- .Call(call_predict_X_new_offsets_explicit,
                           inputs$processed_U$m, FALSE,
                           rows, items, scores,
                           model$info$nthreads,

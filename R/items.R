@@ -169,7 +169,7 @@ item_factors <- function(model, X=NULL, X_col=NULL, X_val=NULL,
         if (NROW(model$matrices$item_bias))
             b_bias <- numeric(1L)
 
-        ret_code <- .Call("call_factors_collective_explicit_single",
+        ret_code <- .Call(call_factors_collective_explicit_single,
                           b_vec, b_bias,
                           inputs$processed_I$U, inputs$processed_I$p,
                           inputs$processed_I$U_val, inputs$processed_I$U_col,
@@ -203,7 +203,7 @@ item_factors <- function(model, X=NULL, X_col=NULL, X_val=NULL,
         b_vec <- numeric(model$info$k_item + model$info$k + model$info$k_main)
         lambda <- ifelse(NROW(model$info$lambda) == 6L, model$info$lambda[4L], model$info$lambda)
         l1_lambda <- ifelse(NROW(model$info$l1_lambda) == 6L, model$info$l1_lambda[4L], model$info$l1_lambda)
-        ret_code <- .Call("call_factors_collective_implicit_single",
+        ret_code <- .Call(call_factors_collective_implicit_single,
                           b_vec,
                           inputs$processed_I$U, inputs$processed_I$p,
                           inputs$processed_I$U_val, inputs$processed_I$U_col,
@@ -222,7 +222,7 @@ item_factors <- function(model, X=NULL, X_col=NULL, X_val=NULL,
                           numeric())
     } else if ("ContentBased" %in% class(model)) {
         b_vec <- numeric(model$info$k)
-        ret_code <- .Call("call_factors_content_based_single",
+        ret_code <- .Call(call_factors_content_based_single,
                           b_vec, model$info$k,
                           inputs$processed_I$U, inputs$processed_I$p,
                           inputs$processed_I$U_val, inputs$processed_I$U_col,
@@ -234,7 +234,7 @@ item_factors <- function(model, X=NULL, X_col=NULL, X_val=NULL,
         b_bias <- numeric()
         if (NROW(model$matrices$item_bias))
             b_bias <- numeric(1L)
-        ret_code <- .Call("call_factors_offsets_explicit_single",
+        ret_code <- .Call(call_factors_offsets_explicit_single,
                           b_vec, b_bias, numeric(),
                           inputs$processed_I$U, inputs$processed_I$p,
                           inputs$processed_I$U_val, inputs$processed_I$U_col,
@@ -253,7 +253,7 @@ item_factors <- function(model, X=NULL, X_col=NULL, X_val=NULL,
                           numeric())
     } else if ("OMF_implicit" %in% class(model)) {
         b_vec <- numeric(model$info$k)
-        ret_code <- .Call("call_factors_offsets_implicit_single",
+        ret_code <- .Call(call_factors_offsets_implicit_single,
                           b_vec,
                           inputs$processed_I$U, inputs$processed_I$p,
                           inputs$processed_I$U_val, inputs$processed_I$U_col,
@@ -437,7 +437,7 @@ predict_new_items <- function(model, user, item=NULL,
             Bbias <- numeric(n_max)
         
         B <- matrix(0., ncol = n_max, nrow = model$info$k_item + model$info$k + model$info$k_main)
-        ret_code <- .Call("call_factors_collective_explicit_multiple",
+        ret_code <- .Call(call_factors_collective_explicit_multiple,
                           B, Bbias, n_max,
                           processed_I$Uarr, processed_I$m, processed_I$p,
                           model$info$ NA_as_zero_item, model$info$NA_as_zero,
@@ -471,7 +471,7 @@ predict_new_items <- function(model, user, item=NULL,
                           numeric(),
                           model$info$nthreads)
         check.ret.code(ret_code)
-        ret_code <- .Call("call_predict_X_old_collective_explicit",
+        ret_code <- .Call(call_predict_X_old_collective_explicit,
                           user, item, scores,
                           model$matrices$A, model$matrices$user_bias,
                           B, Bbias,
@@ -483,7 +483,7 @@ predict_new_items <- function(model, user, item=NULL,
         lambda <- ifelse(NROW(model$info$lambda) == 6L, model$info$lambda[3L], model$info$lambda)
         l1_lambda <- ifelse(NROW(model$info$l1_lambda) == 6L, model$info$l1_lambda[3L], model$info$l1_lambda)
         B <- matrix(0., ncol = n_max, nrow = model$info$k_item + model$info$k + model$info$k_main)
-        ret_code <- .Call("call_factors_collective_implicit_multiple",
+        ret_code <- .Call(call_factors_collective_implicit_multiple,
                           B, n_max,
                           processed_I$Uarr, processed_I$m, processed_I$p,
                           model$info$ NA_as_zero_item,
@@ -505,7 +505,7 @@ predict_new_items <- function(model, user, item=NULL,
                           numeric(),
                           model$info$nthreads)
         check.ret.code(ret_code)
-        ret_code <- .Call("call_predict_X_old_collective_implicit",
+        ret_code <- .Call(call_predict_X_old_collective_implicit,
                           user, item, scores,
                           model$matrices$A,
                           B,
@@ -514,7 +514,7 @@ predict_new_items <- function(model, user, item=NULL,
                           model$info$nthreads)
     } else if ("ContentBased" %in% model_class) {
         B <- matrix(0., ncol = n_max, nrow = model$info$k)
-        ret_code <- .Call("call_factors_content_based_mutliple",
+        ret_code <- .Call(call_factors_content_based_mutliple,
                           B, n_max, model$info$k,
                           model$matrices$D, model$matrices$D_bias,
                           processed_I$Uarr, processed_I$p,
@@ -522,7 +522,7 @@ predict_new_items <- function(model, user, item=NULL,
                           processed_I$Ucsr_p, processed_I$Ucsr_i, processed_I$Ucsr,
                           model$info$nthreads)
         check.ret.code(ret_code)
-        ret_code <- .Call("call_predict_X_old_collective_explicit",
+        ret_code <- .Call(call_predict_X_old_collective_explicit,
                           user, item, scores,
                           model$matrices$Am, model$matrices$user_bias,
                           B, numeric(),
@@ -536,7 +536,7 @@ predict_new_items <- function(model, user, item=NULL,
             Bbias <- numeric(n_max)
         
         B <- matrix(0., ncol = n_max, nrow = model$info$k_sec + model$info$k + model$info$k_main)
-        ret_code <- .Call("call_factors_offsets_explicit_multiple",
+        ret_code <- .Call(call_factors_offsets_explicit_multiple,
                           B, Bbias,
                           numeric(), n_max,
                           processed_I$Uarr, processed_I$p,
@@ -557,7 +557,7 @@ predict_new_items <- function(model, user, item=NULL,
                           numeric(),
                           model$info$nthreads)
         check.ret.code(ret_code)
-        ret_code <- .Call("call_predict_X_old_offsets_explicit",
+        ret_code <- .Call(call_predict_X_old_offsets_explicit,
                           user, item, scores,
                           model$matrices$Am, model$matrices$user_bias,
                           B, Bbias,
@@ -567,7 +567,7 @@ predict_new_items <- function(model, user, item=NULL,
                           model$info$nthreads)
     } else if ("OMF_implicit" %in% model_class) {
         B <- matrix(0., ncol = n_max, nrow = model$info$k)
-        ret_code <- .Call("call_factors_offsets_implicit_multiple",
+        ret_code <- .Call(call_factors_offsets_implicit_multiple,
                           B, n_max,
                           numeric(),
                           processed_I$Uarr, processed_I$p,
@@ -583,7 +583,7 @@ predict_new_items <- function(model, user, item=NULL,
                           numeric(),
                           model$info$nthreads)
         check.ret.code(ret_code)
-        ret_code <- .Call("call_predict_X_old_offsets_implicit",
+        ret_code <- .Call(call_predict_X_old_offsets_implicit,
                           user, item, scores,
                           model$matrices$Am,
                           B,
