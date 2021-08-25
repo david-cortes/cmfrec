@@ -3081,9 +3081,7 @@ int_t collective_factors_cold
 {
     if (NA_as_zero_U && u_bin_vec != NULL) {
         fprintf(stderr, "Cannot use 'NA_as_zero_U' when there is 'u_bin'\n");
-        #ifndef _FOR_R
         fflush(stderr);
-        #endif
         return 2;
     }
     int_t retval = 0;
@@ -3343,16 +3341,12 @@ int_t collective_factors_warm
 {
     if (u_bin_vec != NULL && (NA_as_zero_X || NA_as_zero_U)) {
         fprintf(stderr, "Cannot use 'NA_as_zero' when there is 'u_bin'\n");
-        #ifndef _FOR_R
         fflush(stderr);
-        #endif
         return 2;
     }
     if (u_bin_vec != NULL && add_implicit_features) {
         fprintf(stderr, "Cannot use implicit features when there is 'u_bin'\n");
-        #ifndef _FOR_R
         fflush(stderr);
-        #endif
         return 2;
     }
 
@@ -6672,9 +6666,7 @@ int_t fit_collective_explicit_lbfgs_internal
         printf("\n\nOptimization terminated\n");
         printf("\t%s\n", lbfgs_strerror(retval));
         printf("\tniter:%3d, nfev:%3d\n", data.niter, data.nfev);
-        #if !defined(_FOR_R)
         fflush(stdout);
-        #endif
     }
     if (retval == LBFGSERR_OUTOFMEMORY)
         retval = 1;
@@ -7026,9 +7018,7 @@ int_t fit_collective_explicit_als
     if (retval == 2)
     {
         if (verbose) {
-            #ifndef _FOR_R
             fflush(stderr);
-            #endif
         }
         return retval;
     }
@@ -8006,9 +7996,7 @@ int_t fit_collective_explicit_als
 
     if (verbose) {
         printf("Starting ALS optimization routine\n\n");
-        #if !defined(_FOR_R)
         fflush(stdout);
-        #endif
     }
 
     for (int_t iter = 0; iter < niter; iter++)
@@ -8024,9 +8012,7 @@ int_t fit_collective_explicit_als
         if (U != NULL || nnz_U) {
             if (verbose) {
                 printf("Updating C ...");
-                #if !defined(_FOR_R)
                 fflush(stdout);
-                #endif
             }
 
             if ((size_t)n*(size_t)(k_user+k+k_main+user_bias)
@@ -8069,9 +8055,7 @@ int_t fit_collective_explicit_als
             );
             if (verbose) {
                 printf(" done\n");
-                #if !defined(_FOR_R)
                 fflush(stdout);
-                #endif
             }
         }
 
@@ -8079,9 +8063,7 @@ int_t fit_collective_explicit_als
         if (II != NULL || nnz_I) {
             if (verbose) {
                 printf("Updating D ...");
-                #if !defined(_FOR_R)
                 fflush(stdout);
-                #endif
             }
 
             if ((size_t)n*(size_t)(k_user+k+k_main+user_bias)
@@ -8127,9 +8109,7 @@ int_t fit_collective_explicit_als
             );
             if (verbose) {
                 printf(" done\n");
-                #if !defined(_FOR_R)
                 fflush(stdout);
-                #endif
             }
         }
 
@@ -8139,9 +8119,7 @@ int_t fit_collective_explicit_als
             if (should_stop_procedure) goto check_interrupt;
             if (verbose) {
                 printf("Updating Bi...");
-                #if !defined(_FOR_R)
                 fflush(stdout);
-                #endif
             }
 
             filled_BtB = false;
@@ -8176,18 +8154,14 @@ int_t fit_collective_explicit_als
             );
             if (verbose) {
                 printf(" done\n");
-                #if !defined(_FOR_R)
                 fflush(stdout);
-                #endif
             }
 
 
             if (should_stop_procedure) goto check_interrupt;
             if (verbose) {
                 printf("Updating Ai...");
-                #if !defined(_FOR_R)
                 fflush(stdout);
-                #endif
             }
 
             optimizeA(
@@ -8224,9 +8198,7 @@ int_t fit_collective_explicit_als
 
             if (verbose) {
                 printf(" done\n");
-                #if !defined(_FOR_R)
                 fflush(stdout);
-                #endif
             }
         }
 
@@ -8308,9 +8280,7 @@ int_t fit_collective_explicit_als
         if (should_stop_procedure) goto check_interrupt;
         if (verbose) {
             printf("Updating B ...");
-            #if !defined(_FOR_R)
             fflush(stdout);
-            #endif
         }
 
         if (k_item + item_bias <= k_user + user_bias)
@@ -8415,9 +8385,7 @@ int_t fit_collective_explicit_als
             );
         if (verbose) {
             printf(" done\n");
-            #if !defined(_FOR_R)
             fflush(stdout);
-            #endif
         }
 
         if (item_bias)
@@ -8500,9 +8468,7 @@ int_t fit_collective_explicit_als
         if (should_stop_procedure) goto check_interrupt;
         if (verbose) {
             printf("Updating A ...");
-            #if !defined(_FOR_R)
             fflush(stdout);
-            #endif
         }
         if (U != NULL || nnz_U || add_implicit_features)
             optimizeA_collective(
@@ -8578,9 +8544,7 @@ int_t fit_collective_explicit_als
             );
         if (verbose) {
             printf(" done\n");
-            #if !defined(_FOR_R)
             fflush(stdout);
-            #endif
         }
 
         if (user_bias)
@@ -8589,9 +8553,7 @@ int_t fit_collective_explicit_als
 
         if (verbose) {
             printf("\tCompleted ALS iteration %2d\n\n", iter+1);
-            #if !defined(_FOR_R)
             fflush(stdout);
-            #endif
         }
         check_interrupt:
             if (should_stop_procedure)
@@ -8608,9 +8570,7 @@ int_t fit_collective_explicit_als
             printf("ALS procedure terminated successfully\n");
         else
             printf("ALS procedure failed\n");
-        #if !defined(_FOR_R)
         fflush(stdout);
-        #endif
     }
 
     terminate_early:
@@ -9134,9 +9094,7 @@ int_t fit_collective_implicit_als
     if (retval == 2)
     {
         if (verbose) {
-            #ifndef _FOR_R
             fflush(stderr);
-            #endif
         }
         return retval;
     }
@@ -9514,9 +9472,7 @@ int_t fit_collective_implicit_als
 
     if (verbose) {
         printf("Starting ALS optimization routine\n\n");
-        #if !defined(_FOR_R)
         fflush(stdout);
-        #endif
     }
 
     for (int_t iter = 0; iter < niter; iter++)
@@ -9529,9 +9485,7 @@ int_t fit_collective_implicit_als
         if (U != NULL || nnz_U) {
             if (verbose) {
                 printf("Updating C...");
-                #if !defined(_FOR_R)
                 fflush(stdout);
-                #endif
             }
 
             if (k_item+k <= k_user+k+k_main)
@@ -9569,9 +9523,7 @@ int_t fit_collective_implicit_als
             );
             if (verbose) {
                 printf(" done\n");
-                #if !defined(_FOR_R)
                 fflush(stdout);
-                #endif
             }
         }
 
@@ -9579,9 +9531,7 @@ int_t fit_collective_implicit_als
         if (II != NULL || nnz_I) {
             if (verbose) {
                 printf("Updating D...");
-                #if !defined(_FOR_R)
                 fflush(stdout);
-                #endif
             }
 
             filled_BeTBeChol = false;
@@ -9618,9 +9568,7 @@ int_t fit_collective_implicit_als
             );
             if (verbose) {
                 printf(" done\n");
-                #if !defined(_FOR_R)
                 fflush(stdout);
-                #endif
             }
         }
 
@@ -9628,9 +9576,7 @@ int_t fit_collective_implicit_als
         if (should_stop_procedure) goto check_interrupt;
         if (verbose) {
             printf("Updating B...");
-            #if !defined(_FOR_R)
             fflush(stdout);
-            #endif
         }
         /* Precomputed matrices might get overwritten when solving for A,
            or the procedure may get interrupted */
@@ -9675,18 +9621,14 @@ int_t fit_collective_implicit_als
             );
         if (verbose) {
             printf(" done\n");
-            #if !defined(_FOR_R)
             fflush(stdout);
-            #endif
         }
 
         /* Optimize A */
         if (should_stop_procedure) goto check_interrupt;
         if (verbose) {
             printf("Updating A...");
-            #if !defined(_FOR_R)
             fflush(stdout);
-            #endif
         }
         if (U != NULL || nnz_U)
             optimizeA_collective_implicit(
@@ -9728,18 +9670,14 @@ int_t fit_collective_implicit_als
             );
         if (verbose) {
             printf(" done\n");
-            #if !defined(_FOR_R)
             fflush(stdout);
-            #endif
         }
         filled_BtB = true;
 
         
         if (verbose) {
             printf("\tCompleted ALS iteration %2d\n\n", iter+1);
-            #if !defined(_FOR_R)
             fflush(stdout);
-            #endif
         }
         check_interrupt:
             if (should_stop_procedure)
@@ -9759,9 +9697,7 @@ int_t fit_collective_implicit_als
             printf("ALS procedure terminated successfully\n");
         else
             printf("ALS procedure failed\n");
-        #if !defined(_FOR_R)
         fflush(stdout);
-        #endif
     }
 
     precompute:
@@ -9769,9 +9705,7 @@ int_t fit_collective_implicit_als
     {
         if (verbose) {
             printf("Finishing precomputed matrices...");
-            #if !defined(_FOR_R)
             fflush(stdout);
-            #endif
         }
 
         if (!filled_BtB)
@@ -9839,9 +9773,7 @@ int_t fit_collective_implicit_als
 
         if (verbose) {
             printf("  done\n");
-            #if !defined(_FOR_R)
             fflush(stdout);
-            #endif
         }
     }
 

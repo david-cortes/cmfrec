@@ -4489,9 +4489,7 @@ int_t topN
 
     if (retval == 2)
     {
-        #ifndef _FOR_R
         fflush(stderr);
-        #endif
         return retval;
     }
 

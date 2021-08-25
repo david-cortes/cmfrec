@@ -1399,9 +1399,7 @@ int_t lbfgs_printer_collective
     if ((k % print_every) == 0 && print_every > 0) {
         printf("Iteration %-4d - f(x)= %-8.03g - ||g(x)||= %-8.03g - ls=% 2d\n",
                k, fx, gnorm, ls);
-        #if !defined(_FOR_R)
         fflush(stdout);
-        #endif
     }
     if (should_stop_procedure)
         return 1;
@@ -1427,9 +1425,7 @@ int_t lbfgs_printer_offsets
     if ((k % print_every) == 0 && print_every > 0) {
         printf("Iteration %-5d - f(x)= %-8.03g - ||g(x)||= %-8.03g - ls=% 2d\n",
                k, fx, gnorm, ls);
-        #if !defined(_FOR_R)
         fflush(stdout);
-        #endif
     }
     if (should_stop_procedure)
         return 1;
@@ -1516,10 +1512,10 @@ void print_err_msg(const char *msg)
 {
     #ifndef _FOR_R
     fprintf(stderr, "%s", msg);
-    fflush(stderr);
     #else
     fprintf(stderr, msg);
     #endif
+    fflush(stderr);
 }
 
 void print_oom_message(void)

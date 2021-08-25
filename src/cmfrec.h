@@ -118,6 +118,7 @@ typedef void (*sig_t_)(int);
     #define FORCE_NO_NAN_PROPAGATION
     #define printf Rprintf
     #define fprintf(f, message) REprintf(message)
+    #define fflush(f) R_FlushConsole()
 #elif defined(MKL_ILP64)
     #include "mkl.h"
 #endif

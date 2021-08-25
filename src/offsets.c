@@ -1176,9 +1176,7 @@ int_t fit_offsets_explicit_lbfgs_internal
     {
         if (verbose) {
             fprintf(stderr, "Cannot pass 'k_sec' without 'U' or 'I'.\n");
-            #ifndef _FOR_R
             fflush(stderr);
-            #endif
         }
         return 2;
     }
@@ -1447,9 +1445,7 @@ int_t fit_offsets_explicit_lbfgs_internal
     if (should_stop_procedure)
     {
         fprintf(stderr, "Procedure terminated before starting optimization\n");
-        #if !defined(_FOR_R)
         fflush(stderr);
-        #endif
         goto cleanup;
     }
 
@@ -1468,9 +1464,7 @@ int_t fit_offsets_explicit_lbfgs_internal
         printf("\n\nOptimization terminated\n");
         printf("\t%s\n", lbfgs_strerror(retval));
         printf("\tniter:%3d, nfev:%3d\n", data.niter, data.nfev);
-        #if !defined(_FOR_R)
         fflush(stdout);
-        #endif
     }
     if (retval == LBFGSERR_OUTOFMEMORY)
         retval = 1;
@@ -1832,9 +1826,7 @@ int_t fit_offsets_als
 
     if (retval != 0) {
         if (verbose) {
-            #ifndef _FOR_R
             fflush(stderr);
-            #endif
         }
         return retval;
     }
@@ -1932,9 +1924,7 @@ int_t fit_offsets_als
     else if (retval != 0) {
         if (verbose) {
             fprintf(stderr, "Unexpected error\n");
-            #ifndef _FOR_R
             fflush(stderr);
-            #endif
         }
         return retval;
     }
