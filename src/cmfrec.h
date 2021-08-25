@@ -127,7 +127,7 @@ typedef void (*sig_t_)(int);
 
 /* Aliasing for compiler optimizations */
 #ifdef __cplusplus
-    #if defined(__GNUG__) || defined(__GNUC__) || defined(_MSC_VER) || defined(__clang__) || defined(__INTEL_COMPILER)
+    #if defined(__GNUG__) || defined(__GNUC__) || defined(_MSC_VER) || defined(__clang__) || defined(__INTEL_COMPILER) || defined(__IBMCPP__) || defined(__ibmxl__)
         #define restrict __restrict
     #else
         #define restrict 
