@@ -41,7 +41,7 @@ construct a better recommendation model.
 
 **For a more comprehensive introduction see also the `cmfrec`
 [Python Notebook](https://nbviewer.jupyter.org/github/david-cortes/cmfrec/blob/master/example/cmfrec_movielens_sideinfo.ipynb),
-which uses the more richer MovieLens10M instead (not provided by R packages)**.
+which uses the more richer MovieLens1M instead (not provided by R packages)**.
 
 ## Matrix Factorization
 
