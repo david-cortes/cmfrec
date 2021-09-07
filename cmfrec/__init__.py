@@ -5219,6 +5219,10 @@ class CMF_implicit(_CMF):
             lambda_ = self.lambda_[2]
         else:
             lambda_ = self.lambda_
+        if isinstance(self.l1_lambda, np.ndarray):
+            l1_lambda = self.l1_lambda[2]
+        else:
+            l1_lambda = self.l1_lambda
 
         c_funs = wrapper_float if self.use_float else wrapper_double
         a_vec = c_funs.call_factors_collective_implicit_single(
