@@ -5235,7 +5235,7 @@ class CMF_implicit(_CMF):
             self._BeTBeChol,
             self._CtUbias,
             self.k, self.k_user, self.k_item, self.k_main,
-            lambda_, l1_lambda, self.alpha,
+            lambda_, self.l1_lambda, self.alpha,
             self._w_main_multiplier,
             self.w_user, self.w_main,
             self.apply_log_transf,
