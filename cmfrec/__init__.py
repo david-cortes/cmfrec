@@ -427,7 +427,7 @@ class _CMF:
                 X = X.assign(**{col : X[col].astype(ctypes.c_int)})
             U = U.assign(**{col : pd.Categorical(U[col], user_mapping_).codes})
             if U[col].dtype != ctypes.c_int:
-                U = U.assign({col : U[col].astype(ctypes.c_int)})
+                U = U.assign(**{col : U[col].astype(ctypes.c_int)})
             U_bin = U_bin.assign(**{col : pd.Categorical(U_bin[col], user_mapping_).codes})
             if U_bin[col].dtype != ctypes.c_int:
                 U_bin = U_bin.assign(**{col : U_bin[col].astype(ctypes.c_int)})
