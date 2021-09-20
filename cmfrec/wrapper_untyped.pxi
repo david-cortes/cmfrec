@@ -12,18 +12,9 @@ ctypedef int int_t
 ### TODO: this module should move from doing operations in Python to
 ### using the new designated C functions for each type of prediction.
 
-cdef extern void PySys_WriteStdout(const char *fmt, ...)
-cdef extern void PySys_WriteStderr(const char *fmt, ...)
-cdef public void cy_printf(char *msg) nogil:
-    with gil:
-        PySys_WriteStdout("%s", msg)
-        stdout.flush()
-cdef public void cy_errprintf(char *msg) nogil:
-    with gil:
-        PySys_WriteStderr("%s", msg)
-        stderr.flush()
-
 cdef extern from "cmfrec.h":
+    void python_printmsg(char *msg)
+    void python_printerrmsg(char *msg)
     bint get_has_openmp()
 
     int_t fit_collective_explicit_lbfgs_internal(
@@ -564,6 +555,15 @@ cdef extern from "cmfrec.h":
 
     # void py_set_threads(int) nogil
     # int py_get_threads() nogil
+
+cdef public void cy_printf(char *msg) nogil:
+    with gil:
+        python_printmsg(msg)
+        stdout.flush()
+cdef public void cy_errprintf(char *msg) nogil:
+    with gil:
+        python_printerrmsg(msg)
+        stderr.flush()
 
 def _get_has_openmp():
     return get_has_openmp()

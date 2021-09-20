@@ -109,7 +109,15 @@ typedef void (*sig_t_)(int);
     #endif
     #include <stdarg.h>
     #include <stdio.h>
-    // extern int vsnprintf(char* buffer, size_t buf_size, const char* format, va_list vlist);
+    #ifdef _WIN32
+        #define IMPORTED_FUN __declspec(dllimport)
+    #else
+        #define IMPORTED_FUN 
+    #endif
+    extern IMPORTED_FUN void PySys_WriteStdout(const char *fmt, ...);
+    extern IMPORTED_FUN void PySys_WriteStderr(const char *fmt, ...);
+    void python_printmsg(char *msg);
+    void python_printerrmsg(char *msg);
     void py_printf(const char *fmt, ...);
     void py_errprintf(void *ignored, const char *fmt, ...);
     extern void cy_printf(char *msg);

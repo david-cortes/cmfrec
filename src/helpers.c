@@ -1544,6 +1544,16 @@ void py_errprintf(void *ignored, const char *fmt, ...)
     va_end(args);
     cy_errprintf(msg);
 }
+
+void python_printmsg(char *msg)
+{
+    PySys_WriteStdout("%s", msg);
+}
+
+void python_printerrmsg(char *msg)
+{
+    PySys_WriteStderr("%s", msg);
+}
 #endif
 
 void act_on_interrupt(int retval, bool handle_interrupt, bool print_msg)
