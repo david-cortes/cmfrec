@@ -3,6 +3,7 @@ cimport numpy as np
 from cython cimport boundscheck, nonecheck, wraparound
 import ctypes
 import threadpoolctl
+from sys import stdout, stderr
 
 ctypedef int int_t
 
@@ -11,6 +12,16 @@ ctypedef int int_t
 ### TODO: this module should move from doing operations in Python to
 ### using the new designated C functions for each type of prediction.
 
+cdef extern void PySys_WriteStdout(const char *fmt, ...)
+cdef extern void PySys_WriteStderr(const char *fmt, ...)
+cdef public void cy_printf(char *msg) nogil:
+    with gil:
+        PySys_WriteStdout("%s", msg)
+        stdout.flush()
+cdef public void cy_errprintf(char *msg) nogil:
+    with gil:
+        PySys_WriteStderr("%s", msg)
+        stderr.flush()
 
 cdef extern from "cmfrec.h":
     bint get_has_openmp()

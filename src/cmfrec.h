@@ -107,6 +107,16 @@ typedef void (*sig_t_)(int);
             #define AVOID_BLAS_SYR
         #endif
     #endif
+    #include <stdarg.h>
+    #include <stdio.h>
+    // extern int vsnprintf(char* buffer, size_t buf_size, const char* format, va_list vlist);
+    void py_printf(const char *fmt, ...);
+    void py_errprintf(void *ignored, const char *fmt, ...);
+    extern void cy_printf(char *msg);
+    extern void cy_errprintf(char *msg);
+    #define printf py_printf
+    #define fprintf py_errprintf
+    #define fflush(arg) {}
 #elif defined(_FOR_R)
     #include <R.h>
     #include <Rinternals.h>
@@ -123,6 +133,9 @@ typedef void (*sig_t_)(int);
 #endif
 /* Here one may also include the standard headers "cblas.h" and "lapack.h",
    if one wants to use a non-standard version such as ILP64 (-DMKL_ILP64). */
+#if !defined(_FOR_R) && !defined(_FOR_PYTHON)
+    #include <stdio.h>
+#endif
 
 /* Aliasing for compiler optimizations */
 #ifdef __cplusplus

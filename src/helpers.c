@@ -1523,6 +1523,29 @@ void print_oom_message(void)
     print_err_msg("Error: could not allocate enough memory.\n");
 }
 
+#ifdef _FOR_PYTHON
+#define PY_MSG_MAX_LENGTH 256
+void py_printf(const char *fmt, ...)
+{
+    char msg[PY_MSG_MAX_LENGTH];
+    va_list args;
+    va_start(args, fmt);
+    vsnprintf(msg, PY_MSG_MAX_LENGTH, fmt, args);
+    va_end(args);
+    cy_printf(msg);
+}
+
+void py_errprintf(void *ignored, const char *fmt, ...)
+{
+    char msg[PY_MSG_MAX_LENGTH];
+    va_list args;
+    va_start(args, fmt);
+    vsnprintf(msg, PY_MSG_MAX_LENGTH, fmt, args);
+    va_end(args);
+    cy_errprintf(msg);
+}
+#endif
+
 void act_on_interrupt(int retval, bool handle_interrupt, bool print_msg)
 {
     if (retval == 3)

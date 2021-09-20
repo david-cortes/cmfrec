@@ -2779,9 +2779,7 @@ class CMF(_CMF):
         to use as seed.
     verbose : bool
         Whether to print informational messages about the optimization
-        routine used to fit the model. Note that, if running this from a
-        Jupyter notebook, these messages will be printed in the console,
-        not in the notebook itself. Be aware that, if passing 'False' and
+        routine used to fit the model. Be aware that, if passing 'False' and
         ``method='lbfgs'``, the optimization routine will not respond to
         interrupt signals.
     print_every : int
@@ -4561,9 +4559,7 @@ class CMF_implicit(_CMF):
         to use as seed.
     verbose : bool
         Whether to print informational messages about the optimization
-        routine used to fit the model. Note that, if running this from a
-        Jupyter notebook, these messages will be printed in the console,
-        not in the notebook itself.
+        routine used to fit the model.
     produce_dicts : bool
         Whether to produce Python dicts from the mappings between user/item
         IDs passed to 'fit' and the internal IDs used by the class. Having
@@ -6175,9 +6171,7 @@ class OMF_explicit(_OMF):
         to use as seed.
     verbose : bool
         Whether to print informational messages about the optimization
-        routine used to fit the model. Note that, if running this from a
-        Jupyter notebook, these messages will be printed in the console,
-        not in the notebook itself. Be aware that, if passing 'False' and
+        routine used to fit the model. Be aware that, if passing 'False' and
         ``method='lbfgs'``, the optimization routine will not respond to
         interrupt signals.
     print_every : int
@@ -7135,9 +7129,7 @@ class OMF_implicit(_OMF):
         to use as seed.
     verbose : bool
         Whether to print informational messages about the optimization
-        routine used to fit the model. Note that, if running this from a
-        Jupyter notebook, these messages will be printed in the console,
-        not in the notebook itself.
+        routine used to fit the model.
     handle_interrupt : bool
         When receiving an interrupt signal, whether the model should stop
         early and leave a usable object with the parameters obtained up
@@ -7673,9 +7665,7 @@ class ContentBased(_OMF_Base):
         OpenMP support.
     verbose : bool
         Whether to print informational messages about the optimization
-        routine used to fit the model. Note that, if running this from a
-        Jupyter notebook, these messages will be printed in the console,
-        not in the notebook itself. Be aware that, if passing 'False', the
+        routine used to fit the model. Be aware that, if passing 'False', the
         optimization routine will not respond to interrupt signals.
     print_every : int
         Print L-BFGS convergence messages every n-iterations. Ignored
