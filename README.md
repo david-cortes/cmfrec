@@ -99,12 +99,7 @@ The new version is faster, multi-threaded, and has some new functionality, but i
 * Supports observation weights (for the explicit-feedback models).
 
 
-## Instalation
-
-**Note:** this package relies heavily on BLAS and LAPACK functions for calculations. It's recommended to use MKL (in Python, comes by default in Anaconda, in R for Windows, can be gotten through Microsoft's R distribution) or alternatively OpenBLAS, as backend for them. See [this link](https://github.com/david-cortes/R-openblas-in-windows) for instructions on getting OpenBLAS for R in Windows.
-
-Different backends for BLAS can make a large difference in speed - for example, on an AMD Ryzen 2700, MKL2021 makes models take 4x longer to fit than MKL2020, and using OpenBLAS-pthreads takes around 1.3x longer to fit models compared to OpenBLAS-openmp.
-
+## Installation
 
 * Python:
 
@@ -116,6 +111,8 @@ or if that fails:
 pip install --no-use-pep517 cmfrec
 ```
 
+(See performance tips below)
+
 ** *
 
 **Note for macOS users:** on macOS, the Python version of this package might compile **without** multi-threading capabilities. In order to enable multi-threading support, first install OpenMP:
@@ -126,24 +123,13 @@ And then reinstall this package: `pip install --force-reinstall cmfrec`.
 
 ** *
 
-_Note2: earlier versions of `cmfrec` used the package `findblas` to link to BLAS's CBLAS interface, while newer versions take the BLAS from SciPy and build CBLAS wrapper around it, which can make it run slightly lower. To use `findblas`, define an environment variable `USE_FINDBLAS=1` before installing:_
-```
-export USE_FINDBLAS=1
-pip install cmfrec
-```
-_(Can also define `USE_OPENBLAS=1` to forcibly use `-lopenblas`)_
-
 * R:
 
 ```r
 install.packages("cmfrec")
 ```
 
-**Important:** for optimal performance in R, it's recommended to set a custom Makevars file with extra compiler optimizations, and then install the package from source. On Linux, simply create a text file `~/.R/Makevars` containing this line: `CFLAGS += -O3 -march=native` (plus an empty line at the end). Then install `cmfrec` with `install.packages("cmfrec")`.
-
-Alternatively, one can also install this package from source but editing the `Makevars` file under `src` by uncommenting the lines that are commented out, which will trigger better compiler optimizations which are not CRAN-compliant. For alternative ways of doing this see the "Performance tips" section in the docs. This basically amounts to adding compilation options `-std=c99 -O3 -march=native`, which are typically not the defaults in R.
-
-In modern CPUs, this can make some optimization routines in `cmfrec` roughly 25% faster.
+(See performance tips below)
 
 * Ruby:
 
@@ -151,7 +137,7 @@ See [external repository](https://github.com/ankane/cmfrec).
 
 * C:
 
-Package can be built as a shared library - see the CMake build file for options:
+Package can be built as a shared library (requires BLAS and LAPACK) - see the CMake build file for options:
 ```
 git clone https://www.github.com/david-cortes/cmfrec.git
 cd cmfrec
@@ -171,7 +157,32 @@ By default, it compiles for types `double` and `int`, but this can be changed in
 
 Be aware that the snippet above includes option `-DUSE_MARCH_NATIVE=1`, which will make it use the highest-available CPU instruction set (e.g. AVX2) and will produces objects that might not run on older CPUs - to build more "portable" objects, remove this option from the cmake command.
 
-(Recommended to have MKL or OpenBLAS installed)
+## Performance tips
+
+This package relies heavily on BLAS and LAPACK functions for calculations. It's recommended to use with MKL, OpenBLAS, or BLIS. Additionally, if using it from R, the package will benefit from enabling optimizations which are not CRAN-compliant (see below).
+
+Different backends for BLAS can make a large difference in speed - for example, on an AMD Ryzen 2700, MKL2021 makes models take 4x longer to fit than MKL2020, and using OpenBLAS-pthreads takes around 1.3x longer to fit models compared to OpenBLAS-openmp.
+
+
+Hints:
+
+* In Python, MKL comes by default in Anaconda installs. If using a non-windows OS, OpenBLAS can alternatively be installed in an Anaconda environment through the `nomkl` package. If not using Anaconda, `pip` installs of NumPy + SciPy are likely to bundle OpenBLAS (pthreads version).
+* In R for Windows, see [this link](https://github.com/david-cortes/R-openblas-in-windows) for instructions on getting OpenBLAS. Alternatively, Microsoft's R distribution comes with MKL preinstalled.
+* In R for other OSes, R typically uses the default system BLAS and LAPACK. On debian and debian-based systems such as ubuntu, these can be controlled through the [alternatives system](https://wiki.debian.org/DebianScience/LinearAlgebraLibraries) - see [this StackOverflow post](https://stackoverflow.com/a/49842944/5941695) for an example of setting MKL as the default backend. By default on debian, R will link to OpenBLAS-pthreads, but it is easy to make it use OpenBLAS-openmp (for example, by installing `libopenblas-openmp-dev` before installing R, or by using the alternatives system).
+
+
+For optimal performance in R, it's recommended to set a custom Makevars file with extra compiler optimizations, and then install the package from source. On Linux, simply create a text file `~/.R/Makevars` containing this line: `CFLAGS += -O3 -march=native` (plus an empty line at the end). Then install `cmfrec` with `install.packages("cmfrec")`.
+
+Alternatively, one can also install this package from source but editing the `Makevars` file under `src` by uncommenting the lines that are commented out, which will trigger better compiler optimizations which are not CRAN-compliant (GCC only). For alternative ways of doing this see the "Performance tips" section in the docs. This basically amounts to adding compilation options `-std=c99 -O3 -march=native`, which are typically not the defaults in R.
+
+In modern CPUs, this can make some optimization routines in `cmfrec` roughly 25% faster.
+
+Earlier Python versions of `cmfrec` used the package `findblas` to link to BLAS's CBLAS interface, while newer versions take the BLAS from SciPy and build a CBLAS wrapper around it, which can make it run slightly lower. To use `findblas`, define an environment variable `USE_FINDBLAS=1` before installing:_
+```
+export USE_FINDBLAS=1
+pip install cmfrec
+```
+_(Can also define `USE_OPENBLAS=1` to forcibly use `-lopenblas`)_
 
 
 ## Sample Usage
