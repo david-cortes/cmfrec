@@ -82,17 +82,31 @@ extern "C" {
 #if !defined(CBLAS_H) && !(defined(_FOR_PYTHON) && !defined(USE_FINDBLAS))
 
 #if !defined(USE_FLOAT)
-    #define tdot_ ddot_
-    #define tcopy_ dcopy_
-    #define taxpy_ daxpy_
-    #define tscal_ dscal_
-    #define tsyr_ dsyr_
-    #define tsyrk_ dsyrk_
-    #define tnrm2_ dnrm2_
-    #define tgemm_ dgemm_
-    #define tgemv_ dgemv_
-    #define tsymv_ dsymv_
-    #define tger_ dger_
+    #ifndef _FOR_R
+        #define tdot_ ddot_
+        #define tcopy_ dcopy_
+        #define taxpy_ daxpy_
+        #define tscal_ dscal_
+        #define tsyr_ dsyr_
+        #define tsyrk_ dsyrk_
+        #define tnrm2_ dnrm2_
+        #define tgemm_ dgemm_
+        #define tgemv_ dgemv_
+        #define tsymv_ dsymv_
+        #define tger_ dger_
+    #else
+        #define tdot_ F77_CALL(ddot)
+        #define tcopy_ F77_CALL(dcopy)
+        #define taxpy_ F77_CALL(daxpy)
+        #define tscal_ F77_CALL(dscal)
+        #define tsyr_ F77_CALL(dsyr)
+        #define tsyrk_ F77_CALL(dsyrk)
+        #define tnrm2_ F77_CALL(dnrm2)
+        #define tgemm_ F77_CALL(dgemm)
+        #define tgemv_ F77_CALL(dgemv)
+        #define tsymv_ F77_CALL(dsymv)
+        #define tger_ F77_CALL(dger)
+    #endif
 #else
     #define tdot_ sdot_
     #define tcopy_ scopy_
@@ -156,7 +170,7 @@ void cblas_tsyr(const CBLAS_ORDER order, const CBLAS_UPLO Uplo, const int_t N, c
         else
             uplo = 'L';
     }
-    tsyr_(&uplo, &N, &alpha, X, &incX, A, &lda);
+    tsyr_(&uplo, &N, &alpha, X, &incX, A, &lda FCONE);
 }
 void cblas_tsyrk(const CBLAS_ORDER Order, const CBLAS_UPLO Uplo, const CBLAS_TRANSPOSE Trans,
          const int_t N, const int_t K, const real_t alpha, const real_t *A, const int_t lda, const real_t beta, real_t *C, const int_t ldc)
@@ -193,7 +207,7 @@ void cblas_tsyrk(const CBLAS_ORDER Order, const CBLAS_UPLO Uplo, const CBLAS_TRA
             trans = 'T';
     }
 
-    tsyrk_(&uplo, &trans, &N, &K, &alpha, A, &lda, &beta, C, &ldc);
+    tsyrk_(&uplo, &trans, &N, &K, &alpha, A, &lda, &beta, C, &ldc FCONE FCONE);
 }
 real_t  cblas_tnrm2 (const int_t N, const real_t  *X, const int_t incX)
 {
@@ -220,7 +234,7 @@ void cblas_tgemm(const CBLAS_ORDER Order, const CBLAS_TRANSPOSE TransA, const CB
         else
             transB = 'N';
 
-        tgemm_(&transA, &transB, &M, &N, &K, &alpha, A, &lda, B, &ldb, &beta, C, &ldc);
+        tgemm_(&transA, &transB, &M, &N, &K, &alpha, A, &lda, B, &ldb, &beta, C, &ldc FCONE FCONE);
     }
 
     else
@@ -239,7 +253,7 @@ void cblas_tgemm(const CBLAS_ORDER Order, const CBLAS_TRANSPOSE TransA, const CB
         else
             transA = 'N';
 
-        tgemm_(&transA, &transB, &N, &M, &K, &alpha, B, &ldb, A, &lda, &beta, C, &ldc);
+        tgemm_(&transA, &transB, &N, &M, &K, &alpha, B, &ldb, A, &lda, &beta, C, &ldc FCONE FCONE);
     }
 }
 void cblas_tgemv(const CBLAS_ORDER order,  const CBLAS_TRANSPOSE TransA,  const int_t m, const int_t n,
@@ -255,7 +269,7 @@ void cblas_tgemv(const CBLAS_ORDER order,  const CBLAS_TRANSPOSE TransA,  const 
         else
             trans = 'C';
 
-        tgemv_(&trans, &m, &n, &alpha, a, &lda, x, &incx, &beta, y, &incy);
+        tgemv_(&trans, &m, &n, &alpha, a, &lda, x, &incx, &beta, y, &incy FCONE);
     }
 
     else
@@ -267,7 +281,7 @@ void cblas_tgemv(const CBLAS_ORDER order,  const CBLAS_TRANSPOSE TransA,  const 
         else
             trans = 'N';
 
-        tgemv_(&trans, &n, &m, &alpha, a, &lda, x, &incx, &beta, y, &incy);
+        tgemv_(&trans, &n, &m, &alpha, a, &lda, x, &incx, &beta, y, &incy FCONE);
     }
 }
 void cblas_tsymv(const CBLAS_ORDER order, const CBLAS_UPLO Uplo, const int_t N, const real_t alpha, const real_t *A,
@@ -290,7 +304,7 @@ void cblas_tsymv(const CBLAS_ORDER order, const CBLAS_UPLO Uplo, const int_t N, 
             uplo = 'U';
     }
 
-    tsymv_(&uplo, &N, &alpha, A, &lda, X, &incX, &beta, Y, &incY);
+    tsymv_(&uplo, &N, &alpha, A, &lda, X, &incX, &beta, Y, &incY FCONE);
 }
 
 void cblas_tger(const CBLAS_ORDER order, const int_t m, const int_t n, const real_t alpha,

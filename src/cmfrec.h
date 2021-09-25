@@ -126,6 +126,7 @@ typedef void (*sig_t_)(int);
     #define fprintf py_errprintf
     #define fflush(arg) {}
 #elif defined(_FOR_R)
+    #include <Rconfig.h>
     #include <R.h>
     #include <Rinternals.h>
     #include <R_ext/Print.h>
@@ -143,6 +144,9 @@ typedef void (*sig_t_)(int);
    if one wants to use a non-standard version such as ILP64 (-DMKL_ILP64). */
 #if !defined(_FOR_R) && !defined(_FOR_PYTHON)
     #include <stdio.h>
+#endif
+#ifndef FCONE
+    #define FCONE
 #endif
 
 /* Aliasing for compiler optimizations */
@@ -219,11 +223,19 @@ typedef void (*sig_t_)(int);
     #define cblas_tgemv cblas_dgemv
     #define cblas_tger cblas_dger
     #define cblas_tsymv cblas_dsymv
-    #define tlacpy_ dlacpy_
-    #define tposv_ dposv_
-    #define tpotrf_ dpotrf_
-    #define tpotrs_ dpotrs_
-    #define tgelsd_ dgelsd_
+    #ifndef _FOR_R
+        #define tlacpy_ dlacpy_
+        #define tposv_ dposv_
+        #define tpotrf_ dpotrf_
+        #define tpotrs_ dpotrs_
+        #define tgelsd_ dgelsd_
+    #else
+        #define tlacpy_(a1, a2, a3, a4, a5, a6, a7) F77_CALL(dlacpy)((a1), (a2), (a3), (a4), (a5), (a6), (a7) FCONE)
+        #define tposv_(a1, a2, a3, a4, a5, a6, a7, a8) F77_CALL(dposv)((a1), (a2), (a3), (a4), (a5), (a6), (a7), (a8) FCONE)
+        #define tpotrf_(a1, a2, a3, a4, a5) F77_CALL(dpotrf)((a1), (a2), (a3), (a4), (a5) FCONE)
+        #define tpotrs_(a1, a2, a3, a4, a5, a6, a7, a8) F77_CALL(dpotrs)((a1), (a2), (a3), (a4), (a5), (a6), (a7), (a8) FCONE)
+        #define tgelsd_ F77_CALL(dgelsd)
+    #endif
 #else
     #define LBFGS_FLOAT 32
     #define real_t float
