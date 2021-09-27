@@ -105,7 +105,7 @@ library(MatrixExtra)
 data("MovieLense")
 X <- as.coo.matrix(MovieLense@data)
 r <- Reco()
-r$train(data_memory(X@i, X@j, X@x, index1=FALSE),
+r$train(data_matrix(X),
         out_model = NULL,
         opts = list(dim=10, costp_l2=0.1, costq_l2=0.1,
                     verbose=FALSE, nthread=1))
