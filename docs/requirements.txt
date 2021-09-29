@@ -2,4 +2,5 @@ cython
 numpy
 scipy
 pandas>=0.25.0
-Sphinx>=3.2.1
+Sphinx>=4.2.0
+docutils==0.16
