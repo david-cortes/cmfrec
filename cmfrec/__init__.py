@@ -2459,13 +2459,15 @@ class CMF(_CMF):
     Collective or multi-view matrix factorization
 
     Tries to approximate the 'X' interactions matrix  by a formula as follows:
-        X ~ A * t(B)
+        
+        :math:`\mathbf{X} \sim \mathbf{A}  \mathbf{B}^T`
     
     While at the same time also approximating the user/row side information
     matrix 'U' and the item/column side information matrix 'I' as follows:
-        U ~ A * t(C), 
         
-        I ~ B * t(D)
+        :math:`\mathbf{U} \sim \mathbf{A} \mathbf{C}^T`, 
+        
+        :math:`\mathbf{I} \sim \mathbf{B} \mathbf{D}^T`
     
     The matrices ("A", "B", "C", "D") are obtained by minimizing the error
     with respect to the non-missing entries in the input data ("X", "U", "I").
@@ -2507,7 +2509,7 @@ class CMF(_CMF):
         so this parameter needs good tuning.
         For example, a good value for the MovieLens10M would be ``lambda_=35.``
         (or ``lambda=0.05`` with ``scale_lam=True``).
-        Typical values are 10^-2 to 10^2.
+        Typical values are :math:`10^{-2}` to :math:`10^2`.
     method : str, one of "lbfgs" or "als"
         Optimization method used to fit the model. If passing ``'lbfgs'``, will
         fit it through a gradient-based approach using an L-BFGS optimizer.
@@ -2549,13 +2551,13 @@ class CMF(_CMF):
         model has user and/or item biases.
     add_implicit_features : bool
         Whether to automatically add so-called implicit features from the data,
-        as in reference [5] and similar. If using this for recommender systems
+        as in reference [5]_ and similar. If using this for recommender systems
         with small amounts of data, it's recommended to pass 'True' here.
     scale_lam : bool
         Whether to scale (increase) the regularization parameter
         for each row of the model matrices (A, B, C, D) according
         to the number of non-missing entries in the data for that
-        particular row, as proposed in reference [7]. For the
+        particular row, as proposed in reference [7]_. For the
         A and B matrices, the regularization will only be scaled
         according to the number of non-missing entries in "X"
         (see also the ``scale_lam_sideinfo`` parameter). Note that,
@@ -4347,11 +4349,15 @@ class CMF_implicit(_CMF):
     Collective model for implicit-feedback data
 
     Tries to approximate the 'X' interactions matrix  by a formula as follows:
-        X ~ A * t(B)
+        
+        :math:`\mathbf{X} \sim \mathbf{A} \mathbf{B}^T`
+
     While at the same time also approximating the user side information
     matrix 'U' and the item side information matrix 'I' as follows:
-        U ~ A * t(C), 
-        I ~ B * t(D)
+        
+        :math:`\mathbf{U} \sim \mathbf{A} \mathbf{C}^T`, 
+
+        :math:`\mathbf{I} \sim \mathbf{B} \mathbf{D}^T`
 
     Note
     ----
@@ -4408,10 +4414,10 @@ class CMF_implicit(_CMF):
         value for ``lambda_`` here is much higher than in other software, and that
         the loss/objective function is not divided by the number of entries.
         For example, a good number for the LastFM-360K could be ``lambda_=5``.
-        Typical values are 10^-2 to 10^2.
+        Typical values are :math:`10^{-2}` to :math:`10^2`.
     alpha : float
         Weighting parameter for the non-zero entries in the implicit-feedback
-        model. See [3] for details. Note that, while the author's suggestion for
+        model. See [3]_ for details. Note that, while the author's suggestion for
         this value is 40, other software such as ``implicit`` use a value of 1,
         whereas Spark uses a value of 0.01 by default,
         and values higher than 10 are unlikely to improve results. If the data
@@ -5973,7 +5979,8 @@ class OMF_explicit(_OMF):
 
     Tries to approximate the 'X' ratings matrix using the user side information
     'U' and item side information 'I' by a formula as follows:
-        X ~ (A + U*C) * t(B + I*D)
+        
+        :math:`\mathbf{X} \sim (\mathbf{A} + \mathbf{U} \mathbf{C}) * (\mathbf{B} + \mathbf{I} \mathbf{D})^T`
 
     Note
     ----
@@ -6028,7 +6035,7 @@ class OMF_explicit(_OMF):
         value for ``lambda_`` here is much higher than in other software, and that
         the loss/objective function is not divided by the number of entries.
         For example, a good value for the MovieLens10M would be ``lambda_=35.``.
-        Typical values are 10^-2 to 10^2.
+        Typical values are :math:`10^{-2}` to :math:`10^2`.
         Passing different regularization for each matrix is not supported with
         ``method='als'``.
     method : str, one of "lbfgs" or "als"
@@ -7036,7 +7043,8 @@ class OMF_implicit(_OMF):
 
     Tries to approximate the 'X' interactions matrix using the user side information
     'U' and item side information 'I' by a formula as follows:
-        X ~ (A + U*C) * t(B + I*D)
+        
+        :math:`\mathbf{X} \sim (\mathbf{A} + \mathbf{U} \mathbf{C}) * (\mathbf{B} + \mathbf{I} \mathbf{D})^T`
 
     Note
     ----
@@ -7072,10 +7080,10 @@ class OMF_implicit(_OMF):
         value for ``lambda_`` here is much higher than in other software, and that
         the loss/objective function is not divided by the number of entries.
         For example, a good number for the LastFM-360K could be ``lambda_=5``.
-        Typical values are 10^-2 to 10^2.
+        Typical values are :math:`10^{-2}` to :math:`10^2`.
     alpha : float
         Weighting parameter for the non-zero entries in the implicit-feedback
-        model. See [2] for details. Note that, while the author's suggestion for
+        model. See [2]_ for details. Note that, while the author's suggestion for
         this value is 40, other software such as ``implicit`` use a value of 1,
         whereas Spark uses a value of 0.01 by default
         If the data
@@ -7595,7 +7603,8 @@ class ContentBased(_OMF_Base):
 
     The 'X' is approximated using the user side information
     'U' and item side information 'I' by a formula as follows:
-        X ~ (U*C) * t(I*D)
+        
+        :math:`\mathbf{X} \sim (\mathbf{U} \mathbf{C}) * (\mathbf{I} \mathbf{D})^T`
 
     Note
     ----
@@ -7630,7 +7639,7 @@ class ContentBased(_OMF_Base):
         Note that the default
         value for ``lambda_`` here is much higher than in other software, and that
         the loss/objective function is not divided by the number of entries.
-        Recommended values are 10^-2 to 10^2.
+        Recommended values are :math:`10^{-2}` to :math:`10^2`.
     user_bias : bool
         Whether to add user biases (intercepts) to the model.
     item_bias : bool
@@ -8229,7 +8238,7 @@ class MostPopular(_CMF):
         the loss/objective function is not divided by the number of entries.
     alpha : float
         Weighting parameter for the non-zero entries in the implicit-feedback
-        model. See [2] for details. Note that, while the author's suggestion for
+        model. See [2]_ for details. Note that, while the author's suggestion for
         this value is 40, other software such as ``implicit`` use a value of 1,
         whereas Spark uses a value of 0.01 by default
         See the documentation of ``CMF_implicit`` for more details.
