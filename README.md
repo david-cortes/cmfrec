@@ -163,12 +163,15 @@ This package relies heavily on BLAS and LAPACK functions for calculations. It's 
 
 Different backends for BLAS can make a large difference in speed - for example, on an AMD Ryzen 2700, MKL2021 makes models take 4x longer to fit than MKL2020, and using OpenBLAS-pthreads takes around 1.3x longer to fit models compared to OpenBLAS-openmp.
 
+This library calls BLAS routines from parallel OpenMP blocks, which can cause issues with some BLAS backends - for example, if using MKL and compiling this package with GCC on linux, it *could* have issues with conflicting OpenMPs which could be solved by adding an environment variable `MKL_THREADING_LAYER=GNU`. For the most part, it tries to disable BLAS multi-threading in openmp blocks, but the mechanism might not work with all BLAS libraries or if swapping BLAS libraries after having compiled `cmfrec`.
+
 
 Hints:
 
 * In Python, MKL comes by default in Anaconda installs. If using a non-windows OS, OpenBLAS can alternatively be installed in an Anaconda environment through the `nomkl` package. If not using Anaconda, `pip` installs of NumPy + SciPy are likely to bundle OpenBLAS (pthreads version).
 * In R for Windows, see [this link](https://github.com/david-cortes/R-openblas-in-windows) for instructions on getting OpenBLAS. Alternatively, Microsoft's R distribution comes with MKL preinstalled.
 * In R for other OSes, R typically uses the default system BLAS and LAPACK. On debian and debian-based systems such as ubuntu, these can be controlled through the [alternatives system](https://wiki.debian.org/DebianScience/LinearAlgebraLibraries) - see [this StackOverflow post](https://stackoverflow.com/a/49842944/5941695) for an example of setting MKL as the default backend. By default on debian, R will link to OpenBLAS-pthreads, but it is easy to make it use OpenBLAS-openmp (for example, by installing `libopenblas-openmp-dev` before installing R, or by using the alternatives system).
+* If using MKL and compiling this package with GCC (default in most linux distributions, oftentimes also in anaconda for windows), one might want to set an environment variable `MKL_THREADING_LAYER=GNU`. In Linux and macOS, this can be done by adding `export MKL_THREADING_LAYER=GNU` in `~/.bashrc` or `~/.profile`, while in Windows it can be set through the control panel.
 
 
 For optimal performance in R, it's recommended to set a custom Makevars file with extra compiler optimizations, and then install the package from source. On Linux, simply create a text file `~/.R/Makevars` containing this line: `CFLAGS += -O3 -march=native` (plus an empty line at the end). Then install `cmfrec` with `install.packages("cmfrec")`.

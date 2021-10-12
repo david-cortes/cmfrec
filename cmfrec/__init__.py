@@ -2452,6 +2452,9 @@ class _CMF:
 
         return self
 
+    def __is_fitted__(self):
+        return self.is_fitted_
+
 
 
 class CMF(_CMF):
@@ -2551,13 +2554,13 @@ class CMF(_CMF):
         model has user and/or item biases.
     add_implicit_features : bool
         Whether to automatically add so-called implicit features from the data,
-        as in reference [5]_ and similar. If using this for recommender systems
+        as in reference [5a]_ and similar. If using this for recommender systems
         with small amounts of data, it's recommended to pass 'True' here.
     scale_lam : bool
         Whether to scale (increase) the regularization parameter
         for each row of the model matrices (A, B, C, D) according
         to the number of non-missing entries in the data for that
-        particular row, as proposed in reference [7]_. For the
+        particular row, as proposed in reference [7a]_. For the
         A and B matrices, the regularization will only be scaled
         according to the number of non-missing entries in "X"
         (see also the ``scale_lam_sideinfo`` parameter). Note that,
@@ -2857,28 +2860,28 @@ class CMF(_CMF):
 
     References
     ----------
-    .. [1] Cortes, David.
-           "Cold-start recommendations in Collective Matrix Factorization."
-           arXiv preprint arXiv:1809.00366 (2018).
-    .. [2] Singh, Ajit P., and Geoffrey J. Gordon.
-           "Relational learning via collective matrix factorization."
-           Proceedings of the 14th ACM SIGKDD international conference on
-           Knowledge discovery and data mining. 2008.
-    .. [4] Takacs, Gabor, Istvan Pilaszy, and Domonkos Tikk.
-           "Applications of the conjugate gradient method for implicit feedback collaborative filtering."
-           Proceedings of the fifth ACM conference on Recommender systems. 2011.
-    .. [5] Rendle, Steffen, Li Zhang, and Yehuda Koren.
-           "On the difficulty of evaluating baselines: A study on recommender systems."
-           arXiv preprint arXiv:1905.01395 (2019).
-    .. [6] Franc, Vojtěch, Václav Hlaváč, and Mirko Navara.
-           "Sequential coordinate-wise algorithm for the
-           non-negative least squares problem."
-           International Conference on Computer Analysis of Images and Patterns.
-           Springer, Berlin, Heidelberg, 2005.
-    .. [7] Zhou, Yunhong, et al.
-           "Large-scale parallel collaborative filtering for the netflix prize."
-           International conference on algorithmic applications in management.
-           Springer, Berlin, Heidelberg, 2008.
+    .. [1a] Cortes, David.
+            "Cold-start recommendations in Collective Matrix Factorization."
+            arXiv preprint arXiv:1809.00366 (2018).
+    .. [2a] Singh, Ajit P., and Geoffrey J. Gordon.
+            "Relational learning via collective matrix factorization."
+            Proceedings of the 14th ACM SIGKDD international conference on
+            Knowledge discovery and data mining. 2008.
+    .. [4a] Takacs, Gabor, Istvan Pilaszy, and Domonkos Tikk.
+            "Applications of the conjugate gradient method for implicit feedback collaborative filtering."
+            Proceedings of the fifth ACM conference on Recommender systems. 2011.
+    .. [5a] Rendle, Steffen, Li Zhang, and Yehuda Koren.
+            "On the difficulty of evaluating baselines: A study on recommender systems."
+            arXiv preprint arXiv:1905.01395 (2019).
+    .. [6a] Franc, Vojtěch, Václav Hlaváč, and Mirko Navara.
+            "Sequential coordinate-wise algorithm for the
+            non-negative least squares problem."
+            International Conference on Computer Analysis of Images and Patterns.
+            Springer, Berlin, Heidelberg, 2005.
+    .. [7a] Zhou, Yunhong, et al.
+            "Large-scale parallel collaborative filtering for the netflix prize."
+            International conference on algorithmic applications in management.
+            Springer, Berlin, Heidelberg, 2008.
     """
     def __init__(self, k=40, lambda_=1e+1, method="als", use_cg=True,
                  user_bias=True, item_bias=True, center=True,
@@ -4417,7 +4420,7 @@ class CMF_implicit(_CMF):
         Typical values are :math:`10^{-2}` to :math:`10^2`.
     alpha : float
         Weighting parameter for the non-zero entries in the implicit-feedback
-        model. See [3]_ for details. Note that, while the author's suggestion for
+        model. See [3b]_ for details. Note that, while the author's suggestion for
         this value is 40, other software such as ``implicit`` use a value of 1,
         whereas Spark uses a value of 0.01 by default,
         and values higher than 10 are unlikely to improve results. If the data
@@ -4617,24 +4620,24 @@ class CMF_implicit(_CMF):
 
     References
     ----------
-    .. [1] Cortes, David.
-           "Cold-start recommendations in Collective Matrix Factorization."
-           arXiv preprint arXiv:1809.00366 (2018).
-    .. [2] Singh, Ajit P., and Geoffrey J. Gordon.
-           "Relational learning via collective matrix factorization."
-           Proceedings of the 14th ACM SIGKDD international conference on
-           Knowledge discovery and data mining. 2008.
-    .. [3] Hu, Yifan, Yehuda Koren, and Chris Volinsky.
-           "Collaborative filtering for implicit feedback datasets."
-           2008 Eighth IEEE International Conference on Data Mining. Ieee, 2008.
-    .. [4] Takacs, Gabor, Istvan Pilaszy, and Domonkos Tikk.
-           "Applications of the conjugate gradient method for implicit feedback collaborative filtering."
-           Proceedings of the fifth ACM conference on Recommender systems. 2011.
-    .. [5] Franc, Vojtěch, Václav Hlaváč, and Mirko Navara.
-           "Sequential coordinate-wise algorithm for the
-           non-negative least squares problem."
-           International Conference on Computer Analysis of Images and Patterns.
-           Springer, Berlin, Heidelberg, 2005.
+    .. [1b] Cortes, David.
+            "Cold-start recommendations in Collective Matrix Factorization."
+            arXiv preprint arXiv:1809.00366 (2018).
+    .. [2b] Singh, Ajit P., and Geoffrey J. Gordon.
+            "Relational learning via collective matrix factorization."
+            Proceedings of the 14th ACM SIGKDD international conference on
+            Knowledge discovery and data mining. 2008.
+    .. [3b] Hu, Yifan, Yehuda Koren, and Chris Volinsky.
+            "Collaborative filtering for implicit feedback datasets."
+            2008 Eighth IEEE International Conference on Data Mining. Ieee, 2008.
+    .. [4b] Takacs, Gabor, Istvan Pilaszy, and Domonkos Tikk.
+            "Applications of the conjugate gradient method for implicit feedback collaborative filtering."
+            Proceedings of the fifth ACM conference on Recommender systems. 2011.
+    .. [5b] Franc, Vojtěch, Václav Hlaváč, and Mirko Navara.
+            "Sequential coordinate-wise algorithm for the
+            non-negative least squares problem."
+            International Conference on Computer Analysis of Images and Patterns.
+            Springer, Berlin, Heidelberg, 2005.
     """
     def __init__(self, k=50, lambda_=1e0, alpha=1., use_cg=True,
                  k_user=0, k_item=0, k_main=0,
@@ -6258,9 +6261,9 @@ class OMF_explicit(_OMF):
 
     References
     ----------
-    .. [1] Cortes, David.
-           "Cold-start recommendations in Collective Matrix Factorization."
-           arXiv preprint arXiv:1809.00366 (2018).
+    .. [1c] Cortes, David.
+            "Cold-start recommendations in Collective Matrix Factorization."
+            arXiv preprint arXiv:1809.00366 (2018).
     """
     def __init__(self, k=50, lambda_=1e1, method="lbfgs", use_cg=True,
                  user_bias=True, item_bias=True, center=True, k_sec=0, k_main=0,
@@ -7083,7 +7086,7 @@ class OMF_implicit(_OMF):
         Typical values are :math:`10^{-2}` to :math:`10^2`.
     alpha : float
         Weighting parameter for the non-zero entries in the implicit-feedback
-        model. See [2]_ for details. Note that, while the author's suggestion for
+        model. See [2d]_ for details. Note that, while the author's suggestion for
         this value is 40, other software such as ``implicit`` use a value of 1,
         whereas Spark uses a value of 0.01 by default
         If the data
@@ -7195,15 +7198,15 @@ class OMF_implicit(_OMF):
 
     References
     ----------
-    .. [1] Cortes, David.
-           "Cold-start recommendations in Collective Matrix Factorization."
-           arXiv preprint arXiv:1809.00366 (2018).
-    .. [2] Hu, Yifan, Yehuda Koren, and Chris Volinsky.
-           "Collaborative filtering for implicit feedback datasets."
-           2008 Eighth IEEE International Conference on Data Mining. Ieee, 2008.
-    .. [3] Takacs, Gabor, Istvan Pilaszy, and Domonkos Tikk.
-           "Applications of the conjugate gradient method for implicit feedback collaborative filtering."
-           Proceedings of the fifth ACM conference on Recommender systems. 2011.
+    .. [1d] Cortes, David.
+            "Cold-start recommendations in Collective Matrix Factorization."
+            arXiv preprint arXiv:1809.00366 (2018).
+    .. [2d] Hu, Yifan, Yehuda Koren, and Chris Volinsky.
+            "Collaborative filtering for implicit feedback datasets."
+            2008 Eighth IEEE International Conference on Data Mining. Ieee, 2008.
+    .. [3d] Takacs, Gabor, Istvan Pilaszy, and Domonkos Tikk.
+            "Applications of the conjugate gradient method for implicit feedback collaborative filtering."
+            Proceedings of the fifth ACM conference on Recommender systems. 2011.
     """
     def __init__(self, k=50, lambda_=1e0, alpha=1., use_cg=True,
                  add_intercepts=True, niter=10,
@@ -7762,7 +7765,7 @@ class ContentBased(_OMF_Base):
     
     References
     ----------
-    .. [1] Cortes, David.
+    .. [1e] Cortes, David.
            "Cold-start recommendations in Collective Matrix Factorization."
            arXiv preprint arXiv:1809.00366 (2018).
     """
@@ -8238,7 +8241,7 @@ class MostPopular(_CMF):
         the loss/objective function is not divided by the number of entries.
     alpha : float
         Weighting parameter for the non-zero entries in the implicit-feedback
-        model. See [2]_ for details. Note that, while the author's suggestion for
+        model. See [2f]_ for details. Note that, while the author's suggestion for
         this value is 40, other software such as ``implicit`` use a value of 1,
         whereas Spark uses a value of 0.01 by default
         See the documentation of ``CMF_implicit`` for more details.
@@ -8324,12 +8327,12 @@ class MostPopular(_CMF):
 
     References
     ----------
-    .. [1] Koren, Yehuda, Robert Bell, and Chris Volinsky.
-           "Matrix factorization techniques for recommender systems."
-           Computer 42.8 (2009): 30-37.
-    .. [2] Hu, Yifan, Yehuda Koren, and Chris Volinsky.
-           "Collaborative filtering for implicit feedback datasets."
-           2008 Eighth IEEE International Conference on Data Mining. Ieee, 2008.
+    .. [1f] Koren, Yehuda, Robert Bell, and Chris Volinsky.
+            "Matrix factorization techniques for recommender systems."
+            Computer 42.8 (2009): 30-37.
+    .. [2f] Hu, Yifan, Yehuda Koren, and Chris Volinsky.
+            "Collaborative filtering for implicit feedback datasets."
+            2008 Eighth IEEE International Conference on Data Mining. Ieee, 2008.
     """
     def __init__(self, implicit=False, center=True, user_bias=False, lambda_=1e1, alpha=1.,
                  NA_as_zero=False, scale_lam=False, scale_bias_const=False, apply_log_transf=False,
