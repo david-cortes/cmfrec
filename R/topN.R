@@ -219,6 +219,10 @@ process.inputs.topN <- function(model, obj, user=NULL, a_vec=NULL, a_bias=NULL,
 #' (through e.g. `mclapply` or similar), it's recommended to decrease the number
 #' of threads in the model to 1 (e.g. `model$info$nthreads <- 1L`) and to set the
 #' number of BLAS threads to 1 (through e.g. `RhpcBLASctl` or environment variables).
+#' 
+#' For better cold-start recommendations with \link{CMF_implicit}, one can also add
+#' item biases by using the `CMF` model with parameters that would mimic `CMF_implicit`
+#' plus the biases.
 #' @param model A collective matrix factorization model from this package - see
 #' \link{fit_models} for details.
 #' @param user User (row of `X`) for which to rank items. If `X` to which the model

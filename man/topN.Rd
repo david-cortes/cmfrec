@@ -257,6 +257,10 @@ of top-N predictions is to be calculated in parallel for different users
 (through e.g. `mclapply` or similar), it's recommended to decrease the number
 of threads in the model to 1 (e.g. `model$info$nthreads <- 1L`) and to set the
 number of BLAS threads to 1 (through e.g. `RhpcBLASctl` or environment variables).
+
+For better cold-start recommendations with \link{CMF_implicit}, one can also add
+item biases by using the `CMF` model with parameters that would mimic `CMF_implicit`
+plus the biases.
 }
 \seealso{
 \link{factors_single} \link{predict.cmfrec} \link{predict_new}

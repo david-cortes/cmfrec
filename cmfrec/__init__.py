@@ -89,7 +89,7 @@ class _CMF:
             raise ValueError("Number of factors is too large.")
 
         lambda_ = float(lambda_) if isinstance(lambda_, int) else lambda_
-        if (isinstance(lambda_, list) or isinstance(lambda_, tuple) or isinstance(lambda_, pd.Series)):
+        if isinstance(lambda_, (list, tuple, pd.Series)):
             lambda_ = np.array(lambda_)
         if isinstance(lambda_, np.ndarray):
             lambda_ = lambda_.reshape(-1)
@@ -99,7 +99,7 @@ class _CMF:
             assert isinstance(lambda_, float) and lambda_ >= 0.
 
         l1_lambda = float(l1_lambda) if isinstance(l1_lambda, int) else l1_lambda
-        if (isinstance(l1_lambda, list) or isinstance(l1_lambda, tuple) or isinstance(l1_lambda, pd.Series)):
+        if isinstance(l1_lambda, (list, tuple, pd.Series)):
             l1_lambda = np.array(l1_lambda)
         if isinstance(l1_lambda, np.ndarray):
             l1_lambda = l1_lambda.reshape(-1)
@@ -807,9 +807,9 @@ class _CMF:
         exclude = np.array(exclude).reshape(-1) if exclude is not None \
                     else np.empty(0, dtype=ctypes.c_int)
 
-        if isinstance(user, list) or isinstance(user, tuple):
+        if isinstance(user, (list, tuple)) :
             user = np.array(user)
-        if isinstance(item, list) or isinstance(item, tuple):
+        if isinstance(item, (list, tuple)):
             item = np.array(item)
         if isinstance(user, pd.Series):
             user = user.to_numpy()
@@ -1072,16 +1072,16 @@ class _CMF:
                 I = I.tocoo()
             msg = " must be a Pandas DataFrame, NumPy array, or SciPy sparse COO matrix."
             msg_bin = " must be a Pandas DataFrame or NumPy array."
-            if U is not None and not (isinstance(U, pd.DataFrame) or isinstance(U, np.ndarray) or isspmatrix_coo(U)):
+            if U is not None and not (isinstance(U, (pd.DataFrame, np.ndarray)) or isspmatrix_coo(U)):
                 raise ValueError("'U'" + msg)
-            if I is not None and not (isinstance(I, pd.DataFrame) or isinstance(I, np.ndarray) or isspmatrix_coo(I)):
+            if I is not None and not (isinstance(I, (pd.DataFrame, np.ndarray)) or isspmatrix_coo(I)):
                 raise ValueError("'I'" + msg)
-            if U_bin is not None and not (isinstance(U_bin, pd.DataFrame) or isinstance(U_bin, np.ndarray)):
+            if U_bin is not None and not isinstance(U_bin, (pd.DataFrame, np.ndarray)):
                 raise ValueError("'U_bin'" + msg_bin)
-            if I_bin is not None and not (isinstance(I_bin, pd.DataFrame) or isinstance(I_bin, np.ndarray)):
+            if I_bin is not None and not isinstance(I_bin, (pd.DataFrame, np.ndarray)):
                 raise ValueError("'I_bin'" + msg_bin)
             if W is not None:
-                if isinstance(W, list) or isinstance(W, pd.Series):
+                if isinstance(W, (list, pd.Series)):
                     W = np.array(W)
                 if (len(W.shape) > 1) and isspmatrix_coo(X):
                     W = W.reshape(-1)
@@ -1638,7 +1638,7 @@ class _CMF:
             if Xval.min() < 1:
                 raise ValueError("Cannot pass values below 1 with 'apply_log_transf=True'.")
 
-        if not isinstance(self, OMF_explicit) and not isinstance(self, OMF_implicit):
+        if not isinstance(self, (OMF_explicit, OMF_implicit)):
             return self._factors_warm(X, W_dense, X_val, X_col, W_sp,
                                       U, U_val, U_col, U_bin, return_bias)
         elif isinstance(self, OMF_implicit):
@@ -2331,7 +2331,7 @@ class _CMF:
         new_model._n_orig = self._A_pred.shape[0]
 
         if precompute:
-            if isinstance(self, CMF) or isinstance(self, CMF_implicit):
+            if isinstance(self, (CMF, CMF_implicit)):
                 self.force_precompute_for_predictions()
             elif isinstance(self, OMF_explicit):
                 if new_lambda.shape[0] == 6:
@@ -2420,7 +2420,7 @@ class _CMF:
             This object with the non-essential matrices dropped.
         """
         assert self.is_fitted_
-        if (not isinstance(self, CMF)) and (not isinstance(self, CMF_implicit)):
+        if not isinstance(self, (CMF, CMF_implicit)):
             raise ValueError("Method is only applicable to 'CMF' and 'CMF_implicit'.")
 
         self._only_prediction_info = True
@@ -4956,6 +4956,11 @@ class CMF_implicit(_CMF):
                   include=None, exclude=None, output_score=False):
         """
         Compute top-N highest-predicted items for a new user, given 'U'
+
+        Note
+        ----
+        For better cold-start recommendations, one can also add item biases by using the ``CMF``
+        class with parameters that would mimic ``CMF_implicit`` plus the biases.
 
         Parameters
         ----------
