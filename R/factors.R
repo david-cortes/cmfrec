@@ -76,18 +76,18 @@ process.data.factors <- function(model, obj, X=NULL, weight=NULL,
                                  output_bias=FALSE,
                                  output_A=FALSE, exact=FALSE,
                                  matched_shapes=FALSE) {
-    output_bias      <-  check.bool(output_bias, "output_bias")
-    exact            <-  check.bool(exact, "exact")
-    output_A         <-  check.bool(output_A, "output_A")
+    output_bias      <-  check.bool(output_bias)
+    exact            <-  check.bool(exact)
+    output_A         <-  check.bool(output_A)
     processed_X      <-  process.new.X(obj, X, weight = weight)
     processed_U      <-  process.new.U(U = U, U_cols = obj$info$U_cols,
-                                       p = NCOL(obj$matrices$C), name = "U",
+                                       p = NCOL(obj$matrices$C),
                                        allow_sparse = TRUE,
                                        allow_null = model != "ContentBased",
                                        allow_na = model %in% c("CMF", "CMF_implicit"),
                                        exact_shapes = !(model %in% c("CMF", "CMF_implicit")))
     processed_U_bin  <-  process.new.U(U = U_bin, U_cols = obj$info$U_bin_cols,
-                                       p = NCOL(obj$matrices$Cb), name = "U_bin",
+                                       p = NCOL(obj$matrices$Cb),
                                        allow_sparse=FALSE, allow_null=TRUE,
                                        allow_na=TRUE, exact_shapes=FALSE)
     

@@ -87,9 +87,9 @@ process.data.factors.single <- function(model, obj,
     if (is.null(X) && is.null(X_col) && is.null(X_val) && is.null(weight) &&
         is.null(U) && is.null(U_col) && is.null(U_val) && is.null(U_bin))
         stop("No new data was passed.")
-    output_bias  <-  check.bool(output_bias, "output_bias")
-    output_A     <-  check.bool(output_A, "output_A")
-    exact        <-  check.bool(exact, "exact")
+    output_bias  <-  check.bool(output_bias)
+    output_A     <-  check.bool(output_A)
+    exact        <-  check.bool(exact)
     if (!is.null(U_bin) && !NCOL(obj$matrices$Cb))
         stop("Model was not fit to binary side information.")
     if ((!is.null(U) || !is.null(U_col) || !is.null(U_val)) && !NCOL(obj$C))
@@ -115,13 +115,13 @@ process.data.factors.single <- function(model, obj,
     
     processed_X   <-  process.new.X.single(X, X_col, X_val, weight,
                                            obj$info, NCOL(obj$matrices$B))
-    processed_U   <-  process.new.U.single(U, U_col, U_val, "U",
+    processed_U   <-  process.new.U.single(U, U_col, U_val,
                                            obj$info$user_mapping, NCOL(obj$matrices$C),
                                            obj$info$U_cols,
                                            allow_null = model != "ContentBased",
                                            allow_na = model %in% c("CMF", "CMF_implicit"),
                                            exact_shapes = !(model %in% c("CMF", "CMF_implicit")))
-    processed_Ub  <-  process.new.U.single(U_bin, NULL, NULL, "U_bin",
+    processed_Ub  <-  process.new.U.single(U_bin, NULL, NULL,
                                            obj$info$user_mapping, NCOL(obj$matrices$Cb),
                                            obj$info$U_bin_cols)
     

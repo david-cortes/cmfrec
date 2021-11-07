@@ -12,49 +12,49 @@ check.lambda <- function(lambda, allow_multiple=TRUE) {
     return(lambda)
 }
 
-check.pos.int <- function(k, var="k", pos=FALSE) {
+check.pos.int <- function(k, pos=FALSE) {
     if (NROW(k) != 1L)
-        stop(sprintf("'%s' must be a positive integer", var))
+        stop(sprintf("'%s' must be a positive integer", as.character(substitute(k))))
     k <- as.integer(k)
     if (is.na(k))
         stop(sprintf("Invalid '%s'", k))
     if (pos) {
         if (k <= 0L)
-            stop(sprintf("'%s' must be a positive integer", var))
+            stop(sprintf("'%s' must be a positive integer", as.character(substitute(k))))
     } else if (k < 0L) {
-        stop(sprintf("'%s' must be a non-negative integer", var))
+        stop(sprintf("'%s' must be a non-negative integer", as.character(substitute(k))))
     }
     return(k)
 }
 
-check.bool <- function(x, var="x") {
+check.bool <- function(x) {
     if (NROW(x) != 1L)
-        stop(sprintf("'%s' must be a single boolean/logical.", var))
+        stop(sprintf("'%s' must be a single boolean/logical.", as.character(substitute(x))))
     x <- as.logical(x)
     if (is.na(x))
-        stop(sprintf("'%s' cannot be missing.", var))
+        stop(sprintf("'%s' cannot be missing.", as.character(substitute(x))))
     return(x)
 }
 
-check.pos.real <- function(x, var="x") {
+check.pos.real <- function(x) {
     if (NROW(x) != 1L)
-        stop(sprintf("'%s' must be a single boolean/logical.", var))
+        stop(sprintf("'%s' must be a single boolean/logical.", as.character(substitute(x))))
     x <- as.numeric(x)
     if (is.na(x))
-        stop(sprintf("'%s' cannot be missing.", var))
+        stop(sprintf("'%s' cannot be missing.", as.character(substitute(x))))
     if (x < 0.)
-        stop(sprintf("'%s' must be non-negative.", var))
+        stop(sprintf("'%s' must be non-negative.", as.character(substitute(x))))
     return(x)
 }
 
-check.str.option <- function(x, var="x", allowed=c()) {
+check.str.option <- function(x, allowed=c()) {
     if (NROW(x) != 1L)
-        stop(sprintf("'%s' must be a single string/character.", var))
+        stop(sprintf("'%s' must be a single string/character.", as.character(substitute(x))))
     x <- as.character(x)
     if (is.na(x))
-        stop(sprintf("'%s' cannot be missing.", var))
+        stop(sprintf("'%s' cannot be missing.", as.character(substitute(x))))
     if (!(x %in% allowed))
-        stop(sprintf("'%s' must be one of: %s", var, paste(allowed, collapse=", ")))
+        stop(sprintf("'%s' must be one of: %s", as.character(substitute(x)), paste(allowed, collapse=", ")))
     return(x)
 }
 
@@ -66,7 +66,7 @@ check.is.df.or.mat <- function(df) {
     return(is.matrix(df) || check.is.df(df))
 }
 
-cast.data.frame <- function(df, nm="X") {
+cast.data.frame <- function(df) {
     if (inherits(df, c("tibble", "data.table")))
         df <- as.data.frame(df)
     return(df)
@@ -291,7 +291,7 @@ process.X <- function(X, weight=NULL) {
     return(out)
 }
 
-process.side.info <- function(U, name="U", allow_missing=TRUE) {
+process.side.info <- function(U, allow_missing=TRUE) {
     out <- list(
         Uarr = numeric(),
         Urow = integer(),
@@ -320,18 +320,18 @@ process.side.info <- function(U, name="U", allow_missing=TRUE) {
         out$m    <- U@Dim[1L]
         out$p    <- U@Dim[2L]
     } else {
-        stop(sprintf("Invalid %s.", name))
+        stop(sprintf("Invalid %s.", as.character(substitute(U))))
     }
     
     if (!allow_missing) {
         if (NROW(out$Uarr)) {
             if (anyNA(out$Uarr))
-                stop(sprintf("'%s' cannot have missing values.", name))
+                stop(sprintf("'%s' cannot have missing values.", as.character(substitute(U))))
         }
     }
     if (NROW(out$Uval)) {
         if (anyNA(out$Uval))
-            stop(sprintf("'%s' cannot have NAN values if passed as sparse.", name))
+            stop(sprintf("'%s' cannot have NAN values if passed as sparse.", as.character(substitute(U))))
     }
     
     return(out)
@@ -515,7 +515,7 @@ process.new.X.single <- function(X, X_col, X_val, weight, info, n_max) {
     return(out)
 }
 
-process.new.U.single <- function(U, U_col, U_val, name, mapping, p, colnames,
+process.new.U.single <- function(U, U_col, U_val, mapping, p, colnames,
                                  allow_null=TRUE, allow_na=TRUE, exact_shapes=FALSE) {
     out <- list(
         U = numeric(),
@@ -529,7 +529,7 @@ process.new.U.single <- function(U, U_col, U_val, name, mapping, p, colnames,
             out$p <- p
             return(out)
         } else {
-            stop(sprintf("'%s' cannot be empty.", name))
+            stop(sprintf("'%s' cannot be empty.", as.character(substitute(U))))
         }
     }
     
@@ -544,13 +544,15 @@ process.new.U.single <- function(U, U_col, U_val, name, mapping, p, colnames,
                 U <- as.data.frame(lapply(U, as.numeric))
             invalid <- setdiff(coltypes, c("numeric", "integer"))
             if (NROW(invalid))
-                stop(sprintf("Invalid column type(s) in '%s': ", name), paste(invalid, collapse=", "))
+                stop(sprintf("Invalid column type(s) in '%s': %s",
+                             as.character(substitute(U)),
+                             paste(invalid, collapse=", ")))
             U <- as.numeric(U)
         }
         
         if (is.matrix(U)) {
             if (NROW(U) > 1L)
-                stop(sprintf("'%s' has more than one row.", name))
+                stop(sprintf("'%s' has more than one row.", as.character(substitute(U))))
             U <- as.numeric(U)
         }
     }
@@ -558,21 +560,24 @@ process.new.U.single <- function(U, U_col, U_val, name, mapping, p, colnames,
     allowed_U <- c("numeric", "integer", "sparseVector")
     if (!is.null(U)) {
         if (!inherits(U, allowed_U))
-            stop(sprintf("Invalid '%s' - allowed types: %s", name, paste(allowed_U, collapse=", ")))
+            stop(sprintf("Invalid '%s' - allowed types: %s",
+                 as.character(substitute(U)),
+                 paste(allowed_U, collapse=", ")))
         if (NROW(U) > p)
-            stop(sprintf("'%s' has more columns than the model was fit to.", name))
+            stop(sprintf("'%s' has more columns than the model was fit to.", as.character(substitute(U))))
         if (inherits(U, "integer"))
             U <- as.numeric(U)
         if (inherits(U, "numeric")) {
             if (exact_shapes && NROW(U) != p)
-                stop(sprintf("'%s' has different number of columns than model was fit to.", name))
+                stop(sprintf("'%s' has different number of columns than model was fit to.",
+                     as.character(substitute(U))))
             if (!allow_na && anyNA(U))
-                stop(sprintf("'%s' cannot have NAN values.", name))
+                stop(sprintf("'%s' cannot have NAN values.", as.character(substitute(U))))
             out$U <- U
             out$p <- NROW(U)
         } else {
             if (U@length > p)
-                stop(sprintf("'%s' has more columns than the model was fit to.", name))
+                stop(sprintf("'%s' has more columns than the model was fit to.", as.character(substitute(U))))
             out$U_col <- U@i - 1L
             out$U_val <- U@x
             out$p     <- p
@@ -586,17 +591,17 @@ process.new.U.single <- function(U, U_col, U_val, name, mapping, p, colnames,
             U_col <- as.integer(U_col)
         U_col <- U_col - 1L
         if (anyNA(U_col))
-            stop(sprintf("'%s_col' cannot have missing values or new columns.", name))
+            stop(sprintf("'%s_col' cannot have missing values or new columns.", as.character(substitute(U))))
         if (any(U_col >= p))
-            stop(sprintf("'%s_col' cannot contain new columns.", name))
+            stop(sprintf("'%s_col' cannot contain new columns.", as.character(substitute(U))))
         if (any(U_col < 0L))
-            stop(sprintf("%s_col' cannot contain negative indices.", name))
+            stop(sprintf("%s_col' cannot contain negative indices.", as.character(substitute(U))))
         if (anyNA(U_val))
-            stop(sprintf("'%s_val' cannot have NAN values.", name))
+            stop(sprintf("'%s_val' cannot have NAN values.", as.character(substitute(U))))
         if (inherits(U_val, "integer") || is.matrix(U_val))
             U_val <- as.numeric(U_val)
         if (!inherits(U_val, "numeric"))
-            stop(sprintf("'%s_val' must be a numeric vector.", name))
+            stop(sprintf("'%s_val' must be a numeric vector.", as.character(substitute(U))))
         
         out$U_col <- U_col
         out$U_val <- U_val
@@ -749,7 +754,7 @@ process.new.X <- function(obj, X, weight=NULL,
 
         if (inherits(weight, "integer"))
             weight <- as.numeric(weight)
-        weight <- cast.data.frame(weight, "weight")
+        weight <- cast.data.frame(weight)
         if (is.data.frame(weight))
             weight <- as.matrix(weight)
         
@@ -788,7 +793,7 @@ process.new.X <- function(obj, X, weight=NULL,
     return(out)
 }
 
-process.new.U <- function(U, U_cols, p, name="U",
+process.new.U <- function(U, U_cols, p,
                           allow_sparse=TRUE, allow_null=TRUE,
                           allow_na=TRUE, exact_shapes=FALSE) {
     out <- list(
@@ -808,7 +813,7 @@ process.new.U <- function(U, U_cols, p, name="U",
             out$p <- p
             return(out)
         } else {
-            stop(sprintf("'%s' cannot be empty.", name))
+            stop(sprintf("'%s' cannot be empty.", as.character(substitute(U))))
         }
     }
     
@@ -830,16 +835,18 @@ process.new.U <- function(U, U_cols, p, name="U",
                                     "dgRMatrix", "matrix.csr",
                                     "sparseVector"))
     if (!inherits(U, allowed_U))
-        stop(sprintf("Invalid '%s' - allowed types: ", name), paste(allowed_U, collapse=", "))
+        stop(sprintf("Invalid '%s' - allowed types: %s",
+                     as.character(substitute(U)),
+                     paste(allowed_U, collapse=", ")))
     
-    msg_new_cols <- sprintf("'%s' cannot contain new columns.", name)
+    msg_new_cols <- sprintf("'%s' cannot contain new columns.", as.character(substitute(U)))
     
     if (is.matrix(U)) {
         if (ncol(U) > p)
             stop(msg_new_cols)
         if (exact_shapes && NCOL(U) != p)
             stop(sprintf("'%s' cannot have a different number of columns than the '%s' passed to fit",
-                         name, name))
+                         as.character(substitute(U)), as.character(substitute(U))))
         out$Uarr <- as.numeric(t(U))
         out$m    <- nrow(U)
         out$p    <- ncol(U)
@@ -889,7 +896,7 @@ process.new.U <- function(U, U_cols, p, name="U",
         out$p <- p
     if (!allow_na) {
         if (NROW(out$Uarr) && anyNA(out$Uarr))
-            stop(sprintf("'%s' cannot have NAN values.", name))
+            stop(sprintf("'%s' cannot have NAN values.", as.character(substitute(U))))
     }
     if (NROW(out$Uval) && anyNA(out$Uval))
         stop("Sparse inputs cannot have NAN values.")

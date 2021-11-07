@@ -214,7 +214,7 @@ drop.nonessential.matrices <- function(model, drop_precomputed=TRUE) {
     if (!inherits(model, c("CMF", "CMF_implicit")))
         stop("Method is only applicable to 'CMF' and 'CMF_implicit'.")
     
-    drop_precomputed <- check.bool(drop_precomputed, "drop_precomputed")
+    drop_precomputed <- check.bool(drop_precomputed)
     
     model$info$user_mapping  <-  character()
     model$info$I_cols        <-  character()
@@ -350,14 +350,14 @@ CMF.from.model.matrices <- function(A, B, glob_mean=0, implicit=FALSE,
     if (is.na(glob_mean))
         stop("'glob_mean' is NA.")
     
-    implicit <- check.bool(implicit, "implicit")
-    nthreads <- check.pos.int(nthreads, "nthreads", TRUE)
-    NA_as_zero <- check.bool(NA_as_zero, "NA_as_zero")
-    apply_log_transf <- check.bool(apply_log_transf, "apply_log_transf")
-    scale_lam <- check.bool(scale_lam, "scale_lam")
-    nonneg <- check.bool(nonneg, "nonneg")
-    precompute <- check.bool(precompute, "precompute")
-    alpha <- check.pos.real(alpha, "alpha")
+    implicit <- check.bool(implicit)
+    nthreads <- check.pos.int(nthreads, TRUE)
+    NA_as_zero <- check.bool(NA_as_zero)
+    apply_log_transf <- check.bool(apply_log_transf)
+    scale_lam <- check.bool(scale_lam)
+    nonneg <- check.bool(nonneg)
+    precompute <- check.bool(precompute)
+    alpha <- check.pos.real(alpha)
     lambda <- check.lambda(lambda, TRUE)
     l1_lambda <-check.lambda(l1_lambda, TRUE)
     
@@ -388,7 +388,7 @@ CMF.from.model.matrices <- function(A, B, glob_mean=0, implicit=FALSE,
             stop("Cannot pass 'scaling_biasA' when not using user biases.")
         if (!scale_lam)
             stop("Cannot pass 'scaling_biasA' with 'scale_lam=FALSE'.")
-        scaling_biasA <- check.pos.real(alpha, "scaling_biasA")
+        scaling_biasA <- check.pos.real(scaling_biasA)
     }
     if (!is.null(scaling_biasB)) {
         if (implicit)
@@ -397,7 +397,7 @@ CMF.from.model.matrices <- function(A, B, glob_mean=0, implicit=FALSE,
             stop("Cannot pass 'scaling_biasB' when not using user biases.")
         if (!scale_lam)
             stop("Cannot pass 'scaling_biasB' with 'scale_lam=FALSE'.")
-        scaling_biasB <- check.pos.real(alpha, "scaling_biasB")
+        scaling_biasB <- check.pos.real(scaling_biasB)
     }
     
     if (

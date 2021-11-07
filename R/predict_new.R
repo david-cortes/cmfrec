@@ -299,7 +299,7 @@ predict_new.ContentBased <- function(model, items=NULL, rows=NULL,
     
     
     if (!is.null(I)) {
-        processed_I <- process.new.U(I, model$info$I_cols, NCOL(model$matrices$D), name="I",
+        processed_I <- process.new.U(I, model$info$I_cols, NCOL(model$matrices$D),
                                      allow_sparse=TRUE, allow_null=FALSE,
                                      allow_na=FALSE, exact_shapes=TRUE)
         if (!processed_I$m)

@@ -43,13 +43,13 @@ process.inputs.items <- function(model, obj, X=NULL, X_col=NULL, X_val=NULL, wei
     
     processed_X      <-  process.new.X.single(X, X_col, X_val, weight,
                                               info_pass, info_pass$n_orig)
-    processed_I      <-  process.new.U.single(I, I_col, I_val, "I",
+    processed_I      <-  process.new.U.single(I, I_col, I_val,
                                               obj$info$item_mapping, NCOL(obj$matrices$D),
                                               obj$info$I_cols,
                                               allow_null = TRUE,
                                               allow_na = model %in% c("CMF", "CMF_implicit"),
                                               exact_shapes = !(model %in% c("CMF", "CMF_implicit")))
-    processed_I_bin  <-  process.new.U.single(I_bin, NULL, NULL, "I_bin",
+    processed_I_bin  <-  process.new.U.single(I_bin, NULL, NULL,
                                               obj$info$item_mapping, NCOL(obj$matrices$Db),
                                               obj$info$I_bin_cols)
     
@@ -401,13 +401,13 @@ predict_new_items <- function(model, user, item=NULL,
                                        allow_sparse=TRUE, allow_null=TRUE,
                                        allow_reindex=FALSE)
     processed_I      <-  process.new.U(U = I, U_cols = model$info$I_cols,
-                                       p = NCOL(model$matrices$D), name = "I",
+                                       p = NCOL(model$matrices$D),
                                        allow_sparse = TRUE,
                                        allow_null = as.logical(NROW(I_bin) || NROW(transX)),
                                        allow_na = class(model)[1L] %in% c("CMF", "CMF_implicit"),
                                        exact_shapes = !(class(model)[1L] %in% c("CMF", "CMF_implicit")))
     processed_I_bin  <-  process.new.U(U = I_bin, U_cols = model$info$I_bin_cols,
-                                       p = NCOL(model$matrices$Db), name = "I_bin",
+                                       p = NCOL(model$matrices$Db),
                                        allow_sparse=FALSE,
                                        allow_null=as.logical(NROW(I) || NROW(transX)),
                                        allow_na=TRUE, exact_shapes=FALSE)
