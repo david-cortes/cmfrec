@@ -6953,6 +6953,11 @@ int_t fit_collective_explicit_lbfgs
    'optimizeA' + 'NA_as_zero_X', so as to simplify the code. */
 /* TODO: should have the option of passing the matrices either in row-major
    or in column-major order, as it needs to have both in any case. */
+/* TODO: big design flaw in this function: if running this on a processor with
+   core-specific memory (i.e. anything modern with many cores) and a first-touch
+   memory allocation policy, the temporary buffers set here will all be
+   allocated on the first core but then used from other cores, which will make
+   this function a lot slower than it should be due to slow memory access. */
 int_t fit_collective_explicit_als
 (
     real_t *restrict biasA, real_t *restrict biasB,
@@ -9035,6 +9040,11 @@ int_t fit_collective_explicit_als
 /* TODO: the separation between implicit/explicit is no longer needed,
    as the explicit one can now imitate the implicit. Should instead make
    this function call the explicit one. */
+/* TODO: big design flaw in this function: if running this on a processor with
+   core-specific memory (i.e. anything modern with many cores) and a first-touch
+   memory allocation policy, the temporary buffers set here will all be
+   allocated on the first core but then used from other cores, which will make
+   this function a lot slower than it should be due to slow memory access. */
 int_t fit_collective_implicit_als
 (
     real_t *restrict A, real_t *restrict B,
