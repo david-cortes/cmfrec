@@ -410,7 +410,11 @@ void mult_elemwise(real_t *restrict inout, real_t *restrict other, size_t n, int
 real_t sum_squares(real_t *restrict arr, size_t n, int nthreads);
 void taxpy_large(real_t *restrict A, real_t x, real_t *restrict Y, size_t n, int nthreads);
 void tscal_large(real_t *restrict arr, real_t alpha, size_t n, int nthreads);
-void rnorm_xoshiro(real_t *seq, const size_t n, rng_state_t state[4]);
+void rnorm_xoshiro(real_t *seq, const size_t n, rng_state_t state[4])
+#ifdef __GNUC__
+__attribute__((optimize ("no-math-errno")))
+#endif
+;
 void seed_state(int_t seed, rng_state_t state[4]);
 void fill_rnorm_buckets
 (
@@ -421,7 +425,11 @@ void rnorm_singlethread(ArraysToFill arrays, rng_state_t state[4]);
 int_t rnorm_parallel(ArraysToFill arrays, int_t seed, int nthreads);
 void reduce_mat_sum(real_t *restrict outp, size_t lda, real_t *restrict inp,
                     int_t m, int_t n, int nthreads);
-void exp_neg_x(real_t *restrict arr, size_t n, int nthreads);
+void exp_neg_x(real_t *restrict arr, size_t n, int nthreads)
+#ifdef __GNUC__
+__attribute__((optimize ("no-math-errno")))
+#endif
+;
 void add_to_diag(real_t *restrict A, real_t val, size_t n);
 real_t sum_sq_div_w(real_t *restrict arr, real_t *restrict w, size_t n, bool compensated, int nthreads);
 void tgemm_sp_dense

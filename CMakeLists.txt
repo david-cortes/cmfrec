@@ -154,6 +154,40 @@ if (MSVC)
             set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} /O2")
         endif()
     endif()
+    if (NOT (${CMAKE_C_FLAGS_RELEASE} MATCHES "/fp:contract"))
+        set(OLD_FLAGS ${CMAKE_REQUIRED_FLAGS})
+        set(CMAKE_REQUIRED_FLAGS "/fp:contract")
+        check_c_source_compiles(
+            "
+            int main(int argc, char **argv)
+            {
+                return 0;
+            }
+            "
+            SUPPORTS_FPCONTRACT
+        )
+        set(CMAKE_REQUIRED_FLAGS ${OLD_FLAGS})
+        if (SUPPORTS_FPCONTRACT)
+            set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} /fp:contract")
+        endif()
+    endif()
+    if (NOT (${CMAKE_C_FLAGS_RELEASE} MATCHES "/fp:except-"))
+        set(OLD_FLAGS ${CMAKE_REQUIRED_FLAGS})
+        set(CMAKE_REQUIRED_FLAGS "/fp:except-")
+        check_c_source_compiles(
+            "
+            int main(int argc, char **argv)
+            {
+                return 0;
+            }
+            "
+            SUPPORTS_FPNOEX
+        )
+        set(CMAKE_REQUIRED_FLAGS ${OLD_FLAGS})
+        if (SUPPORTS_FPNOEX)
+            set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} /fp:except-")
+        endif()
+    endif()
 else()
     if (NOT (${CMAKE_C_FLAGS_RELEASE} MATCHES "-O3 "))
         set(OLD_FLAGS ${CMAKE_REQUIRED_FLAGS})
@@ -185,6 +219,23 @@ else()
             if (SUPPORTS_O2)
                 set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -O2")
             endif()
+        endif()
+    endif()
+    if (NOT (${CMAKE_C_FLAGS_RELEASE} MATCHES "-fno-math-errno"))
+        set(OLD_FLAGS ${CMAKE_REQUIRED_FLAGS})
+        set(CMAKE_REQUIRED_FLAGS "-fno-math-errno")
+        check_c_source_compiles(
+            "
+            int main(int argc, char **argv)
+            {
+                return 0;
+            }
+            "
+            SUPPORTS_FNE
+        )
+        set(CMAKE_REQUIRED_FLAGS ${OLD_FLAGS})
+        if (SUPPORTS_FNE)
+            set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -fno-math-errno")
         endif()
     endif()
 endif()

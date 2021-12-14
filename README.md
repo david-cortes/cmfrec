@@ -174,9 +174,9 @@ Hints:
 * If using MKL and compiling this package with GCC (default in most linux distributions, oftentimes also in anaconda for windows), one might want to set an environment variable `MKL_THREADING_LAYER=GNU`. In Linux and macOS, this can be done by adding `export MKL_THREADING_LAYER=GNU` in `~/.bashrc` or `~/.profile`, while in Windows it can be set through the control panel.
 
 
-For optimal performance in R, it's recommended to set a custom Makevars file with extra compiler optimizations, and then install the package from source. On Linux, simply create a text file `~/.R/Makevars` containing this line: `CFLAGS += -O3 -march=native` (plus an empty line at the end). Then install `cmfrec` with `install.packages("cmfrec")`.
+For optimal performance in R, it's recommended to set a custom Makevars file with extra compiler optimizations, and then install the package from source. On Linux, simply create a text file `~/.R/Makevars` containing this line: `CFLAGS += -O3 -march=native -fno-math-errno` (plus an empty line at the end). Then install `cmfrec` with `install.packages("cmfrec")`.
 
-Alternatively, one can also install this package from source but editing the `Makevars` file under `src` by uncommenting the lines that are commented out, which will trigger better compiler optimizations which are not CRAN-compliant (GCC only). For alternative ways of doing this see the "Performance tips" section in the docs. This basically amounts to adding compilation options `-std=c99 -O3 -march=native`, which are typically not the defaults in R.
+Alternatively, one can also install this package from source but editing the `Makevars` file under `src` by uncommenting the lines that are commented out, which will trigger better compiler optimizations which are not CRAN-compliant (GCC only). For alternative ways of doing this see the "Performance tips" section in the docs. This basically amounts to adding compilation options `-std=c99 -O3 -march=native -fno-math-errno`, which are typically not the defaults in R.
 
 In modern CPUs, this can make some optimization routines in `cmfrec` roughly 25% faster.
 
