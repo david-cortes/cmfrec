@@ -1,6 +1,6 @@
 # Collective Matrix Factorization
 
-Implementation of collective matrix factorization, based on _Relational learning via collective matrix factorization_ ([2]), with some enhancements and alternative models for cold-start recommendations as described in _Cold-start recommendations in Collective Matrix Factorization_ ([1]), and adding implicit-feedback variants as described in _Collaborative filtering for implicit feedback datasets_ ([3]).
+Implementation of collective matrix factorization, based on ["Relational learning via collective matrix factorization"](https://dl.acm.org/doi/abs/10.1145/1401890.1401969), with some enhancements and alternative models for cold-start recommendations as described in ["Cold-start recommendations in Collective Matrix Factorization"](https://arxiv.org/abs/1809.00366), and adding implicit-feedback variants as described in ["Collaborative filtering for implicit feedback datasets"](https://ieeexplore.ieee.org/abstract/document/4781121/).
 
 This is a hybrid collaborative filtering model for recommender systems that takes as input either explicit item ratings or implicit-feedback data, and side information about users and/or items (although it can also fit pure collaborative-filtering and pure content-based models). The overall idea was extended here to also be able to do cold-start recommendations (for users and items that were not in the training data but which have side information available).
 
@@ -174,9 +174,9 @@ Hints:
 * If using MKL and compiling this package with GCC (default in most linux distributions, oftentimes also in anaconda for windows), one might want to set an environment variable `MKL_THREADING_LAYER=GNU`. In Linux and macOS, this can be done by adding `export MKL_THREADING_LAYER=GNU` in `~/.bashrc` or `~/.profile`, while in Windows it can be set through the control panel.
 
 
-For optimal performance in R, it's recommended to set a custom Makevars file with extra compiler optimizations, and then install the package from source. On Linux, simply create a text file `~/.R/Makevars` containing this line: `CFLAGS += -O3 -march=native -fno-math-errno` (plus an empty line at the end). Then install `cmfrec` with `install.packages("cmfrec")`.
+For optimal performance in R, it's recommended to set a custom Makevars file with extra compiler optimizations, and then install the package from source. On Linux, simply create a text file `~/.R/Makevars` containing this line: `CFLAGS += -O3 -march=native -fno-math-errno -fno-trapping-math` (plus an empty line at the end). Then install `cmfrec` with `install.packages("cmfrec")`.
 
-Alternatively, one can also install this package from source but editing the `Makevars` file under `src` by uncommenting the lines that are commented out, which will trigger better compiler optimizations which are not CRAN-compliant (GCC only). For alternative ways of doing this see the "Performance tips" section in the docs. This basically amounts to adding compilation options `-std=c99 -O3 -march=native -fno-math-errno`, which are typically not the defaults in R.
+Alternatively, one can also install this package from source but editing the `Makevars` file under `src` by uncommenting the lines that are commented out, which will trigger better compiler optimizations which are not CRAN-compliant (GCC only). For alternative ways of doing this see the "Performance tips" section in the docs. This basically amounts to adding compilation options `-std=c99 -O3 -march=native -fno-math-errno -fno-trapping-math`, which are typically not the defaults in R.
 
 In modern CPUs, this can make some optimization routines in `cmfrec` roughly 25% faster.
 
@@ -351,10 +351,10 @@ For any installation problems or errors encountered with this software, please o
 
 ## References
 
-* [1] Cortes, David. "Cold-start recommendations in Collective Matrix Factorization." arXiv preprint arXiv:1809.00366 (2018).
-* [2] Singh, Ajit P., and Geoffrey J. Gordon. "Relational learning via collective matrix factorization." Proceedings of the 14th ACM SIGKDD international conference on Knowledge discovery and data mining. ACM, 2008.
-* [3] Hu, Yifan, Yehuda Koren, and Chris Volinsky. "Collaborative filtering for implicit feedback datasets." 2008 Eighth IEEE International Conference on Data Mining. Ieee, 2008.
-* [4] Takács, Gábor, István Pilászy, and Domonkos Tikk. "Applications of the conjugate gradient method for implicit feedback collaborative filtering." Proceedings of the fifth ACM conference on Recommender systems. 2011.
-* [5] Rendle, Steffen, Li Zhang, and Yehuda Koren. "On the difficulty of evaluating baselines: A study on recommender systems." arXiv preprint arXiv:1905.01395 (2019).
-* [6] Franc, Vojtěch, Václav Hlaváč, and Mirko Navara. "Sequential coordinate-wise algorithm for the non-negative least squares problem." International Conference on Computer Analysis of Images and Patterns. Springer, Berlin, Heidelberg, 2005.
-* [7] Zhou, Yunhong, et al. "Large-scale parallel collaborative filtering for the netflix prize." International conference on algorithmic applications in management. Springer, Berlin, Heidelberg, 2008.
+* Cortes, David. "Cold-start recommendations in Collective Matrix Factorization." arXiv preprint arXiv:1809.00366 (2018).
+* Singh, Ajit P., and Geoffrey J. Gordon. "Relational learning via collective matrix factorization." Proceedings of the 14th ACM SIGKDD international conference on Knowledge discovery and data mining. ACM, 2008.
+* Hu, Yifan, Yehuda Koren, and Chris Volinsky. "Collaborative filtering for implicit feedback datasets." 2008 Eighth IEEE International Conference on Data Mining. Ieee, 2008.
+* Takács, Gábor, István Pilászy, and Domonkos Tikk. "Applications of the conjugate gradient method for implicit feedback collaborative filtering." Proceedings of the fifth ACM conference on Recommender systems. 2011.
+* Rendle, Steffen, Li Zhang, and Yehuda Koren. "On the difficulty of evaluating baselines: A study on recommender systems." arXiv preprint arXiv:1905.01395 (2019).
+* Franc, Vojtěch, Václav Hlaváč, and Mirko Navara. "Sequential coordinate-wise algorithm for the non-negative least squares problem." International Conference on Computer Analysis of Images and Patterns. Springer, Berlin, Heidelberg, 2005.
+* Zhou, Yunhong, et al. "Large-scale parallel collaborative filtering for the netflix prize." International conference on algorithmic applications in management. Springer, Berlin, Heidelberg, 2008.
