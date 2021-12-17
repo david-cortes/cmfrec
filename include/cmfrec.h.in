@@ -590,6 +590,18 @@ extern "C" {
                    In general, the Cholesky solver tends to lead to better
                    results for the explicit-feedback models.
                    Recommended value: true
+    @param precondition_cg  Whether to use Jacobi preconditioning for the CG
+                            procedure. In general, this type of preconditioning
+                            is not beneficial (makes the algorithm slower) as
+                            the factor variables tend to be in the same scale,
+                            but it might help when using non-shared factors.
+                            Note that, when using preconditioning, the procedure
+                            will not check for convergence, taking instead a
+                            fixed number of steps (given by 'max_cg_steps') at
+                            each iteration regardless of whether it has reached
+                            the optimum already.
+                            Ignored when passing 'use_cg=false'.
+                            Recommended value: false
     @param max_cg_steps  Maximum number of CG updates to perform per iteration.
                          Recommended values: something much smaller than k, >=2
     @param max_cd_steps  Maximum number of coordinate descent updates to perform
@@ -620,6 +632,30 @@ extern "C" {
     
     
     --- Other ---
+    @param numa_locality  Locality level for per-thread memory allocations.
+                          If passing '0', will not pay any attention to the
+                          thread locality of memory allocations, making each
+                          piece of memory interchangeable and assigned to any
+                          thread at random depending on the OpenMP runtime.
+                          This is ideal for UMA (unified memory access) systems,
+                          such as typical desktop computers.
+                          If passing '1', will allocate memory independently for
+                          each thread, preventing reutilization of memory from
+                          allocations temporary buffers used by the main thread.
+                          This is ideal for NUMA (non-unified memory access)
+                          systems, such as servers with a high thread count, as
+                          memory accesses will be faster, but it will use more
+                          total memory since buffers are not reusable.
+                          Note that this will only work if the system has a
+                          first-touch allocation policy (the default in linux).
+                          If passing '2', will allocate thread memory privately
+                          like before, and will additionally make a copy of the
+                          factor matrices that are not being used for each
+                          thread, potentially making it faster if the number of
+                          NUMA nodes is very large and the latencies for
+                          accessing the memory of a different thread grow too
+                          large. This will increase memory usage by a lot.
+                          Recommended value: 1
     @param verbose  Whether to print information about the optimization
                     procedure. This can be helpful for getting an idea of the
                     bottlenecks in ALS, and for determining if the
@@ -895,7 +931,7 @@ CMFREC_EXPORTABLE int_t fit_collective_explicit_als
     int_t k_main, int_t k_user, int_t k_item,
     real_t w_main, real_t w_user, real_t w_item, real_t w_implicit,
     int_t niter, int nthreads, bool verbose, bool handle_interrupt,
-    bool use_cg, int_t max_cg_steps, bool finalize_chol,
+    bool use_cg, int_t max_cg_steps, bool precondition_cg, bool finalize_chol,
     bool nonneg, int_t max_cd_steps, bool nonneg_C, bool nonneg_D,
     bool precompute_for_predictions,
     bool include_all_X,
@@ -929,7 +965,7 @@ CMFREC_EXPORTABLE int_t fit_collective_implicit_als
     real_t *w_main_multiplier,
     real_t alpha, bool adjust_weight, bool apply_log_transf,
     int_t niter, int nthreads, bool verbose, bool handle_interrupt,
-    bool use_cg, int_t max_cg_steps, bool finalize_chol,
+    bool use_cg, int_t max_cg_steps, bool precondition_cg, bool finalize_chol,
     bool nonneg, int_t max_cd_steps, bool nonneg_C, bool nonneg_D,
     bool precompute_for_predictions,
     real_t *precomputedBtB,
@@ -1941,7 +1977,7 @@ CMFREC_EXPORTABLE int_t fit_offsets_explicit_als
     bool NA_as_zero_X,
     int_t niter,
     int nthreads, bool use_cg,
-    int_t max_cg_steps, bool finalize_chol,
+    int_t max_cg_steps, bool precondition_cg, bool finalize_chol,
     bool verbose, bool handle_interrupt,
     bool precompute_for_predictions,
     real_t *Am, real_t *Bm,
@@ -1964,7 +2000,7 @@ CMFREC_EXPORTABLE int_t fit_offsets_implicit_als
     real_t alpha,
     int_t niter,
     int nthreads, bool use_cg,
-    int_t max_cg_steps, bool finalize_chol,
+    int_t max_cg_steps, bool precondition_cg, bool finalize_chol,
     bool verbose, bool handle_interrupt,
     bool precompute_for_predictions,
     real_t *Am, real_t *Bm,

@@ -43,6 +43,7 @@ CMF(
   parallelize = "separate",
   corr_pairs = 4L,
   max_cg_steps = 3L,
+  precondition_cg = FALSE,
   finalize_chol = TRUE,
   NA_as_zero = FALSE,
   NA_as_zero_user = FALSE,
@@ -79,6 +80,7 @@ CMF_implicit(
   center_I = TRUE,
   niter = 10L,
   max_cg_steps = 3L,
+  precondition_cg = FALSE,
   finalize_chol = FALSE,
   NA_as_zero_user = FALSE,
   NA_as_zero_item = FALSE,
@@ -139,6 +141,7 @@ OMF_explicit(
   lambda = 10,
   method = "lbfgs",
   use_cg = TRUE,
+  precondition_cg = FALSE,
   user_bias = TRUE,
   item_bias = TRUE,
   center = TRUE,
@@ -169,6 +172,7 @@ OMF_implicit(
   lambda = 1,
   alpha = 1,
   use_cg = TRUE,
+  precondition_cg = FALSE,
   add_intercepts = TRUE,
   niter = 10L,
   apply_log_transf = FALSE,
@@ -544,6 +548,17 @@ using the ALS method.}
 
 \item{max_cg_steps}{Maximum number of conjugate gradient iterations to perform in an ALS round.
 Ignored when passing `use_cg=FALSE` or using the L-BFGS method.}
+
+\item{precondition_cg}{Whether to use Jacobi preconditioning for the conjugate gradient procedure.
+In general, this type of preconditioning is not beneficial (makes the algorithm
+slower) as the factor variables tend to be in the same scale, but it might help
+when using non-shared factors.
+
+Note that, when using preconditioning, the procedure will not check for convergence,
+taking instead a fixed number of steps (given by `max_cg_steps`) at each iteration
+regardless of whether it has reached the optimum already.
+
+Ignored when passing `use_cg=FALSE` or `method="als"`.}
 
 \item{finalize_chol}{When passing `use_cg=TRUE` and using the ALS method, whether to perform the last iteration with
 the Cholesky solver. This will make it slower, but will avoid the issue

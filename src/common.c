@@ -643,7 +643,8 @@ void factors_closed_form
     real_t *restrict precomputedBtB, int_t cnt_NA, int_t ld_BtB,
     bool BtB_has_diag, bool BtB_is_scaled, real_t scale_BtB, int_t n_BtB,
     real_t *restrict precomputedBtBchol, bool NA_as_zero,
-    bool use_cg, int_t max_cg_steps,/* <- 'cg' should not be used for new data*/
+    bool use_cg, bool precondition_cg,
+    int_t max_cg_steps,/* <- 'cg' should not be used for new data*/
     bool nonneg, int_t max_cd_steps,
     real_t *restrict bias_BtX, real_t *restrict bias_X, real_t bias_X_glob,
     real_t multiplier_bias_BtX,
@@ -882,40 +883,85 @@ void factors_closed_form
        to include here. */
     else if (use_cg)
     {
-        if (Xa_dense != NULL)
-            factors_explicit_cg_dense(
-                a_vec, k,
-                B, n, ldb,
-                Xa_dense, cnt_NA,
-                weight,
-                precomputedBtB, ld_BtB,
-                buffer_real_t,
-                lam, lam_last,
-                max_cg_steps
-            );
-        else if (NA_as_zero && weight != NULL)
-            factors_explicit_cg_NA_as_zero_weighted(
-                a_vec, k,
-                B, n, ldb,
-                Xa, ixB, nnz,
-                weight,
-                precomputedBtB, ld_BtB,
-                bias_BtX, bias_X, bias_X_glob,
-                multiplier_bias_BtX,
-                buffer_real_t,
-                lam, lam_last,
-                max_cg_steps
-            );
+        if (!precondition_cg)
+        {
+            if (Xa_dense != NULL)
+                factors_explicit_cg_dense(
+                    a_vec, k,
+                    B, n, ldb,
+                    Xa_dense, cnt_NA,
+                    weight,
+                    precomputedBtB, ld_BtB,
+                    buffer_real_t,
+                    lam, lam_last,
+                    max_cg_steps
+                );
+            else if (NA_as_zero && weight != NULL)
+                factors_explicit_cg_NA_as_zero_weighted(
+                    a_vec, k,
+                    B, n, ldb,
+                    Xa, ixB, nnz,
+                    weight,
+                    precomputedBtB, ld_BtB,
+                    bias_BtX, bias_X, bias_X_glob,
+                    multiplier_bias_BtX,
+                    buffer_real_t,
+                    lam, lam_last,
+                    max_cg_steps
+                );
+            else
+            {
+                factors_explicit_cg(
+                    a_vec, k,
+                    B, n, ldb,
+                    Xa, ixB, nnz,
+                    weight,
+                    buffer_real_t,
+                    lam, lam_last,
+                    max_cg_steps
+                );
+            }
+        }
+
         else
-            factors_explicit_cg(
-                a_vec, k,
-                B, n, ldb,
-                Xa, ixB, nnz,
-                weight,
-                buffer_real_t,
-                lam, lam_last,
-                max_cg_steps
-            );
+        {
+            if (Xa_dense != NULL)
+                factors_explicit_pcg_dense(
+                    a_vec, k,
+                    B, n, ldb,
+                    Xa_dense, cnt_NA,
+                    weight,
+                    precomputedBtB, ld_BtB,
+                    buffer_real_t,
+                    lam, lam_last,
+                    max_cg_steps
+                );
+            else if (NA_as_zero && weight != NULL)
+                factors_explicit_pcg_NA_as_zero_weighted(
+                    a_vec, k,
+                    B, n, ldb,
+                    Xa, ixB, nnz,
+                    weight,
+                    precomputedBtB, ld_BtB,
+                    bias_BtX, bias_X, bias_X_glob,
+                    multiplier_bias_BtX,
+                    buffer_real_t,
+                    lam, lam_last,
+                    max_cg_steps
+                );
+            else
+            {
+                factors_explicit_pcg(
+                    a_vec, k,
+                    B, n, ldb,
+                    Xa, ixB, nnz,
+                    weight,
+                    buffer_real_t,
+                    lam, lam_last,
+                    max_cg_steps
+                );
+            }
+        }
 
         return;
     }
@@ -1012,8 +1058,7 @@ void factors_closed_form
     /* Finally, obtain closed-form through Cholesky factorization,
        exploiting the fact that t(B)*B+diag(lam) is symmetric PSD */
     if (add_diag || force_add_diag) {
-        add_to_diag(bufferBtB, lam, k);
-        if (lam_last != lam) bufferBtB[square(k)-1] += (lam_last - lam);
+        add_to_diag2(bufferBtB, lam, k, lam_last);
     }
     if (bias_BtX != NULL && NA_as_zero)
         cblas_taxpy(k, 1./multiplier_bias_BtX, bias_BtX, 1, a_vec, 1);
@@ -1069,17 +1114,30 @@ void factors_explicit_cg
     real_t a;
     real_t r_old, r_new;
 
-    for (size_t ix = 0; ix < nnz; ix++) {
-        coef  = cblas_tdot(k, B + (size_t)ixB[ix]*(size_t)ldb, 1, a_vec, 1);
-        coef -= Xa[ix];
-        coef *= (weight == NULL)? 1. : weight[ix];
-        cblas_taxpy(k, -coef, B + (size_t)ixB[ix]*ldb, 1, r, 1);
+    if (weight == NULL)
+    {
+        for (size_t ix = 0; ix < nnz; ix++)
+        {
+            coef  = cblas_tdot(k, B + (size_t)ixB[ix]*(size_t)ldb, 1, a_vec, 1);
+            coef -= Xa[ix];
+            cblas_taxpy(k, -coef, B + (size_t)ixB[ix]*ldb, 1, r, 1);
+        }
     }
-    cblas_taxpy(k, -lam, a_vec, 1, r, 1);
-    if (lam != lam_last)
-        r[k-1] -= (lam_last-lam) * a_vec[k-1];
 
-    copy_arr(r, p, k);
+    else
+    {
+        for (size_t ix = 0; ix < nnz; ix++)
+        {
+            coef  = cblas_tdot(k, B + (size_t)ixB[ix]*(size_t)ldb, 1, a_vec, 1);
+            coef -= Xa[ix];
+            coef *= weight[ix];
+            cblas_taxpy(k, -coef, B + (size_t)ixB[ix]*ldb, 1, r, 1);
+        }
+    }
+
+    cblas_taxpy(k, -lam, a_vec, 1, r, 1);
+    if (lam != lam_last) r[k-1] -= (lam_last - lam) * a_vec[k-1];
+
     r_old = cblas_tdot(k, r, 1, r, 1);
 
     #ifdef TEST_CG
@@ -1090,17 +1148,25 @@ void factors_explicit_cg
         return;
     #endif
 
+    copy_arr(r, p, k);
+
     for (int_t cg_step = 0; cg_step < max_cg_steps; cg_step++)
     {
         set_to_zero(Ap, k);
-        for (size_t ix = 0; ix < nnz; ix++) {
-            coef = cblas_tdot(k, B + (size_t)ixB[ix]*(size_t)ldb, 1, p, 1);
-            coef *= (weight == NULL)? 1. : weight[ix];
-            cblas_taxpy(k, coef, B + (size_t)ixB[ix]*ldb, 1, Ap, 1);
+        if (weight == NULL) {
+            for (size_t ix = 0; ix < nnz; ix++) {
+                coef = cblas_tdot(k, B + (size_t)ixB[ix]*(size_t)ldb, 1, p, 1);
+                cblas_taxpy(k, coef, B + (size_t)ixB[ix]*ldb, 1, Ap, 1);
+            }
+        } else {
+            for (size_t ix = 0; ix < nnz; ix++) {
+                coef = cblas_tdot(k, B + (size_t)ixB[ix]*(size_t)ldb, 1, p, 1);
+                coef *= weight[ix];
+                cblas_taxpy(k, coef, B + (size_t)ixB[ix]*ldb, 1, Ap, 1);
+            }
         }
         cblas_taxpy(k, lam, p, 1, Ap, 1);
-        if (lam != lam_last)
-            Ap[k-1] += (lam_last-lam) * p[k-1];
+        if (lam != lam_last) Ap[k-1] += (lam_last - lam) * p[k-1];
 
         a = r_old / cblas_tdot(k, p, 1, Ap, 1);
         cblas_taxpy(k,  a,  p, 1, a_vec, 1);
@@ -1117,6 +1183,110 @@ void factors_explicit_cg
 
         cblas_tscal(k, r_new / r_old, p, 1);
         cblas_taxpy(k, 1., r, 1, p, 1);
+        r_old = r_new;
+    }
+}
+
+void factors_explicit_pcg
+(
+    real_t *restrict a_vec, int_t k,
+    real_t *restrict B, int_t n, int_t ldb,
+    real_t *restrict Xa, int_t ixB[], size_t nnz,
+    real_t *restrict weight,
+    real_t *restrict buffer_real_t,
+    real_t lam, real_t lam_last,
+    int_t max_cg_steps
+)
+{
+    real_t *restrict Ap = buffer_real_t;
+    real_t *restrict p  = Ap + k;
+    real_t *restrict r  = p  + k;
+    real_t *restrict z  = r  + k;
+    real_t *restrict PC = z  + k;
+    set_to_zero(r, k);
+    real_t coef;
+    real_t a;
+    real_t r_old, r_new;
+
+    if (weight == NULL)
+    {
+        for (size_t ix = 0; ix < nnz; ix++)
+        {
+            coef  = cblas_tdot(k, B + (size_t)ixB[ix]*(size_t)ldb, 1, a_vec, 1);
+            coef -= Xa[ix];
+            cblas_taxpy(k, -coef, B + (size_t)ixB[ix]*ldb, 1, r, 1);
+        }
+    }
+
+    else
+    {
+        for (size_t ix = 0; ix < nnz; ix++)
+        {
+            coef  = cblas_tdot(k, B + (size_t)ixB[ix]*(size_t)ldb, 1, a_vec, 1);
+            coef -= Xa[ix];
+            coef *= weight[ix];
+            cblas_taxpy(k, -coef, B + (size_t)ixB[ix]*ldb, 1, r, 1);
+        }
+    }
+    cblas_taxpy(k, -lam, a_vec, 1, r, 1);
+    if (lam != lam_last) r[k-1] -= (lam_last - lam) * a_vec[k-1];
+
+    /* Jacobi (diagonal Hessian) preconditioner */
+    set_to_zero(PC, k);
+    if (weight == NULL)
+    {
+        for (size_t ix = 0; ix < nnz; ix++)
+        {
+            real_t *restrict B_this = B + (size_t)ixB[ix]*(size_t)ldb;
+            for (int_t kk = 0; kk < k; kk++)
+                PC[kk] = fma_t(B_this[kk], B_this[kk], PC[kk]);
+        }
+    }
+
+    else
+    {
+        for (size_t ix = 0; ix < nnz; ix++)
+        {
+            real_t *restrict B_this = B + (size_t)ixB[ix]*(size_t)ldb;
+            real_t w_this = weight[ix];
+            for (int_t kk = 0; kk < k; kk++)
+                PC[kk] += w_this * square(B_this[kk]);
+        }
+    }
+    for (int_t ix = 0; ix < k; ix++) PC[ix] += lam;
+    if (lam != lam_last) PC[k-1] += (lam_last - lam);
+    recipr(PC, k);
+
+    mult2(z, r, PC, k);
+    r_old = cblas_tdot(k, z, 1, r, 1);
+    copy_arr(z, p, k);
+
+    for (int_t cg_step = 0; cg_step < max_cg_steps; cg_step++)
+    {
+        set_to_zero(Ap, k);
+        if (weight == NULL) {
+            for (size_t ix = 0; ix < nnz; ix++) {
+                coef = cblas_tdot(k, B + (size_t)ixB[ix]*(size_t)ldb, 1, p, 1);
+                cblas_taxpy(k, coef, B + (size_t)ixB[ix]*ldb, 1, Ap, 1);
+            }
+        } else {
+            for (size_t ix = 0; ix < nnz; ix++) {
+                coef = cblas_tdot(k, B + (size_t)ixB[ix]*(size_t)ldb, 1, p, 1);
+                coef *= weight[ix];
+                cblas_taxpy(k, coef, B + (size_t)ixB[ix]*ldb, 1, Ap, 1);
+            }
+        }
+        cblas_taxpy(k, lam, p, 1, Ap, 1);
+        if (lam != lam_last) Ap[k-1] += (lam_last - lam) * p[k-1];
+
+        a = r_old / cblas_tdot(k, p, 1, Ap, 1);
+        cblas_taxpy(k,  a,  p, 1, a_vec, 1);
+        cblas_taxpy(k, -a, Ap, 1, r, 1);
+
+        mult2(z, r, PC, k);
+        r_new = cblas_tdot(k, z, 1, r, 1);
+        cblas_tscal(k, r_new / r_old, p, 1);
+        cblas_taxpy(k, 1., z, 1, p, 1);
         r_old = r_new;
     }
 }
@@ -1271,6 +1441,179 @@ void factors_explicit_cg_NA_as_zero_weighted
     }
 }
 
+void factors_explicit_pcg_NA_as_zero_weighted
+(
+    real_t *restrict a_vec, int_t k,
+    real_t *restrict B, int_t n, int_t ldb,
+    real_t *restrict Xa, int_t ixB[], size_t nnz,
+    real_t *restrict weight,
+    real_t *restrict precomputedBtB, int_t ld_BtB,
+    real_t *restrict bias_BtX, real_t *restrict bias_X, real_t bias_X_glob,
+    real_t multiplier_bias_BtX,
+    real_t *restrict buffer_real_t,
+    real_t lam, real_t lam_last,
+    int_t max_cg_steps
+)
+{
+    if (precomputedBtB == NULL)
+    {
+        /* this should never happen */
+        factors_explicit_cg_NA_as_zero_weighted(
+            a_vec, k,
+            B, n, ldb,
+            Xa, ixB, nnz,
+            weight,
+            precomputedBtB, ld_BtB,
+            bias_BtX, bias_X, bias_X_glob,
+            multiplier_bias_BtX,
+            buffer_real_t,
+            lam, lam_last,
+            max_cg_steps
+        );
+        return;
+    }
+
+    real_t *restrict Ap = buffer_real_t;
+    real_t *restrict p  = Ap + k;
+    real_t *restrict r  = p  + k;
+    real_t *restrict z  = r  + k;
+    real_t *restrict PC = z  + k;
+    real_t *restrict wr = PC + k; /* length is 'n' */
+
+
+    set_to_zero(PC, k);
+    for (size_t ix = 0; ix < nnz; ix++)
+    {
+        real_t *restrict B_this = B + (size_t)ixB[ix]*(size_t)ldb;
+        real_t w_this = weight[ix] - (real_t)1;
+        for (int_t kk = 0; kk < k; kk++)
+            PC[kk] += w_this * square(B_this[kk]);
+    }
+    for (size_t ix = 0; ix < (size_t)k; ix++)
+        PC[ix] += precomputedBtB[ix + ix*ld_BtB];
+    for (int_t ix = 0; ix < k; ix++) PC[ix] += lam;
+    if (lam != lam_last) PC[k-1] += (lam_last - lam);
+    recipr(PC, k);
+
+    
+    set_to_zero(r, k);
+    real_t a;
+    real_t r_old, r_new, coef;
+
+    bool prefer_BtB = k < n;
+    if (precomputedBtB == NULL)
+        prefer_BtB = false;
+
+    if (prefer_BtB)
+    {
+        cblas_tsymv(CblasRowMajor, CblasUpper, k,
+                    -1., precomputedBtB, ld_BtB,
+                    a_vec, 1,
+                    0., r, 1);
+        for (size_t ix = 0; ix < nnz; ix++)
+        {
+            coef = cblas_tdot(k, B + (size_t)ixB[ix]*(size_t)ldb, 1, a_vec, 1);
+            cblas_taxpy(k,
+                        -(weight[ix]-1.)
+                            *
+                        (coef + bias_X_glob + ((bias_X == NULL)?
+                                                0 : bias_X[ixB[ix]]))
+                            +
+                        (weight[ix] * Xa[ix]),
+                        B + (size_t)ixB[ix]*(size_t)ldb, 1,
+                        r, 1);
+        }
+    }
+
+    else
+    {
+        cblas_tgemv(CblasRowMajor, CblasNoTrans,
+                    n, k,
+                    -1., B, ldb,
+                    a_vec, 1,
+                    0., wr, 1);
+        for (size_t ix = 0; ix < nnz; ix++)
+            wr[ixB[ix]] = weight[ix] * (wr[ixB[ix]] + Xa[ix]);
+        if (bias_X != NULL) {
+            for (size_t ix = 0; ix < nnz; ix++)
+                wr[ixB[ix]] -= (weight[ix] - 1.)
+                                    *
+                               (bias_X[ixB[ix]] + bias_X_glob);
+        }
+        else if (bias_X_glob) {
+            for (size_t ix = 0; ix < nnz; ix++)
+                wr[ixB[ix]] -= (weight[ix] - 1.) * bias_X_glob;
+        }
+        cblas_tgemv(CblasRowMajor, CblasTrans,
+                    n, k,
+                    1., B, ldb,
+                    wr, 1,
+                    1., r, 1);
+    }
+
+    if (bias_BtX != NULL)
+    {
+        cblas_taxpy(k, 1./multiplier_bias_BtX, bias_BtX, 1, r, 1);
+    }
+
+    cblas_taxpy(k, -lam, a_vec, 1, r, 1);
+    if (lam != lam_last)
+        r[k-1] -= (lam_last-lam) * a_vec[k-1];
+
+    mult2(z, r, PC, k);
+    r_old = cblas_tdot(k, z, 1, r, 1);
+    copy_arr(z, p, k);
+
+    for (int_t cg_step = 0; cg_step < max_cg_steps; cg_step++)
+    {
+        if (precomputedBtB != NULL && prefer_BtB)
+        {
+            cblas_tsymv(CblasRowMajor, CblasUpper, k,
+                        1., precomputedBtB, ld_BtB,
+                        p, 1,
+                        0., Ap, 1);
+            for (size_t ix = 0; ix < nnz; ix++) {
+                coef = cblas_tdot(k,
+                                  B + (size_t)ixB[ix]*(size_t)ldb, 1,
+                                  p, 1);
+                cblas_taxpy(k, (weight[ix] - 1.) * coef,
+                            B + (size_t)ixB[ix]*(size_t)ldb, 1,
+                            Ap, 1);
+            }
+        }
+
+        else
+        {
+            cblas_tgemv(CblasRowMajor, CblasNoTrans,
+                        n, k,
+                        1., B, ldb,
+                        p, 1,
+                        0., wr, 1);
+            for (size_t ix = 0; ix < nnz; ix++)
+                wr[ixB[ix]] *= weight[ix];
+            cblas_tgemv(CblasRowMajor, CblasTrans,
+                        n, k,
+                        1., B, ldb,
+                        wr, 1,
+                        0., Ap, 1);
+        }
+
+        cblas_taxpy(k, lam, p, 1, Ap, 1);
+        if (lam != lam_last)
+            Ap[k-1] += (lam_last-lam) * p[k-1];
+
+        a = r_old / cblas_tdot(k, p, 1, Ap, 1);
+        cblas_taxpy(k,  a,  p, 1, a_vec, 1);
+        cblas_taxpy(k, -a, Ap, 1, r, 1);
+
+        mult2(z, r, PC, k);
+        r_new = cblas_tdot(k, z, 1, r, 1);
+        cblas_tscal(k, r_new / r_old, p, 1);
+        cblas_taxpy(k, 1., z, 1, p, 1);
+        r_old = r_new;
+    }
+}
+
 void factors_explicit_cg_dense
 (
     real_t *restrict a_vec, int_t k,
@@ -1315,23 +1658,36 @@ void factors_explicit_cg_dense
 
     else
     {
-        for (size_t ix = 0; ix < (size_t)n; ix++)
+        if (weight == NULL)
         {
-            if (!isnan(Xa_dense[ix]))
+            for (size_t ix = 0; ix < (size_t)n; ix++)
             {
-                coef = cblas_tdot(k, B + ix*(size_t)ldb, 1, a_vec, 1);
-                cblas_taxpy(k,
-                            (-coef + Xa_dense[ix])
-                                *
-                            ((weight == NULL)? 1. : weight[ix]),
-                            B + ix*(size_t)ldb, 1, r, 1);
+                if (!isnan(Xa_dense[ix]))
+                {
+                    coef = cblas_tdot(k, B + ix*(size_t)ldb, 1, a_vec, 1);
+                    cblas_taxpy(k, -coef + Xa_dense[ix],
+                                B + ix*(size_t)ldb, 1, r, 1);
+                }
+            }
+        }
+
+        else
+        {
+            for (size_t ix = 0; ix < (size_t)n; ix++)
+            {
+                if (!isnan(Xa_dense[ix]))
+                {
+                    coef = cblas_tdot(k, B + ix*(size_t)ldb, 1, a_vec, 1);
+                    cblas_taxpy(k,
+                                (-coef + Xa_dense[ix]) * weight[ix],
+                                B + ix*(size_t)ldb, 1, r, 1);
+                }
             }
         }
     }
     
     cblas_taxpy(k, -lam, a_vec, 1, r, 1);
-    if (lam != lam_last)
-        r[k-1] -= (lam_last-lam) * a_vec[k-1];
+    if (lam != lam_last) r[k-1] -= (lam_last - lam) * a_vec[k-1];
 
     copy_arr(r, p, k);
     r_old = cblas_tdot(k, r, 1, r, 1);
@@ -1374,8 +1730,7 @@ void factors_explicit_cg_dense
         }
 
         cblas_taxpy(k, lam, p, 1, Ap, 1);
-        if (lam != lam_last)
-            Ap[k-1] += (lam_last-lam) * p[k-1];
+        if (lam != lam_last) Ap[k-1] += (lam_last - lam) * p[k-1];
 
         a = r_old / cblas_tdot(k, p, 1, Ap, 1);
         cblas_taxpy(k,  a,  p, 1, a_vec, 1);
@@ -1395,6 +1750,168 @@ void factors_explicit_cg_dense
     }
 }
 
+void factors_explicit_pcg_dense
+(
+    real_t *restrict a_vec, int_t k,
+    real_t *restrict B, int_t n, int_t ldb,
+    real_t *restrict Xa_dense, int_t cnt_NA,
+    real_t *restrict weight,
+    real_t *restrict precomputedBtB,
+    int_t ld_BtB,
+    real_t *restrict buffer_real_t,
+    real_t lam, real_t lam_last,
+    int_t max_cg_steps
+)
+{
+    real_t *restrict Ap = buffer_real_t;
+    real_t *restrict p  = Ap + k;
+    real_t *restrict r  = p  + k;
+    real_t *restrict z  = r  + k;
+    real_t *restrict PC = z  + k;
+    real_t r_new, r_old;
+    real_t a, coef, w_this;
+
+    if (precomputedBtB != NULL && weight == NULL)
+    {
+        for (size_t ix = 0; ix < (size_t)k; ix++)
+            PC[ix] = precomputedBtB[ix + ix*ld_BtB];
+    }
+
+    else if (weight == NULL)
+    {
+        set_to_zero(PC, k);
+        for (size_t ix = 0; ix < (size_t)n; ix++)
+        {
+            if (!isnan(Xa_dense[ix]))
+            {
+                real_t *restrict B_this =  B + ix*(size_t)ldb;
+                for (int_t kk = 0; kk < k; kk++)
+                    PC[kk] = fma_t(B_this[kk], B_this[kk], PC[kk]);
+            }
+        }
+    }
+
+    else
+    {
+        set_to_zero(PC, k);
+        for (size_t ix = 0; ix < (size_t)n; ix++)
+        {
+            if (!isnan(Xa_dense[ix]))
+            {
+                real_t *restrict B_this =  B + ix*(size_t)ldb;
+                real_t w_this = weight[ix];
+                for (int_t kk = 0; kk < k; kk++)
+                    PC[kk] += w_this * square(B_this[kk]);
+            }
+        }
+    }
+    for (int_t ix = 0; ix < k; ix++) PC[ix] += lam;
+    if (lam != lam_last) PC[k-1] += (lam_last - lam);
+    recipr(PC, k);
+
+    bool prefer_BtB = cnt_NA < k && precomputedBtB != NULL && weight == NULL;
+    if (!prefer_BtB)
+        set_to_zero(r, k);
+
+    if (prefer_BtB)
+    {
+        cblas_tsymv(CblasRowMajor, CblasUpper, k,
+                    -1., precomputedBtB, ld_BtB,
+                    a_vec, 1,
+                    0., r, 1);
+        for (size_t ix = 0; ix < (size_t)n; ix++)
+        {
+            if (isnan(Xa_dense[ix])) {
+                coef = cblas_tdot(k, B + ix*(size_t)ldb, 1, a_vec, 1);
+                cblas_taxpy(k, coef, B + ix*(size_t)ldb, 1, r, 1);
+            }
+            
+            else {
+                cblas_taxpy(k, Xa_dense[ix], B + ix*(size_t)ldb, 1, r, 1);
+            }
+        }
+    }
+
+    else
+    {
+        if (weight == NULL)
+        {
+            for (size_t ix = 0; ix < (size_t)n; ix++)
+            {
+                if (!isnan(Xa_dense[ix]))
+                {
+                    coef = cblas_tdot(k, B + ix*(size_t)ldb, 1, a_vec, 1);
+                    cblas_taxpy(k, -coef + Xa_dense[ix],
+                                B + ix*(size_t)ldb, 1, r, 1);
+                }
+            }
+        }
+
+        else
+        {
+            for (size_t ix = 0; ix < (size_t)n; ix++)
+            {
+                if (!isnan(Xa_dense[ix]))
+                {
+                    coef = cblas_tdot(k, B + ix*(size_t)ldb, 1, a_vec, 1);
+                    cblas_taxpy(k,
+                                (-coef + Xa_dense[ix]) * weight[ix],
+                                B + ix*(size_t)ldb, 1, r, 1);
+                }
+            }
+        }
+    }
+    
+    cblas_taxpy(k, -lam, a_vec, 1, r, 1);
+    if (lam != lam_last) r[k-1] -= (lam_last - lam) * a_vec[k-1];
+
+    mult2(z, r, PC, k);
+    r_old = cblas_tdot(k, z, 1, r, 1);
+    copy_arr(z, p, k);
+
+    for (int_t cg_step = 0; cg_step < max_cg_steps; cg_step++)
+    {
+        if (prefer_BtB)
+        {
+            cblas_tsymv(CblasRowMajor, CblasUpper, k,
+                        1., precomputedBtB, ld_BtB,
+                        p, 1,
+                        0., Ap, 1);
+            for (size_t ix = 0; ix < (size_t)n; ix++)
+                if (isnan(Xa_dense[ix])) {
+                    coef = cblas_tdot(k,  B + ix*(size_t)ldb, 1, p,  1);
+                    cblas_taxpy(k, -coef, B + ix*(size_t)ldb, 1, Ap, 1);
+                }
+        }
+
+        else
+        {
+            set_to_zero(Ap, k);
+            for (size_t ix = 0; ix < (size_t)n; ix++)
+            {
+                if (!isnan(Xa_dense[ix]))
+                {
+                    w_this = (weight == NULL)? 1. : weight[ix];
+                    coef = cblas_tdot(k, B + ix*(size_t)ldb, 1, p, 1);
+                    cblas_taxpy(k, w_this * coef, B + ix*(size_t)ldb, 1, Ap, 1);
+                }
+            }
+        }
+
+        cblas_taxpy(k, lam, p, 1, Ap, 1);
+        if (lam != lam_last) Ap[k-1] += (lam_last - lam) * p[k-1];
+
+        a = r_old / cblas_tdot(k, p, 1, Ap, 1);
+        cblas_taxpy(k,  a,  p, 1, a_vec, 1);
+        cblas_taxpy(k, -a, Ap, 1, r, 1);
+
+        mult2(z, r, PC, k);
+        r_new = cblas_tdot(k, z, 1, r, 1);
+        cblas_tscal(k, r_new / r_old, p, 1);
+        cblas_taxpy(k, 1., z, 1, p, 1);
+        r_old = r_new;
+    }
+}
 
 /* https://www.benfrederickson.com/fast-implicit-matrix-factorization/ */
 void factors_implicit_cg
@@ -1471,6 +1988,80 @@ void factors_implicit_cg
     }
 }
 
+void factors_implicit_pcg
+(
+    real_t *restrict a_vec, int_t k,
+    real_t *restrict B, size_t ldb,
+    real_t *restrict Xa, int_t ixB[], size_t nnz,
+    real_t lam,
+    real_t *restrict precomputedBtB, int_t ld_BtB,
+    int_t max_cg_steps,
+    real_t *restrict buffer_real_t
+)
+{
+    real_t *restrict Ap = buffer_real_t;
+    real_t *restrict r  = Ap + k;
+    real_t *restrict p  = r  + k;
+    real_t *restrict z  = p  + k;
+    real_t *restrict PC = z  + k;
+    real_t coef;
+    real_t r_old, r_new;
+    real_t a;
+
+    set_to_zero(PC, k);
+    for (size_t ix = 0; ix < nnz; ix++) {
+        real_t *restrict B_this = B + (size_t)ixB[ix]*ldb;
+        real_t w_this = Xa[ix];
+        for (int_t kk = 0; kk < k; kk++)
+            PC[kk] += w_this * square(B_this[kk]);
+    }
+    for (size_t ix = 0; ix < (size_t)k; ix++)
+        PC[ix] += precomputedBtB[ix + ix*ld_BtB];
+    recipr(PC, k);
+
+    cblas_tsymv(CblasRowMajor, CblasUpper, k,
+                -1., precomputedBtB, ld_BtB,
+                a_vec, 1,
+                0., r, 1);
+    for (size_t ix = 0; ix < nnz; ix++) {
+        coef = cblas_tdot(k, B + (size_t)ixB[ix]*ldb, 1, a_vec, 1);
+        cblas_taxpy(k,
+                    -(coef - 1.) * Xa[ix] - coef,
+                    B + (size_t)ixB[ix]*ldb, 1,
+                    r, 1);
+    }
+    cblas_taxpy(k, -lam, a_vec, 1, r, 1);
+
+    mult2(z, r, PC, k);
+    r_old = cblas_tdot(k, z, 1, r, 1);
+    copy_arr(z, p, k);
+
+    for (int_t cg_step = 0; cg_step < max_cg_steps; cg_step++)
+    {
+        cblas_tsymv(CblasRowMajor, CblasUpper, k,
+                    1., precomputedBtB, ld_BtB,
+                    p, 1,
+                    0., Ap, 1);
+        for (size_t ix = 0; ix < nnz; ix++) {
+            coef = cblas_tdot(k, B + (size_t)ixB[ix]*ldb, 1, p, 1);
+            cblas_taxpy(k,
+                        coef * (Xa[ix] - 1.) + coef,
+                        B + (size_t)ixB[ix]*ldb, 1,
+                        Ap, 1);
+        }
+        cblas_taxpy(k, lam, p, 1, Ap, 1);
+
+        a = r_old / cblas_tdot(k, Ap, 1, p, 1);
+        cblas_taxpy(k,  a,  p, 1, a_vec, 1);
+        cblas_taxpy(k, -a, Ap, 1, r, 1);
+        
+        mult2(z, r, PC, k);
+        r_new = cblas_tdot(k, z, 1, r, 1);
+        cblas_tscal(k, r_new / r_old, p, 1);
+        cblas_taxpy(k, 1., z, 1, p, 1);
+        r_old = r_new;
+    }
+}
 
 void factors_implicit_chol
 (
@@ -1912,7 +2503,7 @@ size_t buffer_size_optimizeA
     size_t k, size_t nthreads,
     bool has_bias_static,
     bool pass_allocated_BtB, bool keep_precomputedBtB,
-    bool use_cg, bool finalize_chol
+    bool use_cg, bool precondition_cg, bool finalize_chol
 )
 {
     if (finalize_chol && use_cg)
@@ -1925,7 +2516,7 @@ size_t buffer_size_optimizeA
                         k, nthreads,
                         has_bias_static,
                         pass_allocated_BtB, keep_precomputedBtB,
-                        true, false
+                        true, precondition_cg, false
                 ),
                 buffer_size_optimizeA(
                     n, full_dense, near_dense, some_full, do_B,
@@ -1934,7 +2525,7 @@ size_t buffer_size_optimizeA
                     k, nthreads,
                     has_bias_static,
                     pass_allocated_BtB, keep_precomputedBtB,
-                    false, false
+                    false, false, false
                 )
         );
     }
@@ -1972,8 +2563,12 @@ size_t buffer_size_optimizeA
         if (!full_dense)
         {
             size_t size_thread_buffer = square(k);
-            if (use_cg)
-                size_thread_buffer = max2(size_thread_buffer, (3 * k));
+            if (use_cg) {
+                if (precondition_cg)
+                    size_thread_buffer = max2(size_thread_buffer,(size_t)3 * k);
+                else
+                    size_thread_buffer = max2(size_thread_buffer,(size_t)5 * k);
+            }
             if (nonneg)
                 size_thread_buffer += k;
             else if (has_l1)
@@ -2010,7 +2605,8 @@ size_t buffer_size_optimizeA
             if (some_full && !nonneg && !has_l1)
                 buffer_size += square(k);
         }
-        size_t size_thread_buffer = square(k) + (use_cg? (3*k) : 0);
+        size_t size_thread_buffer = square(k) +
+                                    (use_cg? ((precondition_cg? 5 : 3)*k) : 0);
         if (nonneg)
             size_thread_buffer += k;
         else if (has_l1)
@@ -2053,9 +2649,11 @@ size_t buffer_size_optimizeA
 
         size_t size_thread_buffer = square(k);
         if (use_cg)
-            size_thread_buffer = max2(size_thread_buffer, (3 * k));
+            size_thread_buffer = max2(size_thread_buffer,
+                                      ((precondition_cg? 5 : 3) * k));
         if (use_cg && !has_dense)
-            size_thread_buffer = (3 * k) + ((NA_as_zero && k >= n)? n : 0);
+            size_thread_buffer = ((precondition_cg? 5 : 3) * k) +
+                                 ((NA_as_zero && k >= n)? n : 0);
         if (nonneg)
             size_thread_buffer += k;
         else if (has_l1)
@@ -2069,7 +2667,7 @@ size_t buffer_size_optimizeA_implicit
     size_t k, size_t nthreads,
     bool pass_allocated_BtB,
     bool nonneg, bool has_l1,
-    bool use_cg, bool finalize_chol
+    bool use_cg, bool precondition_cg, bool finalize_chol
 )
 {
     if (finalize_chol && use_cg)
@@ -2079,18 +2677,21 @@ size_t buffer_size_optimizeA_implicit
                 k, nthreads,
                 pass_allocated_BtB,
                 nonneg, has_l1,
-                false, false
+                false, false, false
             ),
             buffer_size_optimizeA_implicit(
                 k, nthreads,
                 pass_allocated_BtB,
                 nonneg, has_l1,
-                true, false
+                true, precondition_cg, false
             )
         );
     }
 
-    size_t size_thread_buffer = use_cg? (3 * k) : (square(k));
+    size_t size_thread_buffer = use_cg?
+                                    ((precondition_cg? 5 : 3) * k)
+                                        :
+                                    (square(k));
     if (nonneg)
         size_thread_buffer += k;
     else if (has_l1)
@@ -2112,7 +2713,7 @@ void optimizeA
     real_t l1_lam, real_t l1_lam_last,
     bool scale_lam, bool scale_bias_const, real_t *restrict wsumA,
     bool do_B, int nthreads,
-    bool use_cg, int_t max_cg_steps,
+    bool use_cg, bool precondition_cg, int_t max_cg_steps,
     bool nonneg, int_t max_cd_steps,
     real_t *restrict bias_restore,
     real_t *restrict bias_BtX, real_t *restrict bias_X, real_t bias_X_glob,
@@ -2186,14 +2787,9 @@ void optimizeA
             copy_arr(bufferBtB, precomputedBtB, square(k));
             *filled_BtB = true;
         }
-        add_to_diag(bufferBtB, scale_lam? (lam*(real_t)n) : (lam), k);
-        if (lam_last != lam)
-        {
-            if (!scale_lam)
-                bufferBtB[square(k)-1] += (lam_last - lam);
-            else
-                bufferBtB[square(k)-1] += (lam_last - lam) * (real_t)n;
-        }
+        add_to_diag2(bufferBtB, scale_lam? (lam*(real_t)n) : (lam), k,
+                     scale_lam? (lam_last*(real_t)n) : (lam_last));
+        
         /* Here will also need t(B)*B + diag(lambda) alone (no Cholesky) */
         if (bufferBtBcopy != NULL)
             memcpy(bufferBtBcopy, bufferBtB, (size_t)square(k)*sizeof(real_t));
@@ -2263,8 +2859,12 @@ void optimizeA
         if (!full_dense)
         {
             size_t size_buffer = square(k);
-            if (use_cg)
-                size_buffer = max2(size_buffer, (size_t)(3 * k));
+            if (use_cg) {
+                if (precondition_cg)
+                    size_buffer = max2(size_buffer, ((size_t)5 * (size_t)k));
+                else
+                    size_buffer = max2(size_buffer, ((size_t)3 * (size_t)k));
+            }
             if (nonneg)
                 size_buffer += k;
             else if (l1_lam || l1_lam_last)
@@ -2278,7 +2878,8 @@ void optimizeA
                            scale_lam, scale_bias_const, \
                            lam, lam_last, l1_lam, l1_lam_last, weight,\
                            cnt_NA, Xfull, buffer_real_t, bufferBtBcopy, \
-                           nthreads, use_cg, nonneg, max_cd_steps) \
+                           nthreads, use_cg, nonneg, max_cd_steps, \
+                           precondition_cg) \
                     firstprivate(bufferX)
             for (size_t_for ix = 0; ix < (size_t)m; ix++)
                 if (cnt_NA[ix])
@@ -2320,7 +2921,8 @@ void optimizeA
                         bufferBtBcopy, cnt_NA[ix], k,
                         true, false, 1., n,
                         (real_t*)NULL, false,
-                        use_cg, k, /* <- A was reset to zero, need more steps */
+                        use_cg, precondition_cg,
+                        k, /* <- A was reset to zero, need more steps */
                         nonneg, max_cd_steps,
                         (real_t*)NULL, (real_t*)NULL, 0., 1.,
                         false
@@ -2371,14 +2973,8 @@ void optimizeA
                 copy_arr(bufferBtB, precomputedBtB, square(k));
                 *filled_BtB = true;
             }
-            add_to_diag(bufferBtB, scale_lam? (lam*(real_t)n) : (lam), k);
-            if (lam_last != lam)
-            {
-                if (!scale_lam)
-                    bufferBtB[square(k)-1] += (lam_last - lam);
-                else
-                    bufferBtB[square(k)-1] += (lam_last-lam)*(real_t)n;
-            }
+            add_to_diag2(bufferBtB, scale_lam? (lam*(real_t)n) : (lam), k,
+                         scale_lam? (lam_last*(real_t)n) : (lam_last));
 
             if (some_full && !nonneg && !l1_lam && !l1_lam_last)
             {
@@ -2393,7 +2989,8 @@ void optimizeA
         int nthreads_restore = 1;
         set_blas_threads(1, &nthreads_restore);
 
-        size_t size_buffer = (size_t)square(k) + (size_t)(use_cg? (3*k) : 0);
+        size_t size_buffer = (size_t)square(k) +
+                             (size_t)(use_cg? ((precondition_cg? 5 : 3)*k) : 0);
 
         #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
                 shared(Xfull, weight, do_B, m, n, k, A, lda, B, ldb, ldX, \
@@ -2401,7 +2998,7 @@ void optimizeA
                        scale_lam, scale_bias_const, wsumA, \
                        bufferBtB, cnt_NA, buffer_remainder, \
                        use_cg, max_cg_steps, nonneg, max_cd_steps, \
-                       bufferBtBchol) \
+                       precondition_cg, bufferBtBchol) \
                 firstprivate(bufferX, bufferW)
         for (size_t_for ix = 0; ix < (size_t)m; ix++)
         {
@@ -2441,7 +3038,7 @@ void optimizeA
                 bufferBtB, cnt_NA[ix], k,
                 true, false, 1., n,
                 bufferBtBchol, false,
-                use_cg, max_cg_steps,
+                use_cg, precondition_cg, max_cg_steps,
                 nonneg, max_cd_steps,
                 (real_t*)NULL, (real_t*)NULL, 0., 1.,
                 false
@@ -2472,14 +3069,8 @@ void optimizeA
             copy_arr(bufferBtB, precomputedBtB, square(k));
             *filled_BtB = true;
         }
-        add_to_diag(bufferBtB, scale_lam? (lam*(real_t)n) : (lam), k);
-        if (lam_last != lam)
-        {
-            if (!scale_lam)
-                bufferBtB[square(k)-1] += (lam_last - lam);
-            else
-                bufferBtB[square(k)-1] += (lam_last - lam) * (real_t)n;
-        }
+        add_to_diag2(bufferBtB, scale_lam? (lam*(real_t)n) : (lam), k,
+                     scale_lam? (lam_last*(real_t)n) : (lam_last));
         if (lda == k)
             set_to_zero_(A, (size_t)m*(size_t)k, nthreads);
         else
@@ -2573,8 +3164,7 @@ void optimizeA
             }
             if (add_diag_to_BtB)
             {
-                add_to_diag(bufferBtB, lam, k);
-                if (lam_last != lam) bufferBtB[square(k)-1] += (lam_last - lam);
+                add_to_diag2(bufferBtB, lam, k, lam_last);
             }
             if (precomputedBtB != NULL)
                 *filled_BtB = true;
@@ -2582,9 +3172,10 @@ void optimizeA
 
         size_t size_buffer = square(k);
         if (use_cg)
-            size_buffer = max2(size_buffer, (size_t)(3 * k));
+            size_buffer = max2(size_buffer,
+                               (size_t)((precondition_cg? 5 : 3) * k));
         if (use_cg && Xfull == NULL)
-            size_buffer = (size_t)(3 * k)
+            size_buffer = (size_t)((precondition_cg? 5 : 3) * k)
                         + (size_t)((NA_as_zero && k >= n)? n : 0);
         if (nonneg)
             size_buffer += k;
@@ -2599,7 +3190,7 @@ void optimizeA
                        scale_lam, scale_bias_const, wsumA, \
                        lam, lam_last, l1_lam, l1_lam_last, weight, cnt_NA, \
                        Xcsr_p, Xcsr_i, Xcsr, buffer_real_t, NA_as_zero, \
-                       bufferBtB, size_buffer, use_cg, \
+                       bufferBtB, size_buffer, use_cg, precondition_cg, \
                        nonneg, max_cd_steps, bias_BtX, bias_X, \
                        bias_X_glob, multiplier_bias_BtX)
         for (size_t_for ix = 0; ix < (size_t)m; ix++)
@@ -2623,7 +3214,7 @@ void optimizeA
                     bufferBtB, 0, k,
                     add_diag_to_BtB, false, 1., n,
                     (real_t*)NULL, NA_as_zero,
-                    use_cg, max_cg_steps,
+                    use_cg, precondition_cg, max_cg_steps,
                     nonneg, max_cd_steps,
                     bias_BtX, bias_X, bias_X_glob, multiplier_bias_BtX,
                     false
@@ -2643,7 +3234,7 @@ void optimizeA_implicit
     size_t Xcsr_p[], int_t Xcsr_i[], real_t *restrict Xcsr,
     real_t lam, real_t l1_lam,
     int nthreads,
-    bool use_cg, int_t max_cg_steps,
+    bool use_cg, bool precondition_cg, int_t max_cg_steps,
     bool nonneg, int_t max_cd_steps,
     real_t *restrict precomputedBtB, /* <- will be calculated if not passed */
     real_t *restrict buffer_real_t
@@ -2665,7 +3256,7 @@ void optimizeA_implicit
         add_to_diag(precomputedBtB, lam, k);
         set_to_zero_(A, (size_t)m*(size_t)k - (lda-(size_t)k), nthreads);
     }
-    size_t size_buffer = use_cg? (3 * k) : (square(k));
+    size_t size_buffer = use_cg? ((precondition_cg? 5 : 3) * k) : (square(k));
     if (nonneg)
         size_buffer += k;
     else if (l1_lam)
@@ -2676,7 +3267,7 @@ void optimizeA_implicit
 
     int_t ix = 0;
 
-    if (use_cg)
+    if (use_cg && !precondition_cg)
     {
         #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
                 shared(A, B, lda, ldb, m, n, k, lam, \
@@ -2685,6 +3276,26 @@ void optimizeA_implicit
         for (ix = 0; ix < m; ix++)
             if (Xcsr_p[ix+(size_t)1] > Xcsr_p[ix])
                 factors_implicit_cg(
+                    A + (size_t)ix*lda, k,
+                    B, ldb,
+                    Xcsr + Xcsr_p[ix], Xcsr_i + Xcsr_p[ix],
+                    Xcsr_p[ix+(size_t)1] - Xcsr_p[ix],
+                    lam,
+                    precomputedBtB, k,
+                    max_cg_steps,
+                    buffer_real_t + ((size_t)omp_get_thread_num() * size_buffer)
+                );
+    }
+
+    else if (use_cg)
+    {
+        #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
+                shared(A, B, lda, ldb, m, n, k, lam, \
+                       Xcsr, Xcsr_i, Xcsr_p, precomputedBtB, buffer_real_t, \
+                       max_cg_steps, size_buffer)
+        for (ix = 0; ix < m; ix++)
+            if (Xcsr_p[ix+(size_t)1] > Xcsr_p[ix])
+                factors_implicit_pcg(
                     A + (size_t)ix*lda, k,
                     B, ldb,
                     Xcsr + Xcsr_p[ix], Xcsr_i + Xcsr_p[ix],

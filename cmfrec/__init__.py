@@ -59,7 +59,7 @@ class _CMF:
                      max_cd_steps=100,
                      k=50, lambda_=1e2, method="als", add_implicit_features=False,
                      scale_lam=False, scale_lam_sideinfo=False, scale_bias_const=False,
-                     use_cg=False, max_cg_steps=3, finalize_chol=False,
+                     use_cg=False, precondition_cg=False, max_cg_steps=3, finalize_chol=False,
                      user_bias=True, item_bias=True, center=False,
                      k_user=0, k_item=0, k_main=0,
                      w_main=1., w_user=1., w_item=1., w_implicit=0.5,
@@ -215,6 +215,7 @@ class _CMF:
         self.add_implicit_features = bool(add_implicit_features)
         self.apply_log_transf = bool(apply_log_transf)
         self.use_cg = bool(use_cg)
+        self.precondition_cg = bool(precondition_cg)
         self.max_cg_steps = int(max_cg_steps)
         self.max_cd_steps = int(max_cd_steps)
         self.finalize_chol = bool(finalize_chol)
@@ -2685,6 +2686,15 @@ class CMF(_CMF):
     max_cg_steps : int
         Maximum number of conjugate gradient iterations to perform in an ALS round.
         Ignored when passing ``use_cg=False`` or ``method="lbfgs"``.
+    precondition_cg : bool
+        Whether to use Jacobi preconditioning for the conjugate gradient procedure.
+        In general, this type of preconditioning is not beneficial (makes the algorithm
+        slower) as the factor variables tend to be in the same scale, but it might help
+        when using non-shared factors.
+        Note that, when using preconditioning, the procedure will not check for convergence,
+        taking instead a fixed number of steps (given by ``max_cg_steps``) at each iteration
+        regardless of whether it has reached the optimum already.
+        Ignored when passing ``use_cg=False`` or ``method="als"``.
     finalize_chol : bool
         When passing ``use_cg=True`` and ``method="als"``, whether to perform the last iteration with
         the Cholesky solver. This will make it slower, but will avoid the issue
@@ -2891,7 +2901,7 @@ class CMF(_CMF):
                  w_main=1., w_user=1., w_item=1., w_implicit=0.5,
                  l1_lambda=0., center_U=True, center_I=True,
                  maxiter=800, niter=10, parallelize="separate", corr_pairs=4,
-                 max_cg_steps=3, finalize_chol=True,
+                 max_cg_steps=3, precondition_cg=False, finalize_chol=True,
                  NA_as_zero=False, NA_as_zero_user=False, NA_as_zero_item=False,
                  nonneg=False, nonneg_C=False, nonneg_D=False, max_cd_steps=100,
                  precompute_for_predictions=True, include_all_X=True,
@@ -2903,6 +2913,7 @@ class CMF(_CMF):
         self.lambda_ = lambda_
         self.method = method
         self.use_cg = use_cg
+        self.precondition_cg = precondition_cg
         self.user_bias = user_bias
         self.item_bias = item_bias
         self.center = center
@@ -2950,6 +2961,7 @@ class CMF(_CMF):
         lambda_ = self.lambda_
         method = self.method
         use_cg = self.use_cg
+        precondition_cg = self.precondition_cg
         user_bias = self.user_bias
         item_bias = self.item_bias
         center = self.center
@@ -2997,7 +3009,8 @@ class CMF(_CMF):
                           scale_lam=scale_lam, scale_lam_sideinfo=scale_lam_sideinfo,
                           scale_bias_const=scale_bias_const,
                           nonneg=nonneg, nonneg_C=nonneg_C, nonneg_D=nonneg_D,
-                          use_cg=use_cg, max_cg_steps=max_cg_steps,
+                          use_cg=use_cg, precondition_cg=precondition_cg,
+                          max_cg_steps=max_cg_steps,
                           max_cd_steps=max_cd_steps,
                           finalize_chol=finalize_chol,
                           user_bias=user_bias, item_bias=item_bias,
@@ -3054,7 +3067,8 @@ class CMF(_CMF):
                 "w_main":self.w_main, "w_user":self.w_user, "w_item":self.w_item, "w_implicit":self.w_implicit,
                 "l1_lambda":self.l1_lambda, "center_U":self.center_U, "center_I":self.center_I,
                 "maxiter":self.maxiter, "niter":self.niter, "parallelize":self.parallelize, "corr_pairs":self.corr_pairs,
-                "max_cg_steps":self.max_cg_steps, "finalize_chol":self.finalize_chol,
+                "max_cg_steps":self.max_cg_steps,
+                "precondition_cg":self.precondition_cg, "finalize_chol":self.finalize_chol,
                 "NA_as_zero":self.NA_as_zero, "NA_as_zero_user":self.NA_as_zero_user, "NA_as_zero_item":self.NA_as_zero_item,
                 "nonneg":self.nonneg, "nonneg_C":self.nonneg_C, "nonneg_D":self.nonneg_D, "max_cd_steps":self.max_cd_steps,
                 "precompute_for_predictions":self.precompute_for_predictions, "include_all_X":self.include_all_X,
@@ -3233,7 +3247,7 @@ class CMF(_CMF):
                     self.scale_lam, self.scale_lam_sideinfo, self.scale_bias_const,
                     self.verbose, self.nthreads,
                     self.use_cg, self.max_cg_steps,
-                    self.finalize_chol,
+                    self.precondition_cg, self.finalize_chol,
                     self.nonneg, self.nonneg_C, self.nonneg_D, self.max_cd_steps,
                     self.random_state, self.niter,
                     self.handle_interrupt,
@@ -4539,6 +4553,12 @@ class CMF_implicit(_CMF):
         The procedure will only use coordinate descent updates when having
         L1 regularization and/or non-negativity constraints.
         This number should usually be larger than ``k``.
+    precondition_cg : bool
+        Whether to use Jacobi preconditioning for the conjugate gradient procedure.
+        In general, this type of preconditioning is not beneficial (makes the algorithm
+        slower) as the factor variables tend to be in the same scale, but it might help
+        when using non-shared factors.
+        Ignored when passing ``use_cg=False`` or ``method="als"``.
     apply_log_transf : bool
         Whether to apply a logarithm transformation on the values of 'X'
         (i.e. 'X := log(X)')
@@ -4556,6 +4576,15 @@ class CMF_implicit(_CMF):
     max_cg_steps : int
         Maximum number of conjugate gradient iterations to perform in an ALS round.
         Ignored when passing ``use_cg=False``.
+    precondition_cg : bool
+        Whether to use Jacobi preconditioning for the conjugate gradient procedure.
+        In general, this type of preconditioning is not beneficial (makes the algorithm
+        slower) as the factor variables tend to be in the same scale, but it might help
+        when using non-shared factors.
+        Note that, when using preconditioning, the procedure will not check for convergence,
+        taking instead a fixed number of steps (given by ``max_cg_steps``) at each iteration
+        regardless of whether it has reached the optimum already.
+        Ignored when passing ``use_cg=False`` or ``method="als"``.
     finalize_chol : bool
         When passing ``use_cg=True``, whether to perform the last iteration with
         the Cholesky solver. This will make it slower, but will avoid the issue
@@ -4647,7 +4676,7 @@ class CMF_implicit(_CMF):
                  nonneg=False, nonneg_C=False, nonneg_D=False, max_cd_steps=100,
                  apply_log_transf=False,
                  precompute_for_predictions=True, use_float=True,
-                 max_cg_steps=3, finalize_chol=False,
+                 max_cg_steps=3, precondition_cg=False, finalize_chol=False,
                  random_state=1, verbose=False,
                  produce_dicts=False, handle_interrupt=True,
                  nthreads=-1, n_jobs=None):
@@ -4655,6 +4684,7 @@ class CMF_implicit(_CMF):
         self.lambda_ = lambda_
         self.alpha = alpha
         self.use_cg = use_cg
+        self.precondition_cg = precondition_cg
         self.k_user = k_user
         self.k_item = k_item
         self.k_main = k_main
@@ -4689,6 +4719,7 @@ class CMF_implicit(_CMF):
         lambda_ = self.lambda_
         alpha = self.alpha
         use_cg = self.use_cg
+        precondition_cg = self.precondition_cg
         k_user = self.k_user
         k_item = self.k_item
         k_main = self.k_main
@@ -4719,7 +4750,8 @@ class CMF_implicit(_CMF):
 
         self._take_params(implicit=True, alpha=alpha, downweight=False,
                           k=k, lambda_=lambda_, method="als",
-                          use_cg=use_cg, max_cg_steps=max_cg_steps,
+                          use_cg=use_cg, precondition_cg=precondition_cg,
+                          max_cg_steps=max_cg_steps,
                           finalize_chol=finalize_chol,
                           apply_log_transf=apply_log_transf,
                           nonneg=nonneg, nonneg_C=nonneg_C, nonneg_D=nonneg_D,
@@ -4772,7 +4804,8 @@ class CMF_implicit(_CMF):
             "nonneg":self.nonneg, "nonneg_C":self.nonneg_C, "nonneg_D":self.nonneg_D, "max_cd_steps":self.max_cd_steps,
             "apply_log_transf":self.apply_log_transf,
             "precompute_for_predictions":self.precompute_for_predictions, "use_float":self.use_float,
-            "max_cg_steps":self.max_cg_steps, "finalize_chol":self.finalize_chol,
+            "max_cg_steps":self.max_cg_steps,
+            "precondition_cg":self.precondition_cg, "finalize_chol":self.finalize_chol,
             "random_state":self.random_state, "verbose":self.verbose,
             "produce_dicts":self.produce_dicts, "handle_interrupt":self.handle_interrupt,
             "nthreads":self.nthreads
@@ -4879,7 +4912,7 @@ class CMF_implicit(_CMF):
                 self.center_U, self.center_I,
                 self.verbose, self.niter,
                 self.nthreads, self.use_cg,
-                self.max_cg_steps, self.finalize_chol,
+                self.max_cg_steps, self.precondition_cg, self.finalize_chol,
                 self.nonneg, self.nonneg_C, self.nonneg_D, self.max_cd_steps,
                 self.random_state,
                 handle_interrupt=self.handle_interrupt,
@@ -6155,6 +6188,15 @@ class OMF_explicit(_OMF):
     max_cg_steps : int
         Maximum number of conjugate gradient iterations to perform in an ALS round.
         Ignored when passing ``use_cg=False`` or ``method="lbfgs"``.
+    precondition_cg : bool
+        Whether to use Jacobi preconditioning for the conjugate gradient procedure.
+        In general, this type of preconditioning is not beneficial (makes the algorithm
+        slower) as the factor variables tend to be in the same scale, but it might help
+        when using non-shared factors.
+        Note that, when using preconditioning, the procedure will not check for convergence,
+        taking instead a fixed number of steps (given by ``max_cg_steps``) at each iteration
+        regardless of whether it has reached the optimum already.
+        Ignored when passing ``use_cg=False`` or ``method="als"``.
     finalize_chol : bool
         When passing ``use_cg=True`` and ``method="als"``, whether to perform the last iteration with
         the Cholesky solver. This will make it slower, but will avoid the issue
@@ -6274,7 +6316,7 @@ class OMF_explicit(_OMF):
                  user_bias=True, item_bias=True, center=True, k_sec=0, k_main=0,
                  add_intercepts=True, w_user=1., w_item=1.,
                  maxiter=10000, niter=10, parallelize="separate", corr_pairs=7,
-                 max_cg_steps=3, finalize_chol=True,
+                 max_cg_steps=3, precondition_cg=False, finalize_chol=True,
                  NA_as_zero=False, use_float=False,
                  random_state=1, verbose=True, print_every=100,
                  produce_dicts=False, handle_interrupt=True,
@@ -6283,6 +6325,7 @@ class OMF_explicit(_OMF):
         self.lambda_ = lambda_
         self.method = method
         self.use_cg = use_cg
+        self.precondition_cg = precondition_cg
         self.user_bias = user_bias
         self.item_bias = item_bias
         self.center = center
@@ -6313,6 +6356,7 @@ class OMF_explicit(_OMF):
         lambda_ = self.lambda_
         method = self.method
         use_cg = self.use_cg
+        precondition_cg = self.precondition_cg
         user_bias = self.user_bias
         item_bias = self.item_bias
         center = self.center
@@ -6340,7 +6384,8 @@ class OMF_explicit(_OMF):
         assert k>0 or k_sec>0 or k_main>0
         self._take_params(implicit=False, alpha=0., downweight=False,
                           k=1, lambda_=lambda_, method=method,
-                          use_cg=use_cg, max_cg_steps=max_cg_steps,
+                          use_cg=use_cg, precondition_cg=precondition_cg,
+                          max_cg_steps=max_cg_steps,
                           finalize_chol=finalize_chol,
                           user_bias=user_bias, item_bias=item_bias,
                           center=center,
@@ -6393,7 +6438,8 @@ class OMF_explicit(_OMF):
             "user_bias":self.user_bias, "item_bias":self.item_bias, "center":self.center, "k_sec":self.k_sec, "k_main":self.k_main,
             "add_intercepts":self.add_intercepts, "w_user":self.w_user, "w_item":self.w_item,
             "maxiter":self.maxiter, "niter":self.niter, "parallelize":self.parallelize, "corr_pairs":self.corr_pairs,
-            "max_cg_steps":self.max_cg_steps, "finalize_chol":self.finalize_chol,
+            "max_cg_steps":self.max_cg_steps,
+            "precondition_cg":self.precondition_cg, "finalize_chol":self.finalize_chol,
             "NA_as_zero":self.NA_as_zero, "use_float":self.use_float,
             "random_state":self.random_state, "verbose":self.verbose, "print_every":self.print_every,
             "produce_dicts":self.produce_dicts, "handle_interrupt":self.handle_interrupt,
@@ -6566,7 +6612,7 @@ class OMF_explicit(_OMF):
                     self.lambda_,
                     self.verbose, self.nthreads,
                     self.use_cg, self.max_cg_steps,
-                    self.finalize_chol,
+                    self.precondition_cg, self.finalize_chol,
                     self.random_state, self.niter,
                     self.handle_interrupt,
                     precompute_for_predictions=self.precompute_for_predictions
@@ -7133,6 +7179,15 @@ class OMF_implicit(_OMF):
     max_cg_steps : int
         Maximum number of conjugate gradient iterations to perform in an ALS round.
         Ignored when passing ``use_cg=False``.
+    precondition_cg : bool
+        Whether to use Jacobi preconditioning for the conjugate gradient procedure.
+        In general, this type of preconditioning is not beneficial (makes the algorithm
+        slower) as the factor variables tend to be in the same scale, but it might help
+        when using non-shared factors.
+        Note that, when using preconditioning, the procedure will not check for convergence,
+        taking instead a fixed number of steps (given by ``max_cg_steps``) at each iteration
+        regardless of whether it has reached the optimum already.
+        Ignored when passing ``use_cg=False`` or ``method="als"``.
     finalize_chol : bool
         When passing ``use_cg=True``, whether to perform the last iteration with
         the Cholesky solver. This will make it slower, but will avoid the issue
@@ -7216,7 +7271,7 @@ class OMF_implicit(_OMF):
     def __init__(self, k=50, lambda_=1e0, alpha=1., use_cg=True,
                  add_intercepts=True, niter=10,
                  apply_log_transf=False, use_float=False,
-                 max_cg_steps=3, finalize_chol=False,
+                 max_cg_steps=3, precondition_cg=False, finalize_chol=False,
                  random_state=1, verbose=False,
                  produce_dicts=False, handle_interrupt=True,
                  nthreads=-1, n_jobs=None):
@@ -7224,6 +7279,7 @@ class OMF_implicit(_OMF):
         self.lambda_ = lambda_
         self.alpha = alpha
         self.use_cg = use_cg
+        self.precondition_cg = precondition_cg
         self.add_intercepts = add_intercepts
         self.niter = niter
         self.apply_log_transf = apply_log_transf
@@ -7243,6 +7299,7 @@ class OMF_implicit(_OMF):
         lambda_ = self.lambda_
         alpha = self.alpha
         use_cg = self.use_cg
+        precondition_cg = self.precondition_cg
         add_intercepts = self.add_intercepts
         niter = self.niter
         apply_log_transf = self.apply_log_transf
@@ -7259,7 +7316,8 @@ class OMF_implicit(_OMF):
         self._take_params(implicit=True, alpha=alpha, downweight=False,
                           k=k, lambda_=lambda_, method="als",
                           apply_log_transf=apply_log_transf,
-                          use_cg=use_cg, max_cg_steps=max_cg_steps,
+                          use_cg=use_cg, precondition_cg=precondition_cg,
+                          max_cg_steps=max_cg_steps,
                           finalize_chol=finalize_chol,
                           user_bias=False, item_bias=False,
                           k_user=0, k_item=0, k_main=0,
@@ -7307,7 +7365,8 @@ class OMF_implicit(_OMF):
             "k":self.k, "lambda_":self.lambda_, "alpha":self.alpha, "use_cg":self.use_cg,
             "add_intercepts":self.add_intercepts, "niter":self.niter,
             "apply_log_transf":self.apply_log_transf, "use_float":self.use_float,
-            "max_cg_steps":self.max_cg_steps, "finalize_chol":self.finalize_chol,
+            "max_cg_steps":self.max_cg_steps,
+            "precondition_cg":self.precondition_cg, "finalize_chol":self.finalize_chol,
             "random_state":self.random_state, "verbose":self.verbose,
             "produce_dicts":self.produce_dicts, "handle_interrupt":self.handle_interrupt,
             "nthreads":self.nthreads
@@ -7385,7 +7444,7 @@ class OMF_implicit(_OMF):
                 self.k, self.add_intercepts,
                 self.lambda_, self.alpha, self.apply_log_transf,
                 self.verbose, self.nthreads, self.use_cg,
-                self.max_cg_steps, self.finalize_chol,
+                self.max_cg_steps, self.precondition_cg, self.finalize_chol,
                 self.downweight,
                 self.apply_log_transf,
                 self.random_state, self.niter,

@@ -433,6 +433,27 @@ __attribute__((optimize ("no-trapping-math")))
 #endif
 ;
 void add_to_diag(real_t *restrict A, real_t val, size_t n);
+void add_to_diag2(real_t *restrict A, real_t val, size_t n, real_t val_last);
+real_t mutiply3(real_t *restrict a, real_t *restrict b, int_t n)
+#ifdef __GNUC__
+__attribute__((optimize ("Ofast")))
+__attribute__((hot))
+#endif
+;
+void mult2(real_t *restrict out, real_t *restrict a, real_t *restrict b, int_t n)
+#ifdef __GNUC__
+__attribute__((optimize ("no-math-errno")))
+__attribute__((optimize ("no-trapping-math")))
+__attribute__((hot))
+#endif
+;
+void recipr(real_t *restrict x, int_t n)
+#ifdef __GNUC__
+__attribute__((optimize ("no-math-errno")))
+__attribute__((optimize ("no-trapping-math")))
+__attribute__((hot))
+#endif
+;
 real_t sum_sq_div_w(real_t *restrict arr, real_t *restrict w, size_t n, bool compensated, int nthreads)
 #ifdef __GNUC__
 __attribute__((optimize ("no-math-errno")))
@@ -567,7 +588,11 @@ void R_nan_to_C_nan(real_t arr[], size_t n);
 #endif
 long double compensated_sum(real_t *arr, size_t n);
 long double compensated_sum_product(real_t *restrict arr1, real_t *restrict arr2, size_t n);
-void custom_syr(const int_t n, const real_t alpha, const real_t *restrict x, real_t *restrict A, const int_t lda);
+void custom_syr(const int_t n, const real_t alpha, const real_t *restrict x, real_t *restrict A, const int_t lda)
+#ifdef __GNUC__
+__attribute__((hot))
+#endif
+;
 void set_blas_threads(int nthreads_set, int *nthreads_curr);
 #ifdef _FOR_R
     extern bool has_RhpcBLASctl;
@@ -617,7 +642,8 @@ void factors_closed_form
     real_t *restrict precomputedBtB, int_t cnt_NA, int_t ld_BtB,
     bool BtB_has_diag, bool BtB_is_scaled, real_t scale_BtB, int_t n_BtB,
     real_t *restrict precomputedBtBchol, bool NA_as_zero,
-    bool use_cg, int_t max_cg_steps,/* <- 'cg' should not be used for new data*/
+    bool use_cg, bool precondition_cg,
+    int_t max_cg_steps,/* <- 'cg' should not be used for new data*/
     bool nonneg, int_t max_cd_steps,
     real_t *restrict bias_BtX, real_t *restrict bias_X, real_t bias_X_glob,
     real_t multiplier_bias_BtX,
@@ -645,7 +671,42 @@ __attribute__((optimize ("no-trapping-math")))
 __attribute__((hot))
 #endif
 ;
+void factors_explicit_pcg
+(
+    real_t *restrict a_vec, int_t k,
+    real_t *restrict B, int_t n, int_t ldb,
+    real_t *restrict Xa, int_t ixB[], size_t nnz,
+    real_t *restrict weight,
+    real_t *restrict buffer_real_t,
+    real_t lam, real_t lam_last,
+    int_t max_cg_steps
+)
+#ifdef __GNUC__
+__attribute__((optimize ("no-math-errno")))
+__attribute__((optimize ("no-trapping-math")))
+__attribute__((hot))
+#endif
+;
 void factors_explicit_cg_NA_as_zero_weighted
+(
+    real_t *restrict a_vec, int_t k,
+    real_t *restrict B, int_t n, int_t ldb,
+    real_t *restrict Xa, int_t ixB[], size_t nnz,
+    real_t *restrict weight,
+    real_t *restrict precomputedBtB, int_t ld_BtB,
+    real_t *restrict bias_BtX, real_t *restrict bias_X, real_t bias_X_glob,
+    real_t multiplier_bias_BtX,
+    real_t *restrict buffer_real_t,
+    real_t lam, real_t lam_last,
+    int_t max_cg_steps
+)
+#ifdef __GNUC__
+__attribute__((optimize ("no-math-errno")))
+__attribute__((optimize ("no-trapping-math")))
+__attribute__((hot))
+#endif
+;
+void factors_explicit_pcg_NA_as_zero_weighted
 (
     real_t *restrict a_vec, int_t k,
     real_t *restrict B, int_t n, int_t ldb,
@@ -681,7 +742,40 @@ __attribute__((optimize ("no-trapping-math")))
 __attribute__((hot))
 #endif
 ;
+void factors_explicit_pcg_dense
+(
+    real_t *restrict a_vec, int_t k,
+    real_t *restrict B, int_t n, int_t ldb,
+    real_t *restrict Xa_dense, int_t cnt_NA,
+    real_t *restrict weight,
+    real_t *restrict precomputedBtB, int_t ld_BtB,
+    real_t *restrict buffer_real_t,
+    real_t lam, real_t lam_last,
+    int_t max_cg_steps
+)
+#ifdef __GNUC__
+__attribute__((optimize ("no-math-errno")))
+__attribute__((optimize ("no-trapping-math")))
+__attribute__((hot))
+#endif
+;
 void factors_implicit_cg
+(
+    real_t *restrict a_vec, int_t k,
+    real_t *restrict B, size_t ldb,
+    real_t *restrict Xa, int_t ixB[], size_t nnz,
+    real_t lam,
+    real_t *restrict precomputedBtB, int_t ld_BtB,
+    int_t max_cg_steps,
+    real_t *restrict buffer_real_t
+)
+#ifdef __GNUC__
+__attribute__((optimize ("no-math-errno")))
+__attribute__((optimize ("no-trapping-math")))
+__attribute__((hot))
+#endif
+;
+void factors_implicit_pcg
 (
     real_t *restrict a_vec, int_t k,
     real_t *restrict B, size_t ldb,
@@ -839,14 +933,14 @@ size_t buffer_size_optimizeA
     size_t k, size_t nthreads,
     bool has_bias_static,
     bool pass_allocated_BtB, bool keep_precomputedBtB,
-    bool use_cg, bool finalize_chol
+    bool use_cg, bool precondition_cg, bool finalize_chol
 );
 size_t buffer_size_optimizeA_implicit
 (
     size_t k, size_t nthreads,
     bool pass_allocated_BtB,
     bool nonneg, bool has_l1,
-    bool use_cg, bool finalize_chol
+    bool use_cg, bool precondition_cg, bool finalize_chol
 );
 void optimizeA
 (
@@ -861,7 +955,7 @@ void optimizeA
     real_t l1_lam, real_t l1_lam_last,
     bool scale_lam, bool scale_bias_const, real_t *restrict wsumA,
     bool do_B, int nthreads,
-    bool use_cg, int_t max_cg_steps,
+    bool use_cg, bool precondition_cg, int_t max_cg_steps,
     bool nonneg, int_t max_cd_steps,
     real_t *restrict bias_restore,
     real_t *restrict bias_BtX, real_t *restrict bias_X, real_t bias_X_glob,
@@ -883,7 +977,7 @@ void optimizeA_implicit
     size_t Xcsr_p[], int_t Xcsr_i[], real_t *restrict Xcsr,
     real_t lam, real_t l1_lam,
     int nthreads,
-    bool use_cg, int_t max_cg_steps,
+    bool use_cg, bool precondition_cg, int_t max_cg_steps,
     bool nonneg, int_t max_cd_steps,
     real_t *restrict precomputedBtB, /* <- will be calculated if not passed */
     real_t *restrict buffer_real_t
@@ -1206,7 +1300,8 @@ void collective_closed_form_block
     real_t *restrict precomputedBeTBeChol, int_t n_BtB,
     real_t *restrict precomputedBiTBi,
     bool add_X, bool add_U,
-    bool use_cg, int_t max_cg_steps,/* <- 'cg' should not be used for new data*/
+    bool use_cg, bool precondition_cg,
+    int_t max_cg_steps,/* <- 'cg' should not be used for new data*/
     bool nonneg, int_t max_cd_steps,
     real_t *restrict bias_BtX, real_t *restrict bias_X, real_t bias_X_glob,
     real_t *restrict bias_CtU,
@@ -1234,7 +1329,8 @@ void collective_closed_form_block_implicit
     real_t *restrict precomputedBeTBeChol,
     real_t *restrict precomputedCtCw,
     bool add_U, bool shapes_match,
-    bool use_cg, int_t max_cg_steps,/* <- 'cg' should not be used for new data*/
+    bool use_cg, bool precondition_cg,
+    int_t max_cg_steps,/* <- 'cg' should not be used for new data*/
     bool nonneg, int_t max_cd_steps,
     real_t *restrict buffer_real_t
 )
@@ -1264,6 +1360,7 @@ void collective_block_cg
     real_t *restrict precomputedBtB,
     real_t *restrict precomputedCtC, /* should NOT be multiplied by 'w_user' */
     int_t max_cg_steps,
+    bool precondition_cg,
     real_t *restrict bias_BtX, real_t *restrict bias_X, real_t bias_X_glob,
     real_t *restrict bias_CtU,
     real_t *restrict buffer_real_t
@@ -1287,6 +1384,7 @@ void collective_block_cg_implicit
     real_t lam, real_t w_user,
     int_t cnt_NA_u,
     int_t max_cg_steps,
+    bool precondition_cg,
     real_t *restrict bias_CtU,
     real_t *restrict precomputedBtB,
     real_t *restrict precomputedCtC, /* should NOT be multiplied by weight */
@@ -1309,7 +1407,7 @@ void optimizeA_collective_implicit
     bool full_dense_u, bool near_dense_u, bool NA_as_zero_U,
     real_t lam, real_t l1_lam, real_t w_user,
     int nthreads,
-    bool use_cg, int_t max_cg_steps,
+    bool use_cg, int_t max_cg_steps, bool precondition_cg,
     bool nonneg, int_t max_cd_steps,
     real_t *restrict precomputedBtB, /* will not have lambda with CG */
     real_t *restrict precomputedBeTBe,
@@ -1477,7 +1575,7 @@ size_t buffer_size_optimizeA_collective
     bool full_dense_u, bool near_dense_u, bool some_full_u, bool NA_as_zero_U,
     bool add_implicit_features, size_t k_main_i,
     size_t nthreads,
-    bool use_cg, bool finalize_chol,
+    bool use_cg, bool precondition_cg, bool finalize_chol,
     bool nonneg, bool has_l1,
     bool keep_precomputed,
     bool pass_allocated_BtB,
@@ -1492,7 +1590,7 @@ size_t buffer_size_optimizeA_collective_implicit
     bool has_sparse_U,
     bool NA_as_zero_U,
     size_t nthreads,
-    bool use_cg,
+    bool use_cg, bool precondition_cg,
     bool nonneg, bool has_l1,
     bool pass_allocated_BtB,
     bool pass_allocated_BeTBe,
@@ -1522,7 +1620,7 @@ void optimizeA_collective
     bool scale_bias_const, real_t *restrict wsumA,
     bool do_B,
     int nthreads,
-    bool use_cg, int_t max_cg_steps,
+    bool use_cg, int_t max_cg_steps, bool precondition_cg,
     bool nonneg, int_t max_cd_steps,
     real_t *restrict bias_restore,
     real_t *restrict bias_BtX, real_t *restrict bias_X, real_t bias_X_glob,
@@ -1731,7 +1829,7 @@ CMFREC_EXPORTABLE int_t fit_collective_explicit_als
     int_t k_main, int_t k_user, int_t k_item,
     real_t w_main, real_t w_user, real_t w_item, real_t w_implicit,
     int_t niter, int nthreads, bool verbose, bool handle_interrupt,
-    bool use_cg, int_t max_cg_steps, bool finalize_chol,
+    bool use_cg, int_t max_cg_steps, bool precondition_cg, bool finalize_chol,
     bool nonneg, int_t max_cd_steps, bool nonneg_C, bool nonneg_D,
     bool precompute_for_predictions,
     bool include_all_X,
@@ -1765,7 +1863,7 @@ CMFREC_EXPORTABLE int_t fit_collective_implicit_als
     real_t *restrict w_main_multiplier,
     real_t alpha, bool adjust_weight, bool apply_log_transf,
     int_t niter, int nthreads, bool verbose, bool handle_interrupt,
-    bool use_cg, int_t max_cg_steps, bool finalize_chol,
+    bool use_cg, int_t max_cg_steps, bool precondition_cg, bool finalize_chol,
     bool nonneg, int_t max_cd_steps, bool nonneg_C, bool nonneg_D,
     bool precompute_for_predictions,
     real_t *restrict precomputedBtB,
@@ -2375,7 +2473,7 @@ int_t fit_offsets_als
     bool implicit, bool NA_as_zero_X,
     real_t alpha, bool apply_log_transf,
     int_t niter,
-    int nthreads, bool use_cg,
+    int nthreads, bool use_cg, bool precondition_cg,
     int_t max_cg_steps, bool finalize_chol,
     bool verbose, bool handle_interrupt,
     bool precompute_for_predictions,
@@ -2403,7 +2501,7 @@ CMFREC_EXPORTABLE int_t fit_offsets_explicit_als
     bool NA_as_zero_X,
     int_t niter,
     int nthreads, bool use_cg,
-    int_t max_cg_steps, bool finalize_chol,
+    int_t max_cg_steps, bool precondition_cg, bool finalize_chol,
     bool verbose, bool handle_interrupt,
     bool precompute_for_predictions,
     real_t *restrict Am, real_t *restrict Bm,
@@ -2426,7 +2524,7 @@ CMFREC_EXPORTABLE int_t fit_offsets_implicit_als
     real_t alpha, bool apply_log_transf,
     int_t niter,
     int nthreads, bool use_cg,
-    int_t max_cg_steps, bool finalize_chol,
+    int_t max_cg_steps, bool precondition_cg, bool finalize_chol,
     bool verbose, bool handle_interrupt,
     bool precompute_for_predictions,
     real_t *restrict Am, real_t *restrict Bm,
