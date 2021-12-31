@@ -163,7 +163,7 @@ cdef extern from "cmfrec.h":
         double l1_lam, double l1_lam_last,
         bint scale_lam, bint scale_bias_const, double *wsumA,
         bint do_B,
-        int nthreads,
+        int nthreads, bint numa_locality,
         bint use_cg, bint precondition_cg, int max_cg_steps,
         bint nonneg, int max_cd_steps,
         double *bias_restore,
@@ -171,7 +171,8 @@ cdef extern from "cmfrec.h":
         double *bias_static, double multiplier_bias_BtX,
         bint keep_precomputedBtB,
         double *precomputedBtB, c_bool *filled_BtB,
-        double *buffer_double
+        double *buffer_double,
+        double **buffer_local
     )
 
     void optimizeA_implicit(
@@ -180,11 +181,12 @@ cdef extern from "cmfrec.h":
         int m, int n, int k,
         size_t Xcsr_p[], int Xcsr_i[], double *Xcsr,
         double lam, double l1_lam,
-        int nthreads,
+        int nthreads, bint numa_locality,
         bint use_cg, bint precondition_cg, int max_cg_steps,
         bint nonneg, int max_cd_steps,
         double *precomputedBtB,
-        double *buffer_double
+        double *buffer_double,
+        double **buffer_local
     )
 
     void optimizeA_collective(
@@ -205,7 +207,7 @@ cdef extern from "cmfrec.h":
         bint scale_lam, bint scale_lam_sideinfo,
         bint scale_bias_const, double *wsumA,
         bint do_B,
-        int nthreads,
+        int nthreads, bint numa_locality,
         bint use_cg, int max_cg_steps, bint precondition_cg,
         bint nonneg, int max_cd_steps,
         double *bias_restore,
@@ -219,7 +221,8 @@ cdef extern from "cmfrec.h":
         c_bool *filled_BtB, c_bool *filled_CtCw,
         c_bool *filled_BeTBeChol, c_bool *filled_CtUbias,
         c_bool *CtC_is_scaled,
-        double* buffer_double
+        double* buffer_double,
+        double **buffer_local
     )
 
     void optimizeA_collective_implicit(
@@ -231,7 +234,7 @@ cdef extern from "cmfrec.h":
         double *U, int cnt_NA_u[], double *U_colmeans,
         bint full_dense_u, bint near_dense_u, bint NA_as_zero_U,
         double lam, double l1_lam, double w_user,
-        int nthreads,
+        int nthreads, bint numa_locality,
         bint use_cg, int max_cg_steps, bint precondition_cg,
         bint nonneg, int max_cd_steps,
         double *precomputedBtB,
@@ -243,7 +246,8 @@ cdef extern from "cmfrec.h":
         bint *filled_BeTBeChol,
         bint *filled_CtC,
         bint *filled_CtUbias,
-        double *buffer_double
+        double *buffer_double,
+        double **buffer_local
     )
 
     double offsets_fun_grad(
@@ -1110,14 +1114,14 @@ def py_optimizeA(
         0., 0.,
         0, 0, <double*>NULL,
         is_B,
-        nthreads,
+        nthreads, 0,
         0, 0, 0, 0, 0,
         <double*>NULL,
         <double*>NULL, <double*>NULL, 0.,
         <double*>NULL, 1.,
         0,
         <double*>NULL, &ignore,
-        &buffer_double[0]
+        &buffer_double[0], <double**>NULL
     )
     return A
 
@@ -1240,7 +1244,7 @@ def py_optimizeA_collective(
         lam, w_user, w_implicit, lam,
         0., 0., 0, 0, 0, <double*>NULL,
         is_B,
-        nthreads,
+        nthreads, 0,
         0, 0, 0,
         0, 0,
         <double*>NULL,
@@ -1248,7 +1252,7 @@ def py_optimizeA_collective(
         0, <double*>NULL, <double*>NULL, <double*>NULL, <double*>NULL,
         <double*>NULL,
         &ignore1, &ignore2, &ignore3, &ignore4, &ignore5,
-        &buffer_double[0]
+        &buffer_double[0], <double**>NULL
     )
     return A
 
@@ -1277,11 +1281,11 @@ def py_optimizeA_implicit(
         m, n, k,
         &Xcsr_p[0], &Xcsr_i[0], &Xcsr_pass[0],
         lam, 0.,
-        nthreads,
+        nthreads, 0,
         0, 0, 0,
         0, 0,
         <double*>NULL,
-        &buffer_double[0]
+        &buffer_double[0], <double**>NULL
     )
     return A
 
@@ -1350,7 +1354,7 @@ def py_optimizeA_collective_implicit(
         ptr_U, ptr_cnt_NA_u, <double*>NULL,
         full_dense_u, as_near_dense_u, NA_as_zero_U,
         lam/w_main, 0., w_user/w_main,
-        nthreads,
+        nthreads, 0,
         0, 0, 0,
         0, 0,
         <double*>NULL,
@@ -1362,7 +1366,7 @@ def py_optimizeA_collective_implicit(
         &ignore2,
         &ignore3,
         &ignore4,
-        &buffer_double[0]
+        &buffer_double[0], <double**>NULL
     )
 
     return A

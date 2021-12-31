@@ -632,30 +632,6 @@ extern "C" {
     
     
     --- Other ---
-    @param numa_locality  Locality level for per-thread memory allocations.
-                          If passing '0', will not pay any attention to the
-                          thread locality of memory allocations, making each
-                          piece of memory interchangeable and assigned to any
-                          thread at random depending on the OpenMP runtime.
-                          This is ideal for UMA (unified memory access) systems,
-                          such as typical desktop computers.
-                          If passing '1', will allocate memory independently for
-                          each thread, preventing reutilization of memory from
-                          allocations temporary buffers used by the main thread.
-                          This is ideal for NUMA (non-unified memory access)
-                          systems, such as servers with a high thread count, as
-                          memory accesses will be faster, but it will use more
-                          total memory since buffers are not reusable.
-                          Note that this will only work if the system has a
-                          first-touch allocation policy (the default in linux).
-                          If passing '2', will allocate thread memory privately
-                          like before, and will additionally make a copy of the
-                          factor matrices that are not being used for each
-                          thread, potentially making it faster if the number of
-                          NUMA nodes is very large and the latencies for
-                          accessing the memory of a different thread grow too
-                          large. This will increase memory usage by a lot.
-                          Recommended value: 1
     @param verbose  Whether to print information about the optimization
                     procedure. This can be helpful for getting an idea of the
                     bottlenecks in ALS, and for determining if the
@@ -792,7 +768,7 @@ extern "C" {
              will return 2 (but note that one should still make sure that e.g.
              the pointers are not NULL when they shouldn't be, it won't make
              such checks).
-             If a function runs out of memory, will return 2.
+             If a function runs out of memory, will return 2.@
     
 *******************************************************************************/
 
@@ -930,7 +906,8 @@ CMFREC_EXPORTABLE int_t fit_collective_explicit_als
     bool NA_as_zero_X, bool NA_as_zero_U, bool NA_as_zero_I,
     int_t k_main, int_t k_user, int_t k_item,
     real_t w_main, real_t w_user, real_t w_item, real_t w_implicit,
-    int_t niter, int nthreads, bool verbose, bool handle_interrupt,
+    int_t niter, int nthreads,
+    bool verbose, bool handle_interrupt,
     bool use_cg, int_t max_cg_steps, bool precondition_cg, bool finalize_chol,
     bool nonneg, int_t max_cd_steps, bool nonneg_C, bool nonneg_D,
     bool precompute_for_predictions,
@@ -964,7 +941,8 @@ CMFREC_EXPORTABLE int_t fit_collective_implicit_als
     real_t w_main, real_t w_user, real_t w_item,
     real_t *w_main_multiplier,
     real_t alpha, bool adjust_weight, bool apply_log_transf,
-    int_t niter, int nthreads, bool verbose, bool handle_interrupt,
+    int_t niter, int nthreads,
+    bool verbose, bool handle_interrupt,
     bool use_cg, int_t max_cg_steps, bool precondition_cg, bool finalize_chol,
     bool nonneg, int_t max_cd_steps, bool nonneg_C, bool nonneg_D,
     bool precompute_for_predictions,
@@ -1975,9 +1953,8 @@ CMFREC_EXPORTABLE int_t fit_offsets_explicit_als
     real_t *U, int_t p,
     real_t *II, int_t q,
     bool NA_as_zero_X,
-    int_t niter,
-    int nthreads, bool use_cg,
-    int_t max_cg_steps, bool precondition_cg, bool finalize_chol,
+    int_t niter, int nthreads,
+    bool use_cg, int_t max_cg_steps, bool precondition_cg, bool finalize_chol,
     bool verbose, bool handle_interrupt,
     bool precompute_for_predictions,
     real_t *Am, real_t *Bm,
@@ -1998,9 +1975,8 @@ CMFREC_EXPORTABLE int_t fit_offsets_implicit_als
     real_t *U, int_t p,
     real_t *II, int_t q,
     real_t alpha,
-    int_t niter,
-    int nthreads, bool use_cg,
-    int_t max_cg_steps, bool precondition_cg, bool finalize_chol,
+    int_t niter, int nthreads,
+    bool use_cg, int_t max_cg_steps, bool precondition_cg, bool finalize_chol,
     bool verbose, bool handle_interrupt,
     bool precompute_for_predictions,
     real_t *Am, real_t *Bm,

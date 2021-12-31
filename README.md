@@ -165,6 +165,8 @@ Different backends for BLAS can make a large difference in speed - for example, 
 
 This library calls BLAS routines from parallel OpenMP blocks, which can cause issues with some BLAS backends - for example, if using MKL and compiling this package with GCC on linux, it *could* have issues with conflicting OpenMPs which could be solved by adding an environment variable `MKL_THREADING_LAYER=GNU`. For the most part, it tries to disable BLAS multi-threading in openmp blocks, but the mechanism might not work with all BLAS libraries or if swapping BLAS libraries after having compiled `cmfrec`.
 
+In computers with a NUMA (non-uniform memory access) architecture, one might additionally need to play with OpenMP settings externally (such as process affinity and similar) for better performance, for example by setting environment variables with general settings that might be more appropriate than GNU's defaults for a given CPU.
+
 
 Hints:
 

@@ -1249,8 +1249,7 @@ void factors_explicit_pcg
         {
             real_t *restrict B_this = B + (size_t)ixB[ix]*(size_t)ldb;
             real_t w_this = weight[ix];
-            for (int_t kk = 0; kk < k; kk++)
-                PC[kk] += w_this * square(B_this[kk]);
+            fma_extra(PC, w_this, B_this, k);
         }
     }
     for (int_t ix = 0; ix < k; ix++) PC[ix] += lam;
@@ -1486,8 +1485,7 @@ void factors_explicit_pcg_NA_as_zero_weighted
     {
         real_t *restrict B_this = B + (size_t)ixB[ix]*(size_t)ldb;
         real_t w_this = weight[ix] - (real_t)1;
-        for (int_t kk = 0; kk < k; kk++)
-            PC[kk] += w_this * square(B_this[kk]);
+        fma_extra(PC, w_this, B_this, k);
     }
     for (size_t ix = 0; ix < (size_t)k; ix++)
         PC[ix] += precomputedBtB[ix + ix*ld_BtB];
@@ -1800,8 +1798,7 @@ void factors_explicit_pcg_dense
             {
                 real_t *restrict B_this =  B + ix*(size_t)ldb;
                 real_t w_this = weight[ix];
-                for (int_t kk = 0; kk < k; kk++)
-                    PC[kk] += w_this * square(B_this[kk]);
+                fma_extra(PC, w_this, B_this, k);
             }
         }
     }
@@ -2186,10 +2183,12 @@ void solve_nonneg_batch
     real_t *restrict BtB,
     real_t *restrict BtX, /* <- solution will be here */
     real_t *restrict buffer_real_t,
+    real_t *restrict *restrict buffer_local,
     int_t m, int_t k, size_t lda,
     real_t l1_lam, real_t l1_lam_last,
     size_t max_cd_steps,
-    int nthreads
+    int nthreads,
+    bool numa_locality
 )
 {
     #if defined(_OPENMP) && \
@@ -2203,7 +2202,8 @@ void solve_nonneg_batch
 
     #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
             shared(BtB, BtX, buffer_real_t, m, lda, k, \
-                   l1_lam, l1_lam_last, max_cd_steps)
+                   l1_lam, l1_lam_last, max_cd_steps, \
+                   numa_locality, buffer_local)
     for (size_t_for ix = 0; ix < (size_t)m; ix++)
     {
         for (size_t ii = 0; ii < (size_t)k; ii++) {
@@ -2213,7 +2213,10 @@ void solve_nonneg_batch
         solve_nonneg(
             BtB,
             BtX + ix*lda,
-            buffer_real_t + (size_t)k*(size_t)omp_get_thread_num(),
+            numa_locality?
+                (buffer_local[omp_get_thread_num()])
+                  :
+                (buffer_real_t + (size_t)k*(size_t)omp_get_thread_num()),
             k,
             l1_lam, l1_lam_last,
             max_cd_steps,
@@ -2300,10 +2303,12 @@ void solve_elasticnet_batch
     real_t *restrict BtB,
     real_t *restrict BtX, /* <- solution will be here */
     real_t *restrict buffer_real_t,
+    real_t *restrict *restrict buffer_local,
     int_t m, int_t k, size_t lda,
     real_t l1_lam, real_t l1_lam_last,
     size_t max_cd_steps,
-    int nthreads
+    int nthreads,
+    bool numa_locality
 )
 {
     #if defined(_OPENMP) && \
@@ -2317,7 +2322,8 @@ void solve_elasticnet_batch
 
     #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
             shared(BtB, BtX, buffer_real_t, m, lda, k, \
-                   l1_lam, l1_lam_last, max_cd_steps)
+                   l1_lam, l1_lam_last, max_cd_steps, \
+                   numa_locality, buffer_local)
     for (size_t_for ix = 0; ix < (size_t)m; ix++)
     {
         for (size_t ii = 0; ii < (size_t)k; ii++) {
@@ -2327,7 +2333,11 @@ void solve_elasticnet_batch
         solve_elasticnet(
             BtB,
             BtX + ix*lda,
-            buffer_real_t + (size_t)3*(size_t)k*(size_t)omp_get_thread_num(),
+            numa_locality?
+                (buffer_local[omp_get_thread_num()])
+                  :
+                (buffer_real_t
+                    + (size_t)3*(size_t)k*(size_t)omp_get_thread_num()),
             k,
             l1_lam, l1_lam_last,
             max_cd_steps,
@@ -2500,7 +2510,7 @@ size_t buffer_size_optimizeA
     size_t n, bool full_dense, bool near_dense, bool some_full, bool do_B,
     bool has_dense, bool has_weights, bool NA_as_zero,
     bool nonneg, bool has_l1,
-    size_t k, size_t nthreads,
+    size_t k, size_t nthreads, bool numa_locality, size_t *restrict size_local,
     bool has_bias_static,
     bool pass_allocated_BtB, bool keep_precomputedBtB,
     bool use_cg, bool precondition_cg, bool finalize_chol
@@ -2508,12 +2518,13 @@ size_t buffer_size_optimizeA
 {
     if (finalize_chol && use_cg)
     {
-        return max2(
+        size_t size_local1 = 0, size_local2 = 0;
+        size_t out = max2(
                 buffer_size_optimizeA(
                         n, full_dense, near_dense, some_full, do_B,
                         has_dense, has_weights, NA_as_zero,
                         nonneg, has_l1,
-                        k, nthreads,
+                        k, nthreads, numa_locality, &size_local1,
                         has_bias_static,
                         pass_allocated_BtB, keep_precomputedBtB,
                         true, precondition_cg, false
@@ -2522,12 +2533,14 @@ size_t buffer_size_optimizeA
                     n, full_dense, near_dense, some_full, do_B,
                     has_dense, has_weights, NA_as_zero,
                     nonneg, has_l1,
-                    k, nthreads,
+                    k, nthreads, numa_locality, &size_local2,
                     has_bias_static,
                     pass_allocated_BtB, keep_precomputedBtB,
                     false, false, false
                 )
         );
+        *size_local = max2(size_local1, size_local2);
+        return out;
     }
 
     if (!has_dense)
@@ -2557,8 +2570,22 @@ size_t buffer_size_optimizeA
         else {
             buffer_size += square(k);
         }
-        if (do_B)
-            buffer_size += n*nthreads;
+        
+        *size_local = 0;
+        if (do_B) {
+            *size_local += n;
+        }
+
+        size_t size_thread_buffer1 = 0;
+        if (!nonneg && !has_l1)
+            size_thread_buffer1 = 0;
+        else if (!nonneg)
+            size_thread_buffer1 = (size_t)3*k;
+        else
+            size_thread_buffer1 = k;
+        if (full_dense) {
+            *size_local += size_thread_buffer1;
+        }
 
         if (!full_dense)
         {
@@ -2573,15 +2600,13 @@ size_t buffer_size_optimizeA
                 size_thread_buffer += k;
             else if (has_l1)
                 size_thread_buffer += 3*k;
-            buffer_size += nthreads * size_thread_buffer;
+
+            size_thread_buffer = max2(size_thread_buffer, size_thread_buffer1);
+            *size_local += size_thread_buffer;
+            if (!numa_locality)
+                buffer_size += nthreads * (*size_local);
         }
 
-        else {
-            if (nonneg)
-                buffer_size += k*nthreads;
-            else if (has_l1)
-                buffer_size += (size_t)3*k*nthreads;
-        }
         return buffer_size;
     }
 
@@ -2595,11 +2620,12 @@ size_t buffer_size_optimizeA
                 buffer_size += square(k);
             }
         }
+        *size_local = 0;
         if (do_B) {
-            buffer_size += n * nthreads;
+            *size_local += n;
         }
         if (do_B && has_weights) {
-            buffer_size += n * nthreads;
+            *size_local += n;
         }
         if (!has_weights) {
             if (some_full && !nonneg && !has_l1)
@@ -2611,7 +2637,10 @@ size_t buffer_size_optimizeA
             size_thread_buffer += k;
         else if (has_l1)
             size_thread_buffer += (size_t)3*k;
-        return buffer_size + nthreads * size_thread_buffer;
+        *size_local += size_thread_buffer;
+        if (!numa_locality)
+            buffer_size += nthreads * (*size_local);
+        return buffer_size;
     }
 
     /* case 3 */
@@ -2621,12 +2650,16 @@ size_t buffer_size_optimizeA
             buffer_size += 0;
         else
             buffer_size += square(k);
+        *size_local = 0;
         if (nonneg)
-            buffer_size += k*nthreads;
+            *size_local += k;
         else if (has_l1)
-            buffer_size += (size_t)3*k*nthreads;
+            *size_local += (size_t)3*k;
         if (has_bias_static)
             buffer_size += k;
+
+        if (!numa_locality)
+            buffer_size += (*size_local) * nthreads;
         return buffer_size;
     }
 
@@ -2658,13 +2691,16 @@ size_t buffer_size_optimizeA
             size_thread_buffer += k;
         else if (has_l1)
             size_thread_buffer += (size_t)3*k;
-        return buffer_size + nthreads * size_thread_buffer;
+        *size_local = size_thread_buffer;
+        if (!numa_locality)
+            buffer_size += nthreads * size_thread_buffer;
+        return buffer_size;
     }
 }
 
 size_t buffer_size_optimizeA_implicit
 (
-    size_t k, size_t nthreads,
+    size_t k, size_t nthreads, bool numa_locality, size_t *restrict size_local,
     bool pass_allocated_BtB,
     bool nonneg, bool has_l1,
     bool use_cg, bool precondition_cg, bool finalize_chol
@@ -2672,32 +2708,35 @@ size_t buffer_size_optimizeA_implicit
 {
     if (finalize_chol && use_cg)
     {
-        return max2(
+        size_t size_local1 = 0, size_local2 = 0;
+        size_t out = max2(
             buffer_size_optimizeA_implicit(
-                k, nthreads,
+                k, nthreads, numa_locality, &size_local1,
                 pass_allocated_BtB,
                 nonneg, has_l1,
                 false, false, false
             ),
             buffer_size_optimizeA_implicit(
-                k, nthreads,
+                k, nthreads, numa_locality, &size_local2,
                 pass_allocated_BtB,
                 nonneg, has_l1,
                 true, precondition_cg, false
             )
         );
+        *size_local = max2(size_local1, size_local2);
+        return out;
     }
 
-    size_t size_thread_buffer = use_cg?
-                                    ((precondition_cg? 5 : 3) * k)
-                                        :
-                                    (square(k));
+    *size_local = use_cg? ((precondition_cg? 5 : 3) * k) : (square(k));
     if (nonneg)
-        size_thread_buffer += k;
+        *size_local += k;
     else if (has_l1)
-        size_thread_buffer += (size_t)3*k;
-    return (pass_allocated_BtB? (size_t)0 : square(k))
-            + nthreads * size_thread_buffer;
+        *size_local = *size_local + (size_t)3*k;
+
+    size_t out = (pass_allocated_BtB? (size_t)0 : square(k));
+    if (!numa_locality)
+        out += nthreads * (*size_local);
+    return out;
 }
 
 void optimizeA
@@ -2712,7 +2751,7 @@ void optimizeA
     real_t lam, real_t lam_last,
     real_t l1_lam, real_t l1_lam_last,
     bool scale_lam, bool scale_bias_const, real_t *restrict wsumA,
-    bool do_B, int nthreads,
+    bool do_B, int nthreads, bool numa_locality,
     bool use_cg, bool precondition_cg, int_t max_cg_steps,
     bool nonneg, int_t max_cd_steps,
     real_t *restrict bias_restore,
@@ -2720,7 +2759,8 @@ void optimizeA
     real_t *restrict bias_static, real_t multiplier_bias_BtX,
     bool keep_precomputedBtB,
     real_t *restrict precomputedBtB, bool *filled_BtB,
-    real_t *restrict buffer_real_t
+    real_t *restrict buffer_real_t,
+    real_t *restrict *restrict buffer_local
 )
 {
     /* Note: the BtB produced here has diagonal, the one from
@@ -2774,9 +2814,11 @@ void optimizeA
         }
         /* TODO: this function should do away with 'bufferX', replace it instead
            with an 'incX' parameter. */
-        real_t *restrict bufferX = buffer_real_t;
-        if (do_B)
+        real_t *restrict bufferX = NULL;
+        if (do_B && !numa_locality) {
+            bufferX = buffer_real_t;
             buffer_real_t += (size_t)n*(size_t)nthreads;
+        }
         
         /* t(B)*B + diag(lam) */
         cblas_tsyrk(CblasRowMajor, CblasUpper, CblasTrans,
@@ -2836,22 +2878,26 @@ void optimizeA
                 bufferBtB,
                 A,
                 buffer_real_t,
+                buffer_local,
                 m, k, lda,
                 scale_lam? (l1_lam*n) : (l1_lam),
                 scale_lam? (l1_lam_last*n) : (l1_lam_last),
                 max_cd_steps,
-                nthreads
+                nthreads,
+                numa_locality
             );
         else
             solve_nonneg_batch(
                 bufferBtB,
                 A,
                 buffer_real_t,
+                buffer_local,
                 m, k, lda,
                 scale_lam? (l1_lam*n) : (l1_lam),
                 scale_lam? (l1_lam_last*n) : (l1_lam_last),
                 max_cd_steps,
-                nthreads
+                nthreads,
+                numa_locality
             );
 
         /* If there are some few rows with missing values, now do a
@@ -2879,9 +2925,10 @@ void optimizeA
                            lam, lam_last, l1_lam, l1_lam_last, weight,\
                            cnt_NA, Xfull, buffer_real_t, bufferBtBcopy, \
                            nthreads, use_cg, nonneg, max_cd_steps, \
-                           precondition_cg) \
-                    firstprivate(bufferX)
+                           precondition_cg, numa_locality, buffer_local, \
+                           bufferX)
             for (size_t_for ix = 0; ix < (size_t)m; ix++)
+            {
                 if (cnt_NA[ix])
                 {
                     if (cnt_NA[ix] == n) {
@@ -2889,12 +2936,21 @@ void optimizeA
                         continue;
                     }
 
-                    if (!do_B)
-                        bufferX = Xfull + ix*(size_t)n;
-                    else
-                        cblas_tcopy(n, Xfull + ix, ldX,
-                                    bufferX
-                            + ((size_t)n*(size_t)omp_get_thread_num()), 1);
+                    real_t *bufferX_pass = NULL;
+
+                    if (!do_B) {
+                        bufferX_pass = Xfull + ix*(size_t)n;
+                    }
+                    else if (numa_locality) {
+                        bufferX_pass
+                            = buffer_local[omp_get_thread_num()] + size_buffer;
+                        cblas_tcopy(n, Xfull + ix, ldX, bufferX_pass, 1);
+                    }
+                    else {
+                        bufferX_pass
+                            = bufferX +((size_t)n*(size_t)omp_get_thread_num());
+                        cblas_tcopy(n, Xfull + ix, ldX, bufferX_pass, 1);
+                    }
 
                     if (use_cg)
                     {
@@ -2906,14 +2962,14 @@ void optimizeA
                     factors_closed_form(
                         A + ix*(size_t)lda, k,
                         B, n, ldb,
-                        bufferX + (do_B?
-                                    ((size_t)n*(size_t)omp_get_thread_num())
-                                        :
-                                    ((size_t)0)), false,
+                        bufferX_pass, false,
                         (real_t*)NULL, (int_t*)NULL, (size_t)0,
                         (real_t*)NULL,
-                        buffer_real_t
-                         + size_buffer * (size_t)omp_get_thread_num(),
+                        numa_locality?
+                            (buffer_local[omp_get_thread_num()])
+                                :
+                            (buffer_real_t
+                              + size_buffer * (size_t)omp_get_thread_num()),
                         lam, lam_last,
                         l1_lam, l1_lam_last,
                         scale_lam, scale_bias_const, 0.,
@@ -2928,6 +2984,7 @@ void optimizeA
                         false
                     );
                 }
+            }
 
             set_blas_threads(nthreads_restore, (int*)NULL);
         }
@@ -2950,12 +3007,12 @@ void optimizeA
             }
         }
         real_t *restrict bufferX = NULL;
-        if (do_B) {
+        if (do_B && !numa_locality) {
             bufferX = buffer_real_t;
             buffer_real_t += (size_t)n * (size_t)nthreads;
         }
         real_t *restrict bufferW = NULL;
-        if (do_B && weight != NULL) {
+        if (do_B && weight != NULL && !numa_locality) {
             bufferW = buffer_real_t;
             buffer_real_t += (size_t)n * (size_t)nthreads;
         }
@@ -2998,38 +3055,48 @@ void optimizeA
                        scale_lam, scale_bias_const, wsumA, \
                        bufferBtB, cnt_NA, buffer_remainder, \
                        use_cg, max_cg_steps, nonneg, max_cd_steps, \
-                       precondition_cg, bufferBtBchol) \
-                firstprivate(bufferX, bufferW)
+                       precondition_cg, bufferBtBchol, \
+                       numa_locality, buffer_local, \
+                       bufferX, bufferW)
         for (size_t_for ix = 0; ix < (size_t)m; ix++)
         {
+            real_t *bufferX_pass = NULL;
+            real_t *bufferW_pass = NULL;
             if (!do_B) {
-                bufferX = Xfull + ix*(size_t)n;
+                bufferX_pass = Xfull + ix*(size_t)n;
                 if (weight != NULL)
-                    bufferW = weight + ix*(size_t)n;
+                    bufferW_pass = weight + ix*(size_t)n;
+            }
+            else if (numa_locality) {
+                bufferX_pass = buffer_local[omp_get_thread_num()] + size_buffer;
+                cblas_tcopy(n, Xfull + ix, ldX, bufferX_pass, 1);
+                if (weight != NULL) {
+                    bufferW_pass = bufferX_pass + n;
+                    cblas_tcopy(n, weight + ix, ldX, bufferW_pass, 1);
+                }
             }
             else {
-                cblas_tcopy(n, Xfull + ix, ldX,
-                            bufferX
-                                + ((size_t)n*(size_t)omp_get_thread_num()), 1);
-                if (weight != NULL)
-                    cblas_tcopy(n, weight + ix, ldX,
-                                bufferW
-                            + ((size_t)n*(size_t)omp_get_thread_num()), 1);
+                bufferX_pass
+                    = bufferX + ((size_t)n*(size_t)omp_get_thread_num());
+                cblas_tcopy(n, Xfull + ix, ldX, bufferX_pass, 1);
+                if (weight != NULL) {
+                    bufferW_pass
+                        = bufferW + ((size_t)n*(size_t)omp_get_thread_num());
+                    cblas_tcopy(n, weight + ix, ldX, bufferW_pass, 1);
+                }
             }
 
             factors_closed_form(
                 A + ix*(size_t)lda, k,
                 B, n, ldb,
-                bufferX + (do_B? ((size_t)n*(size_t)omp_get_thread_num())
-                                    : ((size_t)0)),
+                bufferX_pass,
                 cnt_NA[ix] == 0,
                 (real_t*)NULL, (int_t*)NULL, (size_t)0,
-                (weight != NULL)?
-                    (bufferW + (do_B? ((size_t)n*(size_t)omp_get_thread_num())
-                                        : ((size_t)0)))
+                bufferW_pass,
+                numa_locality?
+                    (buffer_local[omp_get_thread_num()])
                       :
-                    ((real_t*)NULL),
-                buffer_remainder + size_buffer*(size_t)omp_get_thread_num(),
+                    (buffer_remainder+size_buffer*(size_t)omp_get_thread_num()),
                 lam, lam_last,
                 l1_lam, l1_lam_last,
                 scale_lam, scale_bias_const,
@@ -3114,22 +3181,26 @@ void optimizeA
                 bufferBtB,
                 A,
                 buffer_real_t,
+                buffer_local,
                 m, k, lda,
                 scale_lam? (l1_lam*(real_t)n) : (l1_lam),
                 scale_lam? (l1_lam_last*(real_t)n) : (l1_lam_last),
                 max_cd_steps,
-                nthreads
+                nthreads,
+                numa_locality
             );
         else
             solve_nonneg_batch(
                 bufferBtB,
                 A,
                 buffer_real_t,
+                buffer_local,
                 m, k, lda,
                 scale_lam? (l1_lam*(real_t)n) : (l1_lam),
                 scale_lam? (l1_lam_last*(real_t)n) : (l1_lam_last),
                 max_cd_steps,
-                nthreads
+                nthreads,
+                numa_locality
             );
     }
 
@@ -3192,7 +3263,8 @@ void optimizeA
                        Xcsr_p, Xcsr_i, Xcsr, buffer_real_t, NA_as_zero, \
                        bufferBtB, size_buffer, use_cg, precondition_cg, \
                        nonneg, max_cd_steps, bias_BtX, bias_X, \
-                       bias_X_glob, multiplier_bias_BtX)
+                       bias_X_glob, multiplier_bias_BtX, \
+                       numa_locality, buffer_local)
         for (size_t_for ix = 0; ix < (size_t)m; ix++)
         {
             if ((Xcsr_p[ix+(size_t)1] > Xcsr_p[ix]) ||
@@ -3205,7 +3277,11 @@ void optimizeA
                     Xcsr +  Xcsr_p[ix], Xcsr_i +  Xcsr_p[ix],
                     Xcsr_p[ix+(size_t)1] - Xcsr_p[ix],
                     (weight == NULL)? ((real_t*)NULL) : (weight + Xcsr_p[ix]),
-                    buffer_real_t + ((size_t)omp_get_thread_num()*size_buffer),
+                    numa_locality?
+                        (buffer_local[omp_get_thread_num()])
+                          :
+                        (buffer_real_t
+                            + ((size_t)omp_get_thread_num()*size_buffer)),
                     lam, lam_last,
                     l1_lam, l1_lam_last,
                     scale_lam, scale_bias_const,
@@ -3233,11 +3309,12 @@ void optimizeA_implicit
     int_t m, int_t n, int_t k,
     size_t Xcsr_p[], int_t Xcsr_i[], real_t *restrict Xcsr,
     real_t lam, real_t l1_lam,
-    int nthreads,
+    int nthreads, bool numa_locality,
     bool use_cg, bool precondition_cg, int_t max_cg_steps,
     bool nonneg, int_t max_cd_steps,
     real_t *restrict precomputedBtB, /* <- will be calculated if not passed */
-    real_t *restrict buffer_real_t
+    real_t *restrict buffer_real_t,
+    real_t *restrict *restrict buffer_local
 )
 {
     if (nonneg || l1_lam) use_cg = false;
@@ -3272,7 +3349,7 @@ void optimizeA_implicit
         #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
                 shared(A, B, lda, ldb, m, n, k, lam, \
                        Xcsr, Xcsr_i, Xcsr_p, precomputedBtB, buffer_real_t, \
-                       max_cg_steps, size_buffer)
+                       max_cg_steps, size_buffer, numa_locality, buffer_local)
         for (ix = 0; ix < m; ix++)
             if (Xcsr_p[ix+(size_t)1] > Xcsr_p[ix])
                 factors_implicit_cg(
@@ -3283,7 +3360,11 @@ void optimizeA_implicit
                     lam,
                     precomputedBtB, k,
                     max_cg_steps,
-                    buffer_real_t + ((size_t)omp_get_thread_num() * size_buffer)
+                    numa_locality?
+                        (buffer_local[omp_get_thread_num()])
+                          :
+                        (buffer_real_t
+                            + ((size_t)omp_get_thread_num() * size_buffer))
                 );
     }
 
@@ -3292,7 +3373,7 @@ void optimizeA_implicit
         #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
                 shared(A, B, lda, ldb, m, n, k, lam, \
                        Xcsr, Xcsr_i, Xcsr_p, precomputedBtB, buffer_real_t, \
-                       max_cg_steps, size_buffer)
+                       max_cg_steps, size_buffer, numa_locality, buffer_local)
         for (ix = 0; ix < m; ix++)
             if (Xcsr_p[ix+(size_t)1] > Xcsr_p[ix])
                 factors_implicit_pcg(
@@ -3303,7 +3384,11 @@ void optimizeA_implicit
                     lam,
                     precomputedBtB, k,
                     max_cg_steps,
-                    buffer_real_t + ((size_t)omp_get_thread_num() * size_buffer)
+                    numa_locality?
+                        (buffer_local[omp_get_thread_num()])
+                          :
+                        (buffer_real_t
+                            + ((size_t)omp_get_thread_num() * size_buffer))
                 );
     }
     
@@ -3312,7 +3397,8 @@ void optimizeA_implicit
         #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
                 shared(A, B, lda, ldb, m, n, k, lam, l1_lam, \
                        Xcsr, Xcsr_i, Xcsr_p, precomputedBtB, buffer_real_t, \
-                       size_buffer, nonneg, max_cd_steps)
+                       size_buffer, nonneg, max_cd_steps, \
+                       numa_locality, buffer_local)
         for (ix = 0; ix < m; ix++)
             if (Xcsr_p[ix+(size_t)1] > Xcsr_p[ix])
                 factors_implicit_chol(
@@ -3323,7 +3409,11 @@ void optimizeA_implicit
                     lam, l1_lam,
                     precomputedBtB, k,
                     nonneg, max_cd_steps,
-                    buffer_real_t + ((size_t)omp_get_thread_num() * size_buffer)
+                    numa_locality?
+                        (buffer_local[omp_get_thread_num()])
+                          :
+                        (buffer_real_t
+                            + ((size_t)omp_get_thread_num() * size_buffer))
                 );
     }
 

@@ -1209,6 +1209,7 @@ validate.inputs <- function(model, implicit=FALSE,
         warnings("Warning: will fit a model with centering in 'I' and non-negativity constraints in 'D'.")
     if (NA_as_zero && add_implicit_features)
         warning("Warning: will add implicit features while having 'NA_as_zero'.")
+
     
     return(list(
         processed_X = processed_X,
@@ -1982,7 +1983,7 @@ OMF_explicit <- function(X, U=NULL, I=NULL, weight=NULL,
                          NA_as_zero = inputs$NA_as_zero,
                          verbose = inputs$verbose, print_every = inputs$print_every,
                          handle_interrupt = inputs$handle_interrupt, seed = inputs$seed,
-                         nthreads = nthreads))
+                         nthreads = inputs$nthreads))
 }
 
 .OMF_explicit <- function(processed_X, processed_U, processed_I,
@@ -2157,7 +2158,7 @@ OMF_implicit <- function(X, U=NULL, I=NULL,
                          max_cg_steps = inputs$max_cg_steps, finalize_chol = inputs$finalize_chol,
                          verbose = inputs$verbose,
                          handle_interrupt = inputs$handle_interrupt, seed = inputs$seed,
-                         nthreads = nthreads))
+                         nthreads = inputs$nthreads))
     
 }
 

@@ -255,6 +255,23 @@ else()
             set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -fno-math-errno")
         endif()
     endif()
+    if (NOT (${CMAKE_C_FLAGS_RELEASE} MATCHES "-ffp-contract=fast"))
+        set(OLD_FLAGS ${CMAKE_REQUIRED_FLAGS})
+        set(CMAKE_REQUIRED_FLAGS "-ffp-contract=fast")
+        check_c_source_compiles(
+            "
+            int main(int argc, char **argv)
+            {
+                return 0;
+            }
+            "
+            SUPPORTS_FFPCONTRACT
+        )
+        set(CMAKE_REQUIRED_FLAGS ${OLD_FLAGS})
+        if (SUPPORTS_FFPCONTRACT)
+            set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -ffp-contract=fast")
+        endif()
+    endif()
 endif()
 
 # Link-time optimization if supported

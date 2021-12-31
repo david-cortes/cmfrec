@@ -191,6 +191,7 @@ class _CMF:
         if (NA_as_zero and add_implicit_features):
             warnings.warn("Warning: will add implicit features while having 'NA_as_zero'.")
 
+
         self.k = k
         self.k_user = k_user
         self.k_item = k_item

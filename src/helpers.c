@@ -976,12 +976,13 @@ void add_to_diag2(real_t *restrict A, real_t val, size_t n, real_t val_last)
     A[square(n)-1] += val_last;
 }
 
-real_t mutiply3(real_t *restrict a, real_t *restrict b, int_t n)
+void fma_extra(real_t *restrict a, real_t w, real_t *restrict b, int_t n)
 {
-    real_t out = 0;
+    #ifdef __clang__
+    #pragma clang fp reassociate(on)
+    #endif
     for (int_t ix = 0; ix < n; ix++)
-        out += b[ix] * a[ix] * a[ix];
-    return out;
+        a[ix] += w * b[ix] * b[ix];
 }
 
 void mult2(real_t *restrict out, real_t *restrict a, real_t *restrict b, int_t n)
