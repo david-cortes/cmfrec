@@ -47,6 +47,7 @@ class build_ext_subclass( build_ext_with_blas ):
             self.add_no_math_errno()
             self.add_no_trapping_math()
             self.add_ffp_contract_fast()
+            self.add_clang_fp_reassociate()
             if sys.platform[:3].lower() != "win":
                 self.add_link_time_optimization()
 
@@ -141,6 +142,11 @@ class build_ext_subclass( build_ext_with_blas ):
                 e.extra_compile_args.append(arg_ffpc)
                 e.extra_link_args.append(arg_ffpc)
 
+    def add_clang_fp_reassociate(self):
+        if self.test_supports_clang_reassociate():
+            for e in self.extensions:
+                e.define_macros.append(("CLANG_FP_REASSOCIATE", None))
+
     def add_openmp_linkage(self):
         arg_omp1 = "-fopenmp"
         arg_omp2 = "-qopenmp"
@@ -194,6 +200,53 @@ class build_ext_subclass( build_ext_with_blas ):
             pass
         return is_supported
 
+    def test_supports_clang_reassociate(self):
+        is_supported = False
+        try:
+            if not hasattr(self.compiler, "compiler"):
+                return False
+            print("--- Checking compiler support for option '%s'" % "#pragma clang fp reassociate(on)")
+            fname = "cmfrec_compiler_testing.c"
+            with open(fname, "w") as ftest:
+                ftest.write(u"int main(int argc, char**argv) {return 0;}\n")
+            try:
+                cmd = [self.compiler.compiler[0]]
+            except:
+                cmd = list(self.compiler.compiler)
+            val_good = subprocess.call(cmd + [fname])
+
+            with open(fname, "w") as ftest:
+                ftest.write(u"""
+                void fma_extra(double *a, double w, double *b, int n)
+                {
+                    #pragma clang fp reassociate(on)
+                    for (int ix = 0; ix < n; ix++)
+                        a[ix] += w * b[ix] * b[ix];
+                }
+                int main(int argc, char **argv)
+                {
+                    double a[] = {1.,2.,3.};
+                    double b[] = {4.,5.,6.};
+                    double w = 2.;
+                    int n = 3;
+                    fma_extra(a, w, b, n);
+
+                    return 0;
+                }\n
+                """)
+            try:
+                val = subprocess.call(cmd + [fname])
+                is_supported = (val == val_good)
+            except:
+                is_supported = False
+        except:
+            pass
+        try:
+            os.remove(fname)
+        except:
+            pass
+        return is_supported
+
 
 force_openblas = (("openblas" in sys.argv)
                   or ("-openblas" in sys.argv)
@@ -210,7 +263,7 @@ if (force_openblas):
 setup(
     name  = "cmfrec",
     packages = ["cmfrec"],
-    version = '3.3.0',
+    version = '3.3.1',
     description = 'Collective matrix factorization',
     author = 'David Cortes',
     author_email = 'david.cortes.rivera@gmail.com',

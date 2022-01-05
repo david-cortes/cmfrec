@@ -419,7 +419,7 @@ real_t sum_squares(real_t *restrict arr, size_t n, int nthreads);
 void taxpy_large(real_t *restrict A, real_t x, real_t *restrict Y, size_t n, int nthreads);
 void tscal_large(real_t *restrict arr, real_t alpha, size_t n, int nthreads);
 void rnorm_xoshiro(real_t *seq, const size_t n, rng_state_t state[4])
-#ifdef __GNUC__
+#if defined(__GNUC__) && !defined(__clang__) && !defined(_FOR_R)
 __attribute__((optimize ("no-math-errno")))
 __attribute__((optimize ("no-trapping-math")))
 #endif
@@ -435,7 +435,7 @@ int_t rnorm_parallel(ArraysToFill arrays, int_t seed, int nthreads);
 void reduce_mat_sum(real_t *restrict outp, size_t lda, real_t *restrict inp,
                     int_t m, int_t n, int nthreads);
 void exp_neg_x(real_t *restrict arr, size_t n, int nthreads)
-#ifdef __GNUC__
+#if defined(__GNUC__) && !defined(__clang__) && !defined(_FOR_R)
 __attribute__((optimize ("no-math-errno")))
 __attribute__((optimize ("no-trapping-math")))
 #endif
@@ -443,27 +443,27 @@ __attribute__((optimize ("no-trapping-math")))
 void add_to_diag(real_t *restrict A, real_t val, size_t n);
 void add_to_diag2(real_t *restrict A, real_t val, size_t n, real_t val_last);
 void fma_extra(real_t *restrict a, real_t w, real_t *restrict b, int_t n)
-#ifdef __GNUC__
+#if defined(__GNUC__) && !defined(__clang__) && !defined(_FOR_R)
 __attribute__((optimize ("Ofast")))
 __attribute__((hot))
 #endif
 ;
 void mult2(real_t *restrict out, real_t *restrict a, real_t *restrict b, int_t n)
-#ifdef __GNUC__
+#if defined(__GNUC__) && !defined(__clang__) && !defined(_FOR_R)
 __attribute__((optimize ("no-math-errno")))
 __attribute__((optimize ("no-trapping-math")))
 __attribute__((hot))
 #endif
 ;
 void recipr(real_t *restrict x, int_t n)
-#ifdef __GNUC__
+#if defined(__GNUC__) && !defined(__clang__) && !defined(_FOR_R)
 __attribute__((optimize ("no-math-errno")))
 __attribute__((optimize ("no-trapping-math")))
 __attribute__((hot))
 #endif
 ;
 real_t sum_sq_div_w(real_t *restrict arr, real_t *restrict w, size_t n, bool compensated, int nthreads)
-#ifdef __GNUC__
+#if defined(__GNUC__) && !defined(__clang__) && !defined(_FOR_R)
 __attribute__((optimize ("no-math-errno")))
 __attribute__((optimize ("no-trapping-math")))
 #endif
@@ -597,7 +597,7 @@ void R_nan_to_C_nan(real_t arr[], size_t n);
 long double compensated_sum(real_t *arr, size_t n);
 long double compensated_sum_product(real_t *restrict arr1, real_t *restrict arr2, size_t n);
 void custom_syr(const int_t n, const real_t alpha, const real_t *restrict x, real_t *restrict A, const int_t lda)
-#ifdef __GNUC__
+#if defined(__GNUC__) && !defined(__clang__) && !defined(_FOR_R)
 __attribute__((hot))
 #endif
 ;
@@ -657,7 +657,7 @@ void factors_closed_form
     real_t multiplier_bias_BtX,
     bool force_add_diag
 )
-#ifdef __GNUC__
+#if defined(__GNUC__) && !defined(__clang__) && !defined(_FOR_R)
 __attribute__((optimize ("no-math-errno")))
 __attribute__((optimize ("no-trapping-math")))
 __attribute__((hot))
@@ -673,7 +673,7 @@ void factors_explicit_cg
     real_t lam, real_t lam_last,
     int_t max_cg_steps
 )
-#ifdef __GNUC__
+#if defined(__GNUC__) && !defined(__clang__) && !defined(_FOR_R)
 __attribute__((optimize ("no-math-errno")))
 __attribute__((optimize ("no-trapping-math")))
 __attribute__((hot))
@@ -689,7 +689,7 @@ void factors_explicit_pcg
     real_t lam, real_t lam_last,
     int_t max_cg_steps
 )
-#ifdef __GNUC__
+#if defined(__GNUC__) && !defined(__clang__) && !defined(_FOR_R)
 __attribute__((optimize ("no-math-errno")))
 __attribute__((optimize ("no-trapping-math")))
 __attribute__((hot))
@@ -708,7 +708,7 @@ void factors_explicit_cg_NA_as_zero_weighted
     real_t lam, real_t lam_last,
     int_t max_cg_steps
 )
-#ifdef __GNUC__
+#if defined(__GNUC__) && !defined(__clang__) && !defined(_FOR_R)
 __attribute__((optimize ("no-math-errno")))
 __attribute__((optimize ("no-trapping-math")))
 __attribute__((hot))
@@ -727,7 +727,7 @@ void factors_explicit_pcg_NA_as_zero_weighted
     real_t lam, real_t lam_last,
     int_t max_cg_steps
 )
-#ifdef __GNUC__
+#if defined(__GNUC__) && !defined(__clang__) && !defined(_FOR_R)
 __attribute__((optimize ("no-math-errno")))
 __attribute__((optimize ("no-trapping-math")))
 __attribute__((hot))
@@ -744,7 +744,7 @@ void factors_explicit_cg_dense
     real_t lam, real_t lam_last,
     int_t max_cg_steps
 )
-#ifdef __GNUC__
+#if defined(__GNUC__) && !defined(__clang__) && !defined(_FOR_R)
 __attribute__((optimize ("no-math-errno")))
 __attribute__((optimize ("no-trapping-math")))
 __attribute__((hot))
@@ -761,7 +761,7 @@ void factors_explicit_pcg_dense
     real_t lam, real_t lam_last,
     int_t max_cg_steps
 )
-#ifdef __GNUC__
+#if defined(__GNUC__) && !defined(__clang__) && !defined(_FOR_R)
 __attribute__((optimize ("no-math-errno")))
 __attribute__((optimize ("no-trapping-math")))
 __attribute__((hot))
@@ -777,7 +777,7 @@ void factors_implicit_cg
     int_t max_cg_steps,
     real_t *restrict buffer_real_t
 )
-#ifdef __GNUC__
+#if defined(__GNUC__) && !defined(__clang__) && !defined(_FOR_R)
 __attribute__((optimize ("no-math-errno")))
 __attribute__((optimize ("no-trapping-math")))
 __attribute__((hot))
@@ -793,7 +793,7 @@ void factors_implicit_pcg
     int_t max_cg_steps,
     real_t *restrict buffer_real_t
 )
-#ifdef __GNUC__
+#if defined(__GNUC__) && !defined(__clang__) && !defined(_FOR_R)
 __attribute__((optimize ("no-math-errno")))
 __attribute__((optimize ("no-trapping-math")))
 __attribute__((hot))
@@ -809,7 +809,7 @@ void factors_implicit_chol
     bool nonneg, int_t max_cd_steps,
     real_t *restrict buffer_real_t
 )
-#ifdef __GNUC__
+#if defined(__GNUC__) && !defined(__clang__) && !defined(_FOR_R)
 __attribute__((optimize ("no-math-errno")))
 __attribute__((optimize ("no-trapping-math")))
 __attribute__((hot))
@@ -825,7 +825,7 @@ void solve_nonneg
     size_t max_cd_steps,
     bool fill_lower
 )
-#ifdef __GNUC__
+#if defined(__GNUC__) && !defined(__clang__) && !defined(_FOR_R)
 __attribute__((optimize ("no-math-errno")))
 __attribute__((optimize ("no-trapping-math")))
 __attribute__((hot))
@@ -843,7 +843,7 @@ void solve_nonneg_batch
     int nthreads,
     bool numa_locality
 )
-#ifdef __GNUC__
+#if defined(__GNUC__) && !defined(__clang__) && !defined(_FOR_R)
 __attribute__((optimize ("no-math-errno")))
 __attribute__((optimize ("no-trapping-math")))
 __attribute__((hot))
@@ -859,7 +859,7 @@ void solve_elasticnet
     size_t max_cd_steps,
     bool fill_lower
 )
-#ifdef __GNUC__
+#if defined(__GNUC__) && !defined(__clang__) && !defined(_FOR_R)
 __attribute__((optimize ("no-math-errno")))
 __attribute__((optimize ("no-trapping-math")))
 __attribute__((hot))
@@ -877,7 +877,7 @@ void solve_elasticnet_batch
     int nthreads,
     bool numa_locality
 )
-#ifdef __GNUC__
+#if defined(__GNUC__) && !defined(__clang__) && !defined(_FOR_R)
 __attribute__((optimize ("no-math-errno")))
 __attribute__((optimize ("no-trapping-math")))
 __attribute__((hot))
@@ -977,7 +977,7 @@ void optimizeA
     real_t *restrict buffer_real_t,
     real_t *restrict *restrict buffer_local
 )
-#ifdef __GNUC__
+#if defined(__GNUC__) && !defined(__clang__) && !defined(_FOR_R)
 __attribute__((optimize ("no-math-errno")))
 __attribute__((optimize ("no-trapping-math")))
 #endif
@@ -996,7 +996,7 @@ void optimizeA_implicit
     real_t *restrict buffer_real_t,
     real_t *restrict *restrict buffer_local
 )
-#ifdef __GNUC__
+#if defined(__GNUC__) && !defined(__clang__) && !defined(_FOR_R)
 __attribute__((optimize ("no-math-errno")))
 __attribute__((optimize ("no-trapping-math")))
 #endif
@@ -1014,7 +1014,7 @@ int_t calc_mean_and_center
     bool *modified_X, bool *modified_Xfull,
     bool allow_overwrite_X
 )
-#ifdef __GNUC__
+#if defined(__GNUC__) && !defined(__clang__) && !defined(_FOR_R)
 __attribute__((optimize ("no-math-errno")))
 __attribute__((optimize ("no-trapping-math")))
 #endif
@@ -1040,7 +1040,7 @@ int_t initialize_biases
     bool *modified_X, bool *modified_Xfull,
     bool allow_overwrite_X
 )
-#ifdef __GNUC__
+#if defined(__GNUC__) && !defined(__clang__) && !defined(_FOR_R)
 __attribute__((optimize ("no-math-errno")))
 __attribute__((optimize ("no-trapping-math")))
 #endif
@@ -1056,7 +1056,7 @@ int_t initialize_biases_onesided
     real_t *restrict biasA,
     int nthreads
 )
-#ifdef __GNUC__
+#if defined(__GNUC__) && !defined(__clang__) && !defined(_FOR_R)
 __attribute__((optimize ("no-math-errno")))
 __attribute__((optimize ("no-trapping-math")))
 #endif
@@ -1076,7 +1076,7 @@ int_t initialize_biases_twosided
     real_t *restrict biasA, real_t *restrict biasB,
     int nthreads
 )
-#ifdef __GNUC__
+#if defined(__GNUC__) && !defined(__clang__) && !defined(_FOR_R)
 __attribute__((optimize ("no-math-errno")))
 __attribute__((optimize ("no-trapping-math")))
 #endif
@@ -1090,7 +1090,7 @@ int_t center_by_cols
     size_t Xcsc_p[], int_t Xcsc_i[], real_t *restrict Xcsc,
     int nthreads, bool *modified_X, bool *modified_Xfull
 )
-#ifdef __GNUC__
+#if defined(__GNUC__) && !defined(__clang__) && !defined(_FOR_R)
 __attribute__((optimize ("no-math-errno")))
 __attribute__((optimize ("no-trapping-math")))
 #endif
@@ -1166,7 +1166,7 @@ int_t fit_most_popular_internal
     bool *free_X, bool *free_Xfull,
     bool allow_overwrite_X
 )
-#ifdef __GNUC__
+#if defined(__GNUC__) && !defined(__clang__) && !defined(_FOR_R)
 __attribute__((optimize ("no-math-errno")))
 __attribute__((optimize ("no-trapping-math")))
 #endif
@@ -1321,7 +1321,7 @@ void collective_closed_form_block
     real_t *restrict bias_CtU,
     real_t *restrict buffer_real_t
 )
-#ifdef __GNUC__
+#if defined(__GNUC__) && !defined(__clang__) && !defined(_FOR_R)
 __attribute__((optimize ("no-math-errno")))
 __attribute__((optimize ("no-trapping-math")))
 __attribute__((hot))
@@ -1348,7 +1348,7 @@ void collective_closed_form_block_implicit
     bool nonneg, int_t max_cd_steps,
     real_t *restrict buffer_real_t
 )
-#ifdef __GNUC__
+#if defined(__GNUC__) && !defined(__clang__) && !defined(_FOR_R)
 __attribute__((optimize ("no-math-errno")))
 __attribute__((optimize ("no-trapping-math")))
 __attribute__((hot))
@@ -1379,7 +1379,7 @@ void collective_block_cg
     real_t *restrict bias_CtU,
     real_t *restrict buffer_real_t
 )
-#ifdef __GNUC__
+#if defined(__GNUC__) && !defined(__clang__) && !defined(_FOR_R)
 __attribute__((optimize ("no-math-errno")))
 __attribute__((optimize ("no-trapping-math")))
 __attribute__((hot))
@@ -1404,7 +1404,7 @@ void collective_block_cg_implicit
     real_t *restrict precomputedCtC, /* should NOT be multiplied by weight */
     real_t *restrict buffer_real_t
 )
-#ifdef __GNUC__
+#if defined(__GNUC__) && !defined(__clang__) && !defined(_FOR_R)
 __attribute__((optimize ("no-math-errno")))
 __attribute__((optimize ("no-trapping-math")))
 __attribute__((hot))
@@ -1453,7 +1453,7 @@ int_t collective_factors_cold
     bool NA_as_zero_U,
     bool nonneg
 )
-#ifdef __GNUC__
+#if defined(__GNUC__) && !defined(__clang__) && !defined(_FOR_R)
 __attribute__((optimize ("no-math-errno")))
 __attribute__((optimize ("no-trapping-math")))
 __attribute__((hot))
@@ -1477,7 +1477,7 @@ int_t collective_factors_cold_implicit
     bool NA_as_zero_U,
     bool nonneg
 )
-#ifdef __GNUC__
+#if defined(__GNUC__) && !defined(__clang__) && !defined(_FOR_R)
 __attribute__((optimize ("no-math-errno")))
 __attribute__((optimize ("no-trapping-math")))
 __attribute__((hot))
@@ -1513,7 +1513,7 @@ int_t collective_factors_warm
     bool nonneg,
     real_t *restrict B_plus_bias
 )
-#ifdef __GNUC__
+#if defined(__GNUC__) && !defined(__clang__) && !defined(_FOR_R)
 __attribute__((optimize ("no-math-errno")))
 __attribute__((optimize ("no-trapping-math")))
 __attribute__((hot))
@@ -1537,7 +1537,7 @@ int_t collective_factors_warm_implicit
     real_t *restrict BeTBeChol,
     real_t *restrict CtUbias
 )
-#ifdef __GNUC__
+#if defined(__GNUC__) && !defined(__clang__) && !defined(_FOR_R)
 __attribute__((optimize ("no-math-errno")))
 __attribute__((optimize ("no-trapping-math")))
 __attribute__((hot))
@@ -1652,7 +1652,7 @@ void optimizeA_collective
     real_t *restrict buffer_real_t,
     real_t *restrict *restrict buffer_local
 )
-#ifdef __GNUC__
+#if defined(__GNUC__) && !defined(__clang__) && !defined(_FOR_R)
 __attribute__((optimize ("no-math-errno")))
 __attribute__((optimize ("no-trapping-math")))
 #endif
@@ -1693,7 +1693,7 @@ int_t preprocess_vec
     int_t *restrict cnt_NA,
     bool *modified_vec, bool *modified_vec_sp
 )
-#ifdef __GNUC__
+#if defined(__GNUC__) && !defined(__clang__) && !defined(_FOR_R)
 __attribute__((optimize ("no-math-errno")))
 __attribute__((optimize ("no-trapping-math")))
 #endif
@@ -1720,7 +1720,7 @@ int_t preprocess_sideinfo_matrix
     bool NA_as_zero_U, bool nonneg, int nthreads,
     bool *modified_U, bool *modified_Usp
 )
-#ifdef __GNUC__
+#if defined(__GNUC__) && !defined(__clang__) && !defined(_FOR_R)
 __attribute__((optimize ("no-math-errno")))
 __attribute__((optimize ("no-trapping-math")))
 #endif

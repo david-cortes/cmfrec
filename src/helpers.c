@@ -978,7 +978,7 @@ void add_to_diag2(real_t *restrict A, real_t val, size_t n, real_t val_last)
 
 void fma_extra(real_t *restrict a, real_t w, real_t *restrict b, int_t n)
 {
-    #ifdef __clang__
+    #if defined(CLANG_FP_REASSOCIATE) && defined(__clang__)
     #pragma clang fp reassociate(on)
     #endif
     for (int_t ix = 0; ix < n; ix++)

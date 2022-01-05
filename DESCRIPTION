@@ -1,7 +1,7 @@
 Package: cmfrec
 Type: Package
 Title: Collective Matrix Factorization for Recommender Systems
-Version: 3.3.0
+Version: 3.3.1
 Authors@R: c(
   person(given="David", family="Cortes", role=c("aut", "cre", "cph"),
          email="david.cortes.rivera@gmail.com"),
@@ -19,7 +19,7 @@ URL: https://github.com/david-cortes/cmfrec
 BugReports: https://github.com/david-cortes/cmfrec/issues
 Description: Collective matrix factorization (a.k.a. multi-view or multi-way factorization,
 	Singh, Gordon, (2008) <doi:10.1145/1401890.1401969>) tries to approximate a matrix 'X' as the
-	product of two low-dimensional matrices aided with secondary information matrices about rows
+	product of two low-dimensional matrices, optionally aided with secondary information matrices about rows
 	and/or columns of 'X' which are also factorized using the same latent components.
 	The intended usage is for recommender systems, dimensionality reduction, and missing value imputation.
 	Implements extensions of the original model (Cortes, (2018) <arXiv:1809.00366>) and can produce

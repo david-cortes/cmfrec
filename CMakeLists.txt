@@ -1,5 +1,5 @@
 cmake_minimum_required (VERSION 3.12.4)
-project (cmfrec VERSION 3.3.0)
+project (cmfrec VERSION 3.3.1)
 set(CMAKE_BUILD_TYPE Release)
 
 ### Note: this build script allows configuring 4 things manually:
@@ -271,6 +271,30 @@ else()
         if (SUPPORTS_FFPCONTRACT)
             set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -ffp-contract=fast")
         endif()
+    endif()
+    check_c_source_compiles(
+    "
+    void fma_extra(double *a, double w, double *b, int n)
+    {
+        #pragma clang fp reassociate(on)
+        for (int ix = 0; ix < n; ix++)
+            a[ix] += w * b[ix] * b[ix];
+    }
+    int main(int argc, char **argv)
+    {
+        double a[] = {1.,2.,3.};
+        double b[] = {4.,5.,6.};
+        double w = 2.;
+        int n = 3;
+        fma_extra(a, w, b, n);
+
+        return 0;
+    }
+    "
+    SUPPORTS_CLANG_FP_REASSOCIATE
+    )
+    if (SUPPORTS_CLANG_FP_REASSOCIATE)
+        add_compile_definitions(CLANG_FP_REASSOCIATE)
     endif()
 endif()
 
