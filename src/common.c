@@ -3327,7 +3327,7 @@ void optimizeA_implicit
        so as to incorporate this function later into the 'factors_multiple'. */
     cblas_tsyrk(CblasRowMajor, CblasUpper, CblasTrans,
                 k, n,
-                1., B, ldb,
+                1., B, (int_t)ldb,
                 0., precomputedBtB, k);
     if (!use_cg) {
         add_to_diag(precomputedBtB, lam, k);
@@ -5317,7 +5317,7 @@ int_t topN
         /* Otherwise, do a proper partial sort */
         else
         {
-            qs_argpartition(buffer_ix, buffer_scores, n_take, n_top);
+            qs_argpartition(buffer_ix, buffer_scores, (int_t)n_take, n_top);
             qsort(buffer_ix, n_top, sizeof(int_t), cmp_argsort);
         }
 
@@ -5334,7 +5334,7 @@ int_t topN
 
         else
         {
-            qs_argpartition(buffer_mask, buffer_scores, n_take, n_top);
+            qs_argpartition(buffer_mask, buffer_scores, (int_t)n_take, n_top);
             qsort(buffer_mask, n_top, sizeof(int_t), cmp_argsort);
         }
 

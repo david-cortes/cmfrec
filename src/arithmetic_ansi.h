@@ -122,7 +122,7 @@ inline static void vecdot(real_t* s, const real_t *x, const real_t *y, const siz
 inline static void vec2norm(real_t* s, const real_t *x, const size_t n)
 {
     if (n < (size_t)INT_MAX)
-        *s = cblas_tnrm2(n, x, 1);
+        *s = cblas_tnrm2((int_t)n, x, 1);
     else {
         long double res = 0;
         for (size_t ix = 0; ix < n; ix++)

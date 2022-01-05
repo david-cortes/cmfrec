@@ -360,7 +360,7 @@ int_t lbfgs(
     //     return LBFGSERR_INVALID_ORTHANTWISE_START;
     // }
     if (param.orthantwise_end < 0) {
-        param.orthantwise_end = n;
+        param.orthantwise_end = (int_t)n;
     }
     // if (n < param.orthantwise_end) {
     //     return LBFGSERR_INVALID_ORTHANTWISE_END;
@@ -450,7 +450,7 @@ int_t lbfgs(
         xnorm = owlqn_x1norm(x, param.orthantwise_start, param.orthantwise_end);
         fx += xnorm * param.orthantwise_c;
         owlqn_pseudo_gradient(
-            pg, x, g, n,
+            pg, x, g, (int_t)n,
             param.orthantwise_c, param.orthantwise_start, param.orthantwise_end
             );
     }
@@ -503,7 +503,7 @@ int_t lbfgs(
         } else {
             ls = linesearch(n, x, &fx, g, d, &step, xp, pg, w, &cd, &param);
             owlqn_pseudo_gradient(
-                pg, x, g, n,
+                pg, x, g, (int_t)n,
                 param.orthantwise_c, param.orthantwise_start, param.orthantwise_end
                 );
         }
@@ -525,7 +525,7 @@ int_t lbfgs(
 
         /* Report the progress. */
         if (cd.proc_progress) {
-            if ((ret = cd.proc_progress(cd.instance, x, g, fx, xnorm, gnorm, step, cd.n, k, ls))) {
+            if ((ret = cd.proc_progress(cd.instance, x, g, fx, xnorm, gnorm, step, cd.n, (int_t)k, ls))) {
                 goto lbfgs_exit;
             }
         }
@@ -651,7 +651,7 @@ int_t lbfgs(
     }
 
     if (cd.proc_progress) {
-        cd.proc_progress(cd.instance, x, g, fx, xnorm, gnorm, step, cd.n, k, ls);
+        cd.proc_progress(cd.instance, x, g, fx, xnorm, gnorm, step, cd.n, (int_t)k, ls);
     }
 
 lbfgs_exit:
@@ -848,7 +848,7 @@ static int_t line_search_backtracking(
             /* The sufficient decrease condition (Armijo condition). */
             if (param->linesearch == LBFGS_LINESEARCH_BACKTRACKING_ARMIJO) {
                 /* Exit with the Armijo condition. */
-                return count;
+                return (int_t)count;
 	        }
 
 	        /* Check the Wolfe condition. */
@@ -858,7 +858,7 @@ static int_t line_search_backtracking(
 	        } else {
 		        if(param->linesearch == LBFGS_LINESEARCH_BACKTRACKING_WOLFE) {
 		            /* Exit with the regular Wolfe condition. */
-		            return count;
+		            return (int_t)count;
 		        }
 
 		        /* Check the strong Wolfe condition. */
@@ -866,7 +866,7 @@ static int_t line_search_backtracking(
 		            width = dec;
 		        } else {
 		            /* Exit with the strong Wolfe condition. */
-		            return count;
+		            return (int_t)count;
 		        }
             }
         }
@@ -942,7 +942,7 @@ static int_t line_search_backtracking_owlqn(
 
         if (*f <= finit + param->ftol * dgtest) {
             /* The sufficient decrease condition. */
-            return count;
+            return (int_t)count;
         }
 
         if (*stp < param->min_step) {
@@ -1084,7 +1084,7 @@ static int_t line_search_morethuente(
         }
         if (*f <= ftest1 && fabs(dg) <= param->gtol * (-dginit)) {
             /* The sufficient decrease condition and the directional derivative condition hold. */
-            return count;
+            return (int_t)count;
         }
 
         /*

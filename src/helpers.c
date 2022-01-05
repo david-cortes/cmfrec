@@ -1526,9 +1526,9 @@ void append_ones_last_col
     real_t *restrict outp
 )
 {
-    copy_mat(m, n,
-             orig, n,
-             outp, n+1);
+    copy_mat((int_t)m, (int_t)n,
+             orig, (int_t)n,
+             outp, (int_t)(n+1));
     for (size_t ix = 0; ix < m; ix++)
         outp[n + ix*(n+(size_t)1)] = 1.;
 }

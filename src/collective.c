@@ -1980,7 +1980,7 @@ void collective_closed_form_block_implicit
             if (precomputedBtB  == NULL) {
                 cblas_tsyrk(CblasRowMajor, CblasUpper, CblasTrans,
                             k+k_main, n,
-                            1., B + k_item, k_totB,
+                            1., B + k_item, (int_t)k_totB,
                             1., BtB + offset_square, k_totA);
                 add_to_diag(BtB, lam, k_totA);
             } else {
@@ -2009,7 +2009,7 @@ void collective_closed_form_block_implicit
         else {
             cblas_tsyrk(CblasRowMajor, CblasUpper, CblasTrans,
                         k+k_main, n,
-                        1., B + k_item, k_totB,
+                        1., B + k_item, (int_t)k_totB,
                         0., BtB + offset_square, k_totA);
             add_to_diag(BtB, lam, k_totA);
         }
@@ -10914,8 +10914,8 @@ int_t factors_collective_explicit_multiple
 
     int_t retval = 0;
     size_t m_max = max2(m, m_u);
-    if (NA_as_zero_U && U == NULL) m_u = m_max;
-    if (NA_as_zero_X && Xfull == NULL) m = m_max;
+    if (NA_as_zero_U && U == NULL) m_u = (int_t)m_max;
+    if (NA_as_zero_X && Xfull == NULL) m = (int_t)m_max;
     if (U == NULL && (!nnz_U && U_csr_p == NULL) && !NA_as_zero_U) m_u = 0;
     if (Xfull == NULL && (!nnz && Xcsr_p == NULL) && !NA_as_zero_X) m = 0;
     bool user_bias = (biasA != NULL);
@@ -11509,7 +11509,7 @@ int_t impute_X_collective_explicit
 
         cblas_tgemm(CblasRowMajor, CblasNoTrans, CblasTrans,
                     m, n, k+k_main,
-                    1., A + k_user, lda, B + k_item, ldb,
+                    1., A + k_user, (int_t)lda, B + k_item, (int_t)ldb,
                     0., Xpred, n);
         #if !defined(_MSC_VER) || (_MSC_VER >= 1921)
         #pragma omp parallel for collapse(2) \
@@ -11960,7 +11960,7 @@ int_t predict_X_new_collective_explicit
         B, biasB,
         glob_mean,
         k, k_user, k_item, k_main,
-        m_max, n_max,
+        (int_t)m_max, n_max,
         nthreads
     );
     if (retval != 0)
@@ -12059,7 +12059,7 @@ int_t predict_X_new_collective_implicit
         A,
         B,
         k, k_user, k_item, k_main,
-        m_max, n,
+        (int_t)m_max, n,
         nthreads
     );
 

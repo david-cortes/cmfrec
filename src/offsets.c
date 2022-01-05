@@ -480,7 +480,7 @@ void construct_Am
     } else {
         /* Am[:,:] = 0; Am[:,k_sec:] = A[:,:] */
         set_to_zero_(Am, (size_t)m*k_totA, nthreads);
-        copy_mat(m, k+k_main, A, k_szA, Am + k_sec, k_totA);
+        copy_mat(m, k+k_main, A, (int_t)k_szA, Am + k_sec, (int_t)k_totA);
     }
 
     /* Am[:,:k_sec+k] += U * C */
@@ -488,7 +488,7 @@ void construct_Am
         cblas_tgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,
                     m, k_sec+k, p,
                     w_user, U, p, C, k_sec+k,
-                    1., Am, k_totA);
+                    1., Am, (int_t)k_totA);
     else if (U_csr_p != NULL)
         tgemm_sp_dense(m, k+k_sec, w_user,
                        U_csr_p, U_csr_i, U_csr,
