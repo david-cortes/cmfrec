@@ -643,7 +643,7 @@ NULL
 #' \item `precomputed`: will contain some pre-computed calculations based on the model
 #' matrices which might help speed up predictions on new data.
 #' }
-#' @references \itemize{
+#' @references \enumerate{
 #' \item Cortes, David. "Cold-start recommendations in Collective Matrix Factorization." arXiv preprint arXiv:1809.00366 (2018).
 #' \item Singh, Ajit P., and Geoffrey J. Gordon. "Relational learning via collective matrix factorization." Proceedings of the 14th ACM SIGKDD international conference on Knowledge discovery and data mining. 2008.
 #' \item Hu, Yifan, Yehuda Koren, and Chris Volinsky. "Collaborative filtering for implicit feedback datasets." 2008 Eighth IEEE International Conference on Data Mining. Ieee, 2008.
