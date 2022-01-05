@@ -130,10 +130,12 @@ NULL
 #' `-msse2` and `-O2`, which misses lots of performance optimizations, and in particular,
 #' `cmfrec` will not be able to achieve its maximum performance with them.
 #' 
-#' It is recommended to use compilation options `-O3`, `-march=native` and `-std=c99`.
+#' It is recommended to use compilation options `-O3`, `-march=native`,
+#' `-fno-math-errno`, `-fno-trapping-math`, and `-std=c99` or `-std=gnu99`.
 #' These can be activated in multiple ways: \itemize{
 #' \item (On Linux) Creating an empty text file `~/.R/Makevars` and adding this line there:
-#' `CFLAGS += -O3 -march=native` (plus an empty line at the end), then installing the usual
+#' `CFLAGS += -O3 -march=native -fno-math-errno -fno-trapping-math`
+#' (plus an empty line at the end), then installing the usual
 #' way with `install.packages("cmfrec")`.
 #' \item Installing `cmfrec` from source, but modifying the `Makevars` file (it has lines
 #' that can be uncommented in order to enable these optimizations).
@@ -141,8 +143,10 @@ NULL
 #' compilation options for \bold{all} R packages, so be careful about it. In Debian,
 #' this file will typically be under `/etc/R/`, but this can vary in other operating systems.
 #' In this file, replace all occurences of `-O2` with `-O3`, and all occurrences of
-#' `-msse2` with `-march=native` (e.g. open them in some text editor or in RStudio and
-#' use the 'Replace All' functionality).
+#' `-msse2` with `-march=native -fno-math-errno -fno-trapping-math` (e.g. open them
+#' in some text editor or in RStudio and
+#' use the 'Replace All' functionality) (not recommended to edit this global file, it should be
+#' preferred to edit the local user Makevars instead).
 #' }
 #' @param X The main matrix with interactions data to factorize (e.g. movie ratings by users,
 #' bag-of-words representations of texts, etc.). The package is built with
