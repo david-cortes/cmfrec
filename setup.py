@@ -37,6 +37,7 @@ if not (len(custom_blas_link_args) or len(custom_blas_compile_args)):
 
 class build_ext_subclass( build_ext_with_blas ):
     def build_extensions(self):
+        is_windows = sys.platform[:3].lower() == "win"
         
         if self.compiler.compiler_type == 'msvc':
             for e in self.extensions:
@@ -48,12 +49,15 @@ class build_ext_subclass( build_ext_with_blas ):
             self.add_no_trapping_math()
             self.add_ffp_contract_fast()
             self.add_clang_fp_reassociate()
-            if sys.platform[:3].lower() != "win":
+            if not is_windows:
                 self.add_link_time_optimization()
 
             ### Now add arguments as appropriate for good performance
             for e in self.extensions:
                 e.extra_compile_args += ['-O3', '-std=c99']
+
+                if is_windows:
+                    e.define_macros += [("NO_LONG_DOUBLE", None)]
                 
                 # e.extra_compile_args += ['-O2', '-fopenmp', '-march=native', '-std=c99', '-ggdb']
                 # e.extra_link_args += ['-fopenmp']
@@ -263,7 +267,7 @@ if (force_openblas):
 setup(
     name  = "cmfrec",
     packages = ["cmfrec"],
-    version = '3.3.1',
+    version = '3.3.2',
     description = 'Collective matrix factorization',
     author = 'David Cortes',
     author_email = 'david.cortes.rivera@gmail.com',

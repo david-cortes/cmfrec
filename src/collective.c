@@ -607,7 +607,7 @@ real_t collective_fun_grad
     int_t k_totB = k_item + k + k_main;
     int_t m_max = max2(max2(m, m_u), m_ubin);
     int_t n_max = max2(max2(n, n_i), n_ibin);
-    long double f = 0;
+    ldouble_safe f = 0;
 
     /* set the gradients to zero - first need to know how many entries to set */
     size_t nvars, ignored, mtvars;
@@ -761,7 +761,7 @@ real_t collective_fun_grad
 
     /* otherwise, add it one by one */ 
     else {
-        long double freg = 0;
+        ldouble_safe freg = 0;
 
         /* Note: Cbin is in memory right next to C, so there's not need to
            account for it separately - can be passed extra elements to C */
@@ -4426,9 +4426,9 @@ size_t buffer_size_optimizeA_collective
             }
             size_t m_diff = m_u - m + 2; /* <- extra padding just in case */
             if (sizeof(size_t) > sizeof(real_t))
-                m_diff *= (size_t)ceill((long double)(sizeof(size_t))
-                                            /
-                                        (long double)(sizeof(real_t)));
+                m_diff *= (size_t)ceilLD((ldouble_safe)(sizeof(size_t))
+                                             /
+                                         (ldouble_safe)(sizeof(real_t)));
             size_optimizeA = m_diff;
             size_optimizeA += buffer_size_optimizeA_collective(
                 m_diff, m_diff, n, p,
@@ -9781,9 +9781,9 @@ int_t fit_collective_implicit_als
     *w_main_multiplier = 1.;
     if (adjust_weight)
     {
-        *w_main_multiplier = (long double)nnz
+        *w_main_multiplier = (ldouble_safe)nnz
                                 /
-                             (long double)((size_t)m * (size_t)n);
+                             (ldouble_safe)((size_t)m * (size_t)n);
         w_main *= *w_main_multiplier;
     }
 

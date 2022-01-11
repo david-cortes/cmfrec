@@ -1607,16 +1607,16 @@ void R_nan_to_C_nan(real_t arr[], size_t n)
 }
 #endif
 
-long double compensated_sum(real_t *arr, size_t n)
+double compensated_sum(real_t *arr, size_t n)
 {
-    long double err = 0.;
-    long double diff = 0.;
-    long double temp;
-    long double res = 0;
+    double err = 0.;
+    double diff = 0.;
+    double temp;
+    double res = 0;
 
     for (size_t ix = 0; ix < n; ix++)
     {
-        diff = arr[ix] - err;
+        diff = (double)arr[ix] - err;
         temp = res + diff;
         err = (temp - res) - diff;
         res = temp;
@@ -1625,16 +1625,16 @@ long double compensated_sum(real_t *arr, size_t n)
     return res;
 }
 
-long double compensated_sum_product(real_t *restrict arr1, real_t *restrict arr2, size_t n)
+double compensated_sum_product(real_t *restrict arr1, real_t *restrict arr2, size_t n)
 {
-    long double err = 0.;
-    long double diff = 0.;
-    long double temp;
-    long double res = 0;
+    double err = 0.;
+    double diff = 0.;
+    double temp;
+    double res = 0;
 
     for (size_t ix = 0; ix < n; ix++)
     {
-        diff = fmal(arr1[ix], arr2[ix], -err);
+        diff = fma((double)arr1[ix], (double)arr2[ix], -err);
         temp = res + diff;
         err = (temp - res) - diff;
         res = temp;

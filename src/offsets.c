@@ -418,7 +418,7 @@ real_t offsets_fun_grad
     }
 
     else {
-        long double freg = 0;
+        ldouble_safe freg = 0;
         if (user_bias) cblas_taxpy(m, lam_unique[0], biasA, 1, g_biasA, 1);
         if (item_bias) cblas_taxpy(n, lam_unique[1], biasB, 1, g_biasB, 1);
         taxpy_large(A, lam_unique[2], g_A, (size_t)m*(size_t)k_szA, nthreads);

@@ -3516,11 +3516,11 @@ int_t calc_mean_and_center
                 fprintf(stderr, "Warning: 'X' has only zeros.\n");
 
             if (NA_as_zero)
-                *glob_mean = (long double)(*glob_mean)
+                *glob_mean = (ldouble_safe)(*glob_mean)
                                 *
-                             ((long double)nnz
+                             ((ldouble_safe)nnz
                                     / 
-                              ((long double)m * (long double)n));
+                              ((ldouble_safe)m * (ldouble_safe)n));
         }
     }
 
@@ -3584,11 +3584,11 @@ int_t calc_mean_and_center
 
             if (NA_as_zero)
             {
-                long double wsum_l = compensated_sum(weight, nnz);
-                *glob_mean = (long double)(*glob_mean)
+                ldouble_safe wsum_l = compensated_sum(weight, nnz);
+                *glob_mean = (ldouble_safe)(*glob_mean)
                                 /
-                             (wsum_l / (wsum_l + ((long double)m*(long double)n
-                                                   - (long double)nnz)));
+                             (wsum_l / (wsum_l +((ldouble_safe)m*(ldouble_safe)n
+                                                  - (ldouble_safe)nnz)));
             }
         }
 
@@ -3690,7 +3690,7 @@ int_t initialize_biases
     double *restrict buffer_w = NULL;
 
     size_t cnt = 0;
-    long double wsum = 0;
+    ldouble_safe wsum = 0;
 
     if (user_bias || item_bias)
     {
@@ -3767,26 +3767,26 @@ int_t initialize_biases
             if (Xfull != NULL)
             {
                 if (user_bias || force_calc_user_scale)
-                    *scaling_biasA = (long double)cnt / (long double)m;
+                    *scaling_biasA = (ldouble_safe)cnt / (ldouble_safe)m;
                 if (item_bias || force_calc_item_scale)
-                    *scaling_biasB = (long double)cnt / (long double)n;
+                    *scaling_biasB = (ldouble_safe)cnt / (ldouble_safe)n;
             }
 
             else
             {
                 if (user_bias || force_calc_user_scale)
-                    *scaling_biasA = (long double)nnz / (long double)m;
+                    *scaling_biasA = (ldouble_safe)nnz / (ldouble_safe)m;
                 if (item_bias || force_calc_item_scale)
-                    *scaling_biasB = (long double)nnz / (long double)n;
+                    *scaling_biasB = (ldouble_safe)nnz / (ldouble_safe)n;
             }
         }
 
         else
         {
             if (user_bias || force_calc_user_scale)
-                *scaling_biasA = (long double)wsum / (long double)m;
+                *scaling_biasA = (ldouble_safe)wsum / (ldouble_safe)m;
             if (item_bias || force_calc_item_scale)
-                *scaling_biasB = (long double)wsum / (long double)n;
+                *scaling_biasB = (ldouble_safe)wsum / (ldouble_safe)n;
         }
 
         if (user_bias || force_calc_user_scale)
@@ -5634,7 +5634,7 @@ int_t fit_most_popular
         {
             *w_main_multiplier
                 =
-            (long double)nnz / ((long double)m * (long double)n);
+            (ldouble_safe)nnz / ((ldouble_safe)m * (ldouble_safe)n);
             lam_item /= *w_main_multiplier;
             lam_user /= *w_main_multiplier;
         }
@@ -5798,7 +5798,7 @@ int_t fit_most_popular_internal
                 nnz += (size_t)cnt_by_col[ix];
             *w_main_multiplier
                 =
-            (long double)nnz / ((long double)m * (long double)n);
+            (ldouble_safe)nnz / ((ldouble_safe)m * (ldouble_safe)n);
             lam_item /= *w_main_multiplier;
         }
 

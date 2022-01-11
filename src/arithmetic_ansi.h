@@ -112,7 +112,7 @@ inline static void vecdot(real_t* s, const real_t *x, const real_t *y, const siz
     if (n < (size_t)INT_MAX)
         *s = cblas_tdot((int)n, x, 1, y, 1);
     else {
-        long double res = 0;
+        ldouble_safe res = 0;
         for (size_t ix = 0; ix < n; ix++)
             res += x[ix]*y[ix];
         *s = (real_t)res;
@@ -124,10 +124,10 @@ inline static void vec2norm(real_t* s, const real_t *x, const size_t n)
     if (n < (size_t)INT_MAX)
         *s = cblas_tnrm2((int_t)n, x, 1);
     else {
-        long double res = 0;
+        ldouble_safe res = 0;
         for (size_t ix = 0; ix < n; ix++)
             res += square(x[ix]);
-        *s = (real_t)sqrtl(res);
+        *s = (real_t)sqrtLD(res);
     }
 }
 
