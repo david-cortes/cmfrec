@@ -101,6 +101,16 @@ if (USE_MARCH_NATIVE AND NOT MSVC)
     endif()
 endif()
 
+### Option (f): No long doubles
+# This option will avoid using C type 'long double', which in some machies
+# can have a large performance overhead. In x86 machines, it is recommended
+# to use keep long doubles, especially if dealing with data that's larger
+# than 2^53. This 'long double' type is always disabled on windows OS.
+option(NO_LONG_DOUBLE "Avoid using long double type" OFF)
+if (NO_LONG_DOUBLE)
+    add_compile_definitions(NO_LONG_DOUBLE)
+endif()
+
 
 
 
