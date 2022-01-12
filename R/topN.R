@@ -214,6 +214,12 @@ process.inputs.topN <- function(model, obj, user=NULL, a_vec=NULL, a_bias=NULL,
 #' as such, it might recommend items that were already seen/rated/consumed by the
 #' user. In order to avoid this, must manually pass the seen/rated/consumed entries
 #' to the argument `exclude` (see details below).
+#' 
+#' This method produces an exact ranking by computing all item predictions
+#' for a given user. As the number of items grows, this can become a rather
+#' slow operation - for model serving purposes, it's usually a better idea
+#' to obtain an an approximate top-N ranking through software such as
+#' "hnsw" or "Milvus" from the calculated user factors and item factors.
 #' @details Be aware that this function is multi-threaded. As such, if a large batch
 #' of top-N predictions is to be calculated in parallel for different users
 #' (through e.g. `mclapply` or similar), it's recommended to decrease the number

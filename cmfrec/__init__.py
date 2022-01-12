@@ -1365,6 +1365,14 @@ class _CMF:
         """
         Rank top-N highest-predicted items for an existing user
 
+        Note
+        ----
+        This method produces an exact ranking by computing all item predictions
+        for a given user. As the number of items grows, this can become a rather
+        slow operation - for model serving purposes, it's usually a better idea
+        to obtain an an approximate top-N ranking through software such as
+        "hnsw" or "Milvus" from the calculated user factors and item factors.
+
         Parameters
         ----------
         user : int or obj
@@ -3349,6 +3357,14 @@ class CMF(_CMF):
         If using ``NA_as_zero``, this function will assume that all
         the 'X' values are zeros rather than being missing.
 
+        Note
+        ----
+        This method produces an exact ranking by computing all item predictions
+        for a given user. As the number of items grows, this can become a rather
+        slow operation - for model serving purposes, it's usually a better idea
+        to obtain an an approximate top-N ranking through software such as
+        "hnsw" or "Milvus" from the calculated user factors and item factors.
+
         Parameters
         ----------
         n : int
@@ -3527,6 +3543,14 @@ class CMF(_CMF):
         In such case, the rows that they have in common should come first, and
         then one of them appended missing values so that one of the matrices
         ends up containing all the rows of the other.
+
+        Note
+        ----
+        This method produces an exact ranking by computing all item predictions
+        for a given user. As the number of items grows, this can become a rather
+        slow operation - for model serving purposes, it's usually a better idea
+        to obtain an an approximate top-N ranking through software such as
+        "hnsw" or "Milvus" from the calculated user factors and item factors.
 
         Parameters
         ----------
@@ -3931,6 +3955,14 @@ class CMF(_CMF):
                   include=None, exclude=None, output_score=False):
         """
         Compute top-N highest-predicted items for a new user, given 'X'
+
+        Note
+        ----
+        This method produces an exact ranking by computing all item predictions
+        for a given user. As the number of items grows, this can become a rather
+        slow operation - for model serving purposes, it's usually a better idea
+        to obtain an an approximate top-N ranking through software such as
+        "hnsw" or "Milvus" from the calculated user factors and item factors.
 
         Parameters
         ----------
@@ -4996,6 +5028,14 @@ class CMF_implicit(_CMF):
         For better cold-start recommendations, one can also add item biases by using the ``CMF``
         class with parameters that would mimic ``CMF_implicit`` plus the biases.
 
+        Note
+        ----
+        This method produces an exact ranking by computing all item predictions
+        for a given user. As the number of items grows, this can become a rather
+        slow operation - for model serving purposes, it's usually a better idea
+        to obtain an an approximate top-N ranking through software such as
+        "hnsw" or "Milvus" from the calculated user factors and item factors.
+
         Parameters
         ----------
         n : int
@@ -5178,6 +5218,14 @@ class CMF_implicit(_CMF):
         """
         Rank top-N highest-predicted items for an existing user, given 'I'
 
+        Note
+        ----
+        This method produces an exact ranking by computing all item predictions
+        for a given user. As the number of items grows, this can become a rather
+        slow operation - for model serving purposes, it's usually a better idea
+        to obtain an an approximate top-N ranking through software such as
+        "hnsw" or "Milvus" from the calculated user factors and item factors.
+
         Parameters
         ----------
         user : int or obj
@@ -5336,6 +5384,14 @@ class CMF_implicit(_CMF):
                   include=None, exclude=None, output_score=False):
         """
         Compute top-N highest-predicted items for a new user, given 'X'
+
+        Note
+        ----
+        This method produces an exact ranking by computing all item predictions
+        for a given user. As the number of items grows, this can become a rather
+        slow operation - for model serving purposes, it's usually a better idea
+        to obtain an an approximate top-N ranking through software such as
+        "hnsw" or "Milvus" from the calculated user factors and item factors.
 
         Parameters
         ----------
