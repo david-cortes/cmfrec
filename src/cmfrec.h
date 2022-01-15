@@ -73,6 +73,13 @@
     IN THE SOFTWARE.
 
 *******************************************************************************/
+#ifndef _FOR_R
+    #if defined(__clang__)
+        #pragma clang diagnostic push
+        #pragma clang diagnostic ignored "-Wunknown-attributes"
+    #endif
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -2872,4 +2879,10 @@ CMFREC_EXPORTABLE int_t predict_X_new_content_based
 
 #ifdef __cplusplus
 }
+#endif
+
+#ifndef _FOR_R
+    #if defined(__clang__)
+        #pragma clang diagnostic pop
+    #endif
 #endif
