@@ -112,6 +112,37 @@ if (NO_LONG_DOUBLE)
 endif()
 
 
+### Option (g): Visibility of exported symbols
+# By default, will hide all functions that are not meant to be exported,
+# but this can be changed if desired
+option(HIDE_INTERNAL_SYMBOLS "Set hidden visibility for non-exported symbols" ON)
+if (HIDE_INTERNAL_SYMBOLS AND NOT WIN32)
+    set(OLD_FLAGS ${CMAKE_REQUIRED_FLAGS})
+    set(CMAKE_REQUIRED_FLAGS " -fvisibility=hidden")
+    check_c_source_compiles(
+        "
+        __attribute__((visibility (\"default\")))
+        int myfun() {
+            return 0;
+        }
+
+        int main(int argc, char **argv)
+        {
+            return myfun();
+        }
+        "
+        SUPPORTS_FVISIBILITY_HIDDEN
+    )
+    set(CMAKE_REQUIRED_FLAGS ${OLD_FLAGS})
+    if (SUPPORTS_FVISIBILITY_HIDDEN)
+        set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -fvisibility=hidden")
+        add_compile_definitions(EXPLICITLTY_EXPORT_SYMBOLS)
+    else()
+        message(STATUS "Hidden symbols visibility not supported by the compiler, will export all symbols.")
+    endif()
+else()
+    message(STATUS "Making all symbols in the library visible.")
+endif()
 
 
 ### ------ Rest of the script is not meant to be user-configurable ----- ###

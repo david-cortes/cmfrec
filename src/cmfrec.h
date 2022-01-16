@@ -206,13 +206,19 @@ typedef void (*sig_t_)(int);
     #define M_PI 3.14159265358979323846
 #endif
 
-#if defined(_FOR_R) || defined(_FOR_PYTHON) || !defined(_WIN32)
+#if defined(_FOR_R) || defined(_FOR_PYTHON)
     #define CMFREC_EXPORTABLE 
-#else
+#elif defined(_WIN32)
     #ifdef CMFREC_COMPILE_TIME
         #define CMFREC_EXPORTABLE __declspec(dllexport)
     #else
         #define CMFREC_EXPORTABLE __declspec(dllimport)
+    #endif
+#else
+    #if defined(EXPLICITLTY_EXPORT_SYMBOLS) && defined(CMFREC_COMPILE_TIME)
+        #define CMFREC_EXPORTABLE __attribute__((visibility ("default")))
+    #else
+        #define CMFREC_EXPORTABLE 
     #endif
 #endif
 
