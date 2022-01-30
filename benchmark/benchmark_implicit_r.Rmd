@@ -1,0 +1,231 @@
+---
+title: "Implicit Matrix Factorization Benchmark"
+author: "David Cortes"
+output: rmarkdown::html_document
+---
+
+# Comparing implicit matrix factorization models
+
+This is a short comparison of different R packages which fit the "weighted matrix
+factorization" or "implicit ALS" model from
+["Collaborative filtering for implicit feedback datasets"](https://ieeexplore.ieee.org/abstract/document/4781121/),
+evaluated on the [LastFM-360K dataset](http://ocelma.net/MusicRecommendationDataset/lastfm-360K.html), which
+contains data about a random sample of LastFM users counting how many times did
+each of them play each song from a pre-defined catalog of available songs. The data
+was already filtered, reindexed, and divided into a training and testing set in a
+different script (see the
+[GitHub page of 'cmfrec'](https://github.com/david-cortes/cmfrec) to find all
+the benchmark-related scripts used for this comparison of libraries).
+
+For this specific dataset, much better results can be achieved by a simple pre-processing
+of the data, for example by multiplying the counts by a small constant and taking their
+logarithm, but for comparison purposes, the values were taken as-is.
+
+Results are evaluated in terms of different ranking metrics for implicit feedback using
+the package [recometrics](https://cran.r-project.org/package=recometrics).
+
+The packages here were all compiled from source with GCC11 using options
+`-O3 -march=native -fno-math-errno -fno-trapping-math`, and linked to OpenBLAS 0.3.18
+(OpenMP variant). The timings are measured on a CPU AMD Ryzen 7 2700 (3.2Ghz 8c/16t).
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r message=FALSE}
+library(data.table)
+
+df_all <- fread("lfm_all.csv")
+df_train <- fread("lfm_train.csv")
+df_test <- fread("lfm_test.csv")
+```
+
+```{r}
+library(Matrix)
+
+X_all <- sparseMatrix(i=as.integer(df_all$user_id),
+                      j=as.integer(df_all$item_id),
+                      x=as.numeric(df_all$counts),
+                      index1=FALSE, repr="T", check=FALSE)
+X_train <- sparseMatrix(i=as.integer(df_train$user_id),
+                        j=as.integer(df_train$item_id),
+                        x=as.numeric(df_train$counts),
+                        index1=FALSE, repr="T", check=FALSE)
+X_test <- sparseMatrix(i=as.integer(df_test$user_id),
+                       j=as.integer(df_test$item_id),
+                       x=as.numeric(df_test$counts),
+                       index1=FALSE, repr="T", check=FALSE)
+
+rm(df_all, df_train, df_test)
+invisible(gc())
+
+cat(dim(X_all), "\n")
+cat(dim(X_train), "\n")
+cat(dim(X_test), "\n")
+```
+## Library: cmfrec
+
+```{r, message=FALSE}
+library(cmfrec)
+library(microbenchmark)
+```
+
+
+```{r}
+microbenchmark({
+    model_cg <- CMF_implicit(X_all, k=50, niter=15, lambda=5,
+                             use_cg=TRUE, finalize_chol=FALSE,
+                             verbose=FALSE, precompute_for_predictions=FALSE)
+}, times=1L)
+microbenchmark({
+    model_chol <- CMF_implicit(X_all, k=50, niter=15, lambda=5,
+                               use_cg=FALSE,
+                               verbose=FALSE, precompute_for_predictions=FALSE)
+}, times=1L)
+```
+
+
+```{r}
+library(recometrics)
+
+X_train_csr <- as(X_train[, 1:ncol(X_test)], "RsparseMatrix")
+X_test_csr <- as(X_test, "RsparseMatrix")
+
+
+model_cg <- CMF_implicit(X_train, k=50, niter=15, lambda=5,
+                         use_cg=TRUE, finalize_chol=FALSE,
+                         verbose=FALSE, precompute_for_predictions=FALSE)
+metrics_cg <- calc.reco.metrics(
+    X_train_csr, X_test_csr,
+    model_cg$matrices$A[, 1:nrow(X_test_csr)],
+    model_cg$matrices$B[, 1:ncol(X_test_csr)],
+    k=10L, all_metrics=TRUE
+)
+apply(metrics_cg, 2, mean)
+
+model_chol <- CMF_implicit(X_train, k=50, niter=15, lambda=5,
+                           use_cg=FALSE,
+                           verbose=FALSE, precompute_for_predictions=FALSE)
+metrics_chol <- calc.reco.metrics(
+    X_train_csr, X_test_csr,
+    model_chol$matrices$A[, 1:nrow(X_test_csr)],
+    model_chol$matrices$B[, 1:ncol(X_test_csr)],
+    k=10L, all_metrics=TRUE
+)
+apply(metrics_chol, 2, mean)
+```
+
+## Library: rsparse
+
+Note: if using version 0.5.0 from CRAN, getting the package `rsparse` to run multi-threaded
+might require manually editing the `Makevars` file. Other versions of the package should not
+require any additional steps.
+
+```{r, message=FALSE}
+library(rsparse)
+library(lgr)
+lg = get_logger("rsparse")
+lg$set_threshold("error")
+options("rsparse_omp_threads" = parallel::detectCores())
+```
+
+```{r}
+microbenchmark({
+    set.seed(123)
+    model_cg <- WRMF$new(feedback="implicit", rank=50, lambda=5,
+                         solver="conjugate_gradient",
+                         with_global_bias=FALSE, with_user_item_bias=FALSE)
+    ignored <- model_cg$fit_transform(X_all, n_iter=15, convergence_tol=-1)
+}, times=1L)
+microbenchmark({
+    set.seed(123)
+    model_chol <- WRMF$new(feedback="implicit", rank=50, lambda=5,
+                           solver="cholesky",
+                           with_global_bias=FALSE, with_user_item_bias=FALSE)
+    ignored <- model_chol$fit_transform(X_all, n_iter=15, convergence_tol=-1)
+}, times=1L)
+```
+
+```{r}
+set.seed(123)
+model_cg <- WRMF$new(feedback="implicit", rank=50, lambda=5,
+                     solver="conjugate_gradient",
+                     with_global_bias=FALSE, with_user_item_bias=FALSE)
+A_cg <- model_cg$fit_transform(X_train, n_iter=15, convergence_tol=-1)
+
+set.seed(123)
+model_chol <- WRMF$new(feedback="implicit", rank=50, lambda=5,
+                       solver="cholesky",
+                       with_global_bias=FALSE, with_user_item_bias=FALSE)
+A_chol <- model_chol$fit_transform(X_train, n_iter=15, convergence_tol=-1)
+
+
+metrics_cg <- calc.reco.metrics(
+    X_train_csr, X_test_csr,
+    t(A_cg)[, 1:nrow(X_test_csr)],
+    model_cg$components[, 1:ncol(X_test_csr)],
+    k=10L, all_metrics=TRUE
+)
+apply(metrics_cg, 2, mean)
+
+metrics_chol <- calc.reco.metrics(
+    X_train_csr, X_test_csr,
+    t(A_chol)[, 1:nrow(X_test_csr)],
+    model_chol$components[, 1:ncol(X_test_csr)],
+    k=10L, all_metrics=TRUE
+)
+apply(metrics_chol, 2, mean)
+```
+
+```{r, message=FALSE}
+rm(model_cg, model_chol, metrics_cg, metrics_chol)
+gc()
+```
+
+## Library: LibMF
+
+Note that running this code requires installing a non-official version of the R package
+`recosystem` which uses a more up-to-date version of the underlying LibMF library - the version
+of `recosystem` with the necessary changes can be found under
+[this link](https://github.com/yixuan/recosystem/pull/19).
+
+The package was installed by manually modifying the `Makevars` file to use AVX instructions.
+
+```{r}
+library(recosystem)
+
+X_all_reco <- data_memory(X_all@i, X_all@j, X_all@x, index1=FALSE)
+X_train_reco <- data_memory(X_train@i, X_train@j, X_train@x, index1=FALSE)
+```
+
+```{r}
+microbenchmark({
+    set.seed(123)
+    model_cd <- Reco()
+    suppressWarnings({
+        model_cd$train(X_train_reco, out_model=NULL,
+                       opts=list(dim=50, costp_l2=5, costq_l2=5,
+                                 niter=15, verbose=FALSE, loss="sse",
+                                 nthread=parallel::detectCores()))
+    })
+}, times=1L)
+```
+
+```{r}
+set.seed(123)
+model_cd <- Reco()
+suppressWarnings({
+    model_cd$train(X_train_reco, out_model=NULL,
+                   opts=list(dim=50, costp_l2=5, costq_l2=5,
+                             niter=15, verbose=FALSE, loss="sse",
+                             nthread=parallel::detectCores()))
+})
+
+metrics_cd <- calc.reco.metrics(
+    X_train_csr, X_test_csr,
+    model_cd$model$matrices$P[, 1:nrow(X_test_csr)],
+    model_cd$model$matrices$Q[, 1:ncol(X_test_csr)],
+    k=10L, all_metrics=TRUE
+)
+apply(metrics_cd, 2, mean)
+```

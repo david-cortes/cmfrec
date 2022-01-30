@@ -41,7 +41,21 @@ Comparing the classical matrix factorization model for explicit feedback **witho
 | softImpute    | ALS-SVD  | Static | 195.73   | 0.808293     | Unscaled lambda
 | Vowpal Wabbit | SGD      | Yes    | 293      | 1.054546     | See details
 
-_Benchmark for implicit feedback models to come in the future._
+Comparing the implicit variant **without side information** in different software libraries (50 factors, 15 iterations, regularization of 5, `float64` when supported) on the lastFM-360K dataset:
+
+| Library  | Method   | Time (s) | P@10        |   MAP        | Additional |
+| :---:    | :---:    | :---:    | :---:       |  :---:       | :---:
+| cmfrec   | ALS-CG   | 29.52    | 0.16969     | 0.12135      |
+| cmfrec   | ALS-Chol | 51.28    | 0.1701      | 0.121761     |
+| implicit | ALS-CG   | **29.0** | 0.17007     | 0.120986     |
+| implicit | ALS-Chol | 98       | 0.17031     | 0.121167     |
+| lenskit  | ALS-CG   | 68       | **0.17069** | 0.121846     |
+| lenskit  | ALS-Chol | 84       | 0.16941     | **0.122121** |
+| Spark    | ALS-Chol | oom      | oom         | oom          | See details
+| rsparse  | ALS-CG   | 39.18    | 0.16998     | 0.121242     |
+| rsparse  | ALS-Chol | 69.75    | 0.16941     | 0.121353     |
+| LibMF    | ALS-CD   | 143.67   | 0.14307     | 0.093755     | float32
+| qmf      | ALS-Chol | 102      | 0.17019     | 0.122017     |
 
 ## Basic Idea
 
@@ -125,13 +139,13 @@ And then reinstall this package: `pip install --force-reinstall cmfrec`.
 **IMPORTANT:** the setup script will try to add compilation flag `-march=native`. This instructs the compiler to tune the package for the CPU in which it is being installed, but the result might not be usable in other computers. If building a binary wheel of this package or putting it into a docker image which will be used in different machines, this can be overriden by manually supplying compilation `CFLAGS` as an environment variable with something related to architecture. For maximum compatibility (but slowest speed), assuming `x86-64` computers, it's possible to do something like this:
 
 ```
-export CFLAGS="-msse2"
+export CFLAGS="-march=x86-64"
 pip install cmfrec
 ```
 
 or for creating wheels:
 ```
-export CFLAGS="-msse2"
+export CFLAGS="-march=x86-64"
 python setup.py bwheel
 ```
 ** *

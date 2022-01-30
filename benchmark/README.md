@@ -71,4 +71,43 @@ Clarifications:
 
 ## Implicit-feedback models
 
-Benchmark with the LastFM-360k dataset to come in the future.
+The comparisons here use the [LastFM-360K dataset](http://ocelma.net/MusicRecommendationDataset/lastfm-360K.html), and fitting the _implicit_ variant of the classical matrix factorization model (also known as "iALS" or "WRMF") as proposed in _"Collaborative filtering for implicit feedback datasets"_, which:
+
+* Sets all the entries to a value of either zero (if a user/item combination was not observed in the data) or one (if a user-item combination was observed in the data), with a weight given by the values for each user-item combination (in this case, those values are the counts of each time a user played a given song).
+* Minimizes squared error with respect to **all** the entries in the user/items matrix.
+* Does not add centering or biases to the model.
+
+In the original paper, the model proposed setting weights according to a function such as `W = 1 + alpha*X`, and recommended a value of `alpha=40`, but in practice, values less than zero tend to give better results, and many libraries instead use a simpler formula `W = X`.
+
+Models are fit using the same hyperparameters for all libraries: 50 latent factors, regularization of 5, an alpha multiplier of 1 when it is added as an option, 15 ALS iterations, computing in double precision (a.k.a. `float64`) when possible; with some exceptions when necessary.
+
+The time measurements are done by fitting the model to the full data, while the metrics are computed by leaving aside a test sample of 10,000 random users for which 30% of their item interactions were left for testing and 70% for training. The test users were included in the training data (but without the test items withheld for them), which is not the most appropriate way of evaluating models, but many of the libraries compared do not offer the option to compute factors for new users so it was not possible to do the comparison otherwise.
+
+#### Results
+
+| Library  | Lang  | Method   | Weight  | Time (s) | P@10        |   MAP        | Additional |
+| :---:    | :---: | :---:    | :---:   | :---:    | :---:       |  :---:       | :---:
+| cmfrec   | Py    | ALS-CG   | W=1+a*X | 31.9     | 0.16969     | 0.12135      |
+| cmfrec   | Py    | ALS-Chol | W=1+a*X | 53.1     | 0.1701      | 0.121761     |
+| implicit | Py    | ALS-CG   | W=X     | **29.0** | 0.17007     | 0.120986     |
+| implicit | Py    | ALS-Chol | W=X     | 98       | 0.17031     | 0.121167     |
+| lenskit  | Py    | ALS-CG   | W=1+a*X | 68       | **0.17069** | 0.121846     |
+| lenskit  | Py    | ALS-Chol | W=1+a*X | 84       | 0.16941     | **0.122121** |
+| Spark    | Py    | ALS-Chol | W=1+a*X | oom      | oom         | oom          | See details
+| cmfrec   | R     | ALS-CG   | W=1+a*X | 29.52    | 0.16969     | 0.12135      |
+| cmfrec   | R     | ALS-Chol | W=1+a*X | 51.28    | 0.1701      | 0.121761     |
+| rsparse  | R     | ALS-CG   | W=X     | 39.18    | 0.16998     | 0.121242     |
+| rsparse  | R     | ALS-Chol | W=X     | 69.75    | 0.16941     | 0.121353     |
+| LibMF    | R     | ALS-CD   | W=X     | 143.67   | 0.14307     | 0.093755     | float32
+| qmf      | CLI   | ALS-Chol | W=1+a*X | 102      | 0.17019     | 0.122017     |
+
+Clarifications:
+* PySpark somehow started dumping dozens of gigabytes to disk until running out of space, despite using more than 4x more RAM than all the other libraries. This was despite:
+    * Using `intermediateStorageLevel='MEMORY_ONLY'` and `finalStorageLevel='MEMORY_ONLY'` (both were ignored by the software).
+    * Setting `spark.driver.memory` to the maximum available.
+    * Setting the java options to pre-allocate more memory than was needed and setting its heap memory limit to the maximum in the system.
+    * Persisting the data in spark before using it.
+    * Enabling arrow execution in spark (and without it, it would not use more than 1 thread).
+    * Playing with different block sizes and other configurations.
+
+As such, it was not possible to compare against the matrix factorization implementation from spark. Nevertheless, from the benchmarks done by others, it may be extrapolated that it should be around 10x slower than `implicit` in a setting like this, which would put it at around 300 seconds.
