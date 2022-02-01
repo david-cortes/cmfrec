@@ -91,8 +91,9 @@ The time measurements are done by fitting the model to the full data, while the 
 | cmfrec   | Py    | ALS-Chol | W=1+a*X | 53.1     | 0.1701      | 0.121761     |
 | implicit | Py    | ALS-CG   | W=X     | **29.0** | 0.17007     | 0.120986     |
 | implicit | Py    | ALS-Chol | W=X     | 98       | 0.17031     | 0.121167     |
-| lenskit  | Py    | ALS-CG   | W=1+a*X | 68       | **0.17069** | 0.121846     |
-| lenskit  | Py    | ALS-Chol | W=1+a*X | 84       | 0.16941     | **0.122121** |
+| LensKit  | Py    | ALS-CG   | W=1+a*X | 68       | **0.17069** | 0.121846     |
+| LensKit  | Py    | ALS-Chol | W=1+a*X | 84       | 0.16941     | **0.122121** |
+| cornac   | Py    | ADAM     | W=X     | 13338    | 0.00889     | 0.006288     | float32
 | Spark    | Py    | ALS-Chol | W=1+a*X | oom      | oom         | oom          | See details
 | cmfrec   | R     | ALS-CG   | W=1+a*X | 29.52    | 0.16969     | 0.12135      |
 | cmfrec   | R     | ALS-Chol | W=1+a*X | 51.28    | 0.1701      | 0.121761     |
