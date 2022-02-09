@@ -633,7 +633,6 @@ static inline void xoshiro128pp_jump(uint32_t state[4])
 void rnorm_xoshiro(double *seq, const size_t n, rng_state_t state[4])
 {
     uint64_t rnd;
-    uint64_t rabs;
     uint8_t rectangle;
     uint8_t sign;
     double rnorm;
@@ -662,7 +661,7 @@ void rnorm_xoshiro(double *seq, const size_t n, rng_state_t state[4])
            was taken to get there faster. */
         rnd >>= 4;
         rnorm = rnd * wi_double[rectangle];
-        if (rabs < ki_double[rectangle])
+        if (rnd < ki_double[rectangle])
         {
             seq[ix++] = sign? rnorm : -rnorm;
         }
