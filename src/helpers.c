@@ -50,7 +50,7 @@
 
     MIT License:
 
-    Copyright (c) 2020-2021 David Cortes
+    Copyright (c) 2020-2022 David Cortes
 
     All rights reserved.
 
@@ -512,11 +512,18 @@ static inline uint64_t splitmix64(const uint64_t seed)
     return z ^ (z >> 31);
 }
 #ifndef USE_XOSHIRO128
-static inline uint64_t rotl64(const uint64_t x, const int k) {
+static inline uint64_t rotl64(const uint64_t x, const int k)
+#ifdef _GNUC_
+__attribute__((always_inline))
+#endif
+{
     return (x << k) | (x >> (64 - k));
 }
 
 static inline uint64_t xoshiro256pp(uint64_t state[4])
+#ifdef _GNUC_
+__attribute__((always_inline))
+#endif
 {
     const uint64_t result = rotl64(state[0] + state[3], 23) + state[0];
     const uint64_t t = state[1] << 17;
@@ -530,6 +537,9 @@ static inline uint64_t xoshiro256pp(uint64_t state[4])
 }
 
 static inline void xoshiro256pp_jump(uint64_t state[4])
+#ifdef _GNUC_
+__attribute__((always_inline))
+#endif
 {
     const uint64_t JUMP[] = { 0x180ec6d33cfd0aba, 0xd5a61266f0c9392c,
                               0xa9582618e03fc9aa, 0x39abdc4529b1661c };
@@ -559,11 +569,18 @@ static inline void xoshiro256pp_jump(uint64_t state[4])
 }
 #else
 
-static inline uint32_t rotl32(const uint32_t x, const int k) {
+static inline uint32_t rotl32(const uint32_t x, const int k)
+#ifdef _GNUC_
+__attribute__((always_inline))
+#endif
+{
     return (x << k) | (x >> (32 - k));
 }
 
 static inline uint32_t xoshiro128pp(uint32_t state[4])
+#ifdef _GNUC_
+__attribute__((always_inline))
+#endif
 {
     const uint32_t result = rotl32(state[0] + state[3], 7) + state[0];
     const uint32_t t = state[1] << 9;
@@ -577,6 +594,9 @@ static inline uint32_t xoshiro128pp(uint32_t state[4])
 }
 
 static inline void xoshiro128pp_jump(uint32_t state[4])
+#ifdef _GNUC_
+__attribute__((always_inline))
+#endif
 {
     const uint32_t JUMP[] = { 0x8764000b, 0xf542d2d3,
                               0x6fa035c3, 0x77f2db5b };
@@ -676,8 +696,7 @@ void rnorm_xoshiro(double *seq, const size_t n, rng_state_t state[4])
             memcpy((char*)&rnd, &rnd1, sizeof(uint32_t));
             memcpy((char*)&rnd + sizeof(uint32_t), &rnd2, sizeof(uint32_t));
             #endif
-            #if (defined(__STDC_VERSION__) && __STDC_VERSION__ >= 199901L) ||\
-                (defined(__cplusplus) && __cplusplus >= 201703L)
+            #ifdef SUPPORTS_HEXFLOAT
             runif = ((double)(rnd  >> 12) + 0.5) * 0x1.0p-52;
             #else
             runif = ((double)(rnd >> 12) + 0.5);
@@ -692,13 +711,39 @@ void rnorm_xoshiro(double *seq, const size_t n, rng_state_t state[4])
         }
     }
 
-    #if (defined(__STDC_VERSION__) && __STDC_VERSION__ >= 199901L) ||\
-        (defined(__cplusplus) && __cplusplus >= 201703L)
+    #ifdef SUPPORTS_HEXFLOAT
     for (size_t ix = 0; ix < n; ix++)
         seq[ix] *= 0x1.0p-7;
     #else
     for (size_t ix = 0; ix < n; ix++)
         seq[ix] = ldexp(seq[ix], -7);
+    #endif
+}
+
+void runif_xoshiro(double *seq, const size_t n, rng_state_t state[4])
+{
+    #ifndef USE_XOSHIRO128
+    #ifdef SUPPORTS_HEXFLOAT
+    for (size_t ix = 0; ix < n; ix++)
+        seq[ix] = ((double)(xoshiro256pp(state) >> 12) + 0.5) * 0x1.0p-59;
+    #else
+    for (size_t ix = 0; ix < n; ix++)
+        seq[ix] = ldexp((double)(xoshiro256pp(state) >> 12) + 0.5, -59);
+    #endif
+    #else
+    uint64_t rnd;
+    uint32_t rnd1, rnd2;
+    for (size_t ix = 0; ix < n; ix++) {
+        rnd1 = xoshiro128pp(state);
+        rnd2 = xoshiro128pp(state);
+        memcpy(&rnd, &rnd1, sizeof(uint32_t));
+        memcpy(&rnd + sizeof(uint32_t), &rnd2, sizeof(uint32_t));
+        #ifdef SUPPORTS_HEXFLOAT
+        seq[ix] = ((double)(rnd >> 12) + 0.5) * 0x1.0p-59;
+        #else
+        seq[ix] = ldexp((double)(rnd >> 12) + 0.5, 59);
+        #endif
+    }
     #endif
 }
 #else
@@ -766,8 +811,7 @@ void rnorm_xoshiro(float *seq, const size_t n, rng_state_t state[4])
             rnd = xoshiro128pp(state);
             #endif
             
-            #if (defined(__STDC_VERSION__) && __STDC_VERSION__ >= 199901L) ||\
-                (defined(__cplusplus) && __cplusplus >= 201703L)
+            #ifdef SUPPORTS_HEXFLOAT
             runif = ((float)(rnd >> 9) + 0.5f) * 0x1.0p-23f;
             #else
             runif = ((float)(rnd  >> 9) + 0.5f);
@@ -782,13 +826,50 @@ void rnorm_xoshiro(float *seq, const size_t n, rng_state_t state[4])
         }
     }
 
-    #if (defined(__STDC_VERSION__) && __STDC_VERSION__ >= 199901L) ||\
-        (defined(__cplusplus) && __cplusplus >= 201703L)
+    #ifdef SUPPORTS_HEXFLOAT
     for (size_t ix = 0; ix < n; ix++)
         seq[ix] *= 0x1.0p-7f;
     #else
     for (size_t ix = 0; ix < n; ix++)
         seq[ix] = ldexpf(seq[ix], -7);
+    #endif
+}
+
+void runif_xoshiro(float *seq, const size_t n, rng_state_t state[4])
+{
+    #ifndef USE_XOSHIRO128
+    uint64_t rnd;
+    size_t ix_;
+    size_t lim = n >> 1;
+    for (size_t ix = 0; ix < lim; ix++)
+    {
+        rnd = xoshiro256pp(state);
+        ix_ = ix << 1;
+        #ifdef SUPPORTS_HEXFLOAT
+        seq[ix_] = ((float)(rnd & 0x7fffff) + 0.5f) * 0x1.0p-30f;
+        seq[ix_ + 1] = ((float)(rnd >> 41) + 0.5f) * 0x1.0p-30f;
+        #else
+        seq[ix_] = ldexpf((float)(rnd & 0x7fffff) + 0.5f, -30);
+        seq[ix_ + 1] = ldexpf((float)(rnd >> 41) + 0.5f, -30);
+        #endif
+    }
+    if ((lim << 1) < n)
+    {
+        rnd = xoshiro256pp(state);
+        #ifdef SUPPORTS_HEXFLOAT
+        seq[lim-1] = ((float)(rnd & 0x7fffff) + 0.5f) * 0x1.0p-30f;
+        #else
+        seq[lim-1] = ldexpf((float)(rnd & 0x7fffff) + 0.5f, -30);
+        #endif
+    }
+    #else
+    #ifdef SUPPORTS_HEXFLOAT
+    for (size_t ix = 0; ix < n; ix++)
+        seq[ix] = ((float)(xoshiro128pp(state) >> 9) + 0.5f) * 0x1.0p-30f;
+    #else
+    for (size_t ix = 0; ix < n; ix++)
+        seq[ix] = ldexpf((float)(xoshiro128pp(state) >> 9) + 0.5f, -30);
+    #endif
     #endif
 }
 #endif
@@ -831,18 +912,51 @@ void rnorm_singlethread(ArraysToFill arrays, rng_state_t state[4])
         rnorm_xoshiro(arrays.B, arrays.sizeB, state);
 }
 
+void runif_singlethread(ArraysToFill arrays, rng_state_t state[4])
+{
+    if (arrays.sizeA)
+        runif_xoshiro(arrays.A, arrays.sizeA, state);
+    if (arrays.sizeB)
+        runif_xoshiro(arrays.B, arrays.sizeB, state);
+}
+
 /* This function generates random normal numbers in parallel, but dividing the
    arrays to fill into buckets of up to 250k each. It uses the jumping technique
    from the Xorshiro family in order to ensure that the generated numbers will
    not overlap. */
-int_t rnorm_parallel(ArraysToFill arrays, int_t seed, int nthreads)
+int_t random_parallel(ArraysToFill arrays, int_t seed, bool normal, int nthreads)
 {
     #ifdef USE_R_RNG
     GetRNGstate();
-    for (size_t ix = 0; ix < arrays.sizeA; ix++)
-        arrays.A[ix] = norm_rand();
-    for (size_t ix = 0; ix < arrays.sizeB; ix++)
-        arrays.B[ix] = norm_rand();
+    if (normal)
+    {
+        #ifdef SUPPORTS_HEXFLOAT
+        for (size_t ix = 0; ix < arrays.sizeA; ix++)
+            arrays.A[ix] = norm_rand() * 0x1.0p-7;
+        for (size_t ix = 0; ix < arrays.sizeB; ix++)
+            arrays.B[ix] = norm_rand() * 0x1.0p-7;
+        #else
+        for (size_t ix = 0; ix < arrays.sizeA; ix++)
+            arrays.A[ix] = ldexp(norm_rand(), -7);
+        for (size_t ix = 0; ix < arrays.sizeB; ix++)
+            arrays.B[ix] = ldexp(norm_rand(), -7);
+        #endif
+    }
+
+    else
+    {
+        #ifdef SUPPORTS_HEXFLOAT
+        for (size_t ix = 0; ix < arrays.sizeA; ix++)
+            arrays.A[ix] = unif_rand() * 0x1.0p-7;
+        for (size_t ix = 0; ix < arrays.sizeB; ix++)
+            arrays.B[ix] = unif_rand() * 0x1.0p-7;
+        #else
+        for (size_t ix = 0; ix < arrays.sizeA; ix++)
+            arrays.A[ix] = ldexp(unif_rand(), -7);
+        for (size_t ix = 0; ix < arrays.sizeB; ix++)
+            arrays.B[ix] = ldexp(unif_rand(), -7);
+        #endif
+    }
     PutRNGstate();
     return 0;
     #endif
@@ -907,14 +1021,17 @@ int_t rnorm_parallel(ArraysToFill arrays, int_t seed, int nthreads)
     #endif
 
     #pragma omp parallel for schedule(static) num_threads(nthreads) \
-            shared(states)
+            shared(states, normal)
     for (size_t_for ix = 0; ix < tot_buckets; ix++)
     {
         rng_state_t state[] = {states[(size_t)4*ix],
                                states[(size_t)4*ix + (size_t)1],
                                states[(size_t)4*ix + (size_t)2],
                                states[(size_t)4*ix + (size_t)3]};
-        rnorm_xoshiro(ptr_bucket_[ix], sz_bucket_[ix], state);
+        if (normal)
+            rnorm_xoshiro(ptr_bucket_[ix], sz_bucket_[ix], state);
+        else
+            runif_xoshiro(ptr_bucket_[ix], sz_bucket_[ix], state);
     }
 
     free(ptr_bucket_);

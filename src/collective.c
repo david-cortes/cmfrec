@@ -50,7 +50,7 @@
 
     MIT License:
 
-    Copyright (c) 2020-2021 David Cortes
+    Copyright (c) 2020-2022 David Cortes
 
     All rights reserved.
 
@@ -6886,7 +6886,7 @@ int_t fit_collective_explicit_lbfgs_internal
                   - (size_t)(item_bias? n_max : 0),
             NULL, 0
         };
-        retval = rnorm_parallel(arrays, seed, nthreads);
+        retval = random_parallel(arrays, seed, true, nthreads);
         if (retval != 0) goto cleanup;
     }
 
@@ -8243,7 +8243,7 @@ int_t fit_collective_explicit_als
             fill_B? B : NULL,
             fill_B? ((size_t)n_max*(size_t)k_totB) : 0
         };
-        retval = rnorm_parallel(arrays, seed, nthreads);
+        retval = random_parallel(arrays, seed, true, nthreads);
         if (retval != 0) goto throw_oom;
 
         if (nonneg)
@@ -9755,17 +9755,8 @@ int_t fit_collective_implicit_als
             fill_B? B : NULL,
             fill_B? ((size_t)n_max*(size_t)k_totB) : 0
         };
-        retval = rnorm_parallel(arrays, seed, nthreads);
+        retval = random_parallel(arrays, seed, false, nthreads);
         if (retval != 0) goto throw_oom;
-
-        if (nonneg)
-        {
-            for (size_t ix = 0; ix < (size_t)m_max*(size_t)k_totA; ix++)
-                A[ix] = fabs_t(A[ix]);
-            if (fill_B)
-                for (size_t ix = 0; ix < (size_t)n_max*(size_t)k_totB; ix++)
-                    B[ix] = fabs_t(B[ix]);
-        }
 
         if (use_cg)
         {

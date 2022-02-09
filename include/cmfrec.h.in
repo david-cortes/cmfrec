@@ -50,7 +50,7 @@
 
     MIT License:
 
-    Copyright (c) 2020-2021 David Cortes
+    Copyright (c) 2020-2022 David Cortes
 
     All rights reserved.
 
@@ -279,9 +279,11 @@ extern "C" {
     
     
     @param reset_values  Whether to reset the values in the model matrices to
-                         random normal numbers and the biases to a most-popular
-                         model. If the matrices and biases are already
-                         initialized, should pass 'false' here.
+                         random normal numbers (for explicit-feedback models) or
+                         random uniform numbers (for implicit-feedback models)
+                         and the biases to a most-popular model. If the matrices
+                         and biases are already initialized, should pass 'false'
+                         here.
     @param seed  Random seed used to initialize the matrices, if passing
                  'reset_values'=true.
     

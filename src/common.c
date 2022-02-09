@@ -50,7 +50,7 @@
 
     MIT License:
 
-    Copyright (c) 2020-2021 David Cortes
+    Copyright (c) 2020-2022 David Cortes
 
     All rights reserved.
 

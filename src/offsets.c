@@ -50,7 +50,7 @@
 
     MIT License:
 
-    Copyright (c) 2020-2021 David Cortes
+    Copyright (c) 2020-2022 David Cortes
 
     All rights reserved.
 
@@ -1400,7 +1400,7 @@ int_t fit_offsets_explicit_lbfgs_internal
                   - (size_t)(item_bias? n : 0),
             NULL, 0
         };
-        retval = rnorm_parallel(arrays, seed, nthreads);
+        retval = random_parallel(arrays, seed, true, nthreads);
         if (retval != 0) goto cleanup;
     }
 

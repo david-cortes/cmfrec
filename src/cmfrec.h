@@ -50,7 +50,7 @@
 
     MIT License:
 
-    Copyright (c) 2020-2021 David Cortes
+    Copyright (c) 2020-2022 David Cortes
 
     All rights reserved.
 
@@ -315,6 +315,11 @@ typedef void (*sig_t_)(int);
     #define USE_XOSHIRO128
 #endif
 
+#if (defined(__STDC_VERSION__) && __STDC_VERSION__ >= 199901L) ||\
+    (defined(__cplusplus) && __cplusplus >= 201703L)
+    #define SUPPORTS_HEXFLOAT
+#endif
+
 #if !defined(LAPACK_H) && !defined(_FOR_R)
 void tposv_(const char*, const int_t*, const int_t*, real_t*, const int_t*, real_t*, const int_t*, int_t*);
 void tlacpy_(const char*, const int_t*, const int_t*, const real_t*, const int_t*, real_t*, const int_t*);
@@ -447,6 +452,12 @@ __attribute__((optimize ("no-math-errno")))
 __attribute__((optimize ("no-trapping-math")))
 #endif
 ;
+void runif_xoshiro(real_t *seq, const size_t n, rng_state_t state[4])
+#if defined(__GNUC__) && !defined(__clang__) && !defined(_FOR_R)
+__attribute__((optimize ("no-math-errno")))
+__attribute__((optimize ("no-trapping-math")))
+#endif
+;
 void seed_state(int_t seed, rng_state_t state[4]);
 void fill_rnorm_buckets
 (
@@ -454,7 +465,8 @@ void fill_rnorm_buckets
     real_t **ptr_bucket, size_t *sz_bucket, const size_t BUCKET_SIZE
 );
 void rnorm_singlethread(ArraysToFill arrays, rng_state_t state[4]);
-int_t rnorm_parallel(ArraysToFill arrays, int_t seed, int nthreads);
+void runif_singlethread(ArraysToFill arrays, rng_state_t state[4]);
+int_t random_parallel(ArraysToFill arrays, int_t seed, bool normal, int nthreads);
 void reduce_mat_sum(real_t *restrict outp, size_t lda, real_t *restrict inp,
                     int_t m, int_t n, int nthreads);
 void exp_neg_x(real_t *restrict arr, size_t n, int nthreads)
