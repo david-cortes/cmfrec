@@ -512,18 +512,18 @@ static inline uint64_t splitmix64(const uint64_t seed)
     return z ^ (z >> 31);
 }
 #ifndef USE_XOSHIRO128
-static inline uint64_t rotl64(const uint64_t x, const int k)
-#ifdef _GNUC_
+#ifdef __GNUC__
 __attribute__((always_inline))
 #endif
+static inline uint64_t rotl64(const uint64_t x, const int k)
 {
     return (x << k) | (x >> (64 - k));
 }
 
-static inline uint64_t xoshiro256pp(uint64_t state[4])
-#ifdef _GNUC_
+#ifdef __GNUC__
 __attribute__((always_inline))
 #endif
+static inline uint64_t xoshiro256pp(uint64_t state[4])
 {
     const uint64_t result = rotl64(state[0] + state[3], 23) + state[0];
     const uint64_t t = state[1] << 17;
@@ -536,10 +536,10 @@ __attribute__((always_inline))
     return result;
 }
 
-static inline void xoshiro256pp_jump(uint64_t state[4])
-#ifdef _GNUC_
+#ifdef __GNUC__
 __attribute__((always_inline))
 #endif
+static inline void xoshiro256pp_jump(uint64_t state[4])
 {
     const uint64_t JUMP[] = { 0x180ec6d33cfd0aba, 0xd5a61266f0c9392c,
                               0xa9582618e03fc9aa, 0x39abdc4529b1661c };
@@ -569,18 +569,18 @@ __attribute__((always_inline))
 }
 #else
 
-static inline uint32_t rotl32(const uint32_t x, const int k)
-#ifdef _GNUC_
+#ifdef __GNUC__
 __attribute__((always_inline))
 #endif
+static inline uint32_t rotl32(const uint32_t x, const int k)
 {
     return (x << k) | (x >> (32 - k));
 }
 
-static inline uint32_t xoshiro128pp(uint32_t state[4])
-#ifdef _GNUC_
+#ifdef __GNUC__
 __attribute__((always_inline))
 #endif
+static inline uint32_t xoshiro128pp(uint32_t state[4])
 {
     const uint32_t result = rotl32(state[0] + state[3], 7) + state[0];
     const uint32_t t = state[1] << 9;
@@ -593,10 +593,10 @@ __attribute__((always_inline))
     return result;
 }
 
-static inline void xoshiro128pp_jump(uint32_t state[4])
-#ifdef _GNUC_
+#ifdef __GNUC__
 __attribute__((always_inline))
 #endif
+static inline void xoshiro128pp_jump(uint32_t state[4])
 {
     const uint32_t JUMP[] = { 0x8764000b, 0xf542d2d3,
                               0x6fa035c3, 0x77f2db5b };
