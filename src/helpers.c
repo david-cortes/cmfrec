@@ -736,8 +736,8 @@ void runif_xoshiro(double *seq, const size_t n, rng_state_t state[4])
     for (size_t ix = 0; ix < n; ix++) {
         rnd1 = xoshiro128pp(state);
         rnd2 = xoshiro128pp(state);
-        memcpy(&rnd, &rnd1, sizeof(uint32_t));
-        memcpy(&rnd + sizeof(uint32_t), &rnd2, sizeof(uint32_t));
+        memcpy((char*)&rnd, &rnd1, sizeof(uint32_t));
+        memcpy((char*)&rnd + sizeof(uint32_t), &rnd2, sizeof(uint32_t));
         #ifdef SUPPORTS_HEXFLOAT
         seq[ix] = ((double)(rnd >> 12) + 0.5) * 0x1.0p-59;
         #else
