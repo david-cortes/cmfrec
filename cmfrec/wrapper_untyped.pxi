@@ -3305,15 +3305,17 @@ def call_factors_collective_implicit_multiple(
     cdef int_t *ptr_Xcsr_i = NULL
     cdef real_t *ptr_Xcsr = NULL
     if Xcsr.shape[0]:
-        ptr_Xcsr_p = &Xcsr_p[0]
-        ptr_Xcsr_i = &Xcsr_i[0]
-        ptr_Xcsr = &Xcsr[0]
         nnz = Xcsr.shape[0]
+        ptr_Xcsr_p = &Xcsr_p[0]
+        if Xcsr_i.shape[0]:
+            ptr_Xcsr_i = &Xcsr_i[0]
+            ptr_Xcsr = &Xcsr[0]
     else:
-        ptr_ixA = &ixA[0]
-        ptr_ixB = &ixB[0]
-        ptr_X = &X[0]
         nnz = X.shape[0]
+        if X.shape[0]:
+            ptr_ixA = &ixA[0]
+            ptr_ixB = &ixB[0]
+            ptr_X = &X[0]
 
     cdef real_t *ptr_U = NULL
     cdef int_t *ptr_U_row = NULL

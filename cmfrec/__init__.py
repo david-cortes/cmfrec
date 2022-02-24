@@ -1306,7 +1306,10 @@ class _CMF:
         c_funs = wrapper_float if self.use_float else wrapper_double
 
         if user.shape[0] != n:
-            raise ValueError("'user' must have the same number of entries as item info.")
+            if user.shape[0] == 1 and len(user.shape) == 1:
+                user = np.repeat(user[0], n)
+            else:
+                raise ValueError("'user' must have the same number of entries as item info.")
 
         return c_funs.call_predict_multiple(
                     self._A_pred,
@@ -2171,7 +2174,7 @@ class _CMF:
                     self._BtB if not is_I else empty_arr,
                     self._BeTBeChol if not is_I else empty_arr,
                     self._CtUbias if not is_I else np.empty(0, dtype=self.dtype_),
-                    n, m_u, 0,
+                    self.B_.shape[0] if not is_I else self.A_.shape[0], m_u, 0,
                     self.k,
                     self.k_user if not is_I else self.k_item,
                     self.k_item if not is_I else self.k_user,
