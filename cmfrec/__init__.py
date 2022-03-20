@@ -5958,7 +5958,7 @@ class _OMF(_OMF_Base):
                             MatBias,
                             self._TransBtBinvBt if not is_I else empty_arr,
                             self._BtB if not is_I else empty_arr,
-                            glob_mean,
+                            self.glob_mean_,
                             m_u, 0,
                             self.k, self.k_sec, self.k_main,
                             lambda_, lambda_,
