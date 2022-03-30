@@ -118,8 +118,8 @@ class _CMF:
 
         if n_jobs is not None:
             nthreads = n_jobs
-        if nthreads < 1:
-            nthreads = multiprocessing.cpu_count() + 1 - nthreads
+        if nthreads < 0:
+            nthreads = multiprocessing.cpu_count() + 1 + nthreads
         if nthreads is None:
             nthreads = 1
         assert isinstance(nthreads, int) and nthreads > 0
