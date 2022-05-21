@@ -50,12 +50,13 @@ class build_ext_subclass( build_ext_with_blas ):
             self.add_no_trapping_math()
             self.add_ffp_contract_fast()
             self.add_clang_fp_reassociate()
+            self.add_O3()
+            self.add_std_c99()
             if not is_windows:
                 self.add_link_time_optimization()
 
             ### Now add arguments as appropriate for good performance
             for e in self.extensions:
-                e.extra_compile_args += ['-O3', '-std=c99']
 
                 if is_windows:
                     e.define_macros += [("NO_LONG_DOUBLE", None)]
@@ -151,6 +152,20 @@ class build_ext_subclass( build_ext_with_blas ):
                 e.extra_compile_args.append(arg_fntm)
                 e.extra_link_args.append(arg_fntm)
 
+    def add_O3(self):
+        arg_O3 = "-O3"
+        if self.test_supports_compile_arg(arg_O3):
+            for e in self.extensions:
+                e.extra_compile_args.append(arg_O3)
+                e.extra_link_args.append(arg_O3)
+
+    def add_std_c99(self):
+        arg_std_c99 = "-std=c99"
+        if self.test_supports_compile_arg(arg_std_c99):
+            for e in self.extensions:
+                e.extra_compile_args.append(arg_std_c99)
+                e.extra_link_args.append(arg_std_c99)
+
     def add_ffp_contract_fast(self):
         arg_ffpc = "-ffp-contract=fast"
         if self.test_supports_compile_arg(arg_ffpc):
@@ -238,9 +253,12 @@ class build_ext_subclass( build_ext_with_blas ):
             with open(fname, "w") as ftest:
                 ftest.write(u"int main(int argc, char**argv) {return 0;}\n")
             try:
-                cmd = [self.compiler.compiler[0]]
+                if not isinstance(self.compiler.compiler, list):
+                    cmd = list(self.compiler.compiler)
+                else:
+                    cmd = self.compiler.compiler
             except:
-                cmd = list(self.compiler.compiler)
+                cmd = self.compiler.compiler
             val_good = subprocess.call(cmd + [fname])
 
             with open(fname, "w") as ftest:
@@ -291,7 +309,7 @@ if (force_openblas):
 setup(
     name  = "cmfrec",
     packages = ["cmfrec"],
-    version = '3.4.2-4',
+    version = '3.4.2-5',
     description = 'Collective matrix factorization',
     author = 'David Cortes',
     author_email = 'david.cortes.rivera@gmail.com',
