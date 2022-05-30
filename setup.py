@@ -1,7 +1,7 @@
 try:
     import setuptools
     from setuptools import setup, Extension
-except:
+except ImportError:
     from distutils.core import setup
     from distutils.extension import Extension
 import numpy as np
@@ -224,7 +224,7 @@ class build_ext_subclass( build_ext_with_blas ):
                     cmd = list(self.compiler.compiler)
                 else:
                     cmd = self.compiler.compiler
-            except:
+            except Exception:
                 cmd = self.compiler.compiler
             val_good = subprocess.call(cmd + [fname])
             if with_omp:
@@ -233,13 +233,13 @@ class build_ext_subclass( build_ext_with_blas ):
             try:
                 val = subprocess.call(cmd + comm + [fname])
                 is_supported = (val == val_good)
-            except:
+            except Exception:
                 is_supported = False
-        except:
+        except Exception:
             pass
         try:
             os.remove(fname)
-        except:
+        except Exception:
             pass
         return is_supported
 
@@ -257,7 +257,7 @@ class build_ext_subclass( build_ext_with_blas ):
                     cmd = list(self.compiler.compiler)
                 else:
                     cmd = self.compiler.compiler
-            except:
+            except Exception:
                 cmd = self.compiler.compiler
             val_good = subprocess.call(cmd + [fname])
 
@@ -283,13 +283,13 @@ class build_ext_subclass( build_ext_with_blas ):
             try:
                 val = subprocess.call(cmd + [fname])
                 is_supported = (val == val_good)
-            except:
+            except Exception:
                 is_supported = False
-        except:
+        except Exception:
             pass
         try:
             os.remove(fname)
-        except:
+        except Exception:
             pass
         return is_supported
 
@@ -309,7 +309,7 @@ if (force_openblas):
 setup(
     name  = "cmfrec",
     packages = ["cmfrec"],
-    version = '3.4.2-6',
+    version = '3.4.2-7',
     description = 'Collective matrix factorization',
     author = 'David Cortes',
     author_email = 'david.cortes.rivera@gmail.com',

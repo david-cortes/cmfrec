@@ -3845,7 +3845,7 @@ cdef public void py_set_threads(int nthreads) nogil:
     with gil:
         try:
             threadpoolctl.threadpool_limits(limits=nthreads, user_api="blas")
-        except:
+        except Exception:
             pass
 
 cdef public int py_get_threads() nogil:
@@ -3856,5 +3856,5 @@ cdef public int py_get_threads() nogil:
                 if el["user_api"] == "blas":
                     return el["num_threads"]
             return 1
-        except:
+        except Exception:
             return 1
