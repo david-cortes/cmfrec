@@ -589,7 +589,7 @@ class _CMF:
                     if len(dct):
                         try:
                             U_col = np.array([dct[u] for u in U_col])
-                        except:
+                        except Exception:
                             raise ValueError("Sparse inputs cannot contain missing values.")
                     else:
                         U_col = pd.Categorical(U_col, mapping).codes.astype(ctypes.c_int)
@@ -832,7 +832,7 @@ class _CMF:
                         if len(self.user_dict_):
                             try:
                                 user = self.user_dict_[user]
-                            except:
+                            except Exception:
                                 user = -1
                         else:
                             user = pd.Categorical(user, self.user_mapping_).codes[0]
@@ -841,7 +841,7 @@ class _CMF:
                     if len(self.user_dict_):
                         try:
                             user = self.user_dict_[user]
-                        except:
+                        except Exception:
                             user = -1
                     else:
                         user = pd.Categorical(np.array([user]), self.user_mapping_).codes[0]
@@ -862,7 +862,7 @@ class _CMF:
                         if len(self.item_dict_):
                             try:
                                 item = self.item_dict_[item[0]]
-                            except:
+                            except Exception:
                                 item = -1
                         else:
                             item = pd.Categorical(item, self.item_mapping_).codes[0]
@@ -871,7 +871,7 @@ class _CMF:
                     if len(self.item_dict_):
                         try:
                             item = self.item_dict_[item]
-                        except:
+                        except Exception:
                             item = -1
                     else:
                         item = pd.Categorical(np.array([item]), self.item_mapping_).codes[0]
@@ -886,7 +886,7 @@ class _CMF:
                 if len(self.item_dict_):
                     try:
                         include = np.array([self.item_dict_[i] for i in include])
-                    except:
+                    except Exception:
                         raise ValueError(msg % "include")
                 else:
                     include = pd.Categorical(include, self.item_mapping_).codes
@@ -900,7 +900,7 @@ class _CMF:
                 if len(self.item_dict_):
                     try:
                         exclude = np.array([self.item_dict_[i] for i in exclude])
-                    except:
+                    except Exception:
                         raise ValueError(msg % "exclude")
                 else:
                     exclude = pd.Categorical(exclude, self.item_mapping_).codes
