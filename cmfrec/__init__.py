@@ -4443,7 +4443,7 @@ class CMF_implicit(_CMF):
 
     Note
     ----
-    This model will not perform mean centering and will not fit uer/item
+    This model will not perform mean centering and will not fit user/item
     biases. If desired, an equivalent problem formulation can be made through
     ``CMF`` which can accommodate mean centering and biases.
 
