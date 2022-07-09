@@ -1496,27 +1496,6 @@ void coo_to_csr_and_csc
         free(cnt_bycol);
 }
 
-void row_means_csr(size_t indptr[], real_t *restrict values,
-                   real_t *restrict output, int_t m, int nthreads)
-{
-    int_t row = 0;
-    set_to_zero(values, m);
-    #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
-            shared(indptr, values, output, m)
-    for (row = 0; row < m; row++)
-    {
-        double rsum = 0;
-        for (size_t ix = indptr[row]; ix < indptr[row+(size_t)1]; ix++)
-            rsum += values[ix];
-        output[row] = rsum;
-    }
-    nthreads = cap_to_4(nthreads);
-    #pragma omp parallel for schedule(static) num_threads(nthreads) \
-            shared(indptr, output, m)
-    for (row = 0; row < m; row++)
-        output[row] /= (real_t)(indptr[row+(size_t)1] - indptr[row]);
-}
-
 bool should_stop_procedure = false;
 bool handle_is_locked = false;
 void set_interrup_global_variable(int_t s)
