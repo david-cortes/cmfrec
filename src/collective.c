@@ -2670,6 +2670,9 @@ void collective_block_cg
 
     for (int_t cg_step = 0; cg_step < max_cg_steps; cg_step++)
     {
+        /* TODO: when compiling with XLC, this line generates 3 warnings
+           about always overflowing the input. Find out in which cases it
+           is not allocating enough memory. */
         set_to_zero(Ap, k_totA);
 
         /* t(B)*B*p */
