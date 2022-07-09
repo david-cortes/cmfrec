@@ -551,7 +551,6 @@ void sum_mat
     real_t *restrict A, size_t lda,
     real_t *restrict B, size_t ldb
 );
-void transpose_mat(real_t *restrict A, size_t m, size_t n, real_t *restrict buffer_real_t);
 void transpose_mat2(real_t *restrict A, size_t m, size_t n, real_t *restrict outp);
 void transpose_mat3
 (

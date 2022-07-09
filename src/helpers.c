@@ -1259,14 +1259,6 @@ void sum_mat
             B[col + row*ldb] += A[col + row*lda];
 }
 
-void transpose_mat(real_t *restrict A, size_t m, size_t n, real_t *restrict buffer_real_t)
-{
-    memcpy(buffer_real_t, A, m*n*sizeof(real_t));
-    for (size_t row = 0; row < m; row++)
-        for (size_t col = 0; col < n; col++)
-            A[row + col*m] = buffer_real_t[col + row*n];
-}
-
 void transpose_mat2(real_t *restrict A, size_t m, size_t n, real_t *restrict outp)
 {
     for (size_t row = 0; row < m; row++)
