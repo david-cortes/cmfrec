@@ -2592,9 +2592,9 @@ size_t buffer_size_optimizeA
             size_t size_thread_buffer = square(k);
             if (use_cg) {
                 if (precondition_cg)
-                    size_thread_buffer = max2(size_thread_buffer,(size_t)3 * k);
-                else
                     size_thread_buffer = max2(size_thread_buffer,(size_t)5 * k);
+                else
+                    size_thread_buffer = max2(size_thread_buffer,(size_t)3 * k);
             }
             if (nonneg)
                 size_thread_buffer += k;
