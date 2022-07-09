@@ -84,15 +84,15 @@ void set_to_zero_(real_t *arr, size_t n, int nthreads)
     nthreads = (nthreads > 1)? 2 : 1;
     size_t chunk_size = n / (size_t)nthreads;
     size_t remainder = n % (size_t)nthreads;
-    int_t i = 0;
+    int i = 0;
     if (nthreads > 1 && n > (size_t)1e8)
     {
         #pragma omp parallel for schedule(static, 1) \
                 firstprivate(arr, chunk_size, nthreads) num_threads(nthreads)
         for (i = 0; i < nthreads; i++)
-            memset(arr + i * chunk_size, 0, chunk_size*sizeof(real_t));
+            memset(arr + (size_t)i * chunk_size, 0, chunk_size*sizeof(real_t));
         if (remainder > 0)
-            memset(arr + nthreads * chunk_size, 0, remainder*sizeof(real_t));
+            memset(arr + (size_t)nthreads * (size_t)chunk_size, 0, remainder*sizeof(real_t));
     } else
     #endif
     {
@@ -112,14 +112,14 @@ void copy_arr_(real_t *restrict src, real_t *restrict dest, size_t n, int nthrea
         nthreads = cap_to_4(nthreads);
         size_t chunk_size = n / (size_t)nthreads;
         size_t remainder = n % (size_t)nthreads;
-        int_t i = 0;
+        int i = 0;
 
         #pragma omp parallel for schedule(static, 1) \
                 firstprivate(src, dest, chunk_size, nthreads) num_threads(nthreads)
         for (i = 0; i < nthreads; i++)
-            memcpy(dest + i * chunk_size, src + i * chunk_size, chunk_size*sizeof(real_t));
+            memcpy(dest + (size_t)i * (size_t)chunk_size, src + (size_t)i * chunk_size, chunk_size*sizeof(real_t));
         if (remainder > 0)
-            memcpy(dest + nthreads*chunk_size, src + nthreads*chunk_size, remainder*sizeof(real_t));
+            memcpy(dest + (size_t)nthreads*chunk_size, src + (size_t)nthreads*chunk_size, remainder*sizeof(real_t));
     }  else 
     #endif
     {
