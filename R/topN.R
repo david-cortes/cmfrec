@@ -379,7 +379,7 @@ topN_new.CMF <- function(model, X=NULL, X_col=NULL, X_val=NULL,
                                   weight = weight,
                                   U = U, U_col = U_col, U_val = U_val, U_bin = U_bin,
                                   output_bias = as.logical(NROW(model$matrices$user_bias)))
-    if (class(factors) == "list") {
+    if (is.list(factors)) {
         a_vec <- factors$factors
         a_bias <- factors$bias
     } else {
@@ -482,7 +482,7 @@ topN_new.OMF_explicit <- function(model, X=NULL, X_col=NULL, X_val=NULL,
                                            output_bias = as.logical(NROW(model$matrices$user_bias)),
                                            output_A = FALSE,
                                            exact = exact)
-    if (class(factors) == "list") {
+    if (is.list(factors)) {
         a_vec <- factors$factors
         a_bias <- factors$bias
     } else {
