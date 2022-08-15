@@ -26,7 +26,7 @@ its not necessary to pass `item`.
 If passing a sparse matrix, can be from package `Matrix` (class `dgTMatrix` or `ngTMatrix`)
 or from package `SparseM` (class `matrix.coo`). If using the package `softImpute`,
 its objects of class `incomplete` might be convertable to `Matrix` objects through
-e.g. `as(as(X, "TsparseMatrix"), "ngTMatrix")`.}
+e.g. `as(as(X, "TsparseMatrix"), "nMatrix")`.}
 
 \item{item}{The item IDs for which to make predictions - see the documentation
 about `user` for details about the indexing.

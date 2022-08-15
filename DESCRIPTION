@@ -1,7 +1,7 @@
 Package: cmfrec
 Type: Package
 Title: Collective Matrix Factorization for Recommender Systems
-Version: 3.4.3
+Version: 3.4.3-1
 Authors@R: c(
   person(given="David", family="Cortes", role=c("aut", "cre", "cph"),
          email="david.cortes.rivera@gmail.com"),
@@ -42,5 +42,5 @@ Description: Collective matrix factorization (a.k.a. multi-view or multi-way fac
 License: MIT + file LICENSE
 Suggests: Matrix, MatrixExtra, RhpcBLASctl, recosystem (>= 0.5), recommenderlab (>= 0.2-7), MASS, knitr, rmarkdown, kableExtra
 VignetteBuilder: knitr
-RoxygenNote: 7.1.2
+RoxygenNote: 7.2.1
 NeedsCompilation: yes
