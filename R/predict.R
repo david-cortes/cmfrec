@@ -39,13 +39,15 @@
 #' predict all the entries in `user` for that single `item`.
 #' 
 #' If passing a sparse matrix as `user`, `item` will be ignored.
+#' @param nthreads Number of parallel threads to use.
 #' @param ... Not used.
 #' @return A numeric vector with the predicted values at the requested combinations.
 #' If the `user` passed was a sparse matrix, and it was not of class `ngTMatrix`,
 #' will instead return a sparse matrix of the same format, with the non-missing entries
 #' set to the predicted values.
 #' @seealso \link{predict_new} \link{topN}
-predict.cmfrec <- function(object, user, item=NULL, ...) {
+predict.cmfrec <- function(object, user, item=NULL, nthreads=object$info$nthreads, ...) {
+    nthreads <- check.nthreads(nthreads)
     if (object$info$only_prediction_info)
         stop("Cannot use this function after dropping non-essential matrices.")
     return_mat <- FALSE
@@ -116,7 +118,7 @@ predict.cmfrec <- function(object, user, item=NULL, ...) {
                           object$matrices$glob_mean,
                           object$info$k, object$info$k_user, object$info$k_item, object$info$k_main,
                           NCOL(object$matrices$A), NCOL(object$matrices$B),
-                          object$info$nthreads)
+                          nthreads)
     } else if ("CMF_implicit" %in% class(object)) {
         ret_code <- .Call(call_predict_X_old_collective_implicit,
                           user, item, scores,
@@ -124,7 +126,7 @@ predict.cmfrec <- function(object, user, item=NULL, ...) {
                           object$matrices$B,
                           object$info$k, object$info$k_user, object$info$k_item, object$info$k_main,
                           NCOL(object$matrices$A), NCOL(object$matrices$B),
-                          object$info$nthreads)
+                          nthreads)
     } else if ("MostPopular" %in% class(object)) {
         ret_code <- .Call(call_predict_X_old_most_popular,
                           user, item, scores,
@@ -140,7 +142,7 @@ predict.cmfrec <- function(object, user, item=NULL, ...) {
                           object$matrices$glob_mean,
                           object$info$k, 0L, 0L, 0L,
                           NCOL(object$matrices$Am), NCOL(object$matrices$Bm),
-                          object$info$nthreads)
+                          nthreads)
     } else if ("OMF_explicit" %in% class(object)) {
         ret_code <- .Call(call_predict_X_old_offsets_explicit,
                           user, item, scores,
@@ -149,7 +151,7 @@ predict.cmfrec <- function(object, user, item=NULL, ...) {
                           object$matrices$glob_mean,
                           object$info$k, object$info$k_sec, object$info$k_main,
                           NCOL(object$matrices$Am), NCOL(object$matrices$Bm),
-                          object$info$nthreads)
+                          nthreads)
     } else if ("OMF_implicit" %in% class(object)) {
         ret_code <- .Call(call_predict_X_old_offsets_implicit,
                           user, item, scores,
@@ -157,7 +159,7 @@ predict.cmfrec <- function(object, user, item=NULL, ...) {
                           object$matrices$Bm,
                           object$info$k,
                           NCOL(object$matrices$Am), NCOL(object$matrices$Bm),
-                          object$info$nthreads)
+                          nthreads)
     } else {
         stop("Unsupported model type.")
     }

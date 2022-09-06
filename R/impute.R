@@ -37,6 +37,7 @@
 #' }
 #' @param U_bin New binary columns of `U` (rows matching to those of `X`).
 #' Must be passed as a dense matrix from base R or as a `data.frame`.
+#' @param nthreads Number of parallel threads to use.
 #' @return The `X` matrix with its missing values imputed according to the
 #' model predictions.
 #' @examples
@@ -87,7 +88,7 @@
 #'     cat(sprintf("RMSE for imputed values w/means: %f\n",
 #'                 sqrt(mean((X[values_NA] - X_imp_mean[values_NA])^2))))
 #' }
-imputeX <- function(model, X, weight = NULL, U = NULL, U_bin = NULL) {
+imputeX <- function(model, X, weight = NULL, U = NULL, U_bin = NULL, nthreads = model$info$nthreads) {
     if (!("CMF" %in% class(model)))
         stop("Method is only applicable to 'CMF' model.")
     if (model$info$only_prediction_info)
@@ -132,7 +133,7 @@ imputeX <- function(model, X, weight = NULL, U = NULL, U_bin = NULL) {
                       model$precomputed$CtC,
                       model$precomputed$B_plus_bias,
                       model$precomputed$CtUbias,
-                      model$info$nthreads)
+                      check.nthreads(nthreads))
     check.ret.code(ret_code)
     inputs$processed_X$Xarr <- matrix(inputs$processed_X$Xarr, ncol = nrow(X), nrow = ncol(X))
     if (!is.null(rownames(X)))

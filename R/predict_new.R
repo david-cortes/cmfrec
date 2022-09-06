@@ -52,6 +52,7 @@
 #' Whether to calculate `A` and `Am` with the regularization applied
 #' to `A` instead of to `Am` (if using the L-BFGS method, this is how the model
 #' was fit). This is usually a slower procedure.
+#' @param nthreads Number of parallel threads to use.
 #' @param ... Not used.
 #' @return A numeric vector with the predicted values for the requested combinations
 #' of users (rows in the new data) and items (columns in the old data, unless passing
@@ -124,7 +125,7 @@ process.data.predict.new <- function(model, obj, X=NULL, weight=NULL,
 #' @export
 #' @rdname predict_new
 predict_new.CMF <- function(model, items, rows=NULL,
-                            X=NULL, U=NULL, U_bin=NULL, weight=NULL, ...) {
+                            X=NULL, U=NULL, U_bin=NULL, weight=NULL, nthreads=model$info$nthreads, ...) {
 
     inputs <- process.data.predict.new("CMF", model, X = X, weight = weight,
                                        U = U, U_bin = U_bin,
@@ -134,7 +135,7 @@ predict_new.CMF <- function(model, items, rows=NULL,
     ret_code <- .Call(call_predict_X_new_collective_explicit,
                       inputs$m_max,
                       inputs$rows, inputs$items, scores,
-                      model$info$nthreads,
+                      check.nthreads(nthreads),
                       as.logical(NROW(model$matrices$user_bias)),
                       inputs$processed_U$Uarr, inputs$processed_U$m, inputs$processed_U$p,
                       model$info$NA_as_zero_user, model$info$NA_as_zero,
@@ -173,7 +174,7 @@ predict_new.CMF <- function(model, items, rows=NULL,
 #' @export
 #' @rdname predict_new
 predict_new.CMF_implicit <- function(model, items, rows=NULL,
-                                     X=NULL, U=NULL, ...) {
+                                     X=NULL, U=NULL, nthreads=model$info$nthreads, ...) {
     inputs <- process.data.predict.new("CMF_implicit", model, X = X,
                                        U = U,
                                        items = items, rows = rows)
@@ -185,7 +186,7 @@ predict_new.CMF_implicit <- function(model, items, rows=NULL,
     ret_code <- .Call(call_predict_X_new_collective_implicit,
                       inputs$m_max,
                       inputs$rows, inputs$items, scores,
-                      model$info$nthreads,
+                      check.nthreads(nthreads),
                       inputs$processed_U$Uarr, inputs$processed_U$m, inputs$processed_U$p,
                       model$info$NA_as_zero_user,
                       model$info$nonneg,
@@ -212,7 +213,7 @@ predict_new.CMF_implicit <- function(model, items, rows=NULL,
 #' @rdname predict_new
 predict_new.OMF_explicit <- function(model, items, rows=NULL,
                                      X=NULL, U=NULL, weight=NULL,
-                                     exact=FALSE, ...) {
+                                     exact=FALSE, nthreads=model$info$nthreads, ...) {
     inputs <- process.data.predict.new("OMF_explicit", model, X = X, weight = weight,
                                        U = U,
                                        items = items, rows = rows,
@@ -223,7 +224,7 @@ predict_new.OMF_explicit <- function(model, items, rows=NULL,
     ret_code <- .Call(call_predict_X_new_offsets_explicit,
                       inputs$m_max, as.logical(NROW(model$matrices$user_bias)),
                       inputs$rows, inputs$items, scores,
-                      model$info$nthreads,
+                      check.nthreads(nthreads),
                       inputs$processed_U$Uarr, inputs$processed_U$p,
                       inputs$processed_U$Urow, inputs$processed_U$Ucol, inputs$processed_U$Uval,
                       inputs$processed_U$Ucsr_p, inputs$processed_U$Ucsr_i, inputs$processed_U$Ucsr,
@@ -247,7 +248,7 @@ predict_new.OMF_explicit <- function(model, items, rows=NULL,
 #' @export
 #' @rdname predict_new
 predict_new.OMF_implicit <- function(model, items, rows=NULL,
-                                     X=NULL, U=NULL, ...) {
+                                     X=NULL, U=NULL, nthreads=model$info$nthreads, ...) {
     inputs <- process.data.predict.new("OMF_implicit", model, X = X,
                                        U = U,
                                        items = items, rows = rows)
@@ -258,7 +259,7 @@ predict_new.OMF_implicit <- function(model, items, rows=NULL,
                       inputs$m_max,
                       inputs$rows, inputs$items, scores,
                       NCOL(model$matrices$Bm),
-                      model$info$nthreads,
+                      check.nthreads(nthreads),
                       inputs$processed_U$Uarr, inputs$processed_U$p,
                       inputs$processed_U$Urow, inputs$processed_U$Ucol, inputs$processed_U$Uval,
                       inputs$processed_U$Ucsr_p, inputs$processed_U$Ucsr_i, inputs$processed_U$Ucsr,
@@ -277,7 +278,7 @@ predict_new.OMF_implicit <- function(model, items, rows=NULL,
 #' @export
 #' @rdname predict_new
 predict_new.ContentBased <- function(model, items=NULL, rows=NULL,
-                                     U=NULL, I=NULL, ...) {
+                                     U=NULL, I=NULL, nthreads=model$info$nthreads, ...) {
     if (!NROW(U))
         stop("'U' cannot be empty")
     if (!NROW(items) && !NROW(I))
@@ -338,7 +339,7 @@ predict_new.ContentBased <- function(model, items=NULL, rows=NULL,
                           model$matrices$C, model$matrices$C_bias,
                           model$matrices$D, model$matrices$D_bias,
                           model$matrices$glob_mean,
-                          model$info$nthreads)
+                          check.nthreads(nthreads))
     } else {
         if (is.null(rows)) {
             if (inputs$processed_U$m == 1L) {
@@ -352,7 +353,7 @@ predict_new.ContentBased <- function(model, items=NULL, rows=NULL,
         ret_code <- .Call(call_predict_X_new_offsets_explicit,
                           inputs$processed_U$m, FALSE,
                           rows, items, scores,
-                          model$info$nthreads,
+                          check.nthreads(nthreads),
                           inputs$processed_U$Uarr, inputs$processed_U$p,
                           inputs$processed_U$Urow, inputs$processed_U$Ucol, inputs$processed_U$Uval,
                           inputs$processed_U$Ucsr_p, inputs$processed_U$Ucsr_i, inputs$processed_U$Ucsr,

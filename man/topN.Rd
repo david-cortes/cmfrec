@@ -16,7 +16,8 @@ topN(
   n = 10L,
   include = NULL,
   exclude = NULL,
-  output_score = FALSE
+  output_score = FALSE,
+  nthreads = model$info$nthreads
 )
 
 topN_new(model, ...)
@@ -35,6 +36,7 @@ topN_new(model, ...)
   include = NULL,
   exclude = NULL,
   output_score = FALSE,
+  nthreads = model$info$nthreads,
   ...
 )
 
@@ -50,6 +52,7 @@ topN_new(model, ...)
   include = NULL,
   exclude = NULL,
   output_score = FALSE,
+  nthreads = model$info$nthreads,
   ...
 )
 
@@ -63,6 +66,7 @@ topN_new(model, ...)
   include = NULL,
   exclude = NULL,
   output_score = FALSE,
+  nthreads = model$info$nthreads,
   ...
 )
 
@@ -80,6 +84,7 @@ topN_new(model, ...)
   include = NULL,
   exclude = NULL,
   output_score = FALSE,
+  nthreads = model$info$nthreads,
   ...
 )
 
@@ -95,6 +100,7 @@ topN_new(model, ...)
   include = NULL,
   exclude = NULL,
   output_score = FALSE,
+  nthreads = model$info$nthreads,
   ...
 )
 }
@@ -134,6 +140,8 @@ Cannot be used together with `include`.}
 
 \item{output_score}{Whether to also output the predicted values, in addition
 to the indices of the top-predicted items.}
+
+\item{nthreads}{Number of parallel threads to use.}
 
 \item{...}{Not used.}
 

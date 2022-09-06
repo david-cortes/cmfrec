@@ -47,6 +47,7 @@
 #' to `A` instead of to `Am` (if using the L-BFGS method, this is how the model
 #' was fit). This is usually a slower procedure.
 #' Only relevant when passing `X` data.
+#' @param nthreads Number of parallel threads to use.
 #' @param ... Not used.
 #' @details Note that, regardless of whether the model was fit with the L-BFGS or
 #' ALS method with CG or Cholesky solver, the new factors will be determined through the
@@ -152,7 +153,7 @@ process.data.factors <- function(model, obj, X=NULL, weight=NULL,
 #' @export
 #' @rdname factors
 factors.CMF <- function(model, X=NULL, U=NULL, U_bin=NULL, weight=NULL,
-                        output_bias=FALSE, ...) {
+                        output_bias=FALSE, nthreads=model$info$nthreads, ...) {
     inputs <- process.data.factors(class(model)[1L], model,
                                    X = X, weight = weight,
                                    U = U, U_bin = U_bin,
@@ -194,7 +195,7 @@ factors.CMF <- function(model, X=NULL, U=NULL, U_bin=NULL, weight=NULL,
                       model$precomputed$CtC,
                       model$precomputed$B_plus_bias,
                       model$precomputed$CtUbias,
-                      model$info$nthreads)
+                      check.nthreads(nthreads))
     check.ret.code(ret_code)
     A <- t(A)
     if (output_bias) {
@@ -206,7 +207,7 @@ factors.CMF <- function(model, X=NULL, U=NULL, U_bin=NULL, weight=NULL,
 
 #' @export
 #' @rdname factors
-factors.CMF_implicit <- function(model, X=NULL, U=NULL, ...) {
+factors.CMF_implicit <- function(model, X=NULL, U=NULL, nthreads=model$info$nthreads, ...) {
     inputs <- process.data.factors(class(model)[1L], model,
                                    X = X,
                                    U = U)
@@ -236,7 +237,7 @@ factors.CMF_implicit <- function(model, X=NULL, U=NULL, ...) {
                       model$precomputed$BtB,
                       model$precomputed$BeTBeChol,
                       model$precomputed$CtUbias,
-                      model$info$nthreads)
+                      check.nthreads(nthreads))
     
     check.ret.code(ret_code)
     A <- t(A)
@@ -245,7 +246,7 @@ factors.CMF_implicit <- function(model, X=NULL, U=NULL, ...) {
 
 #' @export
 #' @rdname factors
-factors.ContentBased <- function(model, U, ...) {
+factors.ContentBased <- function(model, U, nthreads = model$info$nthreads, ...) {
     inputs <- process.data.factors(class(model)[1L], model,
                                    U = U)
     m_max <- inputs$processed_U$m
@@ -257,7 +258,7 @@ factors.ContentBased <- function(model, U, ...) {
                       inputs$processed_U$Uarr, inputs$processed_U$p,
                       inputs$processed_U$Urow, inputs$processed_U$Ucol, inputs$processed_U$Uval,
                       inputs$processed_U$Ucsr_p, inputs$processed_U$Ucsr_i, inputs$processed_U$Ucsr,
-                      model$info$nthreads)
+                      check.nthreads(nthreads))
     
     check.ret.code(ret_code)
     A <- t(A)
@@ -268,7 +269,7 @@ factors.ContentBased <- function(model, U, ...) {
 #' @rdname factors
 factors.OMF_explicit <- function(model, X=NULL, U=NULL, weight=NULL,
                                  output_bias=FALSE,
-                                 output_A = FALSE, exact=FALSE, ...) {
+                                 output_A = FALSE, exact=FALSE, nthreads=model$info$nthreads, ...) {
     if (!exact && !output_A &&
         !is.null(X) && !is.null(U)) {
         warning("'U' data is ignored in the presence of 'X' data with 'exact=FALSE'.")
@@ -314,7 +315,7 @@ factors.OMF_explicit <- function(model, X=NULL, U=NULL, weight=NULL,
                       model$precomputed$TransBtBinvBt,
                       model$precomputed$BtB,
                       model$precomputed$Bm_plus_bias,
-                      model$info$nthreads)
+                      check.nthreads(nthreads))
     
     check.ret.code(ret_code)
     A <- t(A)
@@ -333,7 +334,7 @@ factors.OMF_explicit <- function(model, X=NULL, U=NULL, weight=NULL,
 
 #' @export
 #' @rdname factors
-factors.OMF_implicit <- function(model, X=NULL, U=NULL, output_A=FALSE, ...) {
+factors.OMF_implicit <- function(model, X=NULL, U=NULL, output_A=FALSE, nthreads=model$info$nthreads, ...) {
     if (!output_A &&
         !is.null(X) && !is.null(U)) {
         warning("'U' data is ignored in the presence of 'X' data.")
@@ -370,7 +371,7 @@ factors.OMF_implicit <- function(model, X=NULL, U=NULL, output_A=FALSE, ...) {
                       model$info$lambda, model$info$alpha,
                       model$info$apply_log_transf,
                       model$precomputed$BtB,
-                      model$info$nthreads)
+                      check.nthreads(nthreads))
     
     check.ret.code(ret_code)
     A <- t(A)

@@ -4,7 +4,14 @@
 \alias{imputeX}
 \title{Impute missing entries in `X` data}
 \usage{
-imputeX(model, X, weight = NULL, U = NULL, U_bin = NULL)
+imputeX(
+  model,
+  X,
+  weight = NULL,
+  U = NULL,
+  U_bin = NULL,
+  nthreads = model$info$nthreads
+)
 }
 \arguments{
 \item{model}{A collective matrix factorization model as output by function
@@ -31,6 +38,8 @@ Passing the input as CSR is faster than COO as it will be converted internally.
 
 \item{U_bin}{New binary columns of `U` (rows matching to those of `X`).
 Must be passed as a dense matrix from base R or as a `data.frame`.}
+
+\item{nthreads}{Number of parallel threads to use.}
 }
 \value{
 The `X` matrix with its missing values imputed according to the

@@ -345,11 +345,12 @@ item_factors <- function(model, X=NULL, X_col=NULL, X_val=NULL,
 #' Can be passed in the same formats as `transX`, or additionally as a `data.frame`.
 #' @param I_bin New binary columns of `I`. Must be passed as a dense matrix from
 #' base R or as a `data.frame`.
+#' @param nthreads Number of parallel threads to use.
 #' @seealso \link{item_factors} \link{predict.cmfrec} \link{predict_new}
 #' @return A numeric vector with the predicted value for each requested combination
 #' of (user, item). Invalid combinations will be filled with NAs.
 predict_new_items <- function(model, user, item=NULL,
-                              transX=NULL, weight=NULL, I=NULL, I_bin=NULL) {
+                              transX=NULL, weight=NULL, I=NULL, I_bin=NULL, nthreads=model$info$nthreads) {
     accepted_models <- c("CMF", "CMF_implicit", "ContentBased", "OMF_explicit", "OMF_implicit")
     if (!NROW(intersect(class(model), accepted_models)))
         stop("Method only applicable to the following models: ",
@@ -387,6 +388,8 @@ predict_new_items <- function(model, user, item=NULL,
     } else {
         item <- seq(1L, NROW(user)) - 1L
     }
+
+    nthreads <- check.nthreads(nthreads)
     
     obj_pass <- list(
         matrices = list(B = model$matrices$A, Bm = model$matrices$Am),
@@ -469,7 +472,7 @@ predict_new_items <- function(model, user, item=NULL,
                           numeric(),
                           numeric(),
                           numeric(),
-                          model$info$nthreads)
+                          nthreads)
         check.ret.code(ret_code)
         ret_code <- .Call(call_predict_X_old_collective_explicit,
                           user, item, scores,
@@ -478,7 +481,7 @@ predict_new_items <- function(model, user, item=NULL,
                           model$matrices$glob_mean,
                           model$info$k, model$info$k_user, model$info$k_item, model$info$k_main,
                           NCOL(model$matrices$A), n_max,
-                          model$info$nthreads)
+                          nthreads)
     } else if ("CMF_implicit" %in% model_class) {
         lambda <- ifelse(NROW(model$info$lambda) == 6L, model$info$lambda[3L], model$info$lambda)
         l1_lambda <- ifelse(NROW(model$info$l1_lambda) == 6L, model$info$l1_lambda[3L], model$info$l1_lambda)
@@ -503,7 +506,7 @@ predict_new_items <- function(model, user, item=NULL,
                           numeric(),
                           numeric(),
                           numeric(),
-                          model$info$nthreads)
+                          nthreads)
         check.ret.code(ret_code)
         ret_code <- .Call(call_predict_X_old_collective_implicit,
                           user, item, scores,
@@ -511,7 +514,7 @@ predict_new_items <- function(model, user, item=NULL,
                           B,
                           model$info$k, model$info$k_user, model$info$k_item, model$info$k_main,
                           NCOL(model$matrices$A), n_max,
-                          model$info$nthreads)
+                          nthreads)
     } else if ("ContentBased" %in% model_class) {
         B <- matrix(0., ncol = n_max, nrow = model$info$k)
         ret_code <- .Call(call_factors_content_based_mutliple,
@@ -520,7 +523,7 @@ predict_new_items <- function(model, user, item=NULL,
                           processed_I$Uarr, processed_I$p,
                           processed_I$Urow, processed_I$Ucol, processed_I$Uval,
                           processed_I$Ucsr_p, processed_I$Ucsr_i, processed_I$Ucsr,
-                          model$info$nthreads)
+                          nthreads)
         check.ret.code(ret_code)
         ret_code <- .Call(call_predict_X_old_collective_explicit,
                           user, item, scores,
@@ -529,7 +532,7 @@ predict_new_items <- function(model, user, item=NULL,
                           model$matrices$glob_mean,
                           model$info$k, 0L, 0L, 0L,
                           NCOL(model$matrices$Am), n_max,
-                          model$info$nthreads)
+                          nthreads)
     } else if ("OMF_explicit" %in% model_class) {
         Bbias <- numeric()
         if (NROW(model$matrices$item_bias))
@@ -555,7 +558,7 @@ predict_new_items <- function(model, user, item=NULL,
                           numeric(),
                           numeric(),
                           numeric(),
-                          model$info$nthreads)
+                          nthreads)
         check.ret.code(ret_code)
         ret_code <- .Call(call_predict_X_old_offsets_explicit,
                           user, item, scores,
@@ -564,7 +567,7 @@ predict_new_items <- function(model, user, item=NULL,
                           model$matrices$glob_mean,
                           model$info$k, model$info$k_sec, model$info$k_main,
                           NCOL(model$matrices$Am), n_max,
-                          model$info$nthreads)
+                          nthreads)
     } else if ("OMF_implicit" %in% model_class) {
         B <- matrix(0., ncol = n_max, nrow = model$info$k)
         ret_code <- .Call(call_factors_offsets_implicit_multiple,
@@ -581,7 +584,7 @@ predict_new_items <- function(model, user, item=NULL,
                           model$info$lambda, model$info$alpha,
                           model$info$apply_log_transf,
                           numeric(),
-                          model$info$nthreads)
+                          nthreads)
         check.ret.code(ret_code)
         ret_code <- .Call(call_predict_X_old_offsets_implicit,
                           user, item, scores,
@@ -589,7 +592,7 @@ predict_new_items <- function(model, user, item=NULL,
                           B,
                           model$info$k,
                           NCOL(model$matrices$Am), n_max,
-                          model$info$nthreads)
+                          nthreads)
     } else {
         stop("Unexpected error.")
     }
