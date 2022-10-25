@@ -81,7 +81,7 @@ SEXP *ptr_glob_lst = NULL;
 int *ptr_nthreads = NULL;
 
 /* https://gist.github.com/KRD1/2503984 */
-SEXP prepare_RhpcBLASctl_Call()
+SEXP prepare_RhpcBLASctl_Call(void)
 {
     /* requireNamespace("RhpcBLASctl", quietly=TRUE) */
     int threw_err = 0;
@@ -181,7 +181,7 @@ SEXP as_size_t(SEXP x)
     return out;
 }
 
-SEXP R_has_openmp()
+SEXP R_has_openmp(void)
 {
     #ifdef _OPENMP
     return Rf_ScalarLogical(1);
