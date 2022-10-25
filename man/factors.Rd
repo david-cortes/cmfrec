@@ -18,12 +18,13 @@ factors(model, ...)
   U_bin = NULL,
   weight = NULL,
   output_bias = FALSE,
+  nthreads = model$info$nthreads,
   ...
 )
 
-\method{factors}{CMF_implicit}(model, X = NULL, U = NULL, ...)
+\method{factors}{CMF_implicit}(model, X = NULL, U = NULL, nthreads = model$info$nthreads, ...)
 
-\method{factors}{ContentBased}(model, U, ...)
+\method{factors}{ContentBased}(model, U, nthreads = model$info$nthreads, ...)
 
 \method{factors}{OMF_explicit}(
   model,
@@ -33,10 +34,18 @@ factors(model, ...)
   output_bias = FALSE,
   output_A = FALSE,
   exact = FALSE,
+  nthreads = model$info$nthreads,
   ...
 )
 
-\method{factors}{OMF_implicit}(model, X = NULL, U = NULL, output_A = FALSE, ...)
+\method{factors}{OMF_implicit}(
+  model,
+  X = NULL,
+  U = NULL,
+  output_A = FALSE,
+  nthreads = model$info$nthreads,
+  ...
+)
 }
 \arguments{
 \item{model}{A collective matrix factorization model from this package - see
@@ -73,6 +82,8 @@ matrix, should also be a dense matrix with the same number of rows and columns.}
 
 \item{output_bias}{Whether to also return the user bias determined by the model
 given the data in `X`.}
+
+\item{nthreads}{Number of parallel threads to use.}
 
 \item{output_A}{Whether to return the raw `A` factors (the free offset).}
 

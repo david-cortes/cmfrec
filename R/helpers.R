@@ -58,6 +58,18 @@ check.str.option <- function(x, allowed=c()) {
     return(x)
 }
 
+check.nthreads <- function(nthreads) {
+    if (NROW(nthreads) != 1) stop("'nthreads' must be a positive integer.")
+    if (is.null(nthreads)) {
+        nthreads <- 1L
+    } else if (is.na(nthreads)) {
+        nthreads <- 1L
+    }  else if (nthreads < 1) {
+        nthreads <- 1L
+    }
+    return(as.integer(nthreads))
+}
+
 check.is.df <- function(df) {
     return(inherits(df, c("data.frame", "tibble", "data.table")))
 }

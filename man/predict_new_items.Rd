@@ -11,7 +11,8 @@ predict_new_items(
   transX = NULL,
   weight = NULL,
   I = NULL,
-  I_bin = NULL
+  I_bin = NULL,
+  nthreads = model$info$nthreads
 )
 }
 \arguments{
@@ -60,6 +61,8 @@ Can be passed in the same formats as `transX`, or additionally as a `data.frame`
 
 \item{I_bin}{New binary columns of `I`. Must be passed as a dense matrix from
 base R or as a `data.frame`.}
+
+\item{nthreads}{Number of parallel threads to use.}
 }
 \value{
 A numeric vector with the predicted value for each requested combination

@@ -19,10 +19,19 @@ predict_new(model, ...)
   U = NULL,
   U_bin = NULL,
   weight = NULL,
+  nthreads = model$info$nthreads,
   ...
 )
 
-\method{predict_new}{CMF_implicit}(model, items, rows = NULL, X = NULL, U = NULL, ...)
+\method{predict_new}{CMF_implicit}(
+  model,
+  items,
+  rows = NULL,
+  X = NULL,
+  U = NULL,
+  nthreads = model$info$nthreads,
+  ...
+)
 
 \method{predict_new}{OMF_explicit}(
   model,
@@ -32,12 +41,29 @@ predict_new(model, ...)
   U = NULL,
   weight = NULL,
   exact = FALSE,
+  nthreads = model$info$nthreads,
   ...
 )
 
-\method{predict_new}{OMF_implicit}(model, items, rows = NULL, X = NULL, U = NULL, ...)
+\method{predict_new}{OMF_implicit}(
+  model,
+  items,
+  rows = NULL,
+  X = NULL,
+  U = NULL,
+  nthreads = model$info$nthreads,
+  ...
+)
 
-\method{predict_new}{ContentBased}(model, items = NULL, rows = NULL, U = NULL, I = NULL, ...)
+\method{predict_new}{ContentBased}(
+  model,
+  items = NULL,
+  rows = NULL,
+  U = NULL,
+  I = NULL,
+  nthreads = model$info$nthreads,
+  ...
+)
 }
 \arguments{
 \item{model}{A collective matrix factorization model from this package - see
@@ -85,6 +111,8 @@ base R or as a `data.frame`.}
 have the same shape as `X` - that is, if `X` is a sparse matrix, should be a
 numeric vector with length equal to the non-missing elements, if `X` is a dense
 matrix, should also be a dense matrix with the same number of rows and columns.}
+
+\item{nthreads}{Number of parallel threads to use.}
 
 \item{exact}{(In the `OMF_explicit` model)
 Whether to calculate `A` and `Am` with the regularization applied

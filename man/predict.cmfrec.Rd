@@ -4,7 +4,7 @@
 \alias{predict.cmfrec}
 \title{Predict entries in the factorized `X` matrix}
 \usage{
-\method{predict}{cmfrec}(object, user, item = NULL, ...)
+\method{predict}{cmfrec}(object, user, item = NULL, nthreads = object$info$nthreads, ...)
 }
 \arguments{
 \item{object}{A collective matrix factorization model from this package - see
@@ -35,6 +35,8 @@ If passing a single entry for `item` and `user` has more entries, will
 predict all the entries in `user` for that single `item`.
 
 If passing a sparse matrix as `user`, `item` will be ignored.}
+
+\item{nthreads}{Number of parallel threads to use.}
 
 \item{...}{Not used.}
 }

@@ -107,10 +107,11 @@ process.inputs.topN <- function(model, obj, user=NULL, a_vec=NULL, a_bias=NULL,
 
 .topN <- function(model, obj, a_vec, a_bias=0.,
                   n=10L, include=NULL, exclude=NULL,
-                  output_score=FALSE, reindex=TRUE) {
+                  output_score=FALSE, reindex=TRUE, nthreads=obj$info$nthreads) {
     outp_ix <- integer(length = n)
     outp_score <- numeric(length = ifelse(output_score, n, 0L))
     if (is.null(a_bias)) a_bias <- 0.
+    nthreads <- check.nthreads(nthreads)
     
     if (model == "CMF") {
         ret_code <- .Call(call_topN_old_collective_explicit,
@@ -123,7 +124,7 @@ process.inputs.topN <- function(model, obj, user=NULL, a_vec=NULL, a_bias=NULL,
                           exclude,
                           outp_ix, outp_score,
                           obj$info$n_orig, NCOL(obj$matrices$B),
-                          obj$info$include_all_X, obj$info$nthreads)
+                          obj$info$include_all_X, nthreads)
     } else if (model == "CMF_implicit") {
         ret_code <- .Call(call_topN_old_collective_implicit,
                           a_vec,
@@ -132,7 +133,7 @@ process.inputs.topN <- function(model, obj, user=NULL, a_vec=NULL, a_bias=NULL,
                           include,
                           exclude,
                           outp_ix, outp_score,
-                          NCOL(obj$matrices$B), obj$info$nthreads)
+                          NCOL(obj$matrices$B), nthreads)
     } else if (model == "MostPopular") {
         ret_code <- .Call(call_topN_old_most_popular,
                           as.logical(NROW(obj$matrices$user_bias)),
@@ -153,7 +154,7 @@ process.inputs.topN <- function(model, obj, user=NULL, a_vec=NULL, a_bias=NULL,
                           include,
                           exclude,
                           outp_ix, outp_score,
-                          NCOL(obj$matrices$Bm), obj$info$nthreads)
+                          NCOL(obj$matrices$Bm), nthreads)
     } else if (model == "OMF_explicit") {
         ret_code <- .Call(call_topN_old_offsets_explicit,
                           a_vec, a_bias,
@@ -164,7 +165,7 @@ process.inputs.topN <- function(model, obj, user=NULL, a_vec=NULL, a_bias=NULL,
                           include,
                           exclude,
                           outp_ix, outp_score,
-                          NCOL(obj$matrices$Bm), obj$info$nthreads)
+                          NCOL(obj$matrices$Bm), nthreads)
     } else if (model == "OMF_implicit") {
         ret_code <- .Call(call_topN_old_offsets_implicit,
                           a_vec,
@@ -173,7 +174,7 @@ process.inputs.topN <- function(model, obj, user=NULL, a_vec=NULL, a_bias=NULL,
                           include,
                           exclude,
                           outp_ix, outp_score,
-                          NCOL(obj$matrices$Bm), obj$info$nthreads)
+                          NCOL(obj$matrices$Bm), nthreads)
     } else {
         stop("Unexpected error.")
     }
@@ -326,6 +327,7 @@ process.inputs.topN <- function(model, obj, user=NULL, a_vec=NULL, a_bias=NULL,
 #' Whether to calculate `A` and `Am` with the regularization applied
 #' to `A` instead of to `Am` (if using the L-BFGS method, this is how the model
 #' was fit). This is usually a slower procedure.
+#' @param nthreads Number of parallel threads to use.
 #' @param ... Not used.
 #' @return If passing `output_score=FALSE` (the default), will output the
 #' indices of the top-predicted elements. If passing `output_score=TRUE`,
@@ -339,7 +341,7 @@ process.inputs.topN <- function(model, obj, user=NULL, a_vec=NULL, a_bias=NULL,
 #' Otherwise, will return the indices of the top-predicted columns of `X`
 #' (or rows of `I` if passing it) with numeration starting at 1.
 #' @seealso \link{factors_single} \link{predict.cmfrec} \link{predict_new}
-topN <- function(model, user=NULL, n=10L, include=NULL, exclude=NULL, output_score=FALSE) {
+topN <- function(model, user=NULL, n=10L, include=NULL, exclude=NULL, output_score=FALSE, nthreads=model$info$nthreads) {
     supported_models <- c("CMF", "CMF_implicit",
                           "MostPopular", "ContentBased",
                           "OMF_implicit", "OMF_explicit")
@@ -356,7 +358,7 @@ topN <- function(model, user=NULL, n=10L, include=NULL, exclude=NULL, output_sco
     return(.topN(class(model)[1L], model,
                  a_vec = inputs$a_vec, a_bias = inputs$a_bias,
                  n = inputs$n, include = inputs$include, exclude = inputs$exclude,
-                 output_score = inputs$output_score))
+                 output_score = inputs$output_score, nthreads = nthreads))
 }
 
 #' @export
@@ -370,7 +372,7 @@ topN_new <- function(model, ...) {
 topN_new.CMF <- function(model, X=NULL, X_col=NULL, X_val=NULL,
                          U=NULL, U_col=NULL, U_val=NULL, U_bin=NULL, weight=NULL,
                          n=10L, include=NULL, exclude=NULL,
-                         output_score=FALSE, ...) {
+                         output_score=FALSE, nthreads=model$info$nthreads, ...) {
     inputs <- process.inputs.topN(class(model)[1L], model,
                                   n = n,
                                   include = include, exclude = exclude,
@@ -389,7 +391,7 @@ topN_new.CMF <- function(model, X=NULL, X_col=NULL, X_val=NULL,
     return(.topN(class(model)[1L], model,
                  a_vec = a_vec, a_bias = a_bias,
                  n = inputs$n, include = inputs$include, exclude = inputs$exclude,
-                 output_score = inputs$output_score))
+                 output_score = inputs$output_score, nthreads = nthreads))
 }
 
 #' @export
@@ -397,7 +399,7 @@ topN_new.CMF <- function(model, X=NULL, X_col=NULL, X_val=NULL,
 topN_new.CMF_implicit <- function(model, X=NULL, X_col=NULL, X_val=NULL,
                                   U=NULL, U_col=NULL, U_val=NULL,
                                   n=10L, include=NULL, exclude=NULL,
-                                  output_score=FALSE, ...) {
+                                  output_score=FALSE, nthreads=model$info$nthreads, ...) {
     inputs <- process.inputs.topN(class(model)[1L], model,
                                   n = n,
                                   include = include, exclude = exclude,
@@ -407,7 +409,7 @@ topN_new.CMF_implicit <- function(model, X=NULL, X_col=NULL, X_val=NULL,
     return(.topN(class(model)[1L], model,
                  a_vec = factors,
                  n = inputs$n, include = inputs$include, exclude = inputs$exclude,
-                 output_score = inputs$output_score))
+                 output_score = inputs$output_score, nthreads = nthreads))
     
 }
 
@@ -415,7 +417,7 @@ topN_new.CMF_implicit <- function(model, X=NULL, X_col=NULL, X_val=NULL,
 #' @rdname topN
 topN_new.ContentBased <- function(model, U=NULL, U_col=NULL, U_val=NULL, I=NULL,
                                   n=10L, include=NULL, exclude=NULL,
-                                  output_score=FALSE, ...) {
+                                  output_score=FALSE, nthreads=model$info$nthreads, ...) {
     if (!is.null(I) && (!is.null(include) || !is.null(exclude)))
         stop("Cannot pass 'include' or 'exclude' when passing 'I' data.")
     
@@ -428,7 +430,7 @@ topN_new.ContentBased <- function(model, U=NULL, U_col=NULL, U_val=NULL, I=NULL,
         return(.topN(class(model)[1L], model,
                      a_vec = factors,
                      n = inputs$n, include = inputs$include, exclude = inputs$exclude,
-                     output_score = inputs$output_score))
+                     output_score = inputs$output_score, nthreads = nthreads))
         
     } else {
         processed_U <- process.new.U.single(U, U_col, U_val,
@@ -452,7 +454,7 @@ topN_new.ContentBased <- function(model, U=NULL, U_col=NULL, U_val=NULL, I=NULL,
                           model$matrices$D, model$matrices$D_bias,
                           model$matrices$glob_mean,
                           outp_ix, outp_score,
-                          model$info$nthreads)
+                          check.nthreads(nthreads))
         check.ret.code(ret_code)
         outp_ix <- outp_ix + 1L
         if (!is.null(row.names(I))) {
@@ -471,7 +473,7 @@ topN_new.ContentBased <- function(model, U=NULL, U_col=NULL, U_val=NULL, I=NULL,
 topN_new.OMF_explicit <- function(model, X=NULL, X_col=NULL, X_val=NULL,
                                   U=NULL, U_col=NULL, U_val=NULL,  weight=NULL, exact=FALSE,
                                   n=10L, include=NULL, exclude=NULL,
-                                  output_score=FALSE, ...) {
+                                  output_score=FALSE, nthreads=model$info$nthreads, ...) {
     inputs <- process.inputs.topN(class(model)[1L], model,
                                   n = n,
                                   include = include, exclude = exclude,
@@ -492,7 +494,7 @@ topN_new.OMF_explicit <- function(model, X=NULL, X_col=NULL, X_val=NULL,
     return(.topN(class(model)[1L], model,
                  a_vec = a_vec, a_bias = a_bias,
                  n = inputs$n, include = inputs$include, exclude = inputs$exclude,
-                 output_score = inputs$output_score))
+                 output_score = inputs$output_score, nthreads = nthreads))
 }
 
 #' @export
@@ -500,7 +502,7 @@ topN_new.OMF_explicit <- function(model, X=NULL, X_col=NULL, X_val=NULL,
 topN_new.OMF_implicit <- function(model, X=NULL, X_col=NULL, X_val=NULL,
                                   U=NULL, U_col=NULL, U_val=NULL,
                                   n=10L, include=NULL, exclude=NULL,
-                                  output_score=FALSE, ...) {
+                                  output_score=FALSE, nthreads=model$info$nthreads, ...) {
     inputs <- process.inputs.topN(class(model)[1L], model,
                                   n = n,
                                   include = include, exclude = exclude,
@@ -510,5 +512,5 @@ topN_new.OMF_implicit <- function(model, X=NULL, X_col=NULL, X_val=NULL,
     return(.topN(class(model)[1L], model,
                  a_vec = a_vec,
                  n = inputs$n, include = inputs$include, exclude = inputs$exclude,
-                 output_score = inputs$output_score))
+                 output_score = inputs$output_score, nthreads = nthreads))
 }
