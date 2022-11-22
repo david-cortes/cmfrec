@@ -1150,7 +1150,7 @@ void tgemm_sp_dense
     #endif
 
     if (alpha != 1.)
-        #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
+        #pragma omp parallel for schedule(guided) num_threads(nthreads) \
                 shared(m, n, alpha, ldb, ldc, OutputMat, DenseMat, indptr, indices, values) \
                 private(row_ptr)
         for (size_t_for row = 0; row < (size_t)m; row++) {
@@ -1159,7 +1159,7 @@ void tgemm_sp_dense
                 cblas_taxpy(n, alpha*values[col], DenseMat + (size_t)indices[col]*ldb, 1, row_ptr, 1);
         }
     else
-        #pragma omp parallel for schedule(dynamic) num_threads(nthreads) \
+        #pragma omp parallel for schedule(guided) num_threads(nthreads) \
                 shared(m, n, ldb, ldc, OutputMat, DenseMat, indptr, indices, values) \
                 private(row_ptr)
         for (size_t_for row = 0; row < (size_t)m; row++) {
