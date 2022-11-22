@@ -1926,7 +1926,7 @@ void collective_closed_form_block_implicit
             }
             if (w_user != 1.)
                 cblas_tscal(k_user+k, w_user, a_vec, 1);
-            if (bias_CtU != NULL)
+            if (NA_as_zero_U && bias_CtU != NULL)
                 cblas_taxpy(k_user+k, 1., bias_CtU, 1, a_vec, 1);
         }
         tpotrs_(&lo, &k_totA, &one,
@@ -2035,7 +2035,7 @@ void collective_closed_form_block_implicit
                            w_user, C, (size_t)k_totC,
                            u_vec_ixB, u_vec_sp, nnz_u_vec,
                            a_vec);
-            if (bias_CtU != NULL)
+            if (NA_as_zero_U && bias_CtU != NULL)
                 cblas_taxpy(k_user+k, 1., bias_CtU, 1, a_vec, 1);
         }
     }
@@ -5368,15 +5368,16 @@ void optimizeA_collective
         if (bias_BtX != NULL && Xfull == NULL && NA_as_zero_X)
         {
             for (size_t row = 0; row < (size_t)m; row++)
-                for (size_t ix = 0; ix < (size_t)(k+k_main); ix++)
-                    A[(size_t)k_user + row*(size_t)lda + ix] += bias_BtX[ix];
+                cblas_taxpy(k+k_main, 1.,
+                            bias_BtX, 1,
+                            A + row*(size_t)lda + (size_t)k_user, 1);
         }
 
         if (U == NULL && U_csr_p != NULL && NA_as_zero_U && U_colmeans != NULL)
         {
             for (size_t row = 0; row < (size_t)m; row++)
-                for (size_t ix = 0; ix < (size_t)(k_user+k); ix++)
-                    A[row*(size_t)lda + ix] += precomputedCtUbias[ix];
+                cblas_taxpy(k_user+k, 1.,
+                            precomputedCtUbias, 1, A + row*(size_t)lda, 1);
         }
 
         if (!nonneg && !l1_lam && !l1_lam_bias)
@@ -5824,15 +5825,17 @@ void optimizeA_collective
         if (bias_BtX != NULL && NA_as_zero_X && Xfull == NULL && !add_X)
         {
             for (size_t row = 0; row < (size_t)m_x; row++)
-                for (size_t ix = 0; ix < (size_t)(k+k_main); ix++)
-                    A[(size_t)k_user + row*(size_t)lda + ix] += bias_BtX[ix];
+                cblas_taxpy(k+k_main, 1.,
+                            bias_BtX, 1,
+                            A + row*(size_t)lda + (size_t)k_user, 1);
         }
 
         if (U == NULL && U_csr_p != NULL && NA_as_zero_U &&
             U_colmeans != NULL && !add_U)
         {
             for (size_t row = 0; row < (size_t)m; row++)
-                cblas_taxpy(k_user+k, 1., precomputedCtUbias, 1, A +row*lda, 1);
+                cblas_taxpy(k_user+k, 1.,
+                            precomputedCtUbias, 1, A +row*(size_t)lda, 1);
         }
 
         skip_chol_simplifications:
@@ -6180,10 +6183,10 @@ void optimizeA_collective_implicit
 
             if (NA_as_zero_U && U_colmeans != NULL)
             {
-                for (int row = 0; row < m; row++)
+                for (size_t row = 0; row < (size_t)m; row++)
                     cblas_taxpy(k_totC, 1.,
                                 precomputedCtUbias, 1,
-                                A + row*k_totA, 1);
+                                A + row*(size_t)k_totA, 1);
             }
         }
     }
@@ -10122,7 +10125,7 @@ int_t fit_collective_implicit_als
             buffer_CtUbias == NULL && precomputedCtUbias != NULL)
         {
             cblas_tgemv(CblasRowMajor, CblasTrans, p, k_user+k,
-                        w_user, C, k_user+k,
+                        -w_user, C, k_user+k,
                         U_colmeans, 1,
                         0., precomputedCtUbias, 1);
             filled_CtUbias = true;
@@ -10675,7 +10678,7 @@ int_t factors_collective_explicit_single
         if (buffer_CtUbias == NULL) goto throw_oom;
         CtUbias = buffer_CtUbias;
         cblas_tgemv(CblasRowMajor, CblasTrans, p, k_user+k,
-                    w_user, C, k_user+k,
+                    -w_user, C, k_user+k,
                     U_colmeans, 1,
                     0., CtUbias, 1);
     }
@@ -10801,7 +10804,7 @@ int_t factors_collective_implicit_single
         if (buffer_CtUbias == NULL) goto throw_oom;
         CtUbias = buffer_CtUbias;
         cblas_tgemv(CblasRowMajor, CblasTrans, p, k_user+k,
-                    w_user, C, k_user+k,
+                    -w_user, C, k_user+k,
                     U_colmeans, 1,
                     0., CtUbias, 1);
     }
@@ -10994,7 +10997,7 @@ int_t factors_collective_explicit_multiple
         if (buffer_CtUbias == NULL) goto throw_oom;
         CtUbias = buffer_CtUbias;
         cblas_tgemv(CblasRowMajor, CblasTrans, p, k_user+k,
-                    w_user, C, k_user+k,
+                    -w_user, C, k_user+k,
                     U_colmeans, 1,
                     0., CtUbias, 1);
     }
@@ -11266,7 +11269,7 @@ int_t factors_collective_implicit_multiple
         if (buffer_CtUbias == NULL) goto throw_oom;
         CtUbias = buffer_CtUbias;
         cblas_tgemv(CblasRowMajor, CblasTrans, p, k_user+k,
-                    w_user, C, k_user+k,
+                    -w_user, C, k_user+k,
                     U_colmeans, 1,
                     0., CtUbias, 1);
     }
