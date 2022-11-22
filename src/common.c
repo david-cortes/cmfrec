@@ -3166,7 +3166,7 @@ void optimizeA
             set_to_zero(buffer_colsumsB, k);
             sum_by_cols(B, buffer_colsumsB, n, k, ldb, nthreads);
             cblas_tger(CblasRowMajor, m, k,
-                       1., bias_static, 1,
+                       -1., bias_static, 1,
                        buffer_colsumsB, 1,
                        A, lda);
         }
