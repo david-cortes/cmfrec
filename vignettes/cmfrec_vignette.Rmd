@@ -318,6 +318,7 @@ model.w.sideinfo <- CMF(X_train, U=U, I=I, NA_as_zero_item=TRUE,
                         k=25, lambda=0.1, scale_lam=TRUE,
                         niter=30, use_cg=FALSE, include_all_X=FALSE,
                         w_main=0.75, w_user=0.5, w_item=0.5, w_implicit=0.5,
+                        center_U=FALSE, center_I=FALSE,
                         verbose=FALSE)
 pred_side_info <- predict(model.w.sideinfo, X_test)
 print_rmse(X_test, pred_side_info, "model with side info")
@@ -329,12 +330,14 @@ if (!is_check) {
                             k=25, lambda=0.1, scale_lam=TRUE,
                             niter=30, use_cg=FALSE, include_all_X=FALSE,
                             w_main=0.75, w_user=0.5, w_item=0.5, w_implicit=0.5,
+                            center_U=FALSE, center_I=FALSE,
                             verbose=FALSE)
 } else {
     model.w.sideinfo <- CMF(X_train, U=U, I=I, NA_as_zero_item=TRUE,
                             k=5, lambda=0.1, scale_lam=TRUE, scale_lam_sideinfo=TRUE,
                             use_cg=FALSE, include_all_X=FALSE,
                             w_main=0.75, w_user=0.5, w_item=0.5, w_implicit=0.5,
+                            center_U=FALSE, center_I=FALSE,
                             verbose=FALSE, niter=2, nthreads=1)
 }
 pred_side_info <- predict(model.w.sideinfo, X_test)
