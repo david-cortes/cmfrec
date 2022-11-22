@@ -6178,7 +6178,7 @@ void optimizeA_collective_implicit
                 nthreads
             );
 
-            if (NA_as_zero_U && precomputedCtUbias != NULL)
+            if (NA_as_zero_U && U_colmeans != NULL)
             {
                 for (int row = 0; row < m; row++)
                     cblas_taxpy(k_totC, 1.,
@@ -9248,7 +9248,7 @@ int_t fit_collective_explicit_als
             buffer_CtUbias == NULL && precomputedCtUbias != NULL)
         {
             cblas_tgemv(CblasRowMajor, CblasTrans, p, k_user+k,
-                        w_user, C, k_user+k,
+                        -w_user, C, k_user+k,
                         U_colmeans, 1,
                         0., precomputedCtUbias, 1);
             filled_CtUbias = true;
@@ -10470,7 +10470,7 @@ int_t precompute_collective_explicit
     if (C != NULL && CtUbias != NULL && p && U_colmeans != NULL && NA_as_zero_U)
     {
         cblas_tgemv(CblasRowMajor, CblasTrans, p, k_user+k,
-                    w_user, C, k_user+k,
+                    -w_user, C, k_user+k,
                     U_colmeans, 1,
                     0., CtUbias, 1);
     }
@@ -10570,7 +10570,7 @@ int_t precompute_collective_implicit
     if (C != NULL && CtUbias != NULL && p && U_colmeans != NULL && NA_as_zero_U)
     {
         cblas_tgemv(CblasRowMajor, CblasTrans, p, k_user+k,
-                    w_user, C, k_user+k,
+                    -w_user, C, k_user+k,
                     U_colmeans, 1,
                     0., CtUbias, 1);
     }
