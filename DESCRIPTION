@@ -42,5 +42,5 @@ Description: Collective matrix factorization (a.k.a. multi-view or multi-way fac
 License: MIT + file LICENSE
 Suggests: Matrix, MatrixExtra, RhpcBLASctl, recosystem (>= 0.5), recommenderlab (>= 0.2-7), MASS, knitr, rmarkdown, kableExtra
 VignetteBuilder: knitr
-RoxygenNote: 7.2.1
+RoxygenNote: 7.2.2
 NeedsCompilation: yes

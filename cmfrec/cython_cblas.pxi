@@ -17,7 +17,7 @@ ctypedef double (*dnrm2_)(const int*, const double*, const int*) nogil
 ctypedef void (*dgemm_)(const char*, const char*, const int*, const int*, const int*, const double*, const double*, const int*, const double*, const int*, const double*, double*, const int*) nogil
 ctypedef void (*dgemv_)(const char*, const int*, const int*, const double*, const double*, const int*, const double*, const int*, const double*, double*, const int*) nogil
 ctypedef void (*dsymv_)(const char*, const int*, const double*, const double*, const int*, const double*, const int*, const double*, double*, const int*) nogil
-ctypedef double (*dger_)(const int*, const int*, const double*, const double*, const int*, const double*, const int*, double*, const int*) nogil
+ctypedef void (*dger_)(const int*, const int*, const double*, const double*, const int*, const double*, const int*, double*, const int*) nogil
 
 ctypedef void (*dposv__)(const char*, const int*, const int*, double*, const int*, double*, const int*, int*) nogil
 ctypedef void (*dlacpy__)(const char*, const int*, const int*, const double*, const int*, double*, const int*) nogil
