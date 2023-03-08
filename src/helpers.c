@@ -964,7 +964,7 @@ int_t random_parallel(ArraysToFill arrays, int_t seed, bool normal, int nthreads
     const size_t BUCKET_SIZE = (size_t)1 << 18; /* <- a bit over 250k */
     rng_state_t initial_state[4];
     seed_state(seed, initial_state);
-    if (arrays.sizeA + arrays.sizeB < BUCKET_SIZE)
+    if (arrays.sizeA + arrays.sizeB <= BUCKET_SIZE)
     {
         rnorm_singlethread(arrays, initial_state);
         return 0;
@@ -972,7 +972,9 @@ int_t random_parallel(ArraysToFill arrays, int_t seed, bool normal, int nthreads
 
     const size_t buckA  = arrays.sizeA  / BUCKET_SIZE + (arrays.sizeA %  BUCKET_SIZE) != 0;
     const size_t buckB  = arrays.sizeB  / BUCKET_SIZE + (arrays.sizeB %  BUCKET_SIZE) != 0;
-    const size_t tot_buckets = buckA + buckB;
+    const size_t tot_buckets = max2(1, buckA + buckB);
+    /* Note: the condition above is not needed, but GCC12 complains otherwise
+       and by extension CRAN complains too */
 
     real_t **ptr_bucket = (real_t**)malloc(tot_buckets*sizeof(real_t*));
     size_t *sz_bucket   =  (size_t*)malloc(tot_buckets*sizeof(size_t));
