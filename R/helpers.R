@@ -100,7 +100,7 @@ cast.df.to.matrix <- function(df) {
     return(df)
 }
 
-reindex.data <- function(X, U=NULL, I=NULL, U_bin=NULL, I_bin=NULL) {
+reindex.data <- function(X, U=NULL, I=NULL, U_bin=NULL, I_bin=NULL, disallow_padding_U_I=FALSE) {
     out <- list(
         user_mapping = character(),
         item_mapping = character(),
@@ -136,7 +136,11 @@ reindex.data <- function(X, U=NULL, I=NULL, U_bin=NULL, I_bin=NULL) {
     all_U         <- unique(union(users_X, users_U))
     if ((!is.null(U) || !is.null(U_bin)) && !NROW(in_X_and_U))
         stop("'X' and 'U'/'U_bin' have no IDs in common.")
-    
+    if (disallow_padding_U_I) {
+        if (NROW(in_X_not_in_U)) {
+            stop("'U' must have all rows from 'X' when passing 'start_with_ALS=TRUE'.")
+        }
+    }
     
     ### Entries in I
     items_X <- unique(X[[2L]])
@@ -152,6 +156,11 @@ reindex.data <- function(X, U=NULL, I=NULL, U_bin=NULL, I_bin=NULL) {
     all_I         <- unique(union(items_X, items_I))
     if ((!is.null(I) || !is.null(I_bin)) && !NROW(in_X_and_I))
         stop("'X' and 'I'/'I_bin' have no IDs in common.")
+    if (disallow_padding_U_I) {
+        if (NROW(in_X_not_in_I)) {
+            stop("'I' must have all columns from 'X' when passing 'start_with_ALS=TRUE'.")
+        }
+    }
     
     
     ### Now map and fill

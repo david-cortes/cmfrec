@@ -1108,7 +1108,7 @@ validate.inputs <- function(model, implicit=FALSE,
     user_mapping <- character()
     item_mapping <- character()
     if (reindex) {
-        temp <- reindex.data(X, U, I, U_bin, I_bin)
+        temp <- reindex.data(X, U, I, U_bin, I_bin, (model %in% c("ContentBased", "OMF_explicit")) && start_with_ALS)
         X <- temp$X
         U <- temp$U
         I <- temp$I
