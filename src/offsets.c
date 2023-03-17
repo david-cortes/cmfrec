@@ -1965,13 +1965,11 @@ int_t fit_offsets_als
         #else
         void *lst_pointers[] = {MatTrans, U_plus_bias, sv,
                                 buffer_real_t, buffer_iwork,
-                                (U_plus_bias != U)? U_plus_bias : NULL,
-                                (I_plus_bias != II)? I_plus_bias : NULL,
                                 GELSD_free_inputs? A : NULL,
                                 GELSD_free_inputs? B : NULL,
                                 GELSD_free_inputs? X : NULL,
                                 GELSD_free_inputs? Xfull : NULL};
-        PointersToFree ptrs_free = {lst_pointers, (size_t)11};
+        PointersToFree ptrs_free = {lst_pointers, (size_t)9};
         Args_to_GELSD args_GELSD = {&m, &p_plus_bias, &k,
                                     U_plus_bias, &m, MatTrans, &ldb,
                                     sv, &threshold_svd, &rank,
@@ -2066,15 +2064,13 @@ int_t fit_offsets_als
                 sv, &threshold_svd, &rank,
                 &temp, &minus_one, &sz_iwork, &ignore);
         #else
-        void *lst_pointers[] = {MatTrans, U_plus_bias, sv,
+        void *lst_pointers[] = {MatTrans, I_plus_bias, sv,
                                 buffer_real_t, buffer_iwork,
-                                (U_plus_bias != U)? U_plus_bias : NULL,
-                                (I_plus_bias != II)? I_plus_bias : NULL,
                                 GELSD_free_inputs? A : NULL,
                                 GELSD_free_inputs? B : NULL,
                                 GELSD_free_inputs? X : NULL,
                                 GELSD_free_inputs? Xfull : NULL};
-        PointersToFree ptrs_free = {lst_pointers, (size_t)11};
+        PointersToFree ptrs_free = {lst_pointers, (size_t)9};
         Args_to_GELSD args_GELSD = {&n, &q_plus_bias, &k,
                                     I_plus_bias, &n, MatTrans, &ldb,
                                     sv, &threshold_svd, &rank,
