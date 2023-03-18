@@ -134,7 +134,7 @@ pip install --no-use-pep517 cmfrec
 ```
 brew install libomp
 ```
-And then reinstall this package: `pip install --force-reinstall cmfrec`.
+And then reinstall this package: `pip install --upgrade --no-deps --force-reinstall cmfrec`.
 
 ** *
 **IMPORTANT:** the setup script will try to add compilation flag `-march=native`. This instructs the compiler to tune the package for the CPU in which it is being installed (by e.g. using AVX instructions if available), but the result might not be usable in other computers. If building a binary wheel of this package or putting it into a docker image which will be used in different machines, this can be overriden either by (a) defining an environment variable `DONT_SET_MARCH=1`, or by (b) manually supplying compilation `CFLAGS` as an environment variable with something related to architecture. For maximum compatibility (but slowest speed), it's possible to do something like this:
