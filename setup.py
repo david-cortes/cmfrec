@@ -221,7 +221,7 @@ class build_ext_subclass( build_ext_with_blas ):
             for e in self.extensions:
                 e.extra_compile_args += ["-Xclang", "-fopenmp"]
                 e.extra_link_args += [f"-L{brew_omp_prefix}/lib", "-lomp"]
-                e.include_dirs += [f"-I{brew_omp_prefix}/include"]
+                e.include_dirs += [f"{brew_omp_prefix}/include"]
         elif self.test_supports_compile_arg(arg_omp2, with_omp=True):
             for e in self.extensions:
                 e.extra_compile_args += ["-fopenmp=libomp"]
