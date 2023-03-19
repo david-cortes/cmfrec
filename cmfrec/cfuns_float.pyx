@@ -1,3 +1,4 @@
+#cython: language_level=3
 import ctypes
 
 ctypedef float real_t
