@@ -385,5 +385,5 @@ if not found_omp:
     else:
         omp_msg += " modules for your compiler. "
     
-    omp_msg += "Then reinstall this package from scratch: 'pip install --force-reinstall cmfrec'.\n"
+    omp_msg += "Then reinstall this package from scratch: 'pip install --upgrade --no-deps --force-reinstall cmfrec'.\n"
     warnings.warn(omp_msg)
