@@ -4412,6 +4412,14 @@ class CMF_implicit(_CMF):
 
         :math:`\mathbf{I} \sim \mathbf{B} \mathbf{D}^T`
 
+    Compared to the ``CMF`` class, here the interactions matrix 'X' treats missing
+    entries as zeros and non-missing entries as ones, while the values supplied for
+    interactions are applied as weights over this binarized matrix 'X' (see references
+    for more details). Roughly speaking, it is a more efficient version of `CMF` with
+    hard-coded arguments ``NA_as_zero=True``, ``center=False``, ``user_bias=False``,
+    ``item_bias=False``, ``scale_lam=False``, plus a different initialization of factor
+    matrices, and 'X' converted to a weighted binary matrix as explained earlier.
+
     Note
     ----
     The default hyperparameters in this software are very different from others.

@@ -780,7 +780,8 @@ case, based on reference [3]. While in `CMF` the values of `X` are taken at face
 and the objective is to minimize squared error over the non-missing entries, in the
 implicit-feedback variants the matrix `X` is assumed to be binary (all entries are zero
 or one, with no unknown values), with the positive entries (those which are not
-missing in the data) having a weight determined by `X`.
+missing in the data) having a weight determined by `X`, and without including any
+user/item biases or centering for the 'X' matrix.
 
 `CMF` is intended for explicit feedback data (e.g. movie ratings, which contain both
 likes and dislikes), whereas `CMF_implicit` is intended for implicit feedback data
