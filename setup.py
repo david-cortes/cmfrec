@@ -39,6 +39,11 @@ silent_tests = not (("verbose" in sys.argv)
                     or ("-verbose" in sys.argv)
                     or ("--verbose" in sys.argv))
 
+## Workaround for python<=3.9 on windows
+try:
+    EXIT_SUCCESS = os.EX_OK
+except AttributeError:
+    EXIT_SUCCESS = 0
 
 class build_ext_subclass( build_ext_with_blas ):
     def build_extensions(self):
@@ -198,7 +203,7 @@ class build_ext_subclass( build_ext_with_blas ):
         has_brew_omp = False
         if is_apple:
             res_brew_pref = subprocess.run(["brew", "--prefix", "libomp"], capture_output=silent_tests)
-            if res_brew_pref.returncode == os.EX_OK:
+            if res_brew_pref.returncode == EXIT_SUCCESS:
                 has_brew_omp = True
                 brew_omp_prefix = res_brew_pref.stdout.decode().strip()
                 args_apple_omp3 = ["-Xclang", "-fopenmp", f"-L{brew_omp_prefix}/lib", "-lomp", f"-I{brew_omp_prefix}/include"]
@@ -260,7 +265,7 @@ class build_ext_subclass( build_ext_with_blas ):
                     ftest.write(u"#include <omp.h>\nint main(int argc, char**argv) {return 0;}\n")
             try:
                 val = subprocess.run(cmd + comm + [fname], capture_output=silent_tests).returncode
-                is_supported = (val == os.EX_OK)
+                is_supported = (val == EXIT_SUCCESS)
             except Exception:
                 is_supported = False
         except Exception:
@@ -309,7 +314,7 @@ class build_ext_subclass( build_ext_with_blas ):
                 """)
             try:
                 val = subprocess.run(cmd + [fname], capture_output=silent_tests).returncode
-                is_supported = (val == os.EX_OK)
+                is_supported = (val == EXIT_SUCCESS)
             except Exception:
                 is_supported = False
         except Exception:
