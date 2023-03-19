@@ -194,8 +194,9 @@ class build_ext_subclass( build_ext_with_blas ):
     def add_openmp_linkage(self):
         arg_omp1 = "-fopenmp"
         arg_omp2 = "-fopenmp=libomp"
-        arg_omp3 = "-qopenmp"
-        arg_omp4 = "-xopenmp"
+        args_omp2 = ["-fopenmp=libomp", "-lomp"]
+        arg_omp4 = "-qopenmp"
+        arg_omp5 = "-xopenmp"
         is_apple = sys.platform[:3].lower() == "dar"
         args_apple_omp = ["-Xclang", "-fopenmp", "-lomp"]
         args_apple_omp2 = ["-Xclang", "-fopenmp", "-L/usr/local/lib", "-lomp", "-I/usr/local/include"]
@@ -232,12 +233,16 @@ class build_ext_subclass( build_ext_with_blas ):
                 e.extra_link_args += ["-fopenmp"]
         elif self.test_supports_compile_arg(arg_omp3, with_omp=True):
             for e in self.extensions:
-                e.extra_compile_args.append(arg_omp3)
-                e.extra_link_args.append(arg_omp3)
+                e.extra_compile_args += ["-fopenmp=libomp"]
+                e.extra_link_args += ["-fopenmp", "-lomp"]
         elif self.test_supports_compile_arg(arg_omp4, with_omp=True):
             for e in self.extensions:
                 e.extra_compile_args.append(arg_omp4)
                 e.extra_link_args.append(arg_omp4)
+        elif self.test_supports_compile_arg(arg_omp5, with_omp=True):
+            for e in self.extensions:
+                e.extra_compile_args.append(arg_omp5)
+                e.extra_link_args.append(arg_omp5)
         else:
             set_omp_false()
 
