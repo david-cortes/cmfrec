@@ -202,7 +202,7 @@ class build_ext_subclass( build_ext_with_blas ):
         args_apple_omp2 = ["-Xclang", "-fopenmp", "-L/usr/local/lib", "-lomp", "-I/usr/local/include"]
         has_brew_omp = False
         if is_apple:
-            res_brew_pref = subprocess.run(["brew", "--prefix", "libomp"], capture_output=silent_tests)
+            res_brew_pref = subprocess.run(["brew", "--prefix", "libomp"], capture_output=True)
             if res_brew_pref.returncode == EXIT_SUCCESS:
                 has_brew_omp = True
                 brew_omp_prefix = res_brew_pref.stdout.decode().strip()
@@ -345,7 +345,7 @@ if (force_openblas):
 setup(
     name  = "cmfrec",
     packages = ["cmfrec"],
-    version = '3.5.1-2',
+    version = '3.5.1-3',
     description = 'Collective matrix factorization',
     author = 'David Cortes',
     url = 'https://github.com/david-cortes/cmfrec',
@@ -368,6 +368,7 @@ setup(
             include_dirs=[np.get_include(), "src"],
             define_macros = [("_FOR_PYTHON", None),
                              ("USE_DOUBLE", None),
+                             ("NDEBUG", None),
                              ("USE_FINDBLAS" if use_findblas else "NO_FINDBLAS", None),
                              ("USE_BLAS_SYR" if use_findblas else "AVOID_BLAS_SYR", None)]
             ),
@@ -379,6 +380,7 @@ setup(
             include_dirs=[np.get_include(), "src"],
             define_macros = [("_FOR_PYTHON", None),
                              ("USE_FLOAT", None),
+                             ("NDEBUG", None),
                              ("USE_FINDBLAS" if use_findblas else "NO_FINDBLAS", None),
                              ("USE_BLAS_SYR" if use_findblas else "AVOID_BLAS_SYR", None)]
             ),
