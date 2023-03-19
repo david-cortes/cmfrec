@@ -194,7 +194,7 @@ class build_ext_subclass( build_ext_with_blas ):
     def add_openmp_linkage(self):
         arg_omp1 = "-fopenmp"
         arg_omp2 = "-fopenmp=libomp"
-        args_omp2 = ["-fopenmp=libomp", "-lomp"]
+        args_omp3 = ["-fopenmp=libomp", "-lomp"]
         arg_omp4 = "-qopenmp"
         arg_omp5 = "-xopenmp"
         is_apple = sys.platform[:3].lower() == "dar"
@@ -231,7 +231,7 @@ class build_ext_subclass( build_ext_with_blas ):
             for e in self.extensions:
                 e.extra_compile_args += ["-fopenmp=libomp"]
                 e.extra_link_args += ["-fopenmp"]
-        elif self.test_supports_compile_arg(arg_omp3, with_omp=True):
+        elif self.test_supports_compile_arg(args_omp3, with_omp=True):
             for e in self.extensions:
                 e.extra_compile_args += ["-fopenmp=libomp"]
                 e.extra_link_args += ["-fopenmp", "-lomp"]
@@ -345,10 +345,9 @@ if (force_openblas):
 setup(
     name  = "cmfrec",
     packages = ["cmfrec"],
-    version = '3.5.1-1',
+    version = '3.5.1-2',
     description = 'Collective matrix factorization',
     author = 'David Cortes',
-    author_email = 'david.cortes.rivera@gmail.com',
     url = 'https://github.com/david-cortes/cmfrec',
     keywords = ['collaborative filtering', 'collective matrix factorization',
                 'relational learning'],
