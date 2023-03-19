@@ -51,7 +51,7 @@ class build_ext_subclass( build_ext_with_blas ):
         
         if self.compiler.compiler_type == 'msvc':
             for e in self.extensions:
-                e.extra_compile_args += ['/O2', '/openmp', '/fp:contract', '/fp:except-']
+                e.extra_compile_args += ['/O2', '/openmp', '/GL', '/fp:contract', '/fp:except-']
         else:
             if not self.check_for_variable_dont_set_march() and not self.check_cflags_contain_arch():
                 self.add_march_native()
@@ -62,8 +62,7 @@ class build_ext_subclass( build_ext_with_blas ):
             self.add_clang_fp_reassociate()
             self.add_O3()
             self.add_std_c99()
-            if not is_windows:
-                self.add_link_time_optimization()
+            self.add_link_time_optimization()
 
             ### Now add arguments as appropriate for good performance
             for e in self.extensions:
