@@ -512,6 +512,10 @@ NULL
 #' This might help to speed up the procedure by starting closer to an
 #' optimum. This option is not available when the side information is passed
 #' as sparse matrices.
+#' 
+#' Note that this option will not work (will throw an error) if there are
+#' users or items without side information, or if the input data is otherwise
+#' problematic (e.g. users/items which are duplicates of each other).
 #' @param apply_log_transf Whether to apply a logarithm transformation on the values of `X`
 #' (i.e. `X := log(X)`)
 #' @param NA_as_zero Whether to take missing entries in the `X` matrix as zeros (only

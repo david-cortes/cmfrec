@@ -4395,7 +4395,7 @@ class CMF(_CMF):
         if precompute:
             new_model.force_precompute_for_predictions()
         return new_model
-        
+
 
 class CMF_implicit(_CMF):
     """
@@ -7844,6 +7844,10 @@ class ContentBased(_OMF_Base):
         This might help to speed up the procedure by starting closer to an
         optimum. This option is not available when the side information is passed
         as sparse matrices.
+
+        Note that this option will not work (will throw an error) if there are
+        users or items without side information, or if the input data is otherwise
+        problematic (e.g. users/items which are duplicates of each other).
     nthreads : int
         Number of parallel threads to use. If passing a negative number, will
         use the same formula as joblib (maximum threads + 1 - nthreads).

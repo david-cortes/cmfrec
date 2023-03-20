@@ -701,7 +701,11 @@ Whether to add intercepts/biases to the user/item attribute matrices.}
 Whether to determine the initial coefficients through an ALS procedure.
 This might help to speed up the procedure by starting closer to an
 optimum. This option is not available when the side information is passed
-as sparse matrices.}
+as sparse matrices.
+
+Note that this option will not work (will throw an error) if there are
+users or items without side information, or if the input data is otherwise
+problematic (e.g. users/items which are duplicates of each other).}
 
 \item{k_sec}{(Only for `OMF_explicit`)
 Number of factors in the factorizing matrices which are determined

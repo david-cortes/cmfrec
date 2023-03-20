@@ -1616,6 +1616,11 @@ CMFREC_EXPORTABLE int_t predict_X_old_most_popular
                            might reduce fitting times due to starting closer
                            to a local optimum. Sparse inputs for 'U' and 'I'
                            are not supported with this option.
+                           Note that this option will not work (will throw an
+                           error) if there are users or items without side
+                           information, or if the input data is otherwise
+                           problematic (e.g. users/items which are duplicates of
+                           each other).
                            Recommended value: true
 
     --- For prediction functionality ---
