@@ -118,6 +118,8 @@ The new version is faster, multi-threaded, and has some new functionality, but i
 
 * Python:
 
+**Note:** requires a C compiler configured for Python. See [this guide](https://github.com/david-cortes/installing-optimized-libraries) for instructions.
+
 ```
 pip install cmfrec
 ```
@@ -153,6 +155,8 @@ pip install cmfrec
 
 * R:
 
+**Note:** This package greatly benefits from extra optimizations that aren't enabled by default for R packages. See [this guide](https://github.com/david-cortes/installing-optimized-libraries) for instructions on how to enable them.
+
 ```r
 install.packages("cmfrec")
 ```
@@ -187,7 +191,7 @@ Be aware that the snippet above includes option `-DUSE_MARCH_NATIVE=1`, which wi
 
 ## Performance tips
 
-This package relies heavily on BLAS and LAPACK functions for calculations. It's recommended to use with MKL, OpenBLAS, or BLIS. Additionally, if using it from R, the package will benefit from enabling optimizations which are not CRAN-compliant (see below).
+This package relies heavily on BLAS and LAPACK functions for calculations. It's recommended to use with MKL, OpenBLAS, or BLIS. Additionally, if using it from R, the package will benefit from enabling optimizations which are not CRAN-compliant (see [this guide](https://github.com/david-cortes/installing-optimized-libraries) for detailed instructions).
 
 Different backends for BLAS can make a large difference in speed - for example, on an AMD Ryzen 2700, MKL2021 makes models take 4x longer to fit than MKL2020, and using OpenBLAS-pthreads takes around 1.3x longer to fit models compared to OpenBLAS-openmp.
 
