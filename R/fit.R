@@ -955,8 +955,12 @@ validate.inputs <- function(model, implicit=FALSE,
     if (nthreads > 1L && !.Call(R_has_openmp)) {
         msg <- paste0("Attempting to use more than 1 thread, but ",
                       "package was compiled without OpenMP support.")
-        if (tolower(Sys.info()[["sysname"]]) == "darwin")
-            msg <- paste0(msg, " See https://mac.r-project.org/openmp/")
+        if (tolower(Sys.info()[["sysname"]]) == "darwin") {
+            msg <- paste0(
+                msg,
+                " See https://github.com/david-cortes/installing-optimized-libraries#4-macos-install-and-enable-openmp"
+            )
+        }
         warning(msg)
     }
     
