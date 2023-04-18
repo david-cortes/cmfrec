@@ -7,7 +7,7 @@ except ImportError:
 import numpy as np
 from Cython.Distutils import build_ext
 import sys, os, subprocess, warnings, re
-import platform
+
 
 found_omp = True
 def set_omp_false():
@@ -44,8 +44,6 @@ try:
     EXIT_SUCCESS = os.EX_OK
 except AttributeError:
     EXIT_SUCCESS = 0
-
-is_amd64 = platform.machine() in ("i386", "AMD64", "x86_64")
 
 class build_ext_subclass( build_ext_with_blas ):
     def build_extensions(self):
@@ -350,7 +348,7 @@ if (force_openblas):
 setup(
     name  = "cmfrec",
     packages = ["cmfrec"],
-    version = '3.5.2',
+    version = '3.5.1-4',
     description = 'Collective matrix factorization',
     author = 'David Cortes',
     url = 'https://github.com/david-cortes/cmfrec',
@@ -375,7 +373,7 @@ setup(
                              ("USE_DOUBLE", None),
                              ("NDEBUG", None),
                              ("USE_FINDBLAS" if use_findblas else "NO_FINDBLAS", None),
-                             ("USE_BLAS_SYR" if (use_findblas or not is_amd64) else "AVOID_BLAS_SYR", None)]
+                             ("USE_BLAS_SYR" if use_findblas else "AVOID_BLAS_SYR", None)]
             ),
         Extension("cmfrec.wrapper_float",
             sources=["cmfrec/cfuns_float.pyx" if use_findblas else "cmfrec/cfuns_float_plusblas.pyx",
@@ -387,7 +385,7 @@ setup(
                              ("USE_FLOAT", None),
                              ("NDEBUG", None),
                              ("USE_FINDBLAS" if use_findblas else "NO_FINDBLAS", None),
-                             ("USE_BLAS_SYR" if (use_findblas or not is_amd64) else "AVOID_BLAS_SYR", None)]
+                             ("USE_BLAS_SYR" if use_findblas else "AVOID_BLAS_SYR", None)]
             ),
         ]
 )

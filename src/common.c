@@ -623,7 +623,7 @@ real_t fun_grad_cannonical_form
 
 
 *******************************************************************************/
-#if defined(AVOID_BLAS_SYR) && !(defined(FOR_R) && !defined(__SSE__))
+#ifdef AVOID_BLAS_SYR
 #undef cblas_tsyr
 #define cblas_tsyr(order, Uplo, N, alpha, X, incX, A, lda) \
         custom_syr(N, alpha, X, A, lda)
