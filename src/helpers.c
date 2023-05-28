@@ -1237,7 +1237,7 @@ void copy_mat
 )
 {
     char uplo = '?';
-    if (m == 0 && n == 0) return;
+    if (m == 0 || n == 0) return;
 
     if (ldb == n && lda == n)
         memcpy(B, A, (size_t)m*(size_t)n*sizeof(real_t));
