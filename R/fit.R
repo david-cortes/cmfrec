@@ -492,7 +492,7 @@ NULL
 #' taking instead a fixed number of steps (given by `max_cg_steps`) at each iteration
 #' regardless of whether it has reached the optimum already.
 #' 
-#' Ignored when passing `use_cg=FALSE` or `method="als"`.
+#' Ignored when passing `use_cg=FALSE` or `method="lbfgs"`.
 #' @param alpha Weighting parameter for the non-zero entries in the implicit-feedback
 #' model. See [3] for details. Note that, while the author's suggestion for
 #' this value is 40, other software such as the Python package `implicit` use a value of 1,
@@ -769,8 +769,8 @@ NULL
 #' regularization to the \eqn{\mathbf{A}, \mathbf{B}}{A, B} matrices instead.
 #' 
 #' For reproducibility, the initializations of the model matrices (always initialized
-#' as `~ Normal(0, 1)`) can be controlled
-#' through `set.seed`, but if using parallelizations, there are potential sources
+#' as `~ Normal(0, 1)` for `CMF` and as `~ Uniform(0,1)` for `CMF_implicit`) can be controlled
+#' through the seed parameter, but if using parallelizations, there are potential sources
 #' of irreproducibility of random seeds due to parallelized aggregations and/or
 #' BLAS function calls, which is especially problematic for the L-BFGS method
 #' with `parallelize='single'`.

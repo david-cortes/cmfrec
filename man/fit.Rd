@@ -558,7 +558,7 @@ Note that, when using preconditioning, the procedure will not check for converge
 taking instead a fixed number of steps (given by `max_cg_steps`) at each iteration
 regardless of whether it has reached the optimum already.
 
-Ignored when passing `use_cg=FALSE` or `method="als"`.}
+Ignored when passing `use_cg=FALSE` or `method="lbfgs"`.}
 
 \item{finalize_chol}{When passing `use_cg=TRUE` and using the ALS method, whether to perform the last iteration with
 the Cholesky solver. This will make it slower, but will avoid the issue
@@ -954,8 +954,8 @@ for new data will offer an option `exact` for determining whether to apply the
 regularization to the \eqn{\mathbf{A}, \mathbf{B}}{A, B} matrices instead.
 
 For reproducibility, the initializations of the model matrices (always initialized
-as `~ Normal(0, 1)`) can be controlled
-through `set.seed`, but if using parallelizations, there are potential sources
+as `~ Normal(0, 1)` for `CMF` and as `~ Uniform(0,1)` for `CMF_implicit`) can be controlled
+through the seed parameter, but if using parallelizations, there are potential sources
 of irreproducibility of random seeds due to parallelized aggregations and/or
 BLAS function calls, which is especially problematic for the L-BFGS method
 with `parallelize='single'`.
