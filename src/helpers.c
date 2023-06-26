@@ -1263,8 +1263,8 @@ void sum_mat
 
 void transpose_mat2(real_t *restrict A, size_t m, size_t n, real_t *restrict outp)
 {
-    for (size_t row = 0; row < m; row++)
-        for (size_t col = 0; col < n; col++)
+    for (size_t col = 0; col < n; col++)
+        for (size_t row = 0; row < m; row++)
             outp[row + col*m] = A[col + row*n];
 }
 
@@ -1275,8 +1275,8 @@ void transpose_mat3
     real_t *restrict outp, size_t ldb
 )
 {
-    for (size_t row = 0; row < m; row++)
-        for (size_t col = 0; col < n; col++)
+    for (size_t col = 0; col < n; col++)
+        for (size_t row = 0; row < m; row++)
             outp[row + col*ldb] = A[col + row*lda];
 }
 
