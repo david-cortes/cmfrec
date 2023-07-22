@@ -51,16 +51,19 @@ Naming conventions
 This package uses the following general naming conventions:
 
 About data:
+
  - 'X' -> data about interactions between users/rows and items/columns (e.g. ratings given by users to items).
  - 'U' -> data about user/row attributes (e.g. user's age).
  - 'I' -> data about item/column attributes (e.g. a movie's genre).
 
 About function naming:
+
  - 'warm' -> predictions based on new, unseen 'X' data, and potentially including new 'U' data along.
  - 'cold' -> predictions based on new user attributes data 'U', without 'X'.
  - 'new' -> predictions about new items based on attributes data 'I'.
 
 About function descriptions:
+
  - 'existing' -> the user/item was present in the training data that was passed to 'fit'.
  - 'new' -> the user/items was not present in the training data that was passed to 'fit'.
 
@@ -101,16 +104,9 @@ assumptions like values being comparable between different columns would not hol
 Be aware that classes like ``CMF`` come with some defaults that might not be reasonable in other applications, but which
 can be changed by passing non-default arguments - for example:
 
-- Global centering - the "explicit-feedback" models here will by default calculate a global mean for all entries in 'X' and
-center the matrix by substracting this value from all entries. This is a reasonable thing to do when dealing with movie ratings
-as all ratings follow the same scale, but if columns of the 'X' matrix represent different things that might have different ranges
-or different distributions, global mean centering is probably not going to be desirable or useful.
-- User/row biases: models might also have one bias/intercept parameter per row, which in the approximation, would get added
-to every column for that user/row. This is again a reasonable thing to do for movie ratings, but if the columns of 'X' contain
-different types of information, it might not be a sensible thing to add.
-- Regularization for item/column biases: since the models perform global mean centering beforehand, the item/column-specific
-bias/intercept parameters will get a regularization penalty ("shrinkage") applied to them, which might not be desirable if
-global mean centering is removed.
+- Global centering - the "explicit-feedback" models here will by default calculate a global mean for all entries in 'X' and center the matrix by substracting this value from all entries. This is a reasonable thing to do when dealing with movie ratings as all ratings follow the same scale, but if columns of the 'X' matrix represent different things that might have different ranges or different distributions, global mean centering is probably not going to be desirable or useful.
+- User/row biases: models might also have one bias/intercept parameter per row, which in the approximation, would get added to every column for that user/row. This is again a reasonable thing to do for movie ratings, but if the columns of 'X' contain different types of information, it might not be a sensible thing to add.
+- Regularization for item/column biases: since the models perform global mean centering beforehand, the item/column-specific bias/intercept parameters will get a regularization penalty ("shrinkage") applied to them, which might not be desirable if global mean centering is removed.
 
 .. toctree::
    :maxdepth: 3
