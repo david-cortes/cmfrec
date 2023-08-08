@@ -40,7 +40,7 @@ cdef extern from "cmfrec.h":
         bint verbose, int_t print_every, bint handle_interrupt,
         int_t *niter, int_t *nfev,
         real_t *B_plus_bias
-    ) nogil
+    ) noexcept nogil
 
     int_t fit_offsets_explicit_lbfgs_internal(
         real_t *values, bint reset_values,
@@ -64,7 +64,7 @@ cdef extern from "cmfrec.h":
         int_t *niter, int_t *nfev,
         real_t *Am, real_t *Bm,
         real_t *B_plus_bias
-    ) nogil
+    ) noexcept nogil
 
     int_t fit_collective_explicit_als(
         real_t *biasA, real_t *biasB,
@@ -106,7 +106,7 @@ cdef extern from "cmfrec.h":
         real_t *precomputedTransCtCinvCt,
         real_t *precomputedCtCw,
         real_t *precomputedCtUbias
-    ) nogil
+    ) noexcept nogil
 
     int_t fit_collective_implicit_als(
         real_t *A, real_t *B,
@@ -135,7 +135,7 @@ cdef extern from "cmfrec.h":
         real_t *precomputedBeTBe,
         real_t *precomputedBeTBeChol,
         real_t *precomputedCtUbias
-    ) nogil
+    ) noexcept nogil
 
     int_t fit_offsets_als(
         real_t *biasA, real_t *biasB,
@@ -163,7 +163,7 @@ cdef extern from "cmfrec.h":
         real_t *Bm_plus_bias,
         real_t *precomputedBtB,
         real_t *precomputedTransBtBinvBt
-    ) nogil
+    ) noexcept nogil
 
     int_t precompute_collective_explicit(
         real_t *B, int_t n, int_t n_max, bint include_all_X,
@@ -187,7 +187,7 @@ cdef extern from "cmfrec.h":
         real_t *TransCtCinvCt,
         real_t *CtCw,
         real_t *CtUbias
-    ) nogil
+    ) noexcept nogil
 
     int_t precompute_collective_implicit(
         real_t *B, int_t n,
@@ -201,7 +201,7 @@ cdef extern from "cmfrec.h":
         real_t *BeTBe,
         real_t *BeTBeChol,
         real_t *CtUbias
-    ) nogil
+    ) noexcept nogil
 
     int_t offsets_factors_cold(
         real_t *a_vec,
@@ -211,7 +211,7 @@ cdef extern from "cmfrec.h":
         real_t *C_bias,
         int_t k, int_t k_sec, int_t k_main,
         real_t w_user
-    ) nogil
+    ) noexcept nogil
 
     void predict_multiple(
         real_t *A, int_t k_user,
@@ -223,7 +223,7 @@ cdef extern from "cmfrec.h":
         int_t predA[], int_t predB[], size_t nnz,
         real_t *outp,
         int nthreads
-    ) nogil
+    ) noexcept nogil
 
     int_t predict_X_old_collective_explicit(
         int_t row[], int_t col[], real_t *predicted, size_t n_predict,
@@ -233,7 +233,7 @@ cdef extern from "cmfrec.h":
         int_t k, int_t k_user, int_t k_item, int_t k_main,
         int_t m, int_t n_max,
         int nthreads
-    ) nogil
+    ) noexcept nogil
 
     int_t topN(
         real_t *a_vec, int_t k_user,
@@ -245,7 +245,7 @@ cdef extern from "cmfrec.h":
         int_t *exclude_ix, int_t n_exclude,
         int_t *outp_ix, real_t *outp_score,
         int_t n_top, int_t n, int nthreads
-    ) nogil
+    ) noexcept nogil
 
     int_t topN_new_content_based(
         int_t k, int_t n_new,
@@ -259,7 +259,7 @@ cdef extern from "cmfrec.h":
         real_t glob_mean,
         int_t *outp_ix, real_t *outp_score,
         int_t n_top, int nthreads
-    ) nogil
+    ) noexcept nogil
 
     int_t fit_most_popular(
         real_t *biasA, real_t *biasB,
@@ -275,7 +275,7 @@ cdef extern from "cmfrec.h":
         bint nonneg, bint NA_as_zero,
         real_t *w_main_multiplier,
         int nthreads
-    ) nogil
+    ) noexcept nogil
 
     int_t impute_X_collective_explicit(
         int_t m, bint user_bias,
@@ -308,7 +308,7 @@ cdef extern from "cmfrec.h":
         real_t *CtUbias,
         real_t *B_plus_bias,
         int nthreads
-    ) nogil
+    ) noexcept nogil
 
     int_t predict_X_old_content_based(
         real_t *predicted, size_t n_predict,
@@ -323,7 +323,7 @@ cdef extern from "cmfrec.h":
         real_t *Bm, real_t *biasB,
         real_t glob_mean,
         int nthreads
-    ) nogil
+    ) noexcept nogil
 
     int_t predict_X_new_content_based(
         real_t *predicted, size_t n_predict,
@@ -339,14 +339,14 @@ cdef extern from "cmfrec.h":
         real_t *D, real_t *D_bias,
         real_t glob_mean,
         int nthreads
-    ) nogil
+    ) noexcept nogil
 
     int_t factors_content_based_single(
         real_t *a_vec, int_t k,
         real_t *u_vec, int_t p,
         real_t *u_vec_sp, int_t u_vec_ixB[], size_t nnz_u_vec,
         real_t *C, real_t *C_bias
-    ) nogil
+    ) noexcept nogil
 
     int_t fit_content_based_lbfgs(
         real_t *biasA, real_t *biasB,
@@ -370,7 +370,7 @@ cdef extern from "cmfrec.h":
         bint verbose, int_t print_every, bint handle_interrupt,
         int_t *niter, int_t *nfev,
         real_t *Am, real_t *Bm
-    ) nogil
+    ) noexcept nogil
 
     int_t factors_collective_explicit_single(
         real_t *a_vec, real_t *a_bias,
@@ -403,7 +403,7 @@ cdef extern from "cmfrec.h":
         real_t *TransCtCinvCt,
         real_t *CtUbias,
         real_t *B_plus_bias
-    ) nogil
+    ) noexcept nogil
 
     int_t factors_collective_implicit_single(
         real_t *a_vec,
@@ -422,7 +422,7 @@ cdef extern from "cmfrec.h":
         real_t *BtB,
         real_t *BeTBeChol,
         real_t *CtUbias
-    ) nogil
+    ) noexcept nogil
 
     int_t factors_collective_explicit_multiple(
         real_t *A, real_t *biasA, int_t m,
@@ -458,7 +458,7 @@ cdef extern from "cmfrec.h":
         real_t *CtUbias,
         real_t *B_plus_bias,
         int nthreads
-    ) nogil
+    ) noexcept nogil
 
     int_t factors_collective_implicit_multiple(
         real_t *A, int_t m,
@@ -481,7 +481,7 @@ cdef extern from "cmfrec.h":
         real_t *BeTBeChol,
         real_t *CtUbias,
         int nthreads
-    ) nogil
+    ) noexcept nogil
 
     int_t factors_offsets_explicit_single(
         real_t *a_vec, real_t *a_bias, real_t *output_a,
@@ -500,7 +500,7 @@ cdef extern from "cmfrec.h":
         real_t *precomputedTransBtBinvBt,
         real_t *precomputedBtB,
         real_t *Bm_plus_bias
-    ) nogil
+    ) noexcept nogil
 
     int_t factors_offsets_implicit_single(
         real_t *a_vec,
@@ -514,7 +514,7 @@ cdef extern from "cmfrec.h":
         bint apply_log_transf,
         real_t *precomputedBtB,
         real_t *output_a
-    ) nogil
+    ) noexcept nogil
 
     int_t factors_offsets_explicit_multiple(
         real_t *Am, real_t *biasA,
@@ -536,7 +536,7 @@ cdef extern from "cmfrec.h":
         real_t *precomputedBtB,
         real_t *Bm_plus_bias,
         int nthreads
-    ) nogil
+    ) noexcept nogil
 
     int_t factors_offsets_implicit_multiple(
         real_t *Am, int_t m,
@@ -553,16 +553,16 @@ cdef extern from "cmfrec.h":
         bint apply_log_transf,
         real_t *precomputedBtB,
         int nthreads
-    ) nogil
+    ) noexcept nogil
 
-    # void py_set_threads(int) nogil
-    # int py_get_threads() nogil
+    # void py_set_threads(int) noexcept nogil
+    # int py_get_threads() noexcept nogil
 
-cdef public void cy_printf(char *msg) nogil:
+cdef public void cy_printf(char *msg) noexcept nogil:
     with gil:
         python_printmsg(msg)
         stdout.flush()
-cdef public void cy_errprintf(char *msg) nogil:
+cdef public void cy_errprintf(char *msg) noexcept nogil:
     with gil:
         python_printerrmsg(msg)
         stderr.flush()
@@ -3841,14 +3841,14 @@ def call_impute_X_collective_explicit(
 
     return Xfull
 
-cdef public void py_set_threads(int nthreads) nogil:
+cdef public void py_set_threads(int nthreads) noexcept nogil:
     with gil:
         try:
             threadpoolctl.threadpool_limits(limits=nthreads, user_api="blas")
         except Exception:
             pass
 
-cdef public int py_get_threads() nogil:
+cdef public int py_get_threads() noexcept nogil:
     with gil:
         try:
             res = threadpoolctl.threadpool_info()

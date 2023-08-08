@@ -348,7 +348,7 @@ if (force_openblas):
 setup(
     name  = "cmfrec",
     packages = ["cmfrec"],
-    version = '3.5.1-4',
+    version = '3.5.1-5',
     description = 'Collective matrix factorization',
     author = 'David Cortes',
     url = 'https://github.com/david-cortes/cmfrec',
@@ -372,6 +372,7 @@ setup(
             define_macros = [("_FOR_PYTHON", None),
                              ("USE_DOUBLE", None),
                              ("NDEBUG", None),
+                             ("NPY_NO_DEPRECATED_API", "NPY_1_7_API_VERSION"),
                              ("USE_FINDBLAS" if use_findblas else "NO_FINDBLAS", None),
                              ("USE_BLAS_SYR" if use_findblas else "AVOID_BLAS_SYR", None)]
             ),
@@ -384,6 +385,7 @@ setup(
             define_macros = [("_FOR_PYTHON", None),
                              ("USE_FLOAT", None),
                              ("NDEBUG", None),
+                             ("NPY_NO_DEPRECATED_API", "NPY_1_7_API_VERSION"),
                              ("USE_FINDBLAS" if use_findblas else "NO_FINDBLAS", None),
                              ("USE_BLAS_SYR" if use_findblas else "AVOID_BLAS_SYR", None)]
             ),
