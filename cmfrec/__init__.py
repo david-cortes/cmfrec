@@ -1972,10 +1972,10 @@ class _CMF:
 
         if isinstance(self.l1_lambda, np.ndarray):
             l1_lambda = self.l1_lambda[3]
-            lambda_bias = self.l1_lambda[1]
+            l1_lambda_bias = self.l1_lambda[1]
         else:
             l1_lambda = self.l1_lambda
-            lambda_bias = self.l1_lambda
+            l1_lambda_bias = self.l1_lambda
 
         I, I_col, I_val, I_bin = self._process_new_U(U=I, U_col=I_col, U_val=I_val, U_bin=I_bin, is_I=True)
 
@@ -1997,7 +1997,7 @@ class _CMF:
                 self.A_,
                 np.empty((0,0), dtype=self.dtype_),
                 self.D_,
-                self.D_bin_,
+                self.Dbin_,
                 self.Ai_,
                 np.empty((0,0), dtype=self.dtype_),
                 np.empty((0,0), dtype=self.dtype_),
