@@ -100,4 +100,6 @@
 #' optimized BLAS library for R. See this guide for details:
 #' \href{https://github.com/david-cortes/installing-optimized-libraries}{installing optimized libraries}.
 #' @seealso \link{CMF} \link{CMF_implicit}
-NULL
+#' @keywords package
+#' @docType package
+"_PACKAGE"
