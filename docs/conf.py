@@ -26,6 +26,7 @@ project = 'cmfrec'
 copyright = '2023, David Cortes'
 author = 'David Cortes'
 
+source_suffix = '.rst'
 master_doc = 'index'
 
 # -- General configuration ---------------------------------------------------
