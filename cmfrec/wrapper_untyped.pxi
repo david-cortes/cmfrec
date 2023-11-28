@@ -558,11 +558,11 @@ cdef extern from "cmfrec.h":
     # void py_set_threads(int) noexcept nogil
     # int py_get_threads() noexcept nogil
 
-cdef public void cy_printf(char *msg) noexcept nogil:
+cdef public void cy_printf(const char *msg) noexcept nogil:
     with gil:
         python_printmsg(msg)
         stdout.flush()
-cdef public void cy_errprintf(char *msg) noexcept nogil:
+cdef public void cy_errprintf(const char *msg) noexcept nogil:
     with gil:
         python_printerrmsg(msg)
         stderr.flush()

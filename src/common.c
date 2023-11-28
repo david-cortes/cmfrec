@@ -3488,7 +3488,7 @@ int_t calc_mean_and_center
             }
 
             if (!cnt)
-                fprintf(stderr, "Warning: 'X' has all entries missing.\n");
+                print_err_msg("Warning: 'X' has all entries missing.\n");
         }
 
         else
@@ -3513,7 +3513,7 @@ int_t calc_mean_and_center
             }
 
             if (!xsum)
-                fprintf(stderr, "Warning: 'X' has only zeros.\n");
+                print_err_msg("Warning: 'X' has only zeros.\n");
 
             if (NA_as_zero)
                 *glob_mean = (ldouble_safe)(*glob_mean)
@@ -3593,7 +3593,7 @@ int_t calc_mean_and_center
         }
 
         if (wsum <= 0)
-            fprintf(stderr, "Warning: weights are not positive.\n");
+            print_err_msg("Warning: weights are not positive.\n");
     }
 
     if (nonneg)
@@ -5139,19 +5139,19 @@ int_t topN
 {
     int_t retval = 0;
     if (include_ix != NULL && exclude_ix != NULL) {
-        fprintf(stderr, "Cannot pass both 'include_ix' and 'exclude_ix'.\n");
+        print_err_msg("Cannot pass both 'include_ix' and 'exclude_ix'.\n");
         retval = 2;
     }
     if (n_top == 0) {
-        fprintf(stderr, "'n_top' must be greater than zero.\n");
+        print_err_msg("'n_top' must be greater than zero.\n");
         retval = 2;
     }
     if (n_exclude > n-n_top) {
-        fprintf(stderr, "Number of rankeable entities is less than 'n_top'\n");
+        print_err_msg("Number of rankeable entities is less than 'n_top'\n");
         retval = 2;
     }
     if (n_include > n) {
-        fprintf(stderr, "Number of entities to include is larger than 'n'.\n");
+        print_err_msg("Number of entities to include is larger than 'n'.\n");
         retval = 2;
     }
 
@@ -5160,7 +5160,7 @@ int_t topN
         for (int_t ix = 0; ix < n_include; ix++)
             if (include_ix[ix] < 0 || include_ix[ix] >= n)
             {
-                fprintf(stderr, "'include_ix' contains invalid entries\n");
+                print_err_msg("'include_ix' contains invalid entries\n");
                 retval = 2;
                 break;
             }
@@ -5170,7 +5170,7 @@ int_t topN
         for (int_t ix = 0; ix < n_exclude; ix++)
             if (exclude_ix[ix] < 0 || exclude_ix[ix] >= n)
             {
-                fprintf(stderr, "'exclude_ix' contains invalid entries\n");
+                print_err_msg("'exclude_ix' contains invalid entries\n");
                 retval = 2;
                 break;
             }
@@ -5178,19 +5178,18 @@ int_t topN
     for (int_t ix = 0; ix < k_user+k+k_main; ix++)
     {
         if (isnan(a_vec[ix])) {
-            fprintf(stderr, "The latent factors contain NAN values\n");
+            print_err_msg("The latent factors contain NAN values\n");
             retval = 2;
             break;
         }
     }
     if (isnan(biasA)) {
-        fprintf(stderr, "The bias is a NAN value\n");
+        print_err_msg("The bias is a NAN value\n");
         retval = 2;
     }
 
     if (retval == 2)
     {
-        fflush(stderr);
         return retval;
     }
 
@@ -5389,25 +5388,25 @@ int_t fit_most_popular
     if (implicit)
     {
         if (NA_as_zero) {
-            fprintf(stderr,
+            print_err_msg(
                     "Warning: 'NA_as_zero' ignored with 'implicit=true'.\n");
             NA_as_zero = false;
         }
 
         if (scale_lam) {
-            fprintf(stderr,
+            print_err_msg(
                     "Warning: 'scale_lam' ignored with 'implicit=true'.\n");
             scale_lam = false;
         }
 
         if (weight != NULL) {
-            fprintf(stderr,
+            print_err_msg(
                     "Warning: 'weight' ignored with 'implicit=true'.\n");
             weight = NULL;
         }
 
         if (Xfull != NULL) {
-            fprintf(stderr,
+            print_err_msg(
                     "Error: cannot pass dense 'X' with 'implicit=true'.\n");
             return 2;
         }
@@ -5416,13 +5415,13 @@ int_t fit_most_popular
     else
     {
         if (adjust_weight) {
-            fprintf(stderr,
+            print_err_msg(
                 "Warning: 'adjust_weight' ignored with 'implicit=false'.\n");
             adjust_weight = false;
         }
 
         if (apply_log_transf) {
-            fprintf(stderr,
+            print_err_msg(
                 "Warning: 'apply_log_transf' ignored with 'implicit=false'.\n");
             apply_log_transf = false;
         }
@@ -5430,7 +5429,7 @@ int_t fit_most_popular
 
     if (biasB == NULL)
     {
-        fprintf(stderr, "Error: must pass 'biasB'.\n");
+        print_err_msg("Error: must pass 'biasB'.\n");
         return 2;
     }
 

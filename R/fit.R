@@ -113,42 +113,12 @@ NULL
 #' of internal BLAS threads before entering a multi-threaded region, in order to avoid oversubscription of
 #' threads. This can become an issue when using OpenBLAS if it is the 'pthreads' variant.
 #' 
-#' This package relies heavily on BLAS and LAPACK functions. For better performance, it is
-#' recommended to use an optimized backed for them, such as MKL or OpenBLAS.
+#' This package relies heavily on BLAS and LAPACK functions, and benefits from SIMD vectorization.
+#' For better performance, it is recommended to use an optimized backed such as MKL or OpenBLAS,
+#' and to enable additional compiler optimizations that are not used by default in R.
 #' 
-#' In Windows, the easiest way of getting MKL is to use Microsoft's
-#' \href{https://mran.microsoft.com}{MRAN distribution of R}, while OpenBLAS can be obtained by
-#' following \href{https://github.com/david-cortes/R-openblas-in-windows}{this tutorial}
-#' (no new R installation required).
-#' 
-#' In Linux, these can be installed through the system's package manager. In Debian and
-#' Debian-based distributions such as Ubuntu, the default BLAS and LAPACK can be configured
-#' through the alternatives system (see the
-#' \href{https://wiki.debian.org/DebianScience/LinearAlgebraLibraries}{Debian docs} or
-#' \href{https://stackoverflow.com/a/49842944/5941695}{this post for MKL}).
-#' 
-#' By default, in a regular x86-64 CPU, R will compile all packages with generic options
-#' `-msse2` and `-O2`, which misses lots of performance optimizations, and in particular,
-#' `cmfrec` will not be able to achieve its maximum performance with them.
-#' 
-#' It is recommended to use compilation options `-O3`, `-march=native`,
-#' `-fno-math-errno`, `-fno-trapping-math`, and `-std=c99` or `-std=gnu99`.
-#' These can be activated in multiple ways: \itemize{
-#' \item (On Linux) Creating an empty text file `~/.R/Makevars` and adding this line there:
-#' `CFLAGS += -O3 -march=native -fno-math-errno -fno-trapping-math`
-#' (plus an empty line at the end), then installing the usual
-#' way with `install.packages("cmfrec")`.
-#' \item Installing `cmfrec` from source, but modifying the `Makevars` file (it has lines
-#' that can be uncommented in order to enable these optimizations).
-#' \item Modifying the global `Makeconf` variable. This is a file which defines the default
-#' compilation options for \bold{all} R packages, so be careful about it. In Debian,
-#' this file will typically be under `/etc/R/`, but this can vary in other operating systems.
-#' In this file, replace all occurences of `-O2` with `-O3`, and all occurrences of
-#' `-msse2` with `-march=native -fno-math-errno -fno-trapping-math` (e.g. open them
-#' in some text editor or in RStudio and
-#' use the 'Replace All' functionality) (not recommended to edit this global file, it should be
-#' preferred to edit the local user Makevars instead).
-#' }
+#' See this guide for details:
+#' \href{https://github.com/david-cortes/installing-optimized-libraries}{installing optimized libraries}.
 #' @param X The main matrix with interactions data to factorize (e.g. movie ratings by users,
 #' bag-of-words representations of texts, etc.). The package is built with
 #' recommender systems in mind, and will assume that `X` is a matrix in which users

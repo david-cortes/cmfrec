@@ -1175,8 +1175,7 @@ int_t fit_offsets_explicit_lbfgs_internal
     if (k_sec > 0 && U == NULL && !nnz_U && II == NULL && !nnz_I)
     {
         if (verbose) {
-            fprintf(stderr, "Cannot pass 'k_sec' without 'U' or 'I'.\n");
-            fflush(stderr);
+            print_err_msg("Cannot pass 'k_sec' without 'U' or 'I'.\n");
         }
         return 2;
     }
@@ -1444,8 +1443,7 @@ int_t fit_offsets_explicit_lbfgs_internal
 
     if (should_stop_procedure)
     {
-        fprintf(stderr, "Procedure terminated before starting optimization\n");
-        fflush(stderr);
+        print_err_msg("Procedure terminated before starting optimization\n");
         goto cleanup;
     }
 
@@ -1805,29 +1803,26 @@ int_t fit_offsets_als
     if (p > m || q > n || k > m || k > n) {
         if (verbose) {
             if (k > m || k > n)
-                fprintf(stderr, "'k' cannot be greater than 'm' or 'n'.\n");
+                print_err_msg("'k' cannot be greater than 'm' or 'n'.\n");
             else
-                fprintf(stderr, "Side info has larger dimension than 'X'\n");
+                print_err_msg("Side info has larger dimension than 'X'\n");
         }
         retval = 2;
     }
     if (implicit && (NA_as_zero_X || weight != NULL || Xfull != NULL)) {
         if (verbose) {
-            fprintf(stderr, "Combination of inputs invalid for 'implicit'.\n");
+            print_err_msg("Combination of inputs invalid for 'implicit'.\n");
         }
         retval = 2;
     }
     if (NA_as_zero_X && Xfull != NULL) {
         if (verbose) {
-            fprintf(stderr, "Cannot use 'NA_as_zero' with dense inputs.\n");
+            print_err_msg("Cannot use 'NA_as_zero' with dense inputs.\n");
         }
         retval = 2;
     }
 
     if (retval != 0) {
-        if (verbose) {
-            fflush(stderr);
-        }
         return retval;
     }
 
@@ -1923,8 +1918,7 @@ int_t fit_offsets_als
     }
     else if (retval != 0) {
         if (verbose) {
-            fprintf(stderr, "Unexpected error\n");
-            fflush(stderr);
+            print_err_msg("Unexpected error\n");
         }
         return retval;
     }

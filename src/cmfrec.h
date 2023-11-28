@@ -131,14 +131,12 @@ typedef void (*sig_t_)(int);
     #endif
     extern IMPORTED_FUN void PySys_WriteStdout(const char *fmt, ...);
     extern IMPORTED_FUN void PySys_WriteStderr(const char *fmt, ...);
-    void python_printmsg(char *msg);
-    void python_printerrmsg(char *msg);
+    void python_printmsg(const char *msg);
+    void python_printerrmsg(const char *msg);
     void py_printf(const char *fmt, ...);
-    void py_errprintf(void *ignored, const char *fmt, ...);
-    extern void cy_printf(char *msg);
-    extern void cy_errprintf(char *msg);
+    extern void cy_printf(const char *msg);
+    extern void cy_errprintf(const char *msg);
     #define printf py_printf
-    #define fprintf py_errprintf
     #define fflush(arg) {}
 #elif defined(_FOR_R)
     #include <Rconfig.h>
@@ -150,8 +148,7 @@ typedef void (*sig_t_)(int);
     #include <R_ext/Visibility.h>
     #define USE_DOUBLE
     #define printf Rprintf
-    #define fprintf(f, message) REprintf(message)
-    #define fflush(f) R_FlushConsole()
+    #define fflush(arg) R_FlushConsole()
 #elif defined(MKL_ILP64)
     #include "mkl.h"
 #endif

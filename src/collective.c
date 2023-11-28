@@ -3325,8 +3325,7 @@ int_t collective_factors_cold
 )
 {
     if (NA_as_zero_U && u_bin_vec != NULL) {
-        fprintf(stderr, "Cannot use 'NA_as_zero_U' when there is 'u_bin'\n");
-        fflush(stderr);
+        print_err_msg("Cannot use 'NA_as_zero_U' when there is 'u_bin'\n");
         return 2;
     }
     int_t retval = 0;
@@ -3585,13 +3584,11 @@ int_t collective_factors_warm
 )
 {
     if (u_bin_vec != NULL && (NA_as_zero_X || NA_as_zero_U)) {
-        fprintf(stderr, "Cannot use 'NA_as_zero' when there is 'u_bin'\n");
-        fflush(stderr);
+        print_err_msg("Cannot use 'NA_as_zero' when there is 'u_bin'\n");
         return 2;
     }
     if (u_bin_vec != NULL && add_implicit_features) {
-        fprintf(stderr, "Cannot use implicit features when there is 'u_bin'\n");
-        fflush(stderr);
+        print_err_msg("Cannot use implicit features when there is 'u_bin'\n");
         return 2;
     }
 
@@ -7310,27 +7307,24 @@ int_t fit_collective_explicit_als
 
     if (k_user && U == NULL && nnz_U == 0) {
         if (verbose)
-            fprintf(stderr, "Cannot pass 'k_user' without U data.\n");
+            print_err_msg("Cannot pass 'k_user' without U data.\n");
         retval = 2;
     }
 
     if (k_item && II == NULL && nnz_I == 0) {
         if (verbose)
-            fprintf(stderr, "Cannot pass 'k_item' without I data.\n");
+            print_err_msg("Cannot pass 'k_item' without I data.\n");
         retval = 2;
     }
 
     if (k_main && Xfull == NULL && nnz == 0) {
         if (verbose)
-            fprintf(stderr, "Cannot pass 'k_main' without X data.\n");
+            print_err_msg("Cannot pass 'k_main' without X data.\n");
         retval = 2;
     }
 
     if (retval == 2)
     {
-        if (verbose) {
-            fflush(stderr);
-        }
         return retval;
     }
 
@@ -9411,19 +9405,19 @@ int_t fit_collective_implicit_als
     int_t retval = 0;
     if (k_user && U == NULL && nnz_U == 0) {
         if (verbose)
-            fprintf(stderr, "Cannot pass 'k_user' without U data.\n");
+            print_err_msg("Cannot pass 'k_user' without U data.\n");
         retval = 2;
     }
 
     if (k_item && II == NULL && nnz_I == 0) {
         if (verbose)
-            fprintf(stderr, "Cannot pass 'k_item' without I data.\n");
+            print_err_msg("Cannot pass 'k_item' without I data.\n");
         retval = 2;
     }
 
     if (k_main && nnz == 0) {
         if (verbose)
-            fprintf(stderr, "Cannot pass 'k_main' without X data.\n");
+            print_err_msg("Cannot pass 'k_main' without X data.\n");
         retval = 2;
     }
 
@@ -9431,15 +9425,12 @@ int_t fit_collective_implicit_als
         (II != NULL && NA_as_zero_I))
     {
         if (verbose)
-            fprintf(stderr, "Cannot pass 'NA_as_zero' with dense data.\n");
+            print_err_msg("Cannot pass 'NA_as_zero' with dense data.\n");
         retval = 2;
     }
 
     if (retval == 2)
     {
-        if (verbose) {
-            fflush(stderr);
-        }
         return retval;
     }
 
