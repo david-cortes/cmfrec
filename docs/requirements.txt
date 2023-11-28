@@ -1,6 +1,6 @@
-cython
-numpy
+cython>=3
+numpy>=1.25
 scipy
-pandas>=0.25.0
+pandas>=2
 Sphinx>=4.2.0
-docutils==0.16
+sphinx-rtd-theme>=1.0.0
