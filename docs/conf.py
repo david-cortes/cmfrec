@@ -14,15 +14,15 @@ import os
 import sys
 sys.path.insert(0, os.path.abspath('../'))
 
-import mock 
-MOCK_MODULES = ['cmfrec.wrapper_double', 'cmfrec.wrapper_float']
-sys.modules.update((mod_name, mock.MagicMock()) for mod_name in MOCK_MODULES)
+# import mock 
+# MOCK_MODULES = ['cmfrec.wrapper_double', 'cmfrec.wrapper_float']
+# sys.modules.update((mod_name, mock.MagicMock()) for mod_name in MOCK_MODULES)
 
 
 # -- Project information -----------------------------------------------------
 
 project = 'cmfrec'
-copyright = '2020, David Cortes'
+copyright = '2023, David Cortes'
 author = 'David Cortes'
 
 master_doc = 'index'
@@ -32,10 +32,17 @@ master_doc = 'index'
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
-extensions = ['sphinx.ext.autodoc', 'sphinx.ext.napoleon', 'sphinx_rtd_theme']
+extensions = [
+    'sphinx.ext.autodoc',
+    'sphinx.ext.viewcode',
+    'sphinx.ext.napoleon',
+    'sphinx_rtd_theme',
+    'sphinx.ext.intersphinx'
+]
 napoleon_google_docstring = False
 napoleon_use_param = False
 napoleon_use_ivar = True
+html_theme = "sphinx_rtd_theme"
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
