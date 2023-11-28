@@ -112,8 +112,6 @@ can be changed by passing non-default arguments - for example:
    :maxdepth: 3
    :caption: Contents:
 
-   index
-
 
 Models
 ======
