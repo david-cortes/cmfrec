@@ -92,7 +92,7 @@ process.data.factors.single <- function(model, obj,
     exact        <-  check.bool(exact)
     if (!is.null(U_bin) && !NCOL(obj$matrices$Cb))
         stop("Model was not fit to binary side information.")
-    if ((!is.null(U) || !is.null(U_col) || !is.null(U_val)) && !NCOL(obj$C))
+    if ((!is.null(U) || !is.null(U_col) || !is.null(U_val)) && !NCOL(obj$matrices$C))
         stop("Model was not fit to 'U' data.")
     if (is.null(X_col) != is.null(X_val))
         stop("'X_col' and 'X_val' must be passed in conjunction.")
