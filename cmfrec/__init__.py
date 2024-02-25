@@ -1,6 +1,6 @@
 from . import wrapper_double, wrapper_float
 import numpy as np, pandas as pd
-from scipy.sparse import coo_matrix, csr_matrix, csc_matrix, issparse, isspmatrix_coo, isspmatrix_csr, isspmatrix_csc
+from scipy.sparse import csr_array, csc_array, issparse
 import multiprocessing
 import ctypes
 import warnings
@@ -9,6 +9,13 @@ __all__ = ["CMF", "CMF_implicit",
            "OMF_explicit", "OMF_implicit",
            "MostPopular", "ContentBased",
            "CMF_imputer"]
+
+def _is_csr(x):
+    return issparse(x) and (x.format == "csr")
+def _is_csc(x):
+    return issparse(x) and (x.format == "csc")
+def _is_coo(x):
+    return issparse(x) and (x.format == "coo")
 
 ### TODO: this module should move from doing operations in Python to
 ### using the new designated C functions for each type of prediction.
@@ -67,7 +74,7 @@ class _CMF:
                      maxiter=400, niter=10, parallelize="separate", corr_pairs=4,
                      NA_as_zero=False, NA_as_zero_user=False, NA_as_zero_item=False,
                      precompute_for_predictions=True, use_float=False,
-                     random_state=1, verbose=True,
+                     random_state=1, verbose=False,
                      print_every=10, handle_interrupt=True,
                      produce_dicts=False, nthreads=-1, n_jobs=None):
         assert method in ["als", "lbfgs"]
@@ -88,21 +95,18 @@ class _CMF:
         if ((max(k_user, k_item) + k + k_main + max(user_bias, item_bias))**2) > np.iinfo(ctypes.c_int).max:
             raise ValueError("Number of factors is too large.")
 
+        dtype = ctypes.c_float if use_float else ctypes.c_double
         lambda_ = float(lambda_) if isinstance(lambda_, int) else lambda_
-        if isinstance(lambda_, (list, tuple, pd.Series)):
-            lambda_ = np.array(lambda_)
-        if isinstance(lambda_, np.ndarray):
-            lambda_ = lambda_.reshape(-1)
+        if not isinstance(lambda_, float):
+            lambda_ = np.require(lambda_, dtype=dtype, requirements=["ENSUREARRAY", "C_CONTIGUOUS"])
             assert lambda_.shape[0] == 6
             assert np.all(lambda_ >= 0.)
         else:
             assert isinstance(lambda_, float) and lambda_ >= 0.
 
         l1_lambda = float(l1_lambda) if isinstance(l1_lambda, int) else l1_lambda
-        if isinstance(l1_lambda, (list, tuple, pd.Series)):
-            l1_lambda = np.array(l1_lambda)
-        if isinstance(l1_lambda, np.ndarray):
-            l1_lambda = l1_lambda.reshape(-1)
+        if not isinstance(l1_lambda, float):
+            l1_lambda = np.require(l1_lambda, dtype=dtype, requirements=["ENSUREARRAY", "C_CONTIGUOUS"])
             assert l1_lambda.shape[0] == 6
             assert np.all(l1_lambda >= 0.)
         else:
@@ -122,6 +126,8 @@ class _CMF:
             nthreads = multiprocessing.cpu_count() + 1 + nthreads
         if nthreads is None:
             nthreads = 1
+        if isinstance(nthreads, float):
+            nthreads = int(nthreads)
         assert isinstance(nthreads, int) and nthreads > 0
 
         if (nthreads > 1) and (not wrapper_double._get_has_openmp()):
@@ -247,11 +253,9 @@ class _CMF:
         self._k_main_col = self.k_main
 
         if isinstance(self.lambda_, np.ndarray):
-            if self.lambda_.dtype != self.dtype_:
-                self.lambda_ = self.lambda_.astype(self.dtype_)
+            self.lambda_ = np.require(self.lambda_, dtype=self.dtype_, requirements=["ENSUREARRAY", "C_CONTIGUOUS"])
         if isinstance(self.l1_lambda, np.ndarray):
-            if self.l1_lambda.dtype != self.dtype_:
-                self.l1_lambda = self.l1_lambda.astype(self.dtype_)
+            self.l1_lambda = np.require(self.l1_lambda, dtype=self.dtype_, requirements=["ENSUREARRAY", "C_CONTIGUOUS"])
 
         self._reset()
 
@@ -337,26 +341,18 @@ class _CMF:
 
     def _append_NAs(self, U, m_u, p, append_U):
         U_new = np.repeat(np.nan, m_u*p).reshape((m_u, p))
-        if U_new.dtype != self.dtype_:
-            U_new = U_new.astype(U.dtype)
-        if not U_new.flags["C_CONTIGUOUS"]:
-            U_new = np.ascontiguousarray(U_new)
+        U_new = np.require(U_new, dtype=self.dtype_, requirements=["C_CONTIGUOUS", "ENSUREARRAY"])
         U_new[np.setdiff1d(np.arange(m_u), append_U), :] = U
         if U_new.dtype != self.dtype_:
-            U_new = U_new.astype(U.dtype)
+            U_new = np.require(U_new, dtype=self.dtype_, requirements=["C_CONTIGUOUS", "ENSUREARRAY"])
         return U_new
 
     def _decompose_coo(self, X):
-        row = X.row
-        col = X.col
-        val = X.data
-        if row.dtype != ctypes.c_int:
-            row = row.astype(ctypes.c_int)
-        if col.dtype != ctypes.c_int:
-            col = col.astype(ctypes.c_int)
-        if val.dtype != self.dtype_:
-            val = val.astype(self.dtype_)
-        return row, col, val
+        return(
+            np.require(X.row, dtype=ctypes.c_int, requirements=["ENSUREARRAY", "C_CONTIGUOUS"]),
+            np.require(X.col, dtype=ctypes.c_int, requirements=["ENSUREARRAY", "C_CONTIGUOUS"]),
+            np.require(X.data, dtype=self.dtype_, requirements=["ENSUREARRAY", "C_CONTIGUOUS"]),
+        )
 
     def _process_U_arr(self, U):
         Urow = np.empty(0, dtype=ctypes.c_int)
@@ -366,20 +362,16 @@ class _CMF:
         Ucols = np.empty(0, dtype=object)
         m = 0
         p = 0
-        if issparse(U) and not isspmatrix_coo(U):
+        if issparse(U) and not (U.format == "coo"):
             U = U.tocoo()
-        if isspmatrix_coo(U):
+        if _is_coo(U):
             Urow, Ucol, Uval = self._decompose_coo(U)
             m, p = U.shape
         elif U is not None:
             if isinstance(U, pd.DataFrame):
-                Ucols = U.columns.to_numpy()
-                U = U.to_numpy()
-            if not U.flags["C_CONTIGUOUS"]:
-                U = np.ascontiguousarray(U)
-            if U.dtype != self.dtype_:
-                U = U.astype(self.dtype_)
-            Uarr = U
+                Ucols = U.columns.to_numpy(copy=True)
+                U = U.to_numpy(copy=False, dtype=self.dtype_)
+            Uarr = np.require(U, dtype=self.dtype_, requirements=["C_CONTIGUOUS", "ENSUREARRAY"])
             m, p = Uarr.shape
         return Urow, Ucol, Uval, Uarr, Ucols, m, p
 
@@ -391,18 +383,23 @@ class _CMF:
         append_Ub = np.empty(0, dtype=object)
         msg = "'X' and side info have no IDs in common."
         if (U is not None) and (U_bin is not None):
-            user_ids1 = np.intersect1d(U[col].to_numpy(), X[col].to_numpy())
-            user_ids2 = np.intersect1d(U_bin[col].to_numpy(), X[col].to_numpy())
-            user_ids3 = np.intersect1d(U_bin[col].to_numpy(), U[col].to_numpy())
+            Xcol = X[col].to_numpy(copy=False)
+            Ucol = U[col].to_numpy(copy=False)
+            Ubcol = U_bin[col].to_numpy(copy=False)
+
+
+            user_ids1 = np.intersect1d(Ucol, Xcol)
+            user_ids2 = np.intersect1d(Ubcol, Xcol)
+            user_ids3 = np.intersect1d(Ubcol, Ucol)
             if (user_ids1.shape[0] == 0) and (user_ids2.shape[0] == 0):
                 raise ValueError(msg)
             user_ids = np.intersect1d(user_ids1, user_ids2)
-            u_not_x = np.setdiff1d(U[col].to_numpy(), X[col].to_numpy())
-            x_not_u = np.setdiff1d(X[col].to_numpy(), U[col].to_numpy())
-            b_not_x = np.setdiff1d(U_bin[col].to_numpy(), X[col].to_numpy())
-            x_not_b = np.setdiff1d(X[col].to_numpy(), U_bin[col].to_numpy())
-            b_not_u = np.setdiff1d(U_bin[col].to_numpy(), U[col].to_numpy())
-            u_not_b = np.setdiff1d(U[col].to_numpy(), U_bin[col].to_numpy())
+            u_not_x = np.setdiff1d(Ucol, Xcol)
+            x_not_u = np.setdiff1d(Xcol, Ucol)
+            b_not_x = np.setdiff1d(Ubcol, Xcol)
+            x_not_b = np.setdiff1d(Xcol, Ubcol)
+            b_not_u = np.setdiff1d(Ubcol, Ucol)
+            u_not_b = np.setdiff1d(Ucol, Ubcol)
 
             ### There can be cases in which the sets are disjoint,
             ### and will need to add NAs to one of the inputs.
@@ -415,32 +412,44 @@ class _CMF:
                 user_ids = user_ids
             else:
                 if u_not_b.shape[0] >= b_not_u.shape[0]:
-                    user_ids = np.r_[user_ids, user_ids1, X[col].to_numpy(), user_ids3, U[col].to_numpy(), U_bin[col].to_numpy()]
+                    user_ids = np.r_[user_ids, user_ids1, Xcol, user_ids3, Ucol, Ubcol]
                     append_U = x_not_u
                     append_Ub = np.r_[x_not_b, u_not_b]
                 else:
-                    user_ids = np.r_[user_ids, user_ids2, X[col].to_numpy(), user_ids3, U_bin[col].to_numpy(), U[col].to_numpy()]
+                    user_ids = np.r_[user_ids, user_ids2, Xcol, user_ids3, Ubcol, Ucol]
                     append_U = np.r_[x_not_u, b_not_u]
                     append_Ub = x_not_b
 
+            # TODO: move away from pandas for these operations
             _, user_mapping_ = pd.factorize(user_ids)
-            X = X.assign(**{col : pd.Categorical(X[col], user_mapping_).codes})
-            if X[col].dtype != ctypes.c_int:
-                X = X.assign(**{col : X[col].astype(ctypes.c_int)})
-            U = U.assign(**{col : pd.Categorical(U[col], user_mapping_).codes})
-            if U[col].dtype != ctypes.c_int:
-                U = U.assign(**{col : U[col].astype(ctypes.c_int)})
-            U_bin = U_bin.assign(**{col : pd.Categorical(U_bin[col], user_mapping_).codes})
-            if U_bin[col].dtype != ctypes.c_int:
-                U_bin = U_bin.assign(**{col : U_bin[col].astype(ctypes.c_int)})
+            X = X.assign(**{
+                col : pd.Categorical(Xcol, user_mapping_, copy=False).codes.astype(ctypes.c_int)
+            })
+            U = U.assign(**{
+                col : pd.Categorical(Ucol, user_mapping_, copy=False).codes.astype(ctypes.c_int)
+            })
+            U_bin = U_bin.assign(**{
+                col : pd.Categorical(Ubcol, user_mapping_, copy=False).codes.astype(ctypes.c_int)
+            })
+            user_mapping_ = np.require(user_mapping_, requirements=["ENSUREARRAY"]),reshape(-1)
 
             if append_U.shape[0]:
-                append_U = pd.Categorical(np.unique(append_U), user_mapping_).codes.astype(ctypes.c_int)
+                append_U = pd.Categorical(
+                    np.unique(append_U),
+                    user_mapping_,
+                    copy=False,
+                ).codes
                 append_U = np.sort(append_U)
+                append_U = np.require(append_U, dtype=ctypes.c_int, requirements=["ENSUREARRAY", "C_CONTIGUOUS"])
 
             if append_Ub.shape[0]:
-                append_Ub = pd.Categorical(np.unique(append_Ub), user_mapping_).codes.astype(ctypes.c_int)
+                append_Ub = pd.Categorical(
+                    np.unique(append_Ub),
+                    user_mapping_,
+                    copy=False,
+                ).codes
                 append_Ub = np.sort(append_Ub)
+                append_Ub = np.require(append_Ub, dtype=ctypes.c_int, requirements=["ENSUREARRAY", "C_CONTIGUOUS"])
 
         else:
             if (U is None) and (U_bin is not None):
@@ -448,12 +457,15 @@ class _CMF:
                 swapped = True
 
             if (U is not None):
-                user_ids = np.intersect1d(U[col].to_numpy(), X[col].to_numpy())
+                Xcol = X[col].to_numpy(copy=False)
+                Ucol = U[col].to_numpy(copy=False)
+                
+                user_ids = np.intersect1d(Ucol, Xcol)
                 if user_ids.shape[0] == 0:
                     raise ValueError(msg)
 
-                u_not_x = np.setdiff1d(U[col].to_numpy(), X[col].to_numpy())
-                x_not_u = np.setdiff1d(X[col].to_numpy(), U[col].to_numpy())
+                u_not_x = np.setdiff1d(Ucol, Xcol)
+                x_not_u = np.setdiff1d(Xcol, Ucol)
                 if (u_not_x.shape[0]) or (x_not_u.shape[0]):
                     ### Case0: both have the same entries
                     ### This is the ideal situation
@@ -469,29 +481,40 @@ class _CMF:
                         user_ids = np.r_[user_ids, u_not_x]
                     ### Case3: both have IDs that the others don't
                     else:
-                        user_ids = np.r_[user_ids, X[col].to_numpy(), U[col].to_numpy()]
+                        user_ids = np.r_[user_ids, Xcol, Ucol]
                         append_U = x_not_u
 
                 _, user_mapping_ = pd.factorize(user_ids)
-                if not isinstance(user_mapping_, np.ndarray):
-                    user_mapping_ = user_mapping_.to_numpy()
-                X = X.assign(**{col : pd.Categorical(X[col], user_mapping_).codes})
-                if X[col].dtype != ctypes.c_int:
-                    X = X.assign(**{col : X[col].astype(ctypes.c_int)})
-                U = U.assign(**{col : pd.Categorical(U[col], user_mapping_).codes})
-                if U[col].dtype != ctypes.c_int:
-                    U = U.assign(**{col : U[col].astype(ctypes.c_int)})
+                X = X.assign(**{
+                    col : pd.Categorical(
+                        Xcol, user_mapping_, copy=False
+                    )
+                    .codes
+                    .astype(dtype=ctypes.c_int)
+                })
+                U = U.assign(**{
+                    col : pd.Categorical(
+                        Ucol, user_mapping_, copy=False
+                    )
+                    .codes
+                    .astype(dtype=ctypes.c_int)
+                })
                 if append_U.shape[0]:
-                    append_U = pd.Categorical(append_U, user_mapping_).codes.astype(ctypes.c_int)
+                    append_U = pd.Categorical(
+                        append_U, user_mapping_, copy=False
+                    ).codes
                     append_U = np.sort(append_U)
+                    append_U = np.require(append_U, dtype=ctypes.c_int, requirements=["ENSUREARRAY", "C_CONTIGUOUS"])
+                user_mapping_ = np.require(user_mapping_, requirements=["ENSUREARRAY"]).reshape(-1)
 
             else:
-                X_col, user_mapping_ = pd.factorize(X[col].to_numpy())
-                X = X.assign(**{col : X_col})
+                Xcol = X[col].to_numpy(copy=False)
+                Xcol, user_mapping_ = pd.factorize(Xcol)
+                Xcol = np.require(Xcol, dtype=ctypes.c_int, requirements=["ENSUREARRAY", "C_CONTIGUOUS"])
+                X = X.assign(**{col : Xcol})
                 if X[col].dtype != ctypes.c_int:
                     X = X.assign(**{col : X[col].astype(ctypes.c_int)})
-                if not isinstance(user_mapping_, np.ndarray):
-                    user_mapping_ = user_mapping_.to_numpy()
+                user_mapping_ = np.require(user_mapping_, requirements=["ENSUREARRAY"]).reshape(-1)
 
         if swapped:
             U, U_bin = U_bin, U
@@ -508,25 +531,22 @@ class _CMF:
         m = 0
         p = 0
         if U is not None:
-            if "ColumnId" in U.columns.values:
-                Urow = U[cl_take].astype(ctypes.c_int).to_numpy()
-                Ucol = U.ColumnId.astype(ctypes.c_int).to_numpy()
-                if "Value" not in U.columns.values:
+            if "ColumnId" in U.columns:
+                Urow = U[cl_take].to_numpy(copy=False, dtype=ctypes.c_int)
+                Ucol = U["ColumnId"].to_numpy(copy=False, dtype=ctypes.c_int)
+                if "Value" not in U.columns:
                     msg = "If passing sparse '%s', must have column 'Value'."
                     msg = msg % df_name
                     raise ValueError(msg)
-                Uval = U.Value.astype(self.dtype_).to_numpy()
+                Uval = U["Value"].to_numpy(copy=False, dtype=self.dtype_)
                 m = int(Urow.max() + 1)
                 p = int(Ucol.max() + 1)
             else:
                 U = U.sort_values(cl_take)
-                Uarr = U[[cl for cl in U.columns.values if cl != cl_take]]
-                Ucols = Uarr.columns.to_numpy()
-                Uarr = Uarr.to_numpy()
-                if not Uarr.flags["C_CONTIGUOUS"]:
-                    Uarr = np.ascontiguousarray(Uarr)
-                if Uarr.dtype != self.dtype_:
-                    Uarr = Uarr.astype(self.dtype_)
+                Uarr = U[[cl for cl in U.columns if cl != cl_take]]
+                Ucols = Uarr.columns.to_numpy(copy=True)
+                Uarr = Uarr.to_numpy(copy=False, dtype=self.dtype_)
+                Uarr = np.require(Uarr, dtype=self.dtype_, requirements=["ENSUREARRAY", "C_CONTIGUOUS"])
                 m, p = Uarr.shape
         return Urow, Ucol, Uval, Uarr, Ucols, m, p
 
@@ -556,7 +576,7 @@ class _CMF:
                 raise ValueError("Model was not fit to %s data." % name)
             if isinstance(U, pd.DataFrame) and Cols.shape[0]:
                 U = U[Cols]
-            U = np.array(U).reshape(-1).astype(self.dtype_)
+            U = np.require(U, dtype=self.dtype_, requirements=["ENSUREARRAY", "C_CONTIGUOUS"]).reshape(-1)
             if U.shape[0] != Mat.shape[0]:
                 raise ValueError("Dimensions of %s don't match with earlier data."
                                  % letter)
@@ -568,7 +588,7 @@ class _CMF:
                 raise ValueError("Model was not fit to %s binary data." % name)
             if isinstance(U_bin, pd.DataFrame) and (ColsBin.shape[0]):
                 U_bin = U_bin[ColsBin]
-            U_bin = np.array(U_bin).reshape(-1).astype(self.dtype_)
+            U_bin = np.require(U_bin, dtype=self.dtype_, requirements=["ENSUREARRAY", "C_CONTIGUOUS"]).reshape(-1)
             if U_bin.shape[0] != MatBin.shape[0]:
                 raise ValueError("Dimensions of %s_bin don't match with earlier data."
                                  % letter)
@@ -576,12 +596,22 @@ class _CMF:
             U_bin = np.empty(0, dtype=self.dtype_)
         ###
         if U_col is not None:
+            U_val = np.require(
+                U_val,
+                dtype=self.dtype_,
+                requirements=["ENSUREARRAY", "C_CONTIGUOUS"]
+            ).reshape(-1)
+            U_col = np.require(
+                U_col,
+                dtype=ctypes.c_int if not not self.reindex_ else None,
+                requirements=["ENSUREARRAY", "C_CONTIGUOUS"]
+            ).reshape(-1)
+            if U_val.shape[0] != U_col.shape[0]:
+                raise ValueError("'%s_col' and '%s_val' must have the same number of entries." % (letter, letter))
+            
             if Mat.shape[0] == 0:
                 raise ValueError("Model was not fit to %s data." % name)
-            U_val = np.array(U_val).reshape(-1).astype(self.dtype_)
             if U_val.shape[0] == 0:
-                if np.array(U_col).shape[0] > 0:
-                    raise ValueError("'%s_col' and '%s_val' must have the same number of entries." % (letter, letter))
                 U_col = np.empty(0, dtype=ctypes.c_int)
                 U_val = np.empty(0, dtype=self.dtype_)
             else:
@@ -592,12 +622,13 @@ class _CMF:
                         except Exception:
                             raise ValueError("Sparse inputs cannot contain missing values.")
                     else:
-                        U_col = pd.Categorical(U_col, mapping).codes.astype(ctypes.c_int)
+                        U_col = pd.Categorical(U_col, mapping).codes
+                        U_col = np.require(U_col, dtype=ctypes.c_int, requirements=["ENSUREARRAY", "C_CONTIGUOUS"])
                         if np.any(U_col < 0):
                             raise ValueError("Sparse inputs cannot contain missing values.")
-                    U_col = U_col.astype(ctypes.c_int)
+                    U_col = np.require(U_col, dtype=ctypes.c_int, requirements=["ENSUREARRAY", "C_CONTIGUOUS"])
                 else:
-                    U_col = np.array(U_col).reshape(-1).astype(ctypes.c_int)
+                    U_col = np.require(U_col, dtype=ctypes.c_int, requirements=["ENSUREARRAY", "C_CONTIGUOUS"]).reshape(-1)
                     imin, imax = U_col.min(), U_col.max()
                     if np.isnan(imin) or np.isnan(imax):
                         raise ValueError("Sparse inputs cannot contain missing values.")
@@ -633,37 +664,31 @@ class _CMF:
             msg += "as the data passed to 'fit'."
             raise ValueError(msg % letter)
 
-        if issparse(U) and (not isspmatrix_coo(U)) and (not isspmatrix_csr(U)):
-            U = U.tocoo()
-        elif isspmatrix_csr(U) and not allow_csr:
-            U = U.tocoo()
+        if issparse(U):
+            if (U.format not in ["coo", "csr"]):
+                U = U.tocoo()
+            elif (U.format == "csr") and not allow_csr:
+                U = U.tocoo()
 
         if isinstance(U, pd.DataFrame):
-            if col_id in U.columns.values:
+            if col_id in U.columns:
                 warnings.warn("'%s' not meaningful for new inputs." % col_id)
             if Cols.shape[0]:
                 U = U[Cols]
-            Uarr = U.to_numpy()
-            Uarr = np.ascontiguousarray(Uarr)
-            if Uarr.dtype != self.dtype_:
-                Uarr = Uarr.astype(self.dtype_)
+            Uarr = np.require(U, dtype=self.dtype_, requirements=["ENSUREARRAY", "C_CONTIGUOUS"])
 
-        elif isspmatrix_coo(U):
-            Urow = U.row.astype(ctypes.c_int)
-            Ucol = U.col.astype(ctypes.c_int)
-            Uval = U.data.astype(self.dtype_)
-        elif isspmatrix_csr(U):
+        elif _is_coo(U):
+            Urow = np.require(U.row, dtype=ctypes.c_int, requirements=["ENSUREARRAY", "C_CONTIGUOUS"])
+            Ucol = np.require(U.col, dtype=ctypes.c_int, requirements=["ENSUREARRAY", "C_CONTIGUOUS"])
+            Uval = np.require(U.data, dtype=self.dtype_, requirements=["ENSUREARRAY", "C_CONTIGUOUS"])
+        elif _is_csr(U):
             if not allow_csr:
                 raise ValueError("Unexpected error.")
-            Ucsr_p = U.indptr.astype(ctypes.c_size_t)
-            Ucsr_i = U.indices.astype(ctypes.c_int)
-            Ucsr = U.data.astype(self.dtype_)
+            Ucsr_p = np.require(U.indptr, dtype=ctypes.c_size_t, requirements=["ENSUREARRAY", "C_CONTIGUOUS"])
+            Ucsr_i = np.require(U.indices, dtype=ctypes.c_int, requirements=["ENSUREARRAY", "C_CONTIGUOUS"])
+            Ucsr = np.require(U.data, dtype=self.dtype_, requirements=["ENSUREARRAY", "C_CONTIGUOUS"])
         elif isinstance(U, np.ndarray):
-            if not U.flags["C_CONTIGUOUS"]:
-                U = np.ascontiguousarray(U)
-            if U.dtype != self.dtype_:
-                U = U.astype(self.dtype_)
-            Uarr = U
+            Uarr = np.require(U, dtype=self.dtype_, requirements=["ENSUREARRAY", "C_CONTIGUOUS"])
         elif U is None:
             pass
         else:
@@ -694,19 +719,13 @@ class _CMF:
             raise ValueError(msg % letter)
 
         if isinstance(U_bin, pd.DataFrame):
-            if col_id in U_bin.columns.values:
+            if col_id in U_bin.columns:
                 warnings.warn("'%s' not meaningful for new inputs." % col_id)
             if Cols.shape[0]:
                 U_bin = U_bin[Cols]
-            Ub_arr = U_bin.to_numpy()
-            Ub_arr = np.ascontiguousarray(Ub_arr)
-            if Ub_arr.dtype != self.dtype_:
-                Ub_arr = Ub_arr.astype(self.dtype_)
+            Ub_arr = np.require(U_bin, dtype=self.dtype_, requirements=["ENSUREARRAY", "C_CONTIGUOUS"])
         elif isinstance(Ub_arr, np.ndarray):
-            if not Ub_arr.flags["C_CONTIGUOUS"]:
-                Ub_arr = np.ascontiguousarray(Ub_arr)
-            if Ub_arr.dtype != self.dtype_:
-                Ub_arr = Ub_arr.astype(self.dtype_)
+            Ub_arr = np.require(Ub_arr, dtype=self.dtype_, requirements=["ENSUREARRAY", "C_CONTIGUOUS"])
         elif Ub_arr is None:
             pass
         else:
@@ -730,62 +749,54 @@ class _CMF:
         W_sp = np.empty(0, dtype=self.dtype_)
         m, n = X.shape
 
-        if issparse(X) and (not isspmatrix_coo(X)) and (not isspmatrix_csr(X)):
+        # TODO: why is this needed? should it error out with CSC or is it somehow used internally?
+        if issparse(X) and (not (X.format == "coo")) and (not (X.format == "csr")):
             if (W is not None) and (not issparse(W)):
-                if not isinstance(W, np.ndarray):
-                    W = np.array(W).reshape(-1)
-                    if W.shape[0] != X.nnz:
-                        raise ValueError("'X' and 'W' have different number of entries.")
-                if isspmatrix_csc(X):
-                    W = csc_matrix((W, X.indices, X.indptr), shape=(X.shape[0], X.shape[1]))
+                W = np.require(W, dtype=self.dtype_, requirements=["ENSUREARRAY", "C_CONTIGUOUS"]).reshape(-1)
+                if W.shape[0] != X.data.shape[0]:
+                    raise ValueError("'X' and 'W' have different number of entries.")
+                if (X.format == "csc"):
+                    W = csc_array((W, X.indices, X.indptr), shape=(X.shape[0], X.shape[1]), dtype=self.dtype_)
                     W = W.tocoo()
                 else:
                     raise ValueError("Must pass 'X' as SciPy sparse COO if there are weights.")
             X = X.tocoo()
-        if issparse(W) and (not isspmatrix_coo(W)) and (not isspmatrix_csr(W)):
+        if issparse(W) and (W.format not in ["coo", "csr"]):
             W = W.tocoo()
-        if (isspmatrix_coo(X) != isspmatrix_coo(W)):
-            if not isspmatrix_coo(X):
+        if issparse(X) and issparse(W) and ((X.format == "coo") != (W.format == "coo")):
+            if not _is_coo(X):
                 X = X.tocoo()
-            if not isspmatrix_coo(W):
+            if not _is_coo(W):
                 W = W.tocoo()
         if issparse(W):
-            W = W.data
+            W = np.require(W.data, dtype=self.dtype_, requirements=["ENSUREARRAY", "C_CONTIGUOUS"])
 
-        if isspmatrix_coo(X):
-            Xrow = X.row.astype(ctypes.c_int)
-            Xcol = X.col.astype(ctypes.c_int)
-            Xval = X.data.astype(self.dtype_)
+        if _is_coo(X):
+            Xrow = np.require(X.row, dtype=ctypes.c_int, requirements=["ENSUREARRAY", "C_CONTIGUOUS"])
+            Xcol = np.require(X.col, dtype=ctypes.c_int, requirements=["ENSUREARRAY", "C_CONTIGUOUS"])
+            Xval = np.require(X.data, dtype=self.dtype_, requirements=["ENSUREARRAY", "C_CONTIGUOUS"])
             if W is not None:
-                W_sp = np.array(W).reshape(-1).astype(self.dtype_)
+                W_sp = np.require(W, dtype=self.dtype_, requirements=["ENSUREARRAY", "C_CONTIGUOUS"]).reshape(-1)
                 if W_sp.shape[0] != Xval.shape[0]:
                     msg =  "'W' must have the same number of non-zero entries "
                     msg += "as 'X'."
                     raise ValueError(msg)
-        elif isspmatrix_csr(X):
-            Xcsr_p = X.indptr.astype(ctypes.c_size_t)
-            Xcsr_i = X.indices.astype(ctypes.c_int)
-            Xcsr = X.data.astype(self.dtype_)
+        elif _is_csr(X):
+            Xcsr_p = np.require(X.indptr, dtype=ctypes.c_size_t, requirements=["ENSUREARRAY", "C_CONTIGUOUS"])
+            Xcsr_i = np.require(X.indices, dtype=ctypes.c_int, requirements=["ENSUREARRAY", "C_CONTIGUOUS"])
+            Xcsr = np.require(X.data, dtype=self.dtype_, requirements=["ENSUREARRAY", "C_CONTIGUOUS"])
             if W is not None:
-                W_sp = np.array(W).reshape(-1).astype(self.dtype_)
+                W_sp = np.require(W, dtype=self.dtype_, requirements=["ENSUREARRAY", "C_CONTIGUOUS"]).reshape(-1)
                 if W_sp.shape[0] != Xcsr.shape[0]:
                     msg =  "'W' must have the same number of non-zero entries "
                     msg += "as 'X'."
                     raise ValueError(msg)
         elif isinstance(X, np.ndarray):
-            if not X.flags["C_CONTIGUOUS"]:
-                X = np.ascontiguousarray(X)
-            if X.dtype != self.dtype_:
-                X = X.astype(self.dtype_)
-            Xarr = X
+            Xarr = np.require(X, dtype=self.dtype_, requirements=["ENSUREARRAY", "C_CONTIGUOUS"])
             if W is not None:
                 assert W.shape[0] == X.shape[0]
                 assert W.shape[1] == X.shape[1]
-                if not W.flags["C_CONTIGUOUS"]:
-                    W = np.ascontiguousarray(W)
-                if W.dtype != self.dtype_:
-                    W = W.astype(self.dtype_)
-                W_dense = W
+                W_dense = np.require(W, dtype=self.dtype_, requirements=["ENSUREARRAY", "C_CONTIGUOUS"])
         else:
             raise ValueError("'X' must be a SciPy CSR or COO matrix, or NumPy array.")
 
@@ -804,30 +815,28 @@ class _CMF:
             raise ValueError("'include' and 'exclude' should not contain missing values.")
         if include is not None and exclude is not None:
             raise ValueError("Cannot pass 'include' and 'exclude' together.")
-        include = np.array(include).reshape(-1) if include is not None \
-                    else np.empty(0, dtype=ctypes.c_int)
-        exclude = np.array(exclude).reshape(-1) if exclude is not None \
-                    else np.empty(0, dtype=ctypes.c_int)
+        
+        if include is not None:
+            include = np.require(include, requirements=["ENSUREARRAY"]).reshape(-1)
+        else:
+            include = np.empty(0, dtype=ctypes.c_int)
+        if exclude is not None:
+            exclude = np.require(exclude, requirements=["ENSUREARRAY"]).reshape(-1)
+        else:
+            exclude = np.empty(0, dtype=ctypes.c_int)
 
-        if isinstance(user, (list, tuple)) :
-            user = np.array(user)
-        if isinstance(item, (list, tuple)):
-            item = np.array(item)
-        if isinstance(user, pd.Series):
-            user = user.to_numpy()
-        if isinstance(item, pd.Series):
-            item = item.to_numpy()
+        if not np.isscalar(user):
+            user = np.require(user, requirements=["ENSUREARRAY"]).reshape(-1)
+        if not np.isscalar(item):
+            item = np.require(item, requirements=["ENSUREARRAY"]).reshape(-1)
             
         if user is not None:
             if isinstance(user, np.ndarray):
-                if len(user.shape) > 1:
-                    user = user.reshape(-1)
                 assert user.shape[0] > 0
                 if self.reindex_:
                     if user.shape[0] > 1:
                         user = pd.Categorical(user, self.user_mapping_).codes
-                        if user.dtype != ctypes.c_int:
-                            user = user.astype(ctypes.c_int)
+                        user = np.require(user, dtype=ctypes.c_int, requirements=["ENSUREARRAY", "C_CONTIGUOUS"])
                     else:
                         if len(self.user_dict_):
                             try:
@@ -850,14 +859,11 @@ class _CMF:
         
         if item is not None:
             if isinstance(item, np.ndarray):
-                if len(item.shape) > 1:
-                    item = item.reshape(-1)
                 assert item.shape[0] > 0
                 if self.reindex_:
                     if item.shape[0] > 1:
                         item = pd.Categorical(item, self.item_mapping_).codes
-                        if item.dtype != ctypes.c_int:
-                            item = item.astype(ctypes.c_int)
+                        item = np.require(item, dtype=ctypes.c_int, requirements=["ENSUREARRAY", "C_CONTIGUOUS"])
                     else:
                         if len(self.item_dict_):
                             try:
@@ -893,9 +899,7 @@ class _CMF:
                     if np.any(include < 0):
                         raise ValueError(msg % "include")
                 
-                if include.dtype != ctypes.c_int:
-                    include = include.astype(ctypes.c_int)
-                include = include.reshape(-1)
+                include = np.require(include, dtype=ctypes.c_int, requirements=["ENSUREARRAY", "C_CONTIGUOUS"]).reshape(-1)
             if exclude.shape[0]:
                 if len(self.item_dict_):
                     try:
@@ -904,36 +908,31 @@ class _CMF:
                         raise ValueError(msg % "exclude")
                 else:
                     exclude = pd.Categorical(exclude, self.item_mapping_).codes
-                    if exclude.dtype != ctypes.c_int:
-                        exclude = exclude.astype(ctypes.c_int)
                     if np.any(exclude < 0):
                         raise ValueError(msg % "exclude")
                 
-                if exclude.dtype != ctypes.c_int:
-                    exclude = exclude.astype(ctypes.c_int)
-                exclude = exclude.reshape(-1)
+                exclude = np.require(exclude, dtype=ctypes.c_int, requirements=["ENSUREARRAY", "C_CONTIGUOUS"]).reshape(-1)
 
         else:
             msg  = "'%s' entries must be within the range of the %s (%s)"
             msg += " of the data that was passed to 'fit'."
             if include.shape[0]:
+                include = np.require(include, dtype=ctypes.c_int, requirements=["ENSUREARRAY", "C_CONTIGUOUS"]).reshape(-1)
                 imin, imax = include.min(), include.max()
                 if (imin < 0) or (imax >= self._B_pred.shape[0]):
                     raise ValueError(msg % ("include", "items", "columns"))
             if exclude.shape[0]:
+                exclude = np.require(exclude, dtype=ctypes.c_int, requirements=["ENSUREARRAY", "C_CONTIGUOUS"]).reshape(-1)
                 emin, emax = exclude.min(), exclude.max()
                 if (emin < 0) or (emax >= self._B_pred.shape[0]):
                     raise ValueError(msg % ("exclude", "items", "columns"))
 
         if user is not None:
-            user = user.astype(ctypes.c_int)
+            user = np.require(user, dtype=ctypes.c_int, requirements=["ENSUREARRAY", "C_CONTIGUOUS"]).reshape(-1)
         if item is not None:
-            item = item.astype(ctypes.c_int)
-        if include.dtype != ctypes.c_int:
-            include = include.astype(ctypes.c_int)
-        if exclude.dtype != ctypes.c_int:
-            exclude = exclude.astype(ctypes.c_int)
-
+            item = np.require(item, dtype=ctypes.c_int, requirements=["ENSUREARRAY", "C_CONTIGUOUS"]).reshape(-1)
+        include = np.require(include, dtype=ctypes.c_int, requirements=["ENSUREARRAY", "C_CONTIGUOUS"]).reshape(-1)
+        exclude = np.require(exclude, dtype=ctypes.c_int, requirements=["ENSUREARRAY", "C_CONTIGUOUS"]).reshape(-1)
 
         return user, item, include, exclude
 
@@ -945,29 +944,27 @@ class _CMF:
 
         self._reset()
 
-        if issparse(X) and (not isspmatrix_coo(X)):
+        if issparse(X) and (not (X.format == "coo")):
             if (W is not None) and (not issparse(W)):
-                if isspmatrix_csr(X):
-                    if not isinstance(W, np.ndarray):
-                        W = np.array(W).reshape(-1)
-                    if W.shape[0] != X.nnz:
+                if (X.format == "csr"):
+                    W = np.require(W, dtype=self.dtype_, requirements=["ENSUREARRAY", "C_CONTIGUOUS"]).reshape(-1)
+                    if W.shape[0] != X.data.shape[0]:
                         raise ValueError("'X' and 'W' have different number of entries.")
-                    W = csr_matrix((W, X.indices, X.indptr), shape=(X.shape[0], X.shape[1]))
+                    W = csr_array((W, X.indices, X.indptr), shape=(X.shape[0], X.shape[1]), dtype=self.dtype_)
                     W = W.tocoo()
-                elif isspmatrix_csc(X):
-                    if not isinstance(W, np.ndarray):
-                        W = np.array(W).reshape(-1)
-                    if W.shape[0] != X.nnz:
+                elif (X.format == "csc"):
+                    W = np.require(W, dtype=self.dtype_, requirements=["ENSUREARRAY", "C_CONTIGUOUS"]).reshape(-1)
+                    if W.shape[0] != X.data.shape[0]:
                         raise ValueError("'X' and 'W' have different number of entries.")
-                    W = csc_matrix((W, X.indices, X.indptr), shape=(X.shape[0], X.shape[1]))
+                    W = csc_array((W, X.indices, X.indptr), shape=(X.shape[0], X.shape[1]), dtype=self.dtype_)
                     W = W.tocoo()
                 else:
                     raise ValueError("Must pass 'X' as SciPy COO if passing weights.")
             X = X.tocoo()
-        if issparse(W) and (not isspmatrix_coo(W)):
+        if issparse(W) and (not (W.format == "coo")):
             W = W.tocoo()
         if issparse(W):
-            W = W.data
+            W = np.require(W.data, dtype=self.dtype_, requirements=["ENSUREARRAY", "C_CONTIGUOUS"])
 
         if isinstance(X, pd.DataFrame):
             msg = "If passing 'X' as DataFrame, '%s' must also be a DataFrame."
@@ -985,45 +982,36 @@ class _CMF:
                 msg += "called 'Weight'."
                 raise ValueError(msg)
 
-            assert "UserId" in X.columns.values
-            assert "ItemId" in X.columns.values
-            if (self._implicit) and ("Rating" in X.columns.values) and ("Value" not in X.columns.values):
-                X = X.rename(columns={"Rating":"Value"}, copy=False, inplace=False)
+            assert "UserId" in X.columns
+            assert "ItemId" in X.columns
+            if (self._implicit) and ("Rating" in X.columns) and ("Value" not in X.columns):
+                X = X.rename(columns={"Rating":"Value"}, copy=False)
             if self._implicit:
-                assert "Value" in X.columns.values
+                assert "Value" in X.columns
             else:
-                assert "Rating" in X.columns.values
+                assert "Rating" in X.columns
 
             if U is not None:
-                assert "UserId" in U.columns.values
+                assert "UserId" in U.columns
             if I is not None:
-                assert "ItemId" in I.columns.values
+                assert "ItemId" in I.columns
             if U_bin is not None:
-                assert "UserId" in U_bin.columns.values
+                assert "UserId" in U_bin.columns
             if I_bin is not None:
-                assert "ItemId" in I_bin.columns.values
+                assert "ItemId" in I_bin.columns
 
             X, U, U_bin, self.user_mapping_, append_U, append_Ub = self._convert_ids(X, U, U_bin, "UserId")
             X, I, I_bin, self.item_mapping_, append_I, append_Ib = self._convert_ids(X, I, I_bin, "ItemId")
 
-            Xrow = X.UserId.to_numpy()
-            Xcol = X.ItemId.to_numpy()
-            if Xrow.dtype != ctypes.c_int:
-                Xrow = Xrow.astype(ctypes.c_int)
-            if Xcol.dtype != ctypes.c_int:
-                Xcol = Xcol.astype(ctypes.c_int)
-            if self._implicit:
-                Xval = X.Value.to_numpy()
-            else:
-                Xval = X.Rating.to_numpy()
-            if Xval.dtype != self.dtype_:
-                Xval = Xval.astype(self.dtype_)
+            Xrow = X["UserId"].to_numpy(copy=False, dtype=ctypes.c_int)
+            Xcol = X["ItemId"].to_numpy(copy=False, dtype=ctypes.c_int)
+            Xval = X["Value" if self._implicit else "Rating"].to_numpy(copy=False, dtype=self.dtype_)
             if Xval.shape[0] == 0:
                 raise ValueError("'X' contains no non-zero entries.")
             Xarr = np.empty((0,0), dtype=self.dtype_)
             W_sp = np.empty(0, dtype=self.dtype_)
-            if "Weight" in X.columns.values:
-                W_sp = X.Weight.astype(self.dtype_).to_numpy()
+            if "Weight" in X.columns:
+                W_sp = X["Weight"].to_numpy(copy=False, dtype=self.dtype_)
             W_dense = np.empty((0,0), dtype=self.dtype_)
 
             Urow, Ucol, Uval, Uarr, self._U_cols, m_u, p = self._process_U_df(U, False, "U")
@@ -1037,11 +1025,11 @@ class _CMF:
             qbin = 0
             msg = "Binary side info data cannot be passed in sparse format."
             if U_bin is not None:
-                if "ColumnId" in U_bin.columns.values:
+                if "ColumnId" in U_bin.columns:
                     raise ValueError(msg)
                 _1, _2, _3, Ub_arr, self._Ub_cols, m_ub, pbin = self._process_U_df(U_bin, False, "U_bin")
             if I_bin is not None:
-                if "ColumnId" in I_bin.columns.values:
+                if "ColumnId" in I_bin.columns:
                     raise ValueError(msg)
                 _1, _2, _3, Ib_arr, self._Ib_cols, n_ib, qbin = self._process_U_df(I_bin, True, "U_bin")
 
@@ -1067,28 +1055,28 @@ class _CMF:
                 self.user_dict_ = {self.user_mapping_[i]:i for i in range(self.user_mapping_.shape[0])}
                 self.item_dict_ = {self.item_mapping_[i]:i for i in range(self.item_mapping_.shape[0])}
 
-        elif isspmatrix_coo(X) or isinstance(X, np.ndarray):
-            if issparse(U) and not isspmatrix_coo(U):
+        elif _is_coo(X) or isinstance(X, np.ndarray):
+            if issparse(U) and not (U.format == "coo"):
                 U = U.tocoo()
-            if issparse(I) and not isspmatrix_coo(I):
+            if issparse(I) and not (I.format == "coo"):
                 I = I.tocoo()
             msg = " must be a Pandas DataFrame, NumPy array, or SciPy sparse COO matrix."
             msg_bin = " must be a Pandas DataFrame or NumPy array."
-            if U is not None and not (isinstance(U, (pd.DataFrame, np.ndarray)) or isspmatrix_coo(U)):
+            if U is not None and not (isinstance(U, (pd.DataFrame, np.ndarray)) or _is_coo(U)):
                 raise ValueError("'U'" + msg)
-            if I is not None and not (isinstance(I, (pd.DataFrame, np.ndarray)) or isspmatrix_coo(I)):
+            if I is not None and not (isinstance(I, (pd.DataFrame, np.ndarray)) or _is_coo(I)):
                 raise ValueError("'I'" + msg)
             if U_bin is not None and not isinstance(U_bin, (pd.DataFrame, np.ndarray)):
                 raise ValueError("'U_bin'" + msg_bin)
             if I_bin is not None and not isinstance(I_bin, (pd.DataFrame, np.ndarray)):
                 raise ValueError("'I_bin'" + msg_bin)
             if W is not None:
-                if isinstance(W, (list, pd.Series)):
-                    W = np.array(W)
-                if (len(W.shape) > 1) and isspmatrix_coo(X):
+                if not issparse(W):
+                    W = np.require(W, dtype=self.dtype_, requirements=["ENSUREARRAY"])
+                if (len(W.shape) > 1) and _is_coo(X):
                     W = W.reshape(-1)
                 if (not isinstance(W, np.ndarray)) or \
-                   (isspmatrix_coo(X) and W.shape[0] != X.nnz) or\
+                   (_is_coo(X) and W.shape[0] != X.data.shape[0]) or\
                    (isinstance(X, np.ndarray) and (W.shape[0] != X.shape[0] or W.shape[1] != X.shape[1])):
                     raise ValueError("'W' must be an array with the same number of entries as 'X'.")
 
@@ -1107,14 +1095,14 @@ class _CMF:
             W_sp = np.empty(0, dtype=self.dtype_)
             W_dense = np.empty((0,0), dtype=self.dtype_)
             if W is not None:
-                if issparse(W) and not isspmatrix_coo(W):
+                if issparse(W) and not (W.format == "coo"):
                     W = W.tocoo()
                 if issparse(W):
-                    W = W.data
-                if isspmatrix_coo(X):
+                    W = np.require(W.data, dtype=self.dtype_, requirements=["ENSUREARRAY", "C_CONTIGUOUS"])
+                if _is_coo(X):
                     W_sp = W.astype(self.dtype_)
                 else:
-                    W_dense = W.astype(self.dtype_)
+                    W_dense = np.require(W, dtype=self.dtype_, requirements=["ENSUREARRAY", "C_CONTIGUOUS"])
 
             self.reindex_ = False
         
@@ -1127,7 +1115,7 @@ class _CMF:
         else:
             m = int(Xrow.max() + 1)
             n = int(Xcol.max() + 1)
-            if isspmatrix_coo(X):
+            if _is_coo(X):
                 m = max(m, X.shape[0])
                 n = max(n, X.shape[1])
             if enforce_same_shape:
@@ -1230,11 +1218,12 @@ class _CMF:
         if self._only_prediction_info:
             raise ValueError("Cannot use this function after dropping non-essential matrices.")
 
+        user_was_not_None = not (user is None)
         user, item, _1, _2 = self._process_users_items(user, item, None, None)
 
         c_funs = wrapper_float if self.use_float else wrapper_double
 
-        if user is not None:
+        if user_was_not_None:
             assert user.shape[0] == item.shape[0]
         
             if user.shape[0] == 1:
@@ -1268,8 +1257,8 @@ class _CMF:
                         self.user_bias_,
                         self.item_bias_,
                         self.glob_mean_,
-                        np.array(user).astype(ctypes.c_int),
-                        np.array(item).astype(ctypes.c_int),
+                        np.require(user, dtype=ctypes.c_int, requirements=["ENSUREARRAY", "C_CONTIGUOUS"]).reshape(-1),
+                        np.require(item, dtype=ctypes.c_int, requirements=["ENSUREARRAY", "C_CONTIGUOUS"]).reshape(-1),
                         self._k_pred, self.k_user, self.k_item, self._k_main_col,
                         self.nthreads
                     )
@@ -1280,15 +1269,15 @@ class _CMF:
                         self.user_bias_,
                         self.item_bias_,
                         self.glob_mean_,
-                        np.array(user).astype(ctypes.c_int),
-                        np.array(item).astype(ctypes.c_int),
+                        np.require(user, dtype=ctypes.c_int, requirements=["ENSUREARRAY", "C_CONTIGUOUS"]).reshape(-1),
+                        np.require(item, dtype=ctypes.c_int, requirements=["ENSUREARRAY", "C_CONTIGUOUS"]).reshape(-1),
                         self._k_pred, self.k_user, self.k_item, self._k_main_col,
                         self.nthreads
                     )
 
         #### When passing the factors directly
         else:
-            item = np.array([item]).reshape(-1)
+            item = np.require(item, requirements=["ENSUREARRAY"]).reshape(-1)
             nan_entries = (item == -1)
             outp = self._B_pred[item, self.k_item:].reshape((item.shape[0],-1)).dot(a_vec[self.k_user:])
             outp += a_bias + self.glob_mean_
@@ -1318,7 +1307,7 @@ class _CMF:
                     np.zeros(n, dtype=self.dtype_) if self.item_bias \
                         else np.empty(0, dtype=self.dtype_),
                     self.glob_mean_,
-                    np.array(user).astype(ctypes.c_int),
+                    np.require(user, dtype=ctypes.c_int, requirements=["ENSUREARRAY", "C_CONTIGUOUS"]).reshape(-1),
                     np.arange(n).astype(ctypes.c_int),
                     self._k_pred, self.k_user, self.k_item, self._k_main_col,
                     self.nthreads
@@ -1347,7 +1336,7 @@ class _CMF:
                         self.item_bias_,
                         self.glob_mean_,
                         np.arange(m).astype(ctypes.c_int),
-                        np.array(item).astype(ctypes.c_int),
+                        np.require(item, dtype=ctypes.c_int, requirements=["ENSUREARRAY", "C_CONTIGUOUS"]).reshape(-1),
                         self._k_pred, self.k_user, self.k_item, self._k_main_col,
                         self.nthreads
                     )
@@ -1359,7 +1348,7 @@ class _CMF:
                         self.item_bias_,
                         self.glob_mean_,
                         np.arange(m).astype(ctypes.c_int),
-                        np.array(item).astype(ctypes.c_int),
+                        np.require(item, dtype=ctypes.c_int, requirements=["ENSUREARRAY", "C_CONTIGUOUS"]).reshape(-1),
                         self._k_pred, self.k_user, self.k_item, self._k_main_col,
                         self.nthreads
                     )
@@ -1436,7 +1425,7 @@ class _CMF:
             msg += "fewer than 'n' to rank."
             raise ValueError(msg)
 
-        if user is not None:
+        if (user is not None) and (user.min() >= 0):
             user = user[0]
             a_vec = self._A_pred[user].reshape(-1)
         user_bias_ = 0.
@@ -1587,15 +1576,11 @@ class _CMF:
             W_sp = np.empty(0, dtype=self.dtype_)
             if len(X.shape) > 1:
                 warnings.warn("Passed a 2-d array for 'X' - method expects a single row.")
-            X = np.array(X).reshape(-1)
-            if X.dtype != self.dtype_:
-                X = X.astype(self.dtype_)
+            X = np.require(X, dtype=self.dtype_, requirements=["ENSUREARRAY", "C_CONTIGUOUS"]).reshape(-1)
             if X.shape[0] != self._n_orig:
                 raise ValueError("'X' must have the same columns as when passed to 'fit'.")
             if W is not None:
-                W_dense = np.array(W).reshape(-1)
-                if W_dense.dtype != self.dtype_:
-                    W_dense = W_dense.astype(self.dtype_)
+                W_dense = np.require(W, dtype=self.dtype_, requirements=["ENSUREARRAY", "C_CONTIGUOUS"]).reshape(-1)
                 if W_dense.shape[0] != X.shape[0]:
                     raise ValueError("'W' must have the same number of entries as X.")
             else:
@@ -1603,28 +1588,20 @@ class _CMF:
         else:
             X = np.empty(0, dtype=self.dtype_)
             W_dense = np.empty(0, dtype=self.dtype_)
-            X_val = np.array(X_val).reshape(-1)
-            if X_val.dtype != self.dtype_:
-                X_val = X_val.astype(self.dtype_)
+            X_val = np.require(X_val, dtype=self.dtype_, requirements=["ENSUREARRAY", "C_CONTIGUOUS"]).reshape(-1)
 
             if X_val.shape[0] == 0:
-                X_col = np.array(X_col).reshape(-1)
-                if X_col.dtype != ctypes.c_int:
-                    X_col = X_col.astype(ctypes.c_int)
+                X_col = np.require(X_col, requirements=["ENSUREARRAY"]).reshape(-1)
                 if X_col.shape[0] > 0:
                     raise ValueError("'X_col' and 'X_val' must have the same number of entries.")
             else:
                 if self.reindex_:
-                    X_col = np.array(X_col).reshape(-1)
                     X_col = pd.Categorical(X_col, self.item_mapping_).codes
-                    if X_col.dtype != ctypes.c_int:
-                        X_col = X_col.astype(ctypes.c_int)
+                    X_col = np.require(X_col, dtype=ctypes.c_int, requirements=["ENSUREARRAY", "C_CONTIGUOUS"]).reshape(-1)
                     if np.any(X_col < 0):
                         raise ValueError("'X_col' must have the same item/column entries as passed to 'fit'.")
                 else:
-                    X_col = np.array(X_col).reshape(-1)
-                    if X_col.dtype != ctypes.c_int:
-                        X_col = X_col.astype(ctypes.c_int)
+                    X_col = np.require(X_col, dtype=ctypes.c_int, requirements=["ENSUREARRAY", "C_CONTIGUOUS"]).reshape(-1)
                     imin, imax = np.min(X_col), np.max(X_col)
                     if (imin < 0) or (imax >= self._n_orig) or np.isnan(imin) or np.isnan(imax):
                         msg  = "Column indices ('X_col') must be within the range"
@@ -1639,9 +1616,7 @@ class _CMF:
                 raise ValueError("'X' is empty.")
 
             if W is not None:
-                W_sp = np.array(W).reshape(-1)
-                if W_sp.dtype != self.dtype_:
-                    W_sp = W_sp.astype(self.dtype_)
+                W_sp = np.require(W, dtype=self.dtype_, requirements=["ENSUREARRAY", "C_CONTIGUOUS"]).reshape(-1)
                 if W_sp.shape[0] != X_col.shape[0]:
                     raise ValueError("'W' must have the same number of entries as 'X_val'.")
             else:
@@ -1665,26 +1640,25 @@ class _CMF:
     def _process_transform_inputs(self, X, U, U_bin, W, replace_existing):
         if (W is not None) and (issparse(W) != issparse(X)):
             raise ValueError("'X' and 'W' must be in the same format.")
-        if issparse(X) and not isspmatrix_coo(X):
+        if issparse(X) and not (X.format == "coo"):
             if (W is not None) and (not issparse(W)):
-                if not isinstance(W, np.ndarray):
-                    W = np.array(W).reshape(-1)
-                    if W.shape[0] != X.nnz:
-                        raise ValueError("'X' and 'W' must have the same number of entries.")
-                if isspmatrix_csr(X):
-                    W = csr_matrix((W, X.indices, X.indptr), shape=(X.shape[0], X.shape[1]))
+                W = np.require(W, dtype=self.dtype_, requirements=["ENSUREARRAY", "C_CONTIGUOUS"]).reshape(-1)
+                if W.shape[0] != X.data.shape[0]:
+                    raise ValueError("'X' and 'W' must have the same number of entries.")
+                if _is_csr(X):
+                    W = csr_array((W, X.indices, X.indptr), shape=(X.shape[0], X.shape[1]), dtype=self.dtype_)
                     W = W.tocoo()
-                elif isspmatrix_csc(X):
-                    W = csc_matrix((W, X.indices, X.indptr), shape=(X.shape[0], X.shape[1]))
+                elif _is_csc(X):
+                    W = csc_array((W, X.indices, X.indptr), shape=(X.shape[0], X.shape[1]), dtype=self.dtype_)
                     W = W.tocoo()
                 else:
                     raise ValueError("Must pass 'X' as SciPy COO if there are weights.")
             X = X.tocoo()
-        if issparse(W) and not isspmatrix_coo(W):
+        if issparse(W) and not (W.format == "coo"):
             W = W.tocoo()
         if issparse(W):
-            W = W.data
-        if issparse(U) and (not isspmatrix_coo(U)) and (not isspmatrix_csr(U)):
+            W = np.require(W.data, dtype=self.dtype_, requirements=["ENSUREARRAY", "C_CONTIGUOUS"])
+        if issparse(U) and (U.format not in ["coo", "csr"]):
             U = U.tocoo()
         
         if (X is None) and (U is None) and (U_bin is None):
@@ -1697,7 +1671,7 @@ class _CMF:
                 raise ValueError("Must pass 'X' if not passing 'replace_existing'.")
             if isinstance(X, np.ndarray):
                 mask_take = ~pd.isnull(X)
-            elif isspmatrix_coo(X):
+            elif _is_coo(X):
                 mask_take = np.repeat(False, X.shape[0]*X.shape[1]).reshape((X.shape[0], X.shape[1]))
                 mask_take[X.row, X.col] = True
             else:
@@ -1773,13 +1747,13 @@ class _CMF:
         if self.item_bias:
             outp += self.item_bias_.reshape((1,-1))
 
-        if issparse(Xorig) and not isspmatrix_coo(Xorig):
+        if issparse(Xorig) and not (Xorig.format == "coo"):
             Xorig = Xorig.tocoo()
 
         if mask_take is not None:
             if isinstance(Xorig, np.ndarray):
                 outp[mask_take] = Xorig[mask_take]
-            elif isspmatrix_coo(X):
+            elif _is_coo(X):
                 outp[mask_take] = Xorig.data
             else:
                 raise ValueError("'X' must be a SciPy COO matrix or NumPy array.")
@@ -2918,7 +2892,7 @@ class CMF(_CMF):
                  nonneg=False, nonneg_C=False, nonneg_D=False, max_cd_steps=100,
                  precompute_for_predictions=True, include_all_X=True,
                  use_float=True,
-                 random_state=1, verbose=True, print_every=10,
+                 random_state=1, verbose=False, print_every=10,
                  handle_interrupt=True, produce_dicts=False,
                  nthreads=-1, n_jobs=None):
         self.k = k
@@ -4316,10 +4290,10 @@ class CMF(_CMF):
         ):
             raise ValueError("Must pass both 'scaling_biasA' and 'scaling_biasB'.")
 
-        if (not isinstance(A, np.ndarray)) or (not A.flags["C_CONTIGUOUS"]):
-            A = np.ascontiguousarray(A)
-        if (not isinstance(B, np.ndarray)) or (not B.flags["C_CONTIGUOUS"]):
-            B = np.ascontiguousarray(B)
+        dtype = ctypes.c_double if not use_float else ctypes.c_float
+        A = np.require(A, dtype=dtype, requirements=["ENSUREARRAY", "C_CONTIGUOUS"])
+        B = np.require(B, dtype=dtype, requirements=["ENSUREARRAY", "C_CONTIGUOUS"])
+        
         if (len(A.shape) != 2) or (len(B.shape) != 2):
             raise ValueError("Model matrices must be 2-dimensional.")
 
@@ -4348,31 +4322,14 @@ class CMF(_CMF):
                         n_jobs = n_jobs)
         new_model._init()
 
-        dtype = ctypes.c_double if not use_float else ctypes.c_float
-
         if user_bias is not None:
-            if not isinstance(user_bias, np.ndarray):
-                user_bias = np.array(user_bias).reshape(-1)
+            user_bias = np.require(user_bias, dtype=dtype, requirements=["ENSUREARRAY", "C_CONTIGUOUS"]).reshape(-1)
             if user_bias.shape[0] != A.shape[0]:
                 raise ValueError("'user_bias' dimension does not match with 'A'.")
-            if not user_bias.flags["C_CONTIGUOUS"]:
-                user_bias = np.ascontiguousarray(user_bias)
-            if user_bias.dtype != dtype:
-                user_bias = user_bias.astype(dtype)
         if item_bias is not None:
-            if not isinstance(item_bias, np.ndarray):
-                item_bias = np.array(item_bias).reshape(-1)
+            item_bias = np.require(item_bias, dtype=dtype, requirements=["ENSUREARRAY", "C_CONTIGUOUS"]).reshape(-1)
             if item_bias.shape[0] != B.shape[0]:
                 raise ValueError("'item_bias' dimension does not match with 'B'.")
-            if not item_bias.flags["C_CONTIGUOUS"]:
-                item_bias = np.ascontiguousarray(item_bias)
-            if item_bias.dtype != dtype:
-                item_bias = item_bias.astype(dtype)
-
-        if (A.dtype != dtype):
-            A = A.astype(dtype)
-        if (B.dtype != dtype):
-            B = B.astype(dtype)
 
         new_model.A_ = A
         new_model.B_ = B
@@ -4915,9 +4872,9 @@ class CMF_implicit(_CMF):
 
         """
         self._init()
-        if issparse(X) and not isspmatrix_coo(X):
+        if issparse(X) and not (X.format == "coo"):
             X = X.tocoo()
-        if not isspmatrix_coo(X) and not isinstance(X, pd.DataFrame):
+        if not _is_coo(X) and not isinstance(X, pd.DataFrame):
             raise ValueError("'X' must be a Pandas DataFrame or SciPy sparse COO matrix.")
         return self._fit_common(X, U=U, I=I, U_bin=None, I_bin=None, W=None)
 
@@ -5662,10 +5619,10 @@ class CMF_implicit(_CMF):
             prediction methods such as ``topN`` and ``topN_warm`` can be used as if
             it had been fitted through this software.
         """
-        if (not isinstance(A, np.ndarray)) or (not A.flags["C_CONTIGUOUS"]):
-            A = np.ascontiguousarray(A)
-        if (not isinstance(B, np.ndarray)) or (not B.flags["C_CONTIGUOUS"]):
-            B = np.ascontiguousarray(B)
+        dtype = ctypes.c_double if not use_float else ctypes.c_float
+        A = np.require(A, dtype=dtype, requirements=["ENSUREARRAY", "C_CONTIGUOUS"])
+        B = np.require(B, dtype=dtype, requirements=["ENSUREARRAY", "C_CONTIGUOUS"])
+        
         if (len(A.shape) != 2) or (len(B.shape) != 2):
             raise ValueError("Model matrices must be 2-dimensional.")
 
@@ -5676,8 +5633,7 @@ class CMF_implicit(_CMF):
             raise ValueError("Empty model matrices not supported.")
 
 
-        dtype = ctypes.c_double if not use_float else ctypes.c_float
-
+    
         new_model = CMF_implicit(k = k,
                                  lambda_ = lambda_,
                                  l1_lambda = l1_lambda,
@@ -5688,11 +5644,6 @@ class CMF_implicit(_CMF):
                                  nthreads = nthreads,
                                  n_jobs = n_jobs)
         new_model._init()
-
-        if (A.dtype != dtype):
-            A = A.astype(dtype)
-        if (B.dtype != dtype):
-            B = B.astype(dtype)
 
         new_model.A_ = A
         new_model.B_ = B
@@ -6386,7 +6337,7 @@ class OMF_explicit(_OMF):
                  maxiter=10000, niter=10, parallelize="separate", corr_pairs=7,
                  max_cg_steps=3, precondition_cg=False, finalize_chol=True,
                  NA_as_zero=False, use_float=False,
-                 random_state=1, verbose=True, print_every=100,
+                 random_state=1, verbose=False, print_every=100,
                  produce_dicts=False, handle_interrupt=True,
                  nthreads=-1, n_jobs=None):
         self.k = k
@@ -7907,7 +7858,7 @@ class ContentBased(_OMF_Base):
     """
     def __init__(self, k=20, lambda_=1e2, user_bias=False, item_bias=False,
                  add_intercepts=True, maxiter=3000, corr_pairs=3,
-                 parallelize="separate", verbose=True, print_every=100,
+                 parallelize="separate", verbose=False, print_every=100,
                  random_state=1, use_float=True,
                  produce_dicts=False, handle_interrupt=True, start_with_ALS=True,
                  nthreads=-1, n_jobs=None):
@@ -8310,7 +8261,7 @@ class ContentBased(_OMF_Base):
             Predicted ratings for the requested user-item combinations.
         """
         assert self.is_fitted_
-        items = np.array(items).reshape(-1)
+        items = np.require(items, requirements=["ENSUREARRAY"]).reshape(-1)
         assert items.shape[0] == U.shape[0]
 
         _1, items, _2, _3 = self._process_users_items(None, items, None, None)

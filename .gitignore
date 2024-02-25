@@ -46,3 +46,10 @@ test_math/*.c
 test_math/failing.py
 test_math/run
 .Rproj.user
+
+example/*.p
+example/*.csv
+example/ml*
+example/ml-1m/*
+example/ml-25m/*
+example/cmfrec/*

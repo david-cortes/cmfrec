@@ -1,5 +1,5 @@
 cython
-numpy>=1.18.1
+numpy>=1.25
 scipy
-pandas>=0.25.0
+pandas
 threadpoolctl

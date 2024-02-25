@@ -22,6 +22,7 @@ custom_blas_compile_args = []
 if len(custom_blas_link_args) or len(custom_blas_compile_args):
     build_ext_with_blas = build_ext
 
+use_findblas = False
 if not (len(custom_blas_link_args) or len(custom_blas_compile_args)):
     use_findblas = (("findblas" in sys.argv)
                      or ("-findblas" in sys.argv)
@@ -44,6 +45,18 @@ try:
     EXIT_SUCCESS = os.EX_OK
 except AttributeError:
     EXIT_SUCCESS = 0
+
+## For debugging
+if "--asan" in sys.argv:
+    ADD_ASAN = True
+    sys.argv.remove("--asan")
+else:
+    ADD_ASAN = False
+if "--ggdb" in sys.argv:
+    ADD_GGDB = True
+    sys.argv.remove("--ggdb")
+else:
+    ADD_GGDB = False
 
 class build_ext_subclass( build_ext_with_blas ):
     def build_extensions(self):
@@ -69,16 +82,25 @@ class build_ext_subclass( build_ext_with_blas ):
 
                 if is_windows:
                     e.define_macros += [("NO_LONG_DOUBLE", None)]
-                
-                # e.extra_compile_args += ['-O2', '-fopenmp', '-march=native', '-std=c99', '-ggdb']
-                # e.extra_link_args += ['-fopenmp']
-                # e.extra_link_args += ['-fopenmp=libomp']
 
-                # e.extra_compile_args += ['-O2', '-march=native', '-std=c99', '-ggdb']
-                
+            if ADD_ASAN:
+                for e in self.extensions:
+                    if self.compiler.compiler_type != "clang":
+                        e.extra_compile_args += ["-fsanitize=address", "-static-libasan", "-ggdb"]
+                    else:
+                        e.extra_compile_args += ["-fsanitize=address", "-static-libsan", "-ggdb"]
 
-                # e.extra_compile_args += ['-fsanitize=address', '-static-libasan', '-ggdb']
-                # e.extra_link_args += ['-fsanitize=address', '-static-libasan']                
+            elif ADD_GGDB:
+                for e in self.extensions:
+                    e.extra_compile_args += ["-ggdb"]
+                    e.define_macros += [("DEBUG", 1)]
+
+                if self.compiler.compiler_type == "clang":
+                    e.extra_compile_args += [
+                        "-Wno-unknown-pragmas",
+                        "-Wno-unknown-attributes",
+                        "-Wno-pass-failed",
+                    ]           
 
         ## If a custom BLAS/LAPACK is provided:
         if len(custom_blas_link_args) or len(custom_blas_compile_args):
@@ -348,7 +370,7 @@ if (force_openblas):
 setup(
     name  = "cmfrec",
     packages = ["cmfrec"],
-    version = '3.5.1-7',
+    version = '3.5.1-8',
     description = 'Collective matrix factorization',
     author = 'David Cortes',
     url = 'https://github.com/david-cortes/cmfrec',
@@ -356,9 +378,9 @@ setup(
                 'relational learning'],
     install_requires=[
         'cython',
-        'numpy>=1.17',
+        'numpy>=1.25',
         'scipy',
-        'pandas>=0.25.0',
+        'pandas',
         'findblas'
     ],
     cmdclass = {'build_ext': build_ext_subclass},
