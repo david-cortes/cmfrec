@@ -393,7 +393,7 @@ target_link_libraries(cmfrec PUBLIC ${union_list})
 
 # Public header with the data types substituted according to what was built
 configure_file(${PROJECT_SOURCE_DIR}/include/cmfrec.h.in cmfrec.h @ONLY)
-set_target_properties(cmfrec PROPERTIES PUBLIC_HEADER cmfrec.h)
+set_target_properties(cmfrec PROPERTIES PUBLIC_HEADER cmfrec.h SOVERSION 3 VERSION ${PROJECT_VERSION})
 
 # Install target
 include(GNUInstallDirs)
