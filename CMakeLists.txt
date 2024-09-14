@@ -393,14 +393,16 @@ target_link_libraries(cmfrec PUBLIC ${union_list})
 
 # Public header with the data types substituted according to what was built
 configure_file(${PROJECT_SOURCE_DIR}/include/cmfrec.h.in cmfrec.h @ONLY)
-set_target_properties(cmfrec PROPERTIES PUBLIC_HEADER cmfrec.h SOVERSION 3 VERSION ${PROJECT_VERSION})
+set_target_properties(cmfrec PROPERTIES PUBLIC_HEADER ${CMAKE_BINARY_DIR}/cmfrec.h SOVERSION 3 VERSION ${PROJECT_VERSION})
 
 # Install target
 include(GNUInstallDirs)
 
-install(TARGETS cmfrec
+install(
+    TARGETS cmfrec
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+    PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+)
 
 configure_file(cmfrec.pc.in cmfrec.pc @ONLY)
 install(FILES ${CMAKE_BINARY_DIR}/cmfrec.pc DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/pkgconfig)
