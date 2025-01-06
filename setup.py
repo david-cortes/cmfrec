@@ -7,6 +7,7 @@ except ImportError:
 import numpy as np
 from Cython.Distutils import build_ext
 import sys, os, subprocess, warnings, re
+import tempfile
 
 
 found_omp = True
@@ -279,7 +280,7 @@ class build_ext_subclass( build_ext_with_blas ):
             if not isinstance(comm, list):
                 comm = [comm]
             print("--- Checking compiler support for option '%s'" % " ".join(comm))
-            fname = "cmfrec_compiler_testing.c"
+            fname = os.path.join(tempfile.gettempdir(), "cmfrec_compiler_testing.c")
             with open(fname, "w") as ftest:
                 ftest.write(u"int main(int argc, char**argv) {return 0;}\n")
             try:
@@ -311,7 +312,7 @@ class build_ext_subclass( build_ext_with_blas ):
             if not hasattr(self.compiler, "compiler"):
                 return False
             print("--- Checking compiler support for option '%s'" % "#pragma clang fp reassociate(on)")
-            fname = "cmfrec_compiler_testing.c"
+            fname = os.path.join(tempfile.gettempdir(), "cmfrec_compiler_testing.c")
             with open(fname, "w") as ftest:
                 ftest.write(u"int main(int argc, char**argv) {return 0;}\n")
             try:
@@ -370,7 +371,7 @@ if (force_openblas):
 setup(
     name  = "cmfrec",
     packages = ["cmfrec"],
-    version = '3.5.1-10',
+    version = '3.5.1-11',
     description = 'Collective matrix factorization',
     author = 'David Cortes',
     url = 'https://github.com/david-cortes/cmfrec',
