@@ -824,13 +824,10 @@ class _CMF:
             exclude = np.require(exclude, requirements=["ENSUREARRAY"]).reshape(-1)
         else:
             exclude = np.empty(0, dtype=ctypes.c_int)
-
-        if not np.isscalar(user):
-            user = np.require(user, requirements=["ENSUREARRAY"]).reshape(-1)
-        if not np.isscalar(item):
-            item = np.require(item, requirements=["ENSUREARRAY"]).reshape(-1)
             
         if user is not None:
+            if not np.isscalar(user):
+                user = np.require(user, requirements=["ENSUREARRAY"]).reshape(-1)
             if isinstance(user, np.ndarray):
                 assert user.shape[0] > 0
                 if self.reindex_:
@@ -858,6 +855,8 @@ class _CMF:
             
         
         if item is not None:
+            if not np.isscalar(item):
+                item = np.require(item, requirements=["ENSUREARRAY"]).reshape(-1)
             if isinstance(item, np.ndarray):
                 assert item.shape[0] > 0
                 if self.reindex_:
