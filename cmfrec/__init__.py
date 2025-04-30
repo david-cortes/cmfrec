@@ -2449,14 +2449,14 @@ class CMF(_CMF):
 
     Tries to approximate the 'X' interactions matrix  by a formula as follows:
         
-        :math:`\mathbf{X} \sim \mathbf{A}  \mathbf{B}^T`
+        :math:`\\mathbf{X} \\sim \\mathbf{A}  \\mathbf{B}^T`
     
     While at the same time also approximating the user/row side information
     matrix 'U' and the item/column side information matrix 'I' as follows:
         
-        :math:`\mathbf{U} \sim \mathbf{A} \mathbf{C}^T`, 
+        :math:`\\mathbf{U} \\sim \\mathbf{A} \\mathbf{C}^T`, 
         
-        :math:`\mathbf{I} \sim \mathbf{B} \mathbf{D}^T`
+        :math:`\\mathbf{I} \\sim \\mathbf{B} \\mathbf{D}^T`
     
     The matrices ("A", "B", "C", "D") are obtained by minimizing the error
     with respect to the non-missing entries in the input data ("X", "U", "I").
@@ -4359,14 +4359,14 @@ class CMF_implicit(_CMF):
 
     Tries to approximate the 'X' interactions matrix  by a formula as follows:
         
-        :math:`\mathbf{X} \sim \mathbf{A} \mathbf{B}^T`
+        :math:`\\mathbf{X} \\sim \\mathbf{A} \\mathbf{B}^T`
 
     While at the same time also approximating the user side information
     matrix 'U' and the item side information matrix 'I' as follows:
         
-        :math:`\mathbf{U} \sim \mathbf{A} \mathbf{C}^T`, 
+        :math:`\\mathbf{U} \\sim \\mathbf{A} \\mathbf{C}^T`, 
 
-        :math:`\mathbf{I} \sim \mathbf{B} \mathbf{D}^T`
+        :math:`\\mathbf{I} \\sim \\mathbf{B} \\mathbf{D}^T`
 
     Compared to the ``CMF`` class, here the interactions matrix 'X' treats missing
     entries as zeros and non-missing entries as ones, while the values supplied for
@@ -6039,7 +6039,7 @@ class OMF_explicit(_OMF):
     Tries to approximate the 'X' ratings matrix using the user side information
     'U' and item side information 'I' by a formula as follows:
         
-        :math:`\mathbf{X} \sim (\mathbf{A} + \mathbf{U} \mathbf{C}) * (\mathbf{B} + \mathbf{I} \mathbf{D})^T`
+        :math:`\\mathbf{X} \\sim (\\mathbf{A} + \\mathbf{U} \\mathbf{C}) * (\\mathbf{B} + \\mathbf{I} \\mathbf{D})^T`
 
     Note
     ----
@@ -7116,7 +7116,7 @@ class OMF_implicit(_OMF):
     Tries to approximate the 'X' interactions matrix using the user side information
     'U' and item side information 'I' by a formula as follows:
         
-        :math:`\mathbf{X} \sim (\mathbf{A} + \mathbf{U} \mathbf{C}) * (\mathbf{B} + \mathbf{I} \mathbf{D})^T`
+        :math:`\\mathbf{X} \\sim (\\mathbf{A} + \\mathbf{U} \\mathbf{C}) * (\\mathbf{B} + \\mathbf{I} \\mathbf{D})^T`
 
     Note
     ----
@@ -7689,7 +7689,7 @@ class ContentBased(_OMF_Base):
     The 'X' is approximated using the user side information
     'U' and item side information 'I' by a formula as follows:
         
-        :math:`\mathbf{X} \sim (\mathbf{U} \mathbf{C}) * (\mathbf{I} \mathbf{D})^T`
+        :math:`\\mathbf{X} \\sim (\\mathbf{U} \\mathbf{C}) * (\\mathbf{I} \\mathbf{D})^T`
 
     Note
     ----
