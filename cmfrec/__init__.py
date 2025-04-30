@@ -2868,7 +2868,7 @@ class CMF(_CMF):
     .. [5a] Rendle, Steffen, Li Zhang, and Yehuda Koren.
             "On the difficulty of evaluating baselines: A study on recommender systems."
             arXiv preprint arXiv:1905.01395 (2019).
-    .. [6a] Franc, Vojtěch, Václav Hlaváč, and Mirko Navara.
+    .. [6a] Franc, Vojtech, Vaclav Hlavac, and Mirko Navara.
             "Sequential coordinate-wise algorithm for the
             non-negative least squares problem."
             International Conference on Computer Analysis of Images and Patterns.
@@ -4191,7 +4191,7 @@ class CMF(_CMF):
         """
         Create a CMF model object from fitted matrices
 
-        Creates a `CMF` model object based on fitted
+        Creates a :obj:`CMF` model object based on fitted
         latent factor matrices, which might have been obtained from a different software.
         For example, the package ``python-libmf`` has functionality for obtaining these matrices,
         but not for producing recommendations or latent factors for new users, for which
@@ -4204,7 +4204,9 @@ class CMF(_CMF):
         Note
         ----
         This is a static class method, should be called like this:
+            
             ``CMF.from_model_matrices(...)``
+        
         (i.e. no parentheses after 'CMF')
 
         Parameters
@@ -4662,7 +4664,7 @@ class CMF_implicit(_CMF):
     .. [4b] Takacs, Gabor, Istvan Pilaszy, and Domonkos Tikk.
             "Applications of the conjugate gradient method for implicit feedback collaborative filtering."
             Proceedings of the fifth ACM conference on Recommender systems. 2011.
-    .. [5b] Franc, Vojtěch, Václav Hlaváč, and Mirko Navara.
+    .. [5b] Franc, Vojtech, Vaclav Hlavac, and Mirko Navara.
             "Sequential coordinate-wise algorithm for the
             non-negative least squares problem."
             International Conference on Computer Analysis of Images and Patterns.
@@ -5563,11 +5565,11 @@ class CMF_implicit(_CMF):
         """
         Create a CMF_implicit model object from fitted matrices
 
-        Creates a `CMF_implicit` model object based on fitted
+        Creates a :obj:`CMF_implicit` model object based on fitted
         latent factor matrices, which might have been obtained from a different software.
         For example, the package ``python-libmf`` has functionality for obtaining these matrices,
         but not for producing recommendations or latent factors for new users, for which
-        this function can come in handy as it will turn such model into a `CMF_implicit` model which
+        this function can come in handy as it will turn such model into a :obj:`CMF_implicit` model which
         provides all such functionality.
 
         This is only available for models without side information, and does not support
@@ -5576,7 +5578,9 @@ class CMF_implicit(_CMF):
         Note
         ----
         This is a static class method, should be called like this:
+            
             ``CMF_implicit.from_model_matrices(...)``
+        
         (i.e. no parentheses after 'CMF_implicit')
 
         Parameters
@@ -6081,15 +6085,19 @@ class OMF_explicit(_OMF):
         factorization), which will have a free component and an attribute-dependent
         component. Other additional separate factors can be specified through
         ``k_sec`` and ``k_main``.
+        
         Optionally, this parameter might be set to zero while setting ``k_sec``
         and ``k_main`` for a different type of model.
+        
         Typical values are 30 to 100.
     lambda_ : float or array(6,)
         Regularization parameter. Can also use different regularization for each
         matrix, in which case it should be an array with 6 entries, corresponding,
         in this order, to: user_bias, item_bias, A, B, C, D.
+        
         The attribute biases will have the same regularization as the matrices
         to which they apply (C and D).
+        
         Note that the default
         value for ``lambda_`` here is much higher than in other software, and that
         the loss/objective function is not divided by the number of entries.
@@ -6111,6 +6119,7 @@ class OMF_explicit(_OMF):
         memory-efficient alternative than the default Cholesky solver, but less
         exact, less numerically stable, and will require slightly more ALS
         iterations (``niter``) to reach a good optimum.
+        
         In general, better results are achieved with ``use_cg=False``.
         Note that, if using this method, calculations after fitting which involve
         new data such as ``factors_warm``,  might produce slightly different
@@ -6118,6 +6127,7 @@ class OMF_explicit(_OMF):
         due to differences in numerical precision. A workaround for this issue
         (factors on new data that might differ slightly) is to use
         ``finalize_chol=True``.
+        
         Even if passing "True" here, will use the Cholesky method in cases in which
         it is faster (e.g. dense matrices with no missing values),
         and will not use the conjugate gradient method on new data.
@@ -6304,11 +6314,11 @@ class OMF_explicit(_OMF):
         will be empty.
     A_ : array(m, k+k_main) or array(m, k_sec+k+k_main)
         The free offset for the user-factors obtained from user attributes
-        and matrix C_. If passing ``k_sec>0`` and no user side information,
+        and matrix ``C_``. If passing ``k_sec>0`` and no user side information,
         this matrix will have an extra ``k_sec`` columns at the beginning.
     B_ : array(n, k+k_main) or array(m, k_sec+k+k_main)
         The free offset for the item-factors obtained from item attributes
-        and matrix D_. If passing ``k_sec>0`` and no item side information,
+        and matrix ``D_``. If passing ``k_sec>0`` and no item side information,
         this matrix will have an extra ``k_sec`` columns at the beginning.
     C_ : array(p, k_sec+k)
         The obtained coefficients for the user attributes.
@@ -7168,6 +7178,7 @@ class OMF_implicit(_OMF):
         memory-efficient alternative than the default Cholesky solver, but less
         exact, less numerically stable, and will require slightly more ALS
         iterations (``niter``) to reach a good optimum.
+        
         In general, better results are achieved with ``use_cg=False``.
         Note that, if using this method, calculations after fitting which involve
         new data such as ``factors_warm``,  might produce slightly different
@@ -7175,6 +7186,7 @@ class OMF_implicit(_OMF):
         due to differences in numerical precision. A workaround for this issue
         (factors on new data that might differ slightly) is to use
         ``finalize_chol=True``.
+        
         Even if passing "True" here, will use the Cholesky method in cases in which
         it is faster (e.g. dense matrices with no missing values),
         and will not use the conjugate gradient method on new data.
@@ -7261,10 +7273,10 @@ class OMF_implicit(_OMF):
         passing ``produce_dicts=True`` and when passing data frames to 'fit'.
     A_ : array(m, k)
         The free offset for the user-factors obtained from user attributes
-        and matrix C_.
+        and matrix ``C_``.
     B_ : array(n, k)
         The free offset for the item-factors obtained from item attributes
-        and matrix D_.
+        and matrix ``D_``.
     C_ : array(p, k)
         The obtained coefficients for the user attributes.
     D_ : array(q, k)
@@ -7708,8 +7720,9 @@ class ContentBased(_OMF_Base):
     In order to obtain the final user-factors and item-factors matrices
     that are used to factorize 'X' from a fitted-model object, you'll
     need to perform a matrix multiplication between the side info
-    ('U' and 'I') and the fitted parameters ('C_' and 'D_') - e.g.
-    'A = U*model.C_ + model.C_bias_'.
+    ('U' and 'I') and the fitted parameters (``C_`` and ``D_``) - e.g.
+    
+        ``A = U*model.C_ + model.C_bias_``
 
     Parameters
     ----------
