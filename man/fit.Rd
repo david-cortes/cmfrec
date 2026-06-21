@@ -338,7 +338,11 @@ For example, a good value for the MovieLens10M would be `lambda=35`
 LastFM-360K, a good value would be `lambda=5`.
 
 Typical values are \eqn{10^{-2}}{0.01} to \eqn{10^2}{100}, with the
-implicit-feedback models requiring less regularization.}
+implicit-feedback models requiring less regularization.
+
+\bold{Important:} by default, this is applied in absolute terms, but most of the
+references cited here apply it in relative terms instead, which would
+be achieved with `scale_lam=TRUE` and a much smaller number here.}
 
 \item{method}{Optimization method used to fit the model. If passing `lbfgs`, will
 fit it through a gradient-based approach using an L-BFGS optimizer, and if

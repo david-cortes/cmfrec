@@ -172,6 +172,14 @@ CMF_imputer
     :undoc-members:
     :inherited-members:
 
+CMF_embedder
+-----------
+
+.. autoclass:: cmfrec.CMF_embedder
+    :members:
+    :undoc-members:
+    :inherited-members:
+
 
 Indices and tables
 ==================

@@ -8,7 +8,7 @@ import warnings
 __all__ = ["CMF", "CMF_implicit",
            "OMF_explicit", "OMF_implicit",
            "MostPopular", "ContentBased",
-           "CMF_imputer"]
+           "CMF_imputer", "CMF_embedder"]
 
 def _is_csr(x):
     return issparse(x) and (x.format == "csr")
@@ -22,7 +22,15 @@ def _is_coo(x):
 
 ### TODO: eliminate the hard dependency on pandas.
 
-class _CMF:
+try:
+    from sklearn.base import BaseEstimator, TransformerMixin
+except ImportError:
+    class BaseEstimator:
+        pass
+    class TransformerMixin:
+        pass
+
+class _CMF(BaseEstimator):
     def __repr__(self):
         return self.__str__()
 
@@ -651,6 +659,8 @@ class _CMF:
         Cols = self._U_cols if not is_I else self._I_cols
         Mat = self.C_ if not is_I else self.D_
 
+        U = self._cast_if_polars(U)
+
         Uarr = np.empty((0,0), dtype=self.dtype_)
         Urow = np.empty(0, dtype=ctypes.c_int)
         Ucol = np.empty(0, dtype=ctypes.c_int)
@@ -706,6 +716,8 @@ class _CMF:
         Cols = self._Ub_cols if not is_I else self._Ib_cols
         Mat = self.Cbin_ if not is_I else self.Dbin_
 
+        U_bin = self._cast_if_polars(U_bin)
+
         Ub_arr = np.empty((0,0), dtype=self.dtype_)
 
         m_ub, pbin = U_bin.shape if U_bin is not None else (0,0)
@@ -748,6 +760,9 @@ class _CMF:
         W_dense = np.empty((0,0), dtype=self.dtype_)
         W_sp = np.empty(0, dtype=self.dtype_)
         m, n = X.shape
+
+        X = self._cast_if_polars(X)
+        W = self._cast_if_polars(W)
 
         # TODO: why is this needed? should it error out with CSC or is it somehow used internally?
         if issparse(X) and (not (X.format == "coo")) and (not (X.format == "csr")):
@@ -815,6 +830,11 @@ class _CMF:
             raise ValueError("'include' and 'exclude' should not contain missing values.")
         if include is not None and exclude is not None:
             raise ValueError("Cannot pass 'include' and 'exclude' together.")
+
+        user = self._cast_if_polars(user)
+        item = self._cast_if_polars(item)
+        include = self._cast_if_polars(include)
+        exclude = self._cast_if_polars(exclude)
         
         if include is not None:
             include = np.require(include, requirements=["ENSUREARRAY"]).reshape(-1)
@@ -935,6 +955,11 @@ class _CMF:
 
         return user, item, include, exclude
 
+    def _cast_if_polars(self, X):
+        if X is not None and not isinstance(X, (pd.DataFrame, np.ndarray)) and hasattr(X, "to_pandas"):
+            X = X.to_pandas()
+        return X
+
     def _fit_common(self, X, U=None, I=None, U_bin=None, I_bin=None, W=None,
                     enforce_same_shape=False):
         if (U_bin is not None or I_bin is not None) and self.method != "lbfgs":
@@ -964,6 +989,13 @@ class _CMF:
             W = W.tocoo()
         if issparse(W):
             W = np.require(W.data, dtype=self.dtype_, requirements=["ENSUREARRAY", "C_CONTIGUOUS"])
+
+        X = self._cast_if_polars(X)
+        U = self._cast_if_polars(U)
+        I = self._cast_if_polars(I)
+        U_bin = self._cast_if_polars(U_bin)
+        I_bin = self._cast_if_polars(I_bin)
+        W = self._cast_if_polars(W)
 
         if isinstance(X, pd.DataFrame):
             msg = "If passing 'X' as DataFrame, '%s' must also be a DataFrame."
@@ -2481,6 +2513,21 @@ class CMF(_CMF):
     so hyperparameters such as ``lambda_`` will require more tuning than
     in other software and trying out values over a wider range.
 
+    **Importantly:** this differs from how most of the references cited below handle
+    regularization. To mimic the models from references, one might need to pass
+    ``scale_lam=True`` and a much smaller value for ``lambda_``.
+
+    Note
+    ----
+    The default parameters here are meant for **explicit** feedback data - if used
+    for implicit data (e.g. user-item clicks), or if evaluated by implicit metrics
+    (e.g. precision-at-k, hit-rate, etc.), one should use :obj:`CMF_implicit` instead.
+
+    Note
+    ----
+    To use this kind of model in a scikit-learn pipeline, see the subclasses
+    :obj:`CMF_embedder` and :obj:`CMF_imputer` depending on the usage mode.
+
     Parameters
     ----------
     k : int
@@ -2499,6 +2546,10 @@ class CMF(_CMF):
         For example, a good value for the MovieLens10M would be ``lambda_=35.``
         (or ``lambda=0.05`` with ``scale_lam=True``).
         Typical values are :math:`10^{-2}` to :math:`10^2`.
+
+        **Important:** by default, this is applied in absolute terms, but most of the
+        references cited for this class apply it in relative terms instead, which would
+        be achieved with ``scale_lam=True`` and a much smaller number here.
     method : str, one of "lbfgs" or "als"
         Optimization method used to fit the model. If passing ``'lbfgs'``, will
         fit it through a gradient-based approach using an L-BFGS optimizer.
@@ -4031,7 +4082,7 @@ class CMF(_CMF):
 
         Will reconstruct/impute all the missing entries in the 'X' matrix as
         determined by the model. This method is intended to be used for imputing
-        tabular data, and can be used as part of SciKit-Learn pipelines.
+        tabular data, and can be used as part of scikit-learn pipelines.
 
         Note
         ----
@@ -4047,6 +4098,11 @@ class CMF(_CMF):
         produced by the model. The mappings in such case are available under
         attributes ``self.user_mapping_`` and ``self.item_mapping_``.
 
+        Note
+        ----
+        To use this method in scikit-learn pipelines, one might want prefer class
+        :obj:`CMF_imputer` instead.
+
         Parameters
         ----------
         X : array(m, n), or None
@@ -4054,7 +4110,7 @@ class CMF(_CMF):
             Missing entries should have value ``np.nan`` when passing a dense
             array.
         y : None
-            Not used. Kept as a placeholder for compatibility with SciKit-Learn
+            Not used. Kept as a placeholder for compatibility with scikit-learn
             pipelines.
         U : array(m, p), CSR matrix(m, p), COO matrix(m, p), or None
             User attributes information for each row in 'X'.
@@ -7031,7 +7087,7 @@ class OMF_explicit(_OMF):
 
         Will reconstruct all the entries in the 'X' matrix as determined
         by the model. This method is intended to be used for imputing tabular
-        data, and can be used as part of SciKit-Learn pipelines.
+        data, and can be used as part of scikit-learn pipelines.
 
         Note
         ----
@@ -7051,7 +7107,7 @@ class OMF_explicit(_OMF):
             New 'X' data with potentially missing entries which are to be imputed.
             Missing entries should have value ``np.nan``.
         y : None
-            Not used. Kept as a placeholder for compatibility with SciKit-Learn
+            Not used. Kept as a placeholder for compatibility with scikit-learn
             pipelines.
         U : array(m, p), CSR matrix(m, p), COO matrix(m, p), or None
             User attributes information for each row in 'X'.
@@ -8664,15 +8720,84 @@ class MostPopular(_CMF):
                               include=include, exclude=exclude,
                               output_score=output_score)
 
-class CMF_imputer(CMF):
+class CMF_imputer(CMF, TransformerMixin, BaseEstimator):
     """
-    A wrapper for CMF allowing argument 'y' in 'fit' and
-    'transform' (left as a placeholder only, not used for anything),
-    which can be used as part of SciKit-Learn pipelines due to having
-    this extra parameter.
+    A variant of CMF intended to be used as an imputer in scikit-learn pipelines.
+    It has the following differences with respect to :obj:`CMF`:
 
-    Everything else is exactly the same as for 'CMF' - see its
+    - It allows argument `y` in :meth:`fit` and :meth:`transform` (left as a placeholder only, not used for anything).
+    - It interprets data frame inputs as numeric matrices with arbitrary columns (not
+      looking for UserId and ItemId) and keeps their columns names to use them as outputs
+      from :meth:`transform`.
+    - It inherits from base scikit-learn classes.
+
+    Everything else is exactly the same as for :obj:`CMF` - see its
     documentation for details.
     """
     def fit(self, X, y=None, U=None, I=None, U_bin=None, I_bin=None, W=None):
+        if not isinstance(X, (pd.DataFrame, np.ndarray)) and hasattr(X, "to_pandas"):
+            X = X.to_pandas()
+        if isinstance(X, pd.DataFrame):
+            self._impute_col_names = X.columns.to_numpy()
+        else:
+            self._impute_col_names = None
+        if hasattr(X, "to_numpy"):
+            X = X.to_numpy()
         return super().fit(X=X, U=U, U_bin=U_bin, I=I, I_bin=I_bin, W=W)
+
+    fit.__doc__ = CMF.fit.__doc__
+
+    def transform(self, X=None, y=None, U=None, U_bin=None, W=None,
+                  replace_existing=False):
+        if not isinstance(X, (pd.DataFrame, np.ndarray)) and hasattr(X, "to_pandas"):
+            X = X.to_pandas()
+        if hasattr(X, "to_numpy"):
+            X = X.to_numpy()
+        return super().transform(X=X, y=y, U=U, U_bin=U_bin, W=W, replace_existing=replace_existing)
+
+    transform.__doc__ = CMF.transform.__doc__
+
+    # A workaround to support sklearn's transform output
+    def get_feature_names_out(self):
+        if hasattr(self, "_impute_col_names") and self._impute_col_names is not None and self._impute_col_names.shape[0]:
+            return self._impute_col_names
+        else:
+            return [f"x{col}" for col in range(self._n_orig)]
+
+class CMF_embedder(CMF, TransformerMixin, BaseEstimator):
+    """
+    A variant of CMF intended to be used as a dimensionality reducer / embedder in scikit-learn pipelines.
+    It has the following differences with respect to :obj:`CMF`:
+
+    - Its :meth:`transform` method is equivalent to :meth:`CMF.factors_multiple`.
+    - It allows argument `y` in :meth:`fit` and :meth:`transform` (left as a placeholder only, not used for anything).
+    - It interprets data frame inputs as numeric matrices with arbitrary columns (not
+      looking for UserId and ItemId).
+    - It inherits from base scikit-learn classes.
+
+    Everything else is exactly the same as for :obj:`CMF` - see its
+    documentation for details.
+    """
+    def fit(self, X, y=None, U=None, I=None, U_bin=None, I_bin=None, W=None):
+        if not isinstance(X, (pd.DataFrame, np.ndarray)) and hasattr(X, "to_pandas"):
+            X = X.to_pandas()
+        if hasattr(X, "to_numpy"):
+            X = X.to_numpy()
+        return super().fit(X=X, U=U, U_bin=U_bin, I=I, I_bin=I_bin, W=W)
+
+    fit.__doc__ = CMF.fit.__doc__
+
+    def transform(self, X=None, y=None, U=None, U_bin=None, W=None, return_bias=False):
+        if not isinstance(X, (pd.DataFrame, np.ndarray)) and hasattr(X, "to_pandas"):
+            X = X.to_pandas()
+        if not isinstance(U, (pd.DataFrame, np.ndarray)) and hasattr(U, "to_pandas"):
+            U = U.to_pandas()
+        if hasattr(X, "to_numpy"):
+            X = X.to_numpy()
+        return super().factors_multiple(X=X, U=U, U_bin=U_bin, W=W, return_bias=return_bias)
+
+    transform.__doc__ = CMF.factors_multiple.__doc__
+
+    # A workaround to support sklearn's transform output
+    def get_feature_names_out(self):
+        return [f"x{col}" for col in range(self.k_user+self.k+self.k_main)]

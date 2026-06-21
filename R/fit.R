@@ -266,6 +266,10 @@ NULL
 #' 
 #' Typical values are \eqn{10^{-2}}{0.01} to \eqn{10^2}{100}, with the
 #' implicit-feedback models requiring less regularization.
+#' 
+#' \bold{Important:} by default, this is applied in absolute terms, but most of the
+#' references cited here apply it in relative terms instead, which would
+#' be achieved with `scale_lam=TRUE` and a much smaller number here.
 #' @param scale_lam Whether to scale (increase) the regularization parameter
 #' for each row of the model matrices (A, B, C, D) according
 #' to the number of non-missing entries in the data for that

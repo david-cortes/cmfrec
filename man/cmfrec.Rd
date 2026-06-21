@@ -2,8 +2,8 @@
 % Please edit documentation in R/cmfrec.R
 \docType{package}
 \name{cmfrec}
-\alias{cmfrec}
 \alias{cmfrec-package}
+\alias{cmfrec}
 \title{cmfrec package}
 \description{
 This is a library for approximate low-rank matrix factorizations, mainly oriented
