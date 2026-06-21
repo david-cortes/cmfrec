@@ -8720,7 +8720,16 @@ class MostPopular(_CMF):
                               include=include, exclude=exclude,
                               output_score=output_score)
 
-class CMF_imputer(CMF, TransformerMixin, BaseEstimator):
+class _CMF_sklearn_base(CMF, TransformerMixin, BaseEstimator):
+    @property
+    def _doc_link_module(self):
+        return "cmfrec"
+
+    @property
+    def _doc_link_template(self):
+        return f"https://cmfrec.readthedocs.io/en/latest/#cmfrec.{self.__class__.__name__}"
+
+class CMF_imputer(_CMF_sklearn_base):
     """
     A variant of CMF intended to be used as an imputer in scikit-learn pipelines.
     It has the following differences with respect to :obj:`CMF`:
@@ -8764,7 +8773,7 @@ class CMF_imputer(CMF, TransformerMixin, BaseEstimator):
         else:
             return [f"x{col}" for col in range(self._n_orig)]
 
-class CMF_embedder(CMF, TransformerMixin, BaseEstimator):
+class CMF_embedder(_CMF_sklearn_base):
     """
     A variant of CMF intended to be used as a dimensionality reducer / embedder in scikit-learn pipelines.
     It has the following differences with respect to :obj:`CMF`:
